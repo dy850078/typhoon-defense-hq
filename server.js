@@ -446,14 +446,14 @@ const norm = (s) => String(s || '').normalize('NFKC').toLowerCase().replace(/\s+
 const nameOf = (id) => (players.get(id) || {}).name || '';
 function makeGame(key, label, game) {
   const g = Object.assign(game, { key, label, host: null, round: 0, members: new Set(), vote: null,
-    hostRewarded: false, lastHostAct: 0, scores: new Map() });
+    hostRewarded: false, lastHostAct: 0, scores: new Map(), scoreIds: new Map() });
   g.pub = () => {
     const v = g.vote;
     return Object.assign({
       host: g.host, hostName: nameOf(g.host), round: g.round, playing: g.playing(),
       members: [...g.members].map(id => ({ id, name: nameOf(id) })),
       vote: v && { by: v.by, byName: nameOf(v.by), yes: [...v.yes], need: Math.floor(g.members.size / 2) + 1, ms: v.until - Date.now() },
-      scores: [...g.scores].sort((x, y) => y[1] - x[1]).map(([name, pts]) => ({ name, pts })),
+      scores: [...g.scores].sort((x, y) => y[1] - x[1]).map(([name, pts]) => ({ name, pts, id: g.scoreIds.get(name) })),
     }, g.extra());
   };
   g.state = () => io.to(key).emit(key + 'State', g.pub());
@@ -483,7 +483,8 @@ function makeGame(key, label, game) {
     } else if (g.vote) g.checkVote();
     else g.state();
   };
-  g.addScore = (p, n) => g.scores.set(p.name, (g.scores.get(p.name) || 0) + n);
+  // 記分板用名字記（重新整理也還在），另外記最後一次的 id，讓畫面找得到這個人的頭像
+  g.addScore = (p, n) => { g.scores.set(p.name, (g.scores.get(p.name) || 0) + n); g.scoreIds.set(p.name, p.id); };
   // 發裝備，拿到什麼也寫在遊戲紀錄裡
   const prize = (id) => { const it = id && GEAR.GEAR[id]; return it ? `，獲得【${it.rarity}】${it.icon} ${it.name}` : '（裝備已經全部收集完了）'; };
   g.reward = (p, text) => { const id = giveGear(p); g.log(text + prize(id), 'right'); return id; };
@@ -938,7 +939,7 @@ io.on('connection', (socket) => {
     // 主持人清空記分板，重新計分
     socket.on(k + 'ScoreReset', () => {
       if (!g.members.has(socket.id) || g.host !== socket.id) return;
-      g.scores.clear();
+      g.scores.clear(); g.scoreIds.clear();
       g.log(`🧹 主持人 ${nameOf(socket.id)} 清空了記分板，重新計分！`);
       g.state();
     });

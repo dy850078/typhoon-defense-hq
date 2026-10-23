@@ -94,7 +94,13 @@
       <div id="draw-vote" class="draw-vote" hidden><span id="draw-vote-text"></span><button id="draw-vote-yes" class="primary small" type="button">同意</button></div>
       <div class="draw-main">
         <div class="draw-board">
-          <canvas id="draw-canvas" width="800" height="600"></canvas>
+          <div class="stage-wrap">
+            <canvas id="draw-canvas" width="800" height="600"></canvas>
+            <div id="draw-scorebox" class="game-scores">
+            <div class="gs-head"><button class="gs-toggle" type="button" aria-expanded="true">🏆 記分板 <span>▾</span></button><button id="draw-score-reset" class="gs-reset host-only" type="button" title="清空記分板，重新計分">🧹 清空</button></div>
+            <ol id="draw-scores"></ol>
+          </div>
+          </div>
           <div class="draw-tools host-only">
             <div id="draw-colors" class="draw-colors"></div>
             <div id="draw-shapes" class="draw-sizes draw-shapes"></div>
@@ -116,10 +122,6 @@
             <button class="primary small" type="submit">送出</button>
           </form>
           <button id="draw-claim" class="hud-btn" type="button">🎤 搶主持棒</button>
-          <div class="game-scores">
-            <div class="gs-head"><b>🏆 記分板</b><button id="draw-score-reset" class="hud-btn tiny host-only" type="button">🧹 清空重算</button></div>
-            <ol id="draw-scores"></ol>
-          </div>
         </div>
       </div>
       </section>
@@ -128,6 +130,7 @@
       <div id="song-vote" class="draw-vote" hidden><span id="song-vote-text"></span><button id="song-vote-yes" class="primary small" type="button">同意</button></div>
       <div class="draw-main">
         <div class="draw-board">
+          <div class="stage-wrap">
           <div class="song-stage">
             <div class="song-disc">💿</div>
             <div class="song-slots">
@@ -137,6 +140,11 @@
             <p id="song-goal-text" class="song-goal"></p>
             <p id="song-pts-text" class="song-tip"></p>
             <p class="song-tip">主持人可以在視訊裡唱一段、哼旋律或播前奏，大家在右邊輸入歌手或歌名。歌手、歌名分開算分，越早答對分數越高，兩個都答對才算達標！</p>
+          </div>
+            <div id="song-scorebox" class="game-scores">
+            <div class="gs-head"><button class="gs-toggle" type="button" aria-expanded="true">🏆 記分板 <span>▾</span></button><button id="song-score-reset" class="gs-reset host-only" type="button" title="清空記分板，重新計分">🧹 清空</button></div>
+            <ol id="song-scores"></ol>
+          </div>
           </div>
           <form id="song-start-form" class="draw-start song-start host-only">
             <input id="song-singer" maxlength="20" placeholder="歌手（別人看不到）" autocomplete="off">
@@ -157,10 +165,6 @@
             <button class="primary small" type="submit">送出</button>
           </form>
           <button id="song-claim" class="hud-btn" type="button">🎤 搶主持棒</button>
-          <div class="game-scores">
-            <div class="gs-head"><b>🏆 記分板</b><button id="song-score-reset" class="hud-btn tiny host-only" type="button">🧹 清空重算</button></div>
-            <ol id="song-scores"></ol>
-          </div>
         </div>
       </div>
       </section>

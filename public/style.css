@@ -330,6 +330,7 @@ button.inv-item:hover { border-color: var(--accent); }
 .song-tip { margin: 0; font-size: 13px; opacity: .8; max-width: 440px; }
 .song-start .song-goal-in { display: flex; align-items: center; gap: 4px; font-weight: 700; font-size: 13px; white-space: nowrap; }
 .song-start .song-goal-in input { width: 56px; min-width: 0; flex: none; margin: 0; }
+.song-start .song-goal-in input.song-pts { width: 72px; }
 @media (max-width: 760px) {
   .draw-main { flex-direction: column; }
   .draw-side { width: auto; }

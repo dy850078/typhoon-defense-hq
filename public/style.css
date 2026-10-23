@@ -315,12 +315,28 @@ button.inv-item:hover { border-color: var(--accent); }
 .game-tabs button { font: 700 15px var(--display); padding: 7px 16px; border-radius: 999px; border: 2px solid var(--ink);
   background: var(--paper); color: var(--ink); cursor: pointer; }
 .game-tabs button.on { background: var(--accent); color: #fff; border-color: var(--accent); }
-.game-scores { background: var(--paper); border: 2px solid var(--line); border-radius: 12px; padding: 6px 10px; }
-.game-scores .gs-head { display: flex; justify-content: space-between; align-items: center; gap: 6px; }
-.game-scores ol { margin: 4px 0 0; padding-left: 22px; max-height: 150px; overflow-y: auto; font-size: 14px; }
-.game-scores li { padding: 1px 0; }
-.game-scores li b { float: right; font-family: var(--mono); }
-.game-scores .empty { list-style: none; margin-left: -22px; color: var(--muted); font-size: 13px; }
+/* 記分板：浮在畫板右上角的小窗，名單不擋滑鼠（主持人照樣可以畫到底下） */
+.stage-wrap { position: relative; }
+.game-scores { position: absolute; top: 8px; right: 8px; width: 190px; max-width: 45%; z-index: 2; background: rgba(251,251,248,.88);
+  border: 2px solid var(--ink); border-radius: 12px; padding: 4px 8px 6px; box-shadow: 0 4px 12px rgba(0,0,0,.18); backdrop-filter: blur(3px); }
+.game-scores .gs-head { display: flex; justify-content: space-between; align-items: center; gap: 4px; }
+.game-scores .gs-toggle, .game-scores .gs-reset { font: 700 13px var(--display); background: none; border: 0; padding: 2px 0; cursor: pointer; color: var(--ink); }
+.game-scores .gs-reset { font-size: 12px; color: var(--accent-ink); }
+.game-scores .gs-toggle span { display: inline-block; transition: transform .2s; }
+.game-scores.collapsed .gs-toggle span { transform: rotate(-90deg); }
+.game-scores.collapsed ol { display: none; }
+.game-scores ol { list-style: none; margin: 2px 0 0; padding: 0; font-size: 13px; pointer-events: none; }
+.game-scores li { display: flex; align-items: center; gap: 5px; padding: 2px 4px; border-radius: 8px; line-height: 1.2; }
+.game-scores li .rk { width: 1.4em; text-align: center; font-weight: 900; flex: none; }
+.game-scores li img { width: 1.35em; height: 1.35em; border-radius: 50%; background: #e6e9ef; flex: none; object-fit: cover; }
+.game-scores li .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.game-scores li b { font-family: var(--mono); flex: none; }
+.game-scores li.me { background: #ffe1cf; }
+.game-scores li.gap { justify-content: center; color: var(--muted); padding: 0; }
+.game-scores li .up { color: #2f8f4f; font-size: 11px; font-weight: 900; }
+.game-scores li.rise { animation: gs-rise 1.2s ease; }
+@keyframes gs-rise { 0%, 40% { background: #fff1a8; box-shadow: 0 0 0 2px #ffd23f; } 100% { box-shadow: none; } }
+.game-scores .empty { color: var(--muted); font-size: 12px; justify-content: center; }
 .song-stage { aspect-ratio: 4 / 3; border: 3px solid var(--ink); border-radius: 14px; background: linear-gradient(160deg, #2f3b55, #6b4fa8);
   color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 16px; text-align: center; }
 .song-disc { font-size: 64px; line-height: 1; }

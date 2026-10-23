@@ -485,16 +485,64 @@
     const g = $(k + '-guess');
     g.placeholder = host ? '主持人不能猜喔' : placeholder;
     g.disabled = host;
-    const sc = $(k + '-scores');
+    renderScores(k, state.scores);
+  }
+  // 記分板上的小頭像：從場上那個人的角色貼圖切出臉
+  const faceCache = new Map();
+  function faceOf(id) {
+    const who = scene && (scene.me && me && id === me.id ? scene.me : scene.remotes.get(id));
+    if (!who || !who.texKey || !scene.textures.exists(who.texKey)) return '';
+    if (faceCache.has(who.texKey)) return faceCache.get(who.texKey);
+    const src = scene.textures.get(who.texKey).getSourceImage();
+    const c = document.createElement('canvas'); c.width = c.height = 48;
+    // 角色貼圖是 2 倍大，頭大約在角色框的 (8, -2) 起 48×48 的範圍
+    c.getContext('2d').drawImage(src, (FRAME.ox + 8) * 2, (FRAME.oy - 2) * 2, 96, 96, 0, 0, 48, 48);
+    const url = c.toDataURL();
+    faceCache.set(who.texKey, url);
+    return url;
+  }
+  // 記分板：只列前 5 名（自己在 5 名外也會列出來）；名次往上爬的人會往上滑並閃一下
+  const SCORE_TOP = 5, MEDALS = ['🥇', '🥈', '🥉'];
+  const lastRanks = { draw: new Map(), song: new Map() };
+  function renderScores(k, scores) {
+    const sc = $(k + '-scores'), prev = lastRanks[k];
+    const before = new Map([...sc.children].filter(li => li.dataset.name).map(li => [li.dataset.name, li.getBoundingClientRect().top]));
     sc.innerHTML = '';
-    if (!state.scores.length) sc.appendChild(el('li', 'empty', '還沒有人得分'));
-    state.scores.forEach(r => { const li = el('li', null, r.name + ' '); li.appendChild(el('b', null, r.pts + ' 分')); sc.appendChild(li); });
+    if (!scores.length) sc.appendChild(el('li', 'empty', '還沒有人得分'));
+    const myName = me && me.name;
+    const mine = scores.findIndex(r => r.name === myName);
+    const rows = scores.map((r, i) => [r, i]).filter(([, i]) => i < SCORE_TOP || i === mine);
+    const now = new Map();
+    rows.forEach(([r, i]) => {
+      if (i === mine && i > SCORE_TOP) sc.appendChild(el('li', 'gap', '⋯'));
+      const li = el('li', r.name === myName ? 'me' : null);
+      li.dataset.name = r.name;
+      li.appendChild(el('span', 'rk', MEDALS[i] || String(i + 1)));
+      const face = r.id ? faceOf(r.id) : '';
+      if (face) { const img = el('img'); img.src = face; img.alt = ''; li.appendChild(img); }
+      li.appendChild(el('span', 'nm', r.name));
+      const old = prev.get(r.name);
+      if (old !== undefined && i < old) li.appendChild(el('span', 'up', '▲' + (old - i)));
+      li.appendChild(el('b', null, r.pts));
+      sc.appendChild(li);
+      // 名次變了：從原本的位置滑到新位置
+      const top = before.get(r.name);
+      if (top !== undefined) {
+        const dy = top - li.getBoundingClientRect().top;
+        if (dy && li.animate) li.animate([{ transform: `translateY(${dy}px)` }, { transform: 'none' }], { duration: 500, easing: 'ease-out' });
+      } else if (prev.size && old === undefined) li.animate && li.animate([{ opacity: 0, transform: 'translateX(12px)' }, { opacity: 1, transform: 'none' }], { duration: 400 });
+      if (old !== undefined && i < old) li.classList.add('rise');
+    });
+    scores.forEach((r, i) => now.set(r.name, i));
+    lastRanks[k] = now;
   }
   function gameWire(k) {
     $(k + '-claim').onclick = () => socket.emit(k + 'Claim', (res) => { if (res && res.error) toast(res.error); });
     $(k + '-vote-yes').onclick = () => socket.emit(k + 'Vote');
     $(k + '-reveal').onclick = () => socket.emit(k + 'Reveal');
     $(k + '-score-reset').onclick = () => socket.emit(k + 'ScoreReset');
+    const box = $(k + '-scorebox'), tg = box.querySelector('.gs-toggle');
+    tg.onclick = () => { const c = box.classList.toggle('collapsed'); tg.setAttribute('aria-expanded', String(!c)); };
   }
   // 加入某一個遊戲：伺服器回傳目前狀態後，交給 onJoin 畫出來
   function gameJoin(k, onJoin) {

@@ -1499,10 +1499,17 @@
   }
 
   // 慶祝煙火：把文字畫在小畫布上，取樣成一顆顆火花的位置
+  // 煙火會用到的顏色（每個顏色一格火花貼圖）
+  const SPARK_COLORS = [0xff6a13, 0xffb020, 0x4f7cc2, 0xe8384f, 0x3f9f5a, 0x8a5cd6, 0xffd23f];
+  // 把文字拆成一顆顆火花的位置；同一句話算過就記起來
+  const textPtsCache = new Map();
   function textPoints(text, max) {
+    const key = text + '|' + max;
+    if (textPtsCache.has(key)) return textPtsCache.get(key);
     const size = 64;
     const c = document.createElement('canvas');
-    const ctx = c.getContext('2d');
+    // willReadFrequently：讓這張畫布留在 CPU 上，不然 getImageData 要從顯示卡讀回來，整個畫面會卡住一兩秒
+    const ctx = c.getContext('2d', { willReadFrequently: true });
     ctx.font = `900 ${size}px ${FONT}`;
     c.width = Math.ceil(ctx.measureText(text).width) + 8; c.height = size + 16;
     ctx.font = `900 ${size}px ${FONT}`;
@@ -1517,7 +1524,10 @@
       }
       step++;
     } while (pts.length > max && step < 12);
-    return { pts, w: c.width };
+    const res = { pts, w: c.width };
+    if (textPtsCache.size > 50) textPtsCache.clear();
+    textPtsCache.set(key, res);
+    return res;
   }
 
   // ---------------- 畫地圖（蠟筆手繪風） ----------------
@@ -1813,8 +1823,20 @@
       this.tweens.add({ targets: talk, y: my - 74, duration: 700, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
 
       // 煙火的火花統一畫在一張 graphics 上
+      // 煙火的火花：先把每個顏色的發光小點畫成一張貼圖，再用 Blitter 大量貼上去
+      // （以前每一顆都用 graphics 畫兩個圓，幾千顆一起畫會很卡）
       this.sparks = [];
-      this.fw = this.add.graphics().setDepth(3000);
+      this.sparkPool = [];
+      const sp = this.textures.createCanvas('fx-spark', SPARK_COLORS.length * 16, 16), sctx = sp.getContext();
+      SPARK_COLORS.forEach((c, i) => {
+        const hex = '#' + c.toString(16).padStart(6, '0'), cx = i * 16 + 8;
+        const grd = sctx.createRadialGradient(cx, 8, 0, cx, 8, 8);
+        grd.addColorStop(0, '#ffffff'); grd.addColorStop(0.25, hex); grd.addColorStop(0.5, hex + '55'); grd.addColorStop(1, hex + '00');
+        sctx.fillStyle = grd; sctx.fillRect(i * 16, 0, 16, 16);
+        sp.add('c' + i, 0, i * 16, 0, 16, 16);
+      });
+      sp.refresh();
+      this.fw = this.add.blitter(0, 0, 'fx-spark').setDepth(3000);
       this.emptyCrates = new Map();
 
       const Z = MAP.MONSTER_ZONE;
@@ -2709,7 +2731,7 @@
         onUpdate: () => this.sparks.push({ x: rocket.x + (Math.random() - 0.5) * 4, y: rocket.y, vx: 0, vy: 30,
           color: 0xffd23f, size: 3, born: performance.now(), life: 400, mode: 'fade' }),
         onComplete: () => {
-          const { pts, w } = textPoints(f.text, 1100);
+          const { pts, w } = textPoints(f.text, 700);
           const scale = Math.min(2, 560 / w);
           const now = performance.now();
           pts.forEach(([px, py]) => {
@@ -2728,11 +2750,11 @@
     }
 
     updateSparks(dt) {
-      const g = this.fw, now = performance.now();
-      g.clear();
-      this.sparks = this.sparks.filter(p => now - p.born < p.life);
+      const now = performance.now();
+      const live = [];
       this.sparks.forEach(p => {
         const age = now - p.born;
+        if (age >= p.life) { if (p.bob) { p.bob.setVisible(false); this.sparkPool.push(p.bob); } return; }
         let alpha = 1;
         if (p.mode === 'text') {
           if (age < 650) {
@@ -2750,9 +2772,16 @@
           p.x += p.vx * dt; p.y += p.vy * dt;
           alpha = 1 - age / p.life;
         }
-        g.fillStyle(p.color, alpha * 0.25); g.fillCircle(p.x, p.y, p.size * 2);
-        g.fillStyle(p.color, alpha); g.fillCircle(p.x, p.y, p.size);
+        if (!p.bob) {
+          const frame = 'c' + Math.max(0, SPARK_COLORS.indexOf(p.color));
+          p.bob = this.sparkPool.pop();
+          if (p.bob) p.bob.reset(p.x - 8, p.y - 8, frame);
+          else p.bob = this.fw.create(p.x - 8, p.y - 8, frame);
+        }
+        p.bob.x = p.x - 8; p.bob.y = p.y - 8; p.bob.setAlpha(alpha);
+        live.push(p);
       });
+      this.sparks = live;
     }
 
     // ---------- 物資箱 ----------

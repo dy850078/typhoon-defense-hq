@@ -4,6 +4,7 @@ const express = require('express');
 const { Server } = require('socket.io');
 const MAP = require('./shared/map');
 const AVATAR = require('./shared/avatar');
+const STATS = require('./shared/stats');
 
 const PORT = Number(process.env.PORT) || 3000;
 const MAX_PLAYERS = Number(process.env.MAX_PLAYERS) || 40;
@@ -13,6 +14,9 @@ const HISTORY_SIZE = 50;
 const CRATE_HITS = 3; // 敲幾下會掉出東西
 const MONSTER_HP = Number(process.env.MONSTER_HP) || 600;
 const RESPAWN_MS = (Number(process.env.RESPAWN_MINUTES) || 5) * 60 * 1000;
+const CRATE_RESTOCK_MS = (Number(process.env.CRATE_RESTOCK_SECONDS) || 60) * 1000;
+const COOK_MS = 2500;
+const GUST_DAMAGE = [8, 14];
 const T = MAP.TILE;
 
 const app = express();
@@ -75,7 +79,13 @@ setInterval(() => {
   // 每隔幾秒吹一陣強風，把附近的人吹開
   if (now >= monster.nextGust) {
     monster.nextGust = now + 6000 + Math.random() * 4000;
-    io.emit('gust', { x: Math.round(monster.x), y: Math.round(monster.y), r: 230 });
+    const gust = { x: Math.round(monster.x), y: Math.round(monster.y), r: 230 };
+    io.emit('gust', gust);
+    players.forEach(p => {
+      if (dist(p.x, p.y, gust.x, gust.y) <= gust.r) {
+        hurt(p, GUST_DAMAGE[0] + Math.floor(Math.random() * (GUST_DAMAGE[1] - GUST_DAMAGE[0] + 1)));
+      }
+    });
   }
   io.volatile.emit('monsterMove', { x: Math.round(monster.x), y: Math.round(monster.y) });
 }, TICK);
@@ -84,6 +94,46 @@ function pushChat(msg) {
   history.push(msg);
   if (history.length > HISTORY_SIZE) history.shift();
   io.emit('chat', msg);
+}
+
+// ---------------- 角色數值 ----------------
+function publicStats(p) {
+  return { id: p.id, hp: p.hp, maxHp: p.maxHp, mp: p.mp, maxMp: p.maxMp, atk: p.atk, dead: p.dead };
+}
+function sendStats(p) { io.emit('stats', publicStats(p)); }
+
+function hurt(p, dmg) {
+  if (p.dead) return;
+  p.hp = Math.max(0, p.hp - dmg);
+  if (p.hp > 0) return sendStats(p);
+  p.dead = true;
+  sendStats(p);
+  pushChat({ system: true, text: `💫 ${p.name} 被颱風吹倒了，${STATS.RESPAWN_MS / 1000} 秒後回到總部`, t: Date.now() });
+  setTimeout(() => {
+    if (!players.has(p.id)) return;
+    p.dead = false;
+    p.hp = p.maxHp;
+    p.x = MAP.spawn.x; p.y = MAP.spawn.y;
+    io.emit('playerMoved', { id: p.id, x: p.x, y: p.y, dir: p.dir, moving: false, teleport: true });
+    sendStats(p);
+  }, STATS.RESPAWN_MS);
+}
+
+// 魔力慢慢回復
+setInterval(() => {
+  players.forEach(p => {
+    if (p.dead || p.mp >= p.maxMp) return;
+    p.mp = Math.min(p.maxMp, p.mp + STATS.REGEN.mpPerSec);
+    sendStats(p);
+  });
+}, 1000);
+
+// ---------------- 物資箱 ----------------
+// key 'tx,ty' -> { hits, emptyUntil }；被敲開的箱子會空一段時間再補貨
+const crates = new Map();
+function emptyCrates() {
+  const now = Date.now();
+  return [...crates.entries()].filter(([, c]) => c.emptyUntil > now).map(([k]) => k);
 }
 
 io.on('connection', (socket) => {
@@ -108,17 +158,20 @@ io.on('connection', (socket) => {
       y: MAP.spawn.y + (Math.random() - 0.5) * 40,
       dir: 1, moving: false,
       inv: { noodle: 0, water: 0, veggie: 0 },
+      cls: 'staff', dead: false, cooldowns: {},
     };
+    Object.assign(p, STATS.statsFor(p.cls));
+    p.hp = p.maxHp; p.mp = p.maxMp;
     players.set(socket.id, p);
 
-    ack({ ok: true, you: p, players: [...players.values()], history, monster: monsterState() });
+    ack({ ok: true, you: p, players: [...players.values()], history, monster: monsterState(), emptyCrates: emptyCrates() });
     socket.broadcast.emit('playerJoined', p);
     pushChat({ system: true, text: `${name} 進入了防衛總部 🌀`, t: Date.now() });
   });
 
   socket.on('move', (m) => {
     const p = players.get(socket.id);
-    if (!p || !m) return;
+    if (!p || !m || p.dead) return;
     const x = Number(m.x), y = Number(m.y);
     if (!Number.isFinite(x) || !Number.isFinite(y)) return;
     p.x = clamp(x, 0, MAP.W * MAP.TILE);
@@ -128,43 +181,55 @@ io.on('connection', (socket) => {
     socket.volatile.broadcast.emit('playerMoved', { id: p.id, x: p.x, y: p.y, dir: p.dir, moving: p.moving });
   });
 
-  // 敲物資箱：同一個箱子敲滿 CRATE_HITS 下就會掉出東西
+  // 敲物資箱：大家一起敲，敲滿 CRATE_HITS 下掉出東西，箱子空掉一段時間後補貨
   let lastAction = 0;
-  const crateHits = new Map();
   socket.on('hitCrate', (m, ack) => {
     const p = players.get(socket.id);
-    if (!p || !m || typeof ack !== 'function') return;
+    if (!p || !m || typeof ack !== 'function' || p.dead) return;
     const now = Date.now();
     if (now - lastAction < 300) return ack({ ok: false });
     const tx = Math.floor(Number(m.tx)), ty = Math.floor(Number(m.ty));
     const ci = MAP.crateAt(tx, ty);
     if (ci < 0 || dist(p.x, p.y, (tx + 0.5) * T, (ty + 0.5) * T) > 1.7 * T) return ack({ ok: false });
+    const key = tx + ',' + ty;
+    const c = crates.get(key) || { hits: 0, emptyUntil: 0 };
+    if (c.emptyUntil > now) return ack({ ok: false, empty: true });
     lastAction = now;
     io.emit('crateHit', { tx, ty, id: p.id });
-    const key = tx + ',' + ty;
-    const n = (crateHits.get(key) || 0) + 1;
-    if (n < CRATE_HITS) { crateHits.set(key, n); return ack({ ok: true, hits: n }); }
-    crateHits.set(key, 0);
+    c.hits++;
+    crates.set(key, c);
+    if (c.hits < CRATE_HITS) return ack({ ok: true, hits: c.hits });
+    c.hits = 0;
+    c.emptyUntil = now + CRATE_RESTOCK_MS;
     const keys = Object.keys(MAP.ITEMS);
     const item = MAP.CRATES[ci].item || keys[Math.floor(Math.random() * keys.length)];
     p.inv[item]++;
     io.emit('itemGot', { id: p.id, item });
-    ack({ ok: true, hits: n, item, inv: p.inv });
+    io.emit('crateEmpty', { tx, ty });
+    setTimeout(() => io.emit('crateRestock', { tx, ty }), CRATE_RESTOCK_MS);
+    ack({ ok: true, item, inv: p.inv });
   });
 
-  // 打颱風
-  socket.on('attack', (ack) => {
+  // 打颱風：skill 對應 shared/stats.js 的 SKILLS
+  socket.on('attack', (skillId, ack) => {
     const p = players.get(socket.id);
-    if (!p || typeof ack !== 'function') return;
+    if (typeof ack !== 'function') return;
+    if (!p || p.dead) return ack({ ok: false });
+    const cls = STATS.CLASSES[p.cls];
+    const skill = STATS.SKILLS[skillId];
+    if (!skill || !cls.skills.includes(skillId)) return ack({ ok: false });
     const now = Date.now();
-    if (!monster.alive || now - lastAction < 350) return ack({ ok: false });
+    if (!monster.alive || now - lastAction < 300 || now < (p.cooldowns[skillId] || 0)) return ack({ ok: false });
     if (dist(p.x, p.y, monster.x, monster.y) > 130) return ack({ ok: false });
+    if (p.mp < skill.mp) return ack({ ok: false, error: '魔力不夠' });
     lastAction = now;
+    p.cooldowns[skillId] = now + skill.cooldown;
+    if (skill.mp) { p.mp -= skill.mp; sendStats(p); }
     const crit = Math.random() < 0.12;
-    const dmg = Math.round((6 + Math.random() * 6) * (crit ? 2.5 : 1));
+    const dmg = Math.round(p.atk * skill.power * (0.6 + Math.random() * 0.6) * (crit ? 2.5 : 1));
     monster.hp = Math.max(0, monster.hp - dmg);
     monster.damage.set(p.name, (monster.damage.get(p.name) || 0) + dmg);
-    io.emit('monsterHit', { id: p.id, dmg, crit, hp: monster.hp });
+    io.emit('monsterHit', { id: p.id, dmg, crit, hp: monster.hp, skill: skillId });
     ack({ ok: true, dmg });
     if (monster.hp > 0) return;
     monster.alive = false;
@@ -174,6 +239,40 @@ io.on('connection', (socket) => {
     const mins = Math.round(RESPAWN_MS / 60000);
     pushChat({ system: true, text: `🎉 ${p.name} 打出最後一擊，颱風被擊退了！${mins} 分鐘後會再生成。`, t: now });
     if (top.length) pushChat({ system: true, text: '🏅 輸出排行：' + top.map(([n, d], i) => `${i + 1}. ${n} ${d}`).join('、'), t: now });
+  });
+
+  // 煮泡麵：在爐台旁邊、有泡麵才能煮；有蔬菜會自動加進去，補更多血
+  socket.on('cook', (ack) => {
+    const p = players.get(socket.id);
+    if (typeof ack !== 'function') return;
+    if (!p || p.dead || p.cooking) return ack({ ok: false });
+    if (!MAP.nearStove(p.x, p.y, 1.8 * T)) return ack({ ok: false, error: '要站在爐台旁邊' });
+    if (p.inv.noodle < 1) return ack({ ok: false, error: '沒有泡麵，先去物資倉庫敲箱子' });
+    const veggie = p.inv.veggie > 0;
+    p.inv.noodle--;
+    if (veggie) p.inv.veggie--;
+    p.cooking = true;
+    io.emit('cooking', { id: p.id, ms: COOK_MS });
+    ack({ ok: true, ms: COOK_MS, inv: p.inv });
+    setTimeout(() => {
+      p.cooking = false;
+      if (!players.has(p.id)) return;
+      const food = STATS.FOODS[veggie ? 'noodleVeggie' : 'noodle'];
+      p.hp = Math.min(p.maxHp, p.hp + food.hp);
+      sendStats(p);
+      socket.emit('ate', { food: food.name, hp: food.hp });
+    }, COOK_MS);
+  });
+
+  // 喝礦泉水補魔力，在哪裡都可以喝
+  socket.on('drink', (ack) => {
+    const p = players.get(socket.id);
+    if (typeof ack !== 'function') return;
+    if (!p || p.dead || p.inv.water < 1) return ack({ ok: false });
+    p.inv.water--;
+    p.mp = Math.min(p.maxMp, p.mp + STATS.FOODS.water.mp);
+    sendStats(p);
+    ack({ ok: true, inv: p.inv, mp: STATS.FOODS.water.mp });
   });
 
   socket.on('chat', (text) => {

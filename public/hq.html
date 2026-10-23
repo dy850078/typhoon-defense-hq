@@ -41,9 +41,15 @@
   <!-- 遊戲中介面 -->
   <div id="hud" hidden>
     <div id="banner"><span class="hot">● 颱風警報</span><span id="room-name">戶外</span><span class="mono"><span id="online">0</span> ONLINE</span></div>
+    <div id="stats">
+      <div class="stat-row"><span class="stat-k">HP</span><div class="stat-bar"><i id="hp-fill" class="hp"></i></div><span id="hp-text" class="stat-v"></span></div>
+      <div class="stat-row"><span class="stat-k">MP</span><div class="stat-bar"><i id="mp-fill" class="mp"></i></div><span id="mp-text" class="stat-v"></span></div>
+      <div class="stat-row"><span class="stat-k">ATK</span><span id="atk-text" class="stat-v"></span></div>
+    </div>
     <div id="inventory"></div>
     <div id="toasts"></div>
     <button id="action-btn" class="primary" hidden></button>
+    <button id="skill-btn" hidden>⚡ 強力一擊 <small>15 MP · K</small></button>
     <div id="video-prompt" hidden>
       <span>📹 你在視訊會議室</span>
       <button id="video-btn" class="primary">加入視訊</button>
@@ -55,7 +61,7 @@
         <input id="chat-input" maxlength="200" placeholder="按 Enter 聊天…" autocomplete="off">
       </form>
     </div>
-    <div id="help">方向鍵 / WASD 移動 · 點地板也能走 · 空白鍵 敲箱子／攻擊 · Enter 聊天</div>
+    <div id="help">方向鍵 / WASD 移動 · 點地板也能走 · 空白鍵 互動／攻擊 · K 強力一擊 · Enter 聊天</div>
   </div>
 
   <script src="/vendor/phaser.min.js"></script>
@@ -63,6 +69,7 @@
   <script src="/shared/map.js"></script>
   <script src="crayon.js"></script>
   <script src="/shared/avatar.js"></script>
+  <script src="/shared/stats.js"></script>
   <script src="game.js"></script>
 </body>
 </html>

@@ -8,8 +8,8 @@
   // ,  草地      .  室內地板   #  牆壁       =  門
   // ~  水窪      T  樹         B  沙包       K  物資箱
   // M  會議桌    P  螢幕牆     S  沙發       V  視訊室地板
-  // F  圍欄      :  前線泥地
-  const BLOCKING = new Set(['#', 'T', 'B', 'K', 'M', 'P', 'S', 'F']);
+  // F  圍欄      :  前線泥地   G  爐台
+  const BLOCKING = new Set(['#', 'T', 'B', 'K', 'M', 'P', 'S', 'F', 'G']);
 
   const g = [];
   for (let y = 0; y < H; y++) g.push(new Array(W).fill(','));
@@ -42,6 +42,8 @@
   // 休息區：沙發
   rect(23, 17, 26, 17, 'S'); rect(30, 17, 33, 17, 'S');
   rect(23, 21, 25, 21, 'S');
+  // 煮泡麵區：休息區右下角的爐台
+  rect(31, 22, 33, 22, 'G');
 
   // 戶外：沙包、樹、水窪
   rect(24, 26, 25, 26, 'B'); rect(30, 26, 31, 26, 'B');
@@ -74,6 +76,7 @@
     { id: 'command', name: '🗺️ 指揮中心', x1: 5, y1: 4, x2: 19, y2: 13 },
     { id: 'video', name: '📹 視訊會議室', x1: 21, y1: 4, x2: 34, y2: 13 },
     { id: 'storage', name: '📦 物資倉庫', x1: 5, y1: 15, x2: 19, y2: 23 },
+    { id: 'kitchen', name: '🍜 煮泡麵區', x1: 30, y1: 20, x2: 34, y2: 23 },
     { id: 'lounge', name: '🛋️ 休息區', x1: 21, y1: 15, x2: 34, y2: 23 },
     { id: 'front', name: '🌀 颱風前線', x1: 0, y1: 31, x2: W - 1, y2: H - 1 },
   ];
@@ -94,6 +97,17 @@
     crateAt(tx, ty) {
       if (tx < 0 || ty < 0 || tx >= W || ty >= H || g[ty][tx] !== 'K') return -1;
       return CRATES.findIndex(c => tx >= c.x1 && tx <= c.x2 && ty >= c.y1 && ty <= c.y2);
+    },
+    // 像素座標 (px, py) 附近 range 內有沒有爐台
+    nearStove(px, py, range) {
+      const cx = Math.floor(px / TILE), cy = Math.floor(py / TILE);
+      for (let ty = cy - 2; ty <= cy + 2; ty++) {
+        for (let tx = cx - 2; tx <= cx + 2; tx++) {
+          if (ty < 0 || tx < 0 || ty >= H || tx >= W || g[ty][tx] !== 'G') continue;
+          if (Math.hypot(px - (tx + 0.5) * TILE, py - (ty + 0.5) * TILE) < range) return true;
+        }
+      }
+      return false;
     },
     roomAt(px, py) {
       const tx = Math.floor(px / TILE);

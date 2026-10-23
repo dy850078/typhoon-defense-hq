@@ -118,13 +118,17 @@
   socket.on('playerMoved', (m) => scene && scene.moveRemote(m));
   socket.on('playerLeft', (id) => scene && scene.removeRemote(id));
   socket.on('monster', (m) => scene && scene.setMonster(m));
-  socket.on('monsterMove', (m) => scene && scene.moveMonster(m));
+  socket.on('world', (w) => {
+    if (!scene) return;
+    scene.moveMobs(w.mobs);
+    if (w.summons.length) scene.moveSummons(w.summons);
+    if (w.boss) scene.moveMonster({ x: w.boss[0], y: w.boss[1] });
+  });
   socket.on('monsterHit', (m) => scene && scene.onMonsterHit(m));
   socket.on('mAttack', (a) => scene && scene.onMonsterAttack(a));
   socket.on('mAttackHit', (a) => scene && scene.onMonsterAttackHit(a));
   socket.on('skillFx', (fx) => scene && scene.onSkillFx(fx));
   socket.on('mob', (m) => scene && scene.setMob(m));
-  socket.on('mobsMove', (list) => scene && scene.moveMobs(list));
   socket.on('mobHit', (m) => scene && scene.onMobHit(m));
   socket.on('mobAttack', (a) => scene && scene.onMobAttack(a));
   socket.on('levelUp', (l) => scene && scene.onLevelUp(l));
@@ -147,7 +151,6 @@
   });
   socket.on('cake', (c) => scene && scene.onCake(c.id, c.ms));
   socket.on('summon', (sm) => scene && scene.onSummon(sm));
-  socket.on('summonsMove', (list) => scene && scene.moveSummons(list));
   socket.on('summonHurt', (h) => scene && scene.onSummonHurt(h));
   socket.on('summonGone', (g) => scene && scene.onSummonGone(g));
   socket.on('decor', (d) => scene && scene.setDecor(d));
@@ -2247,9 +2250,9 @@
     actionAt(x, y) {
       const reach = Math.max(130, ST.SKILLS[basic()].range);
       if (this.mState.alive && this.monster.visible && Math.hypot(x - this.monster.x, y - (this.monster.y - 70)) < 110 &&
-        Math.hypot(this.me.x - this.monster.x, this.me.y - this.monster.y) < reach) return { type: 'attack', target: 'boss' };
+        ST.foeGap(this.me, this.monster, true) < reach) return { type: 'attack', target: 'boss' };
       for (const m of this.mobs.values()) {
-        if (m.state.alive && Math.hypot(x - m.x, y - (m.y - 40)) < 50 && Math.hypot(this.me.x - m.x, this.me.y - m.y) < reach) {
+        if (m.state.alive && Math.hypot(x - m.x, y - (m.y - 40)) < 50 && ST.foeGap(this.me, m, false) < reach) {
           return { type: 'attack', target: m.state.id };
         }
       }
@@ -2338,12 +2341,12 @@
     nearestFoe(range) {
       let best = null, bd = range;
       if (this.mState.alive && this.monster.visible) {
-        const d = Math.hypot(this.me.x - this.monster.x, this.me.y - this.monster.y);
+        const d = Math.max(0, ST.foeGap(this.me, this.monster, true));
         if (d <= bd) { bd = d; best = { id: 'boss', name: ST.MONSTER.name }; }
       }
       this.mobs.forEach(m => {
         if (!m.state.alive) return;
-        const d = Math.hypot(this.me.x - m.x, this.me.y - m.y);
+        const d = Math.max(0, ST.foeGap(this.me, m, false));
         if (d <= bd) { bd = d; best = { id: m.state.id, name: ST.MOBS[m.state.kind].name }; }
       });
       return best;

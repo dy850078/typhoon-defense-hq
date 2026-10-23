@@ -120,8 +120,17 @@
     return Math.max(Math.ceil(dmg * 0.3), Math.round(dmg - def));
   }
 
+  // 攻擊距離量到敵人身體的邊緣，不是量到腳底中心：颱風雲很大，站在雲旁邊也要打得到
+  // 再多給一點寬限，抵掉位置同步的延遲（颱風和人都在動）
+  function foeGap(p, foe, isBoss) {
+    const half = isBoss ? 100 : 26, top = isBoss ? 180 : 70, bottom = isBoss ? 30 : 10;
+    const dx = Math.max(0, Math.abs(p.x - foe.x) - half);
+    const dy = Math.max(0, foe.y - top - p.y, p.y - (foe.y + bottom));
+    return Math.hypot(dx, dy) - 40;
+  }
+
   const stats = { BASE, CLASSES, SKILLS, SUMMONS, SUMMON_MAX, SUMMON_HIT_MS, FOODS, REGEN, MONSTER, RESPAWN_MS, WEAKEN, LEVEL,
-    MOBS, MOB_RESPAWN_MS, statsFor, reduce, boost, bonusDef };
+    MOBS, MOB_RESPAWN_MS, statsFor, reduce, boost, bonusDef, foeGap };
   if (typeof module !== 'undefined' && module.exports) module.exports = stats;
   else root.HQ_STATS = stats;
 })(this);

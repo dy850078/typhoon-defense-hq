@@ -4,6 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
   <title>颱風天防衛總部</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&family=Space+Mono:wght@400;700&display=swap">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -12,18 +14,23 @@
   <!-- 角色創建 -->
   <div id="join" class="overlay">
     <form id="join-form" class="card">
-      <h1>🌀 颱風天防衛總部</h1>
+      <p class="eyebrow">TYPHOON DAY · DEFENSE HQ</p>
+      <h1>颱風天防衛總部</h1>
       <p class="sub">外面風雨交加，大家快進總部集合！</p>
       <div class="create">
         <canvas id="preview" width="128" height="160"></canvas>
         <div class="fields">
           <label>名字<input id="name" maxlength="12" placeholder="你的名字" autocomplete="off" required></label>
-          <div class="label">動物</div>
-          <div id="animals" class="chips"></div>
-          <div class="label">毛色</div>
-          <div id="colors" class="swatches"></div>
+          <div class="label">髮型</div>
+          <div id="hairs" class="chips"></div>
+          <div class="label">髮色</div>
+          <div id="hair-colors" class="swatches"></div>
+          <div class="label">膚色</div>
+          <div id="skins" class="swatches"></div>
           <div class="label">雨衣</div>
           <div id="outfits" class="swatches"></div>
+          <div class="label">眼鏡</div>
+          <div id="glasses" class="chips"></div>
         </div>
       </div>
       <p id="join-error" class="error"></p>
@@ -33,24 +40,40 @@
 
   <!-- 遊戲中介面 -->
   <div id="hud" hidden>
-    <div id="banner">⚠️ 颱風警報發布中 · <span id="room-name">戶外</span> · <span id="online">0</span> 人在線</div>
+    <div id="banner"><span class="hot">● 颱風警報</span><span id="room-name">戶外</span><span class="mono"><span id="online">0</span> ONLINE</span></div>
+    <div id="boss" hidden>
+      <div class="boss-name"><span class="boss-lv">Lv.30</span> 薔琵 <span id="boss-pct" class="boss-pct">100%</span></div>
+      <div class="boss-bar"><i id="boss-fill"></i></div>
+    </div>
+    <div id="stats">
+      <div class="stat-row"><span class="stat-k">HP</span><div class="stat-bar"><i id="hp-fill" class="hp"></i></div><span id="hp-text" class="stat-v"></span></div>
+      <div class="stat-row"><span class="stat-k">MP</span><div class="stat-bar"><i id="mp-fill" class="mp"></i></div><span id="mp-text" class="stat-v"></span></div>
+      <div class="stat-row"><span class="stat-k">ATK</span><span id="atk-text" class="stat-v"></span></div>
+    </div>
+    <div id="inventory"></div>
+    <div id="toasts"></div>
+    <button id="action-btn" class="primary" hidden></button>
+    <button id="skill-btn" hidden>⚡ 強力一擊 <small>15 MP · K</small></button>
     <div id="video-prompt" hidden>
       <span>📹 你在視訊會議室</span>
       <button id="video-btn" class="primary">加入視訊</button>
     </div>
     <div id="chat">
+      <button id="chat-toggle" type="button">CHAT <span>▾</span></button>
       <div id="messages"></div>
       <form id="chat-form">
         <input id="chat-input" maxlength="200" placeholder="按 Enter 聊天…" autocomplete="off">
       </form>
     </div>
-    <div id="help">方向鍵 / WASD 移動 · 點地板也能走 · Enter 聊天</div>
+    <div id="help">方向鍵 / WASD 移動 · 點地板也能走 · 空白鍵 互動／攻擊 · K 強力一擊 · Enter 聊天</div>
   </div>
 
   <script src="/vendor/phaser.min.js"></script>
   <script src="/socket.io/socket.io.js"></script>
   <script src="/shared/map.js"></script>
+  <script src="crayon.js"></script>
   <script src="/shared/avatar.js"></script>
+  <script src="/shared/stats.js"></script>
   <script src="game.js"></script>
 </body>
 </html>

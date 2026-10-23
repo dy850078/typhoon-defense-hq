@@ -1,14 +1,15 @@
 // 地圖資料：前後端共用（瀏覽器會掛在 window.HQ_MAP，Node 用 module.exports）
 (function (root) {
   const W = 40;
-  const H = 30;
+  const H = 46;
   const TILE = 48;
 
   // 圖例
   // ,  草地      .  室內地板   #  牆壁       =  門
   // ~  水窪      T  樹         B  沙包       K  物資箱
   // M  會議桌    P  螢幕牆     S  沙發       V  視訊室地板
-  const BLOCKING = new Set(['#', 'T', 'B', 'K', 'M', 'P', 'S']);
+  // F  圍欄      :  前線泥地   G  爐台
+  const BLOCKING = new Set(['#', 'T', 'B', 'K', 'M', 'P', 'S', 'F', 'G']);
 
   const g = [];
   for (let y = 0; y < H; y++) g.push(new Array(W).fill(','));
@@ -41,6 +42,8 @@
   // 休息區：沙發
   rect(23, 17, 26, 17, 'S'); rect(30, 17, 33, 17, 'S');
   rect(23, 21, 25, 21, 'S');
+  // 煮泡麵區：休息區右下角的爐台
+  rect(31, 22, 33, 22, 'G');
 
   // 戶外：沙包、樹、水窪
   rect(24, 26, 25, 26, 'B'); rect(30, 26, 31, 26, 'B');
@@ -49,15 +52,39 @@
   [[8, 26], [9, 26], [9, 27], [15, 26], [33, 28], [34, 28], [38, 23], [1, 6], [2, 6]]
     .forEach(([x, y]) => set(x, y, '~'));
 
+  // 颱風前線：圍欄以南，中間留一個出口
+  rect(0, 31, W - 1, H - 1, ':');
+  rect(0, 30, W - 1, 30, 'F');
+  rect(26, 30, 29, 30, ',');
+  [[4, 35], [5, 35], [33, 40], [34, 41], [10, 43], [30, 34]].forEach(([x, y]) => set(x, y, '~'));
+  [[1, 33], [38, 33], [2, 44], [37, 44]].forEach(([x, y]) => set(x, y, 'T'));
+
+  // 物資箱：每一堆會掉出不同的東西
+  const ITEMS = {
+    noodle: { name: '泡麵', icon: '🍜' },
+    water: { name: '礦泉水', icon: '💧' },
+    veggie: { name: '蔬菜', icon: '🥬' },
+  };
+  const CRATES = [
+    { label: '泡麵', item: 'noodle', x1: 6, y1: 16, x2: 7, y2: 17 },
+    { label: '礦泉水', item: 'water', x1: 6, y1: 20, x2: 8, y2: 22 },
+    { label: '蔬菜', item: 'veggie', x1: 16, y1: 16, x2: 18, y2: 17 },
+    { label: '綜合', item: null, x1: 15, y1: 21, x2: 18, y2: 22 },
+  ];
+
   const ROOMS = [
     { id: 'command', name: '🗺️ 指揮中心', x1: 5, y1: 4, x2: 19, y2: 13 },
     { id: 'video', name: '📹 視訊會議室', x1: 21, y1: 4, x2: 34, y2: 13 },
     { id: 'storage', name: '📦 物資倉庫', x1: 5, y1: 15, x2: 19, y2: 23 },
+    { id: 'kitchen', name: '🍜 煮泡麵區', x1: 30, y1: 20, x2: 34, y2: 23 },
     { id: 'lounge', name: '🛋️ 休息區', x1: 21, y1: 15, x2: 34, y2: 23 },
+    { id: 'front', name: '🌀 颱風前線', x1: 0, y1: 31, x2: W - 1, y2: H - 1 },
   ];
+  // 颱風怪物活動的範圍（像素）
+  const MONSTER_ZONE = { x1: 4 * TILE, y1: 34 * TILE, x2: (W - 4) * TILE, y2: (H - 3) * TILE };
 
   const map = {
-    W, H, TILE, BLOCKING, ROOMS,
+    W, H, TILE, BLOCKING, ROOMS, ITEMS, CRATES, MONSTER_ZONE,
     tiles: g,
     spawn: { x: 28 * TILE, y: 27 * TILE },
     isBlocked(px, py) {
@@ -65,6 +92,22 @@
       const ty = Math.floor(py / TILE);
       if (tx < 0 || ty < 0 || tx >= W || ty >= H) return true;
       return BLOCKING.has(g[ty][tx]);
+    },
+    // 回傳 (tx, ty) 這格所屬的物資箱堆編號，沒有就回傳 -1
+    crateAt(tx, ty) {
+      if (tx < 0 || ty < 0 || tx >= W || ty >= H || g[ty][tx] !== 'K') return -1;
+      return CRATES.findIndex(c => tx >= c.x1 && tx <= c.x2 && ty >= c.y1 && ty <= c.y2);
+    },
+    // 像素座標 (px, py) 附近 range 內有沒有爐台
+    nearStove(px, py, range) {
+      const cx = Math.floor(px / TILE), cy = Math.floor(py / TILE);
+      for (let ty = cy - 2; ty <= cy + 2; ty++) {
+        for (let tx = cx - 2; tx <= cx + 2; tx++) {
+          if (ty < 0 || tx < 0 || ty >= H || tx >= W || g[ty][tx] !== 'G') continue;
+          if (Math.hypot(px - (tx + 0.5) * TILE, py - (ty + 0.5) * TILE) < range) return true;
+        }
+      }
+      return false;
     },
     roomAt(px, py) {
       const tx = Math.floor(px / TILE);

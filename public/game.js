@@ -202,7 +202,7 @@
   const typing = () => document.activeElement === chatInput ||
     (document.activeElement && document.activeElement.tagName === 'INPUT') || !$('modal').hidden || !$('draw').hidden;
   $('chat-toggle').addEventListener('click', () => $('chat').classList.toggle('collapsed'));
-  if (window.innerWidth < 600) $('chat').classList.add('collapsed');
+  if (window.innerWidth < 600 || window.innerHeight < 520) $('chat').classList.add('collapsed');
 
   // ---------------- 視訊 ----------------
   $('video-btn').addEventListener('click', () => {
@@ -459,7 +459,9 @@
     const cv = $('draw-canvas'), ctx = cv.getContext('2d');
     const COLORS = ['#2b2a33', '#e8384f', '#ff7a2f', '#ffd23f', '#6baf7b', '#4f7cc2', '#7a5cc8', '#a0663e'];
     const SIZES = [4, 10, 22];
-    let state = null, answer = '', color = COLORS[0], size = SIZES[1], cur = null, sendTimer = 0;
+    // 筆刷，或是拖一下拉出形狀（圓形、矩形、三角形）
+    const TOOLS = [['pen', '✏️', '筆刷'], ['circle', '⭕', '圓形'], ['rect', '⬜', '矩形'], ['tri', '🔺', '三角形']];
+    let state = null, answer = '', color = COLORS[0], size = SIZES[1], tool = 'pen', cur = null, sendTimer = 0, snap = null;
     const amHost = () => state && me && state.host === me.id;
 
     function clear() { ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, cv.width, cv.height); }
@@ -467,6 +469,15 @@
       const k = cv.width / 1000, ky = cv.height / 1000;
       ctx.save(); ctx.strokeStyle = st.c; ctx.fillStyle = st.c; ctx.lineWidth = st.w * k; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
       ctx.beginPath();
+      if (st.k && st.k !== 'pen') {
+        // 形狀：pts 是拖曳的起點和終點，形狀畫在這兩點框出來的範圍裡
+        const [[ax, ay], [bx, by]] = st.pts, x0 = Math.min(ax, bx) * k, y0 = Math.min(ay, by) * ky, x1 = Math.max(ax, bx) * k, y1 = Math.max(ay, by) * ky;
+        if (st.k === 'circle') ctx.ellipse((x0 + x1) / 2, (y0 + y1) / 2, (x1 - x0) / 2, (y1 - y0) / 2, 0, 0, Math.PI * 2);
+        else if (st.k === 'rect') ctx.rect(x0, y0, x1 - x0, y1 - y0);
+        else { ctx.moveTo((x0 + x1) / 2, y0); ctx.lineTo(x1, y1); ctx.lineTo(x0, y1); ctx.closePath(); }
+        ctx.stroke(); ctx.restore();
+        return;
+      }
       st.pts.forEach(([x, y], i) => (i ? ctx.lineTo(x * k, y * ky) : ctx.moveTo(x * k, y * ky)));
       if (st.pts.length === 1) { ctx.arc(st.pts[0][0] * k, st.pts[0][1] * ky, st.w * k / 2, 0, Math.PI * 2); ctx.fill(); } else ctx.stroke();
       ctx.restore();
@@ -482,11 +493,12 @@
       if (!state) return;
       const host = amHost();
       $('draw').classList.toggle('is-host', host);
+      $('draw').classList.toggle('can-paint', host && state.playing);
       const guessers = state.members.filter(m => m.id !== state.host);
       const right = guessers.filter(m => state.correct.includes(m.id)).length;
       let info;
       if (!state.host) info = '還沒有主持人，按「🎤 當主持人」來出題！';
-      else if (!state.playing) info = host ? '你是主持人：輸入答案、按「出題」，然後開始畫！' : `主持人 ${state.hostName} 正在想題目…`;
+      else if (!state.playing) info = host ? '你是主持人：先輸入答案、按「出題」，出題後才能開始畫！' : `主持人 ${state.hostName} 正在想題目…`;
       else info = host ? `答案「${answer}」· 已猜對 ${right} / ${guessers.length}` : `${state.hostName} 出題中 · 答案有 ${state.len} 個字 · 已猜對 ${right} / ${guessers.length}`;
       $('draw-info').textContent = info;
       const claim = $('draw-claim');
@@ -525,12 +537,20 @@
     cv.addEventListener('pointerdown', (e) => {
       if (!amHost()) return;
       e.preventDefault();
+      if (!state.playing) { toast('先輸入答案、按「出題」才能開始畫喔'); return; }
       cv.setPointerCapture(e.pointerId);
+      if (tool !== 'pen') {
+        // 拖曳時先記下畫布，每次移動都還原再畫一次預覽
+        snap = ctx.getImageData(0, 0, cv.width, cv.height);
+        cur = { k: tool, c: color, w: size, pts: [pos(e), pos(e)] };
+        return;
+      }
       cur = { c: color, w: size, pts: [pos(e)] };
       paint(cur);
     });
     cv.addEventListener('pointermove', (e) => {
       if (!cur) return;
+      if (cur.k) { cur.pts[1] = pos(e); ctx.putImageData(snap, 0, 0); paint(cur); return; }
       const p = pos(e), last = cur.pts[cur.pts.length - 1];
       if (Math.hypot(p[0] - last[0], p[1] - last[1]) < 4) return;
       paint({ c: cur.c, w: cur.w, pts: [last, p] });
@@ -538,7 +558,18 @@
       if (cur.pts.length > 150) flush();
       else if (!sendTimer) sendTimer = setTimeout(flush, 60);
     });
-    const end = () => { if (!cur) return; clearTimeout(sendTimer); flush(); cur = null; };
+    const end = () => {
+      if (!cur) return;
+      if (cur.k) {
+        const [[ax, ay], [bx, by]] = cur.pts;
+        // 只是點一下沒有拉開就不算
+        if (Math.abs(ax - bx) > 6 || Math.abs(ay - by) > 6) socket.emit('drawStroke', cur);
+        else ctx.putImageData(snap, 0, 0);
+        cur = null; snap = null;
+        return;
+      }
+      clearTimeout(sendTimer); flush(); cur = null;
+    };
     cv.addEventListener('pointerup', end);
     cv.addEventListener('pointercancel', end);
 
@@ -550,6 +581,13 @@
       if (c === '#ffffff') b.textContent = '🧽';
       b.onclick = () => { color = c; [...pal.children].forEach(x => x.classList.toggle('on', x === b)); };
       pal.appendChild(b);
+    });
+    const tl = $('draw-shapes');
+    TOOLS.forEach(([k, icon, name]) => {
+      const b = el('button', 'tl' + (k === tool ? ' on' : ''), icon);
+      b.type = 'button'; b.title = name; b.setAttribute('aria-label', name);
+      b.onclick = () => { tool = k; [...tl.children].forEach(x => x.classList.toggle('on', x === b)); };
+      tl.appendChild(b);
     });
     const sz = $('draw-sizes');
     SIZES.forEach(w => {

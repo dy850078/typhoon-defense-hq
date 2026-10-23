@@ -280,7 +280,8 @@ button.inv-item:hover { border-color: var(--accent); }
 .draw-main { display: flex; gap: 14px; align-items: stretch; }
 .draw-board { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
 #draw-canvas { width: 100%; aspect-ratio: 4 / 3; background: #fff; border: 3px solid var(--ink); border-radius: 14px; touch-action: none; display: block; }
-#draw.is-host #draw-canvas { cursor: crosshair; }
+#draw.is-host #draw-canvas { cursor: not-allowed; }
+#draw.can-paint #draw-canvas { cursor: crosshair; }
 #draw:not(.is-host) .host-only { display: none; }
 .draw-tools, .draw-start { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .draw-start input { flex: 1; margin: 0; min-width: 140px; }
@@ -288,6 +289,8 @@ button.inv-item:hover { border-color: var(--accent); }
 .draw-colors .sw { width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--line); cursor: pointer; padding: 0; font-size: 13px; }
 .draw-sizes .sz { width: 30px; height: 30px; border-radius: 50%; border: 2px solid var(--line); background: var(--paper); cursor: pointer;
   display: flex; align-items: center; justify-content: center; padding: 0; }
+.draw-shapes .tl { width: 32px; height: 30px; border-radius: 9px; border: 2px solid var(--line); background: var(--paper); cursor: pointer;
+  padding: 0; font-size: 15px; line-height: 1; }
 .draw-sizes .sz i { display: block; border-radius: 50%; background: var(--ink); }
 .draw-colors .on, .draw-sizes .on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
 .draw-side { width: 260px; flex-shrink: 0; display: flex; flex-direction: column; gap: 8px; }
@@ -320,7 +323,9 @@ button.inv-item:hover { border-color: var(--accent); }
   #banner .hot { display: none; }
   #boss { top: auto; bottom: 150px; left: 12px; transform: none; width: calc(100vw - 90px); }
   #stats { min-width: 150px; padding: 6px 10px; }
-  #inventory { top: 12px; right: 12px; flex-direction: column; align-items: flex-end; }
+  /* 手機直拿：右上角的道具和按鈕排成幾行，不要擠到畫面外面 */
+  #inventory { top: 12px; right: 12px; max-width: calc(100vw - 190px); gap: 4px; }
+  .inv-item { font-size: 12px; padding: 2px 7px; }
   /* 手機：技能欄改成右邊一排圓形按鈕 */
   #skillbar { bottom: 84px; right: 12px; flex-direction: column-reverse; gap: 8px; }
   #skill-btn { width: 54px; height: 54px; padding: 0; font-size: 24px; border-radius: 50%; }
@@ -335,4 +340,30 @@ button.inv-item:hover { border-color: var(--accent); }
   #action-btn { bottom: 16px; right: 12px; }
   #chat { width: calc(100vw - 24px - 170px); min-width: 180px; }
   #chat:not(.collapsed) { width: calc(100vw - 24px); bottom: 12px; z-index: 6; }
+}
+
+/* 平板和手機橫拿：觸控裝置不需要鍵盤說明；颱風血條縮窄，不壓到左上和右上的面板 */
+@media (pointer: coarse), (max-width: 1024px) {
+  #help { display: none; }
+}
+@media (min-width: 601px) and (max-width: 1100px) {
+  #banner { font-size: 12px; gap: 8px; padding: 5px 12px; }
+  #banner .hot { display: none; }
+  #boss { width: calc(100vw - 500px); min-width: 220px; }
+  #inventory { max-width: 214px; gap: 4px; }
+  .inv-item { font-size: 12px; padding: 2px 8px; }
+}
+/* 手機橫拿（高度很矮）：面板縮小、聊天室預設收起來 */
+@media (min-width: 601px) and (max-height: 520px) {
+  #stats { transform: scale(.82); transform-origin: top left; min-width: 170px; }
+  #banner { top: 8px; }
+  #boss { top: 40px; }
+  #toasts { top: 76px; }
+  #inventory { top: 8px; }
+  #messages { height: 80px; font-size: 13px; }
+  #chat { width: 300px; bottom: 8px; }
+  #chat-input { padding: 6px 10px; font-size: 14px; }
+  #skillbar { bottom: 72px; }
+  #action-btn { bottom: 12px; }
+  #video-prompt { bottom: auto; top: 76px; }
 }

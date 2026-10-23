@@ -868,11 +868,14 @@ io.on('connection', (socket) => {
     ack({ ok: true });
   });
   socket.on('drawStroke', (st) => {
-    if (!isHost() || !st || !Array.isArray(st.pts)) return;
+    // 主持人出題之後才能畫
+    if (!isHost() || !draw.answer || !st || !Array.isArray(st.pts)) return;
     if (draw.strokes.length >= DRAW_MAX_STROKES) return;
     const pts = st.pts.slice(0, 200).map(q => Array.isArray(q) ? [clamp(Math.round(q[0]) || 0, 0, 1000), clamp(Math.round(q[1]) || 0, 0, 1000)] : null).filter(Boolean);
     if (!pts.length) return;
     const s2 = { c: /^#[0-9a-f]{6}$/i.test(st.c) ? st.c : '#2b2a33', w: clamp(Number(st.w) || 6, 1, 60), pts };
+    // 形狀（圓形、矩形、三角形）只帶起點和終點
+    if (['circle', 'rect', 'tri'].includes(st.k)) { if (pts.length !== 2) return; s2.k = st.k; }
     draw.strokes.push(s2);
     draw.lastHostAct = Date.now();
     socket.to('draw').emit('drawStroke', s2);

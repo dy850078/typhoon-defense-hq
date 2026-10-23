@@ -12,7 +12,7 @@
   const MELEE = ['strike', 'power', 'syringe', 'punch', 'kick'];
   // 會飛過去的攻擊：特效打到才跳數字（毫秒）
   const HIT_DELAY = { arrow: 520, barbell: 330, skate: 950, shot: 260, orb: 300, ray: 120,
-    defib: 150, arrowRain: 650, roar: 200, icicle: 320, mothership: 600 };
+    defib: 150, arrowRain: 650, roar: 200, icicle: 330, mothership: 600 };
   // 人物貼圖比 64x80 大一圈，翅膀、氣球、帽子才畫得下；(16,32) 是人物框的左上角，腳底在 y=108
   const FRAME = { w: 96, h: 112, ox: 16, oy: 32 };
   const AV_ORIGIN_Y = (FRAME.oy + 76) / FRAME.h;
@@ -163,6 +163,12 @@
     store('hq-furn', myFurn);
     const it = DC.DECOR[g.k];
     if (it) toast(`🎁 撿到家具 ${it.icon} ${it.name}！按右上角 🪑 家具 擺到總部裡`);
+    if (modalKind === 'furn') openFurn();
+  });
+  socket.on('furnSync', (g) => {
+    myFurn = g.furn;
+    store('hq-furn', myFurn);
+    if (!me || g.by !== me.id) toast('🧹 總部的家具被收乾淨了，你擺的都退回背包了');
     if (modalKind === 'furn') openFurn();
   });
   socket.on('drawState', (st) => DRAW.onState(st));
@@ -506,7 +512,8 @@
       e.preventDefault();
       socket.emit('cake', input.value, (res) => {
         closeModal();
-        if (res && res.ok) toast('🎂 拿到蛋糕了！靠近你的人都會戴上慶祝帽');
+        if (res && res.clean != null) toast(res.clean ? `🧹 收掉了 ${res.clean} 件家具，總部回到原本的樣子` : '🧹 總部本來就沒有擺家具');
+        else if (res && res.ok) toast('🎂 拿到蛋糕了！靠近你的人都會戴上慶祝帽');
         else toast('🧊 冰箱裡只有幾瓶礦泉水…');
       });
     };
@@ -1389,6 +1396,12 @@
         ctx.fillStyle = '#ffffff'; ctx.fillRect(-w * 0.5, -h * 0.65, w * 0.4, h * 0.45);
         ctx.restore();
       });
+    }),
+    // 冰錐：尖端朝下的一根長冰柱
+    icicle: () => fxCanvas(44, 120, 31, (ctx, r) => {
+      ctx.beginPath(); ctx.moveTo(4, 4); ctx.lineTo(40, 4); ctx.lineTo(30, 40); ctx.lineTo(22, 116); ctx.lineTo(14, 40); ctx.closePath();
+      CR.fill(ctx, '#bfe6ff', r, null); CR.stroke(ctx, r, 2.6, '#2f5f8f');
+      ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.moveTo(12, 9); ctx.lineTo(19, 9); ctx.lineTo(20, 70); ctx.closePath(); ctx.fill();
     }),
     // 暴雨彈：一大顆水滴
     drop: () => fxCanvas(50, 66, 28, (ctx, r) => {
@@ -2711,15 +2724,31 @@
         this.cameras.main.shake(260, 0.01);
         this.time.delayedCall(200, () => (fx.hits || [fx.target]).forEach(t => { const f = this.foePos(t); this.burst(f.x, f.mid, 8, 0xff9a3c, 60); }));
       } else if (fx.skill === 'icicle') {
-        // 射出一根大冰柱，打中後結冰
-        const sx = who.x + (mx < who.x ? -14 : 14), sy = who.y - 50;
-        const ic = this.add.image(sx, sy, 'fx-ice').setDepth(2050).setScale(0.7).setRotation(Math.atan2(my - sy, mx - sx));
-        this.tweens.add({ targets: ic, x: mx, y: my, duration: 300, ease: 'Quad.in', onComplete: () => {
-          ic.destroy();
-          this.burst(mx, my, 14, 0xbfe6ff, 90);
-          this.floatText(mx, my - 50, '🧊 凍住了！', '#bfe6ff', 24);
-          this.refreshFoeTint(fx.target);
-        } });
+        // 頭頂先出現陰影，一根大冰錐從天上插下來，旁邊再掉兩根小的，砸中後地上結冰
+        const gy = foe.y, big = foe.mob ? 1 : 1.6;
+        const shadow = this.add.graphics({ x: mx, y: gy }).setDepth(-4);
+        shadow.fillStyle(0x2f5f8f, 0.35); shadow.fillEllipse(0, 0, 70 * big, 26 * big);
+        shadow.setScale(0.2);
+        this.tweens.add({ targets: shadow, scale: 1, duration: 330, ease: 'Quad.in' });
+        [[0, 0, 1.3], [-36, 90, 0.6], [32, 150, 0.55]].forEach(([dx, delay, sc], i) => {
+          const tipY = gy - (i ? 6 : 24 * big);
+          const ic = this.add.image(mx + dx, tipY - 460, 'fx-icicle').setOrigin(0.5, 1).setScale(sc * big).setDepth(2050);
+          this.tweens.add({ targets: ic, y: tipY, delay, duration: 330, ease: 'Quad.in', onComplete: () => {
+            this.burst(mx + dx, tipY - 10, i ? 6 : 16, i ? 0xffffff : 0xbfe6ff, i ? 40 : 100);
+            if (!i) {
+              this.cameras.main.shake(140, 0.006);
+              shadow.destroy();
+              const frost = this.add.graphics({ x: mx, y: gy }).setDepth(-4);
+              frost.fillStyle(0xbfe6ff, 0.7); frost.fillEllipse(0, 0, 120 * big, 44 * big);
+              frost.lineStyle(3, 0x4f7cc2, 0.8); frost.strokeEllipse(0, 0, 120 * big, 44 * big);
+              this.tweens.add({ targets: frost, alpha: 0, delay: (sk.freeze || 1500) - 400, duration: 400, onComplete: () => frost.destroy() });
+              this.floatText(mx, my - 50, '🧊 凍住了！', '#bfe6ff', 24);
+              this.refreshFoeTint(fx.target);
+            }
+            // 插在地上一下再碎掉
+            this.tweens.add({ targets: ic, alpha: 0, scaleX: sc * big * 1.4, delay: i ? 150 : 350, duration: 250, onComplete: () => ic.destroy() });
+          } });
+        });
       }
     }
 

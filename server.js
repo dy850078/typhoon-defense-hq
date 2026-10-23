@@ -38,6 +38,16 @@ const CAKE_MS = 3 * 60 * 1000;
 const T = MAP.TILE;
 
 const app = express();
+// 報名頁：分享連結的預覽圖要用完整網址，quick tunnel 的網址每次都不一樣，所以照請求的網址填進去
+const INDEX_FILE = path.join(__dirname, 'public', 'index.html');
+app.get(['/', '/index.html'], (req, res) => {
+  const proto = String(req.headers['x-forwarded-proto'] || req.protocol).split(',')[0].trim();
+  const origin = `${proto}://${req.get('host')}`.replace(/[<>"']/g, '');
+  fs.readFile(INDEX_FILE, 'utf8', (err, html) => {
+    if (err) return res.status(500).end();
+    res.type('html').send(html.split('__ORIGIN__').join(origin));
+  });
+});
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/shared', express.static(path.join(__dirname, 'shared')));
 app.use('/vendor', express.static(path.join(__dirname, 'node_modules/phaser/dist')));
@@ -448,6 +458,29 @@ function saveDecor() {
       fs.writeFileSync(DECOR_FILE, JSON.stringify(Object.fromEntries(decor)));
     } catch (e) { console.error('家具存檔失敗', e.message); }
   }, 1500);
+}
+// 冰箱輸入 clean：收掉總部裡所有家具，在線上的人擺的會退回他的背包
+function cleanDecor(p) {
+  const n = decor.size;
+  if (!n) return { ok: true, clean: 0 };
+  const back = new Map(); // name -> { k: 件數 }
+  decor.forEach((d, key) => {
+    const b = back.get(d.by) || {};
+    b[d.k] = (b[d.k] || 0) + 1;
+    back.set(d.by, b);
+    io.emit('decor', { key, removed: true });
+  });
+  decor.clear();
+  saveDecor();
+  players.forEach(q => {
+    const b = back.get(q.name);
+    if (!b) return;
+    Object.entries(b).forEach(([k, c]) => { q.furn[k] = (q.furn[k] || 0) + c; });
+    back.delete(q.name);
+    io.to(q.id).emit('furnSync', { furn: q.furn, by: p.id });
+  });
+  pushChat({ system: true, text: `🧹 ${p.name} 把總部的家具都收乾淨了（${n} 件）`, t: Date.now() });
+  return { ok: true, clean: n };
 }
 const decorList = () => [...decor.entries()].map(([key, d]) => ({ key, k: d.k, by: d.by }));
 function giveDecor(p) {
@@ -920,6 +953,7 @@ io.on('connection', (socket) => {
     const p = players.get(socket.id);
     if (typeof ack !== 'function' || !p) return;
     if (!MAP.nearFridge(p.x, p.y)) return ack({ ok: false });
+    if (norm(code) === 'clean') return ack(cleanDecor(p));
     if (norm(code) !== norm(CAKE_CODE)) return ack({ ok: false });
     const fresh = p.cakeUntil < Date.now();
     p.cakeUntil = Date.now() + CAKE_MS;

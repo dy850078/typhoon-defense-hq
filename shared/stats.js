@@ -53,8 +53,8 @@
     barbell: { name: '槓鈴老師', icon: '🏋️', mp: 18, cooldown: 2000, power: 4, range: 150,
       selfDef: { v: 10, ms: 6000 },
       desc: '掄起槓鈴往颱風頭上搥！傷害是普攻 4 倍，之後 6 秒自己防禦 +10。' },
-    skate: { name: '冰嬉', icon: '❄️', mp: 30, cooldown: 9000, power: 3, range: 220, freeze: 4000,
-      desc: '繞著颱風溜冰一圈，把它冰凍 4 秒（不會動也不會攻擊），並造成普攻 3 倍傷害。' },
+    skate: { name: '冰嬉', icon: '❄️', mp: 30, cooldown: 9000, power: 2.5, range: 260, aoe: 260, freeze: 4000,
+      desc: '在自己身邊溜冰一大圈，範圍裡的颱風和小怪全部冰凍 4 秒（不會動也不會攻擊），每隻都受到普攻 2.5 倍傷害。' },
     summon: { name: '召喚奇異生物', icon: '👽', mp: 35, cooldown: 8000, power: 0, support: true, summon: true,
       desc: '在颱風前線召喚一隻隨機的奇異生物（共五種，有強有弱），牠會自己去打怪。最多同時 3 隻，被打倒就不會回來。' },
   };

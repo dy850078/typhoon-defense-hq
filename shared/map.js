@@ -9,7 +9,8 @@
   // ~  水窪      T  樹         B  沙包       K  物資箱
   // M  會議桌    P  螢幕牆     S  沙發       V  視訊室地板
   // F  圍欄      :  前線泥地   G  爐台       N  轉職導師
-  const BLOCKING = new Set(['#', 'T', 'B', 'K', 'M', 'P', 'S', 'F', 'G', 'N']);
+  // W  戰情室電視牆（擋路）     C  會議椅（不擋路）
+  const BLOCKING = new Set(['#', 'T', 'B', 'K', 'M', 'P', 'S', 'F', 'G', 'N', 'W']);
 
   const g = [];
   for (let y = 0; y < H; y++) g.push(new Array(W).fill(','));
@@ -37,8 +38,10 @@
   // 轉職導師站在螢幕牆右邊
   const MENTOR_TILE = { x: 17, y: 6 };
   set(MENTOR_TILE.x, MENTOR_TILE.y, 'N');
-  // 視訊會議室：長桌
-  rect(25, 8, 30, 9, 'M');
+  // 戰情室：電視牆、長會議桌、兩排椅子
+  rect(23, 4, 32, 4, 'W');
+  rect(24, 8, 31, 9, 'M');
+  rect(24, 7, 31, 7, 'C'); rect(24, 10, 31, 10, 'C');
   // 物資倉庫：箱子
   rect(6, 16, 7, 17, 'K'); rect(6, 20, 8, 22, 'K');
   rect(16, 16, 18, 17, 'K'); rect(15, 21, 18, 22, 'K');
@@ -77,7 +80,7 @@
 
   const ROOMS = [
     { id: 'command', name: '🗺️ 指揮中心', x1: 5, y1: 4, x2: 19, y2: 13 },
-    { id: 'video', name: '📹 視訊會議室', x1: 21, y1: 4, x2: 34, y2: 13 },
+    { id: 'video', name: '🎖️ 戰情室', x1: 21, y1: 4, x2: 34, y2: 13 },
     { id: 'storage', name: '📦 物資倉庫', x1: 5, y1: 15, x2: 19, y2: 23 },
     { id: 'kitchen', name: '🍜 煮泡麵區', x1: 30, y1: 20, x2: 34, y2: 23 },
     { id: 'lounge', name: '🛋️ 休息區', x1: 21, y1: 15, x2: 34, y2: 23 },

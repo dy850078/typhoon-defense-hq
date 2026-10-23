@@ -55,9 +55,29 @@
   const RESPAWN_MS = 5000; // 倒下後幾秒回到總部
   const WEAKEN = { dmgTaken: 1.3, dmgDealt: 0.7 }; // 被預言家削弱時
 
-  function statsFor(cls) {
+  // 等級：打怪拿經驗（造成的傷害、補的血都算），每待 10 分鐘也會升一等
+  const LEVEL = {
+    max: 99,
+    expFor: (lv) => 250 * lv, // 從 lv 升到 lv+1 要的經驗
+    onlineMs: 10 * 60 * 1000,
+    perLevel: { maxHp: 6, maxMp: 3, atk: 1 }, // 每升一等加的數值
+    fireworkLv: 5, // 幾等才能放煙火
+  };
+
+  // 野外的小怪：在颱風前線晃來晃去，靠太近會被打
+  const MOBS = {
+    chiang: { name: '蔣不聽', level: 12, hp: 900, dmg: [10, 16], range: 90, speed: 55, exp: 150,
+      say: ['我聽不到～', '不聽不聽！', '再說一次？', '🙉'] },
+    hsu: { name: '徐小心', level: 15, hp: 1100, dmg: [12, 18], range: 90, speed: 65, exp: 180,
+      say: ['小心喔！', '我要查你喔～', '⚠️ 小心！', '你過來一下'] },
+  };
+  const MOB_RESPAWN_MS = 45000;
+
+  function statsFor(cls, level = 1) {
     const c = CLASSES[cls] || CLASSES.staff;
-    return Object.assign({}, BASE, c.base);
+    const st = Object.assign({}, BASE, c.base);
+    Object.entries(LEVEL.perLevel).forEach(([k, v]) => { st[k] += v * (level - 1); });
+    return st;
   }
 
   // 颱風打人：防禦直接扣傷害，但最少還是會吃三成
@@ -65,7 +85,7 @@
     return Math.max(Math.ceil(dmg * 0.3), Math.round(dmg - def));
   }
 
-  const stats = { BASE, CLASSES, SKILLS, FOODS, REGEN, MONSTER, RESPAWN_MS, WEAKEN, statsFor, reduce };
+  const stats = { BASE, CLASSES, SKILLS, FOODS, REGEN, MONSTER, RESPAWN_MS, WEAKEN, LEVEL, MOBS, MOB_RESPAWN_MS, statsFor, reduce };
   if (typeof module !== 'undefined' && module.exports) module.exports = stats;
   else root.HQ_STATS = stats;
 })(this);

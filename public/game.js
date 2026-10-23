@@ -66,8 +66,13 @@
   let joined = false;
   const pending = []; // scene 建好之前收到的事件
 
+  // 等級、經驗存在自己的瀏覽器；報名頁的邀請函也一起帶進總部
+  const saved = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
   function doJoin() {
-    socket.emit('join', profile, (res) => {
+    let vip = null;
+    try { vip = JSON.parse(saved('hq-vip') || 'null'); } catch (e) { vip = null; }
+    const data = Object.assign({}, profile, { level: Number(saved('hq-level')) || 1, exp: Number(saved('hq-exp')) || 0, vip });
+    socket.emit('join', data, (res) => {
       if (!res.ok) { $('join-error').textContent = res.error; return; }
       joined = true;
       me = res.you;
@@ -100,6 +105,11 @@
   socket.on('mAttack', (a) => scene && scene.onMonsterAttack(a));
   socket.on('mAttackHit', (a) => scene && scene.onMonsterAttackHit(a));
   socket.on('skillFx', (fx) => scene && scene.onSkillFx(fx));
+  socket.on('mob', (m) => scene && scene.setMob(m));
+  socket.on('mobsMove', (list) => scene && scene.moveMobs(list));
+  socket.on('mobHit', (m) => scene && scene.onMobHit(m));
+  socket.on('mobAttack', (a) => scene && scene.onMobAttack(a));
+  socket.on('levelUp', (l) => scene && scene.onLevelUp(l));
   socket.on('firework', (f) => scene && scene.launchFirework(f));
   socket.on('crateHit', (c) => scene && scene.onCrateHit(c));
   socket.on('itemGot', (g) => scene && scene.onItemGot(g));
@@ -165,6 +175,7 @@
   let modalKind = null;
   function openModal(kind, title, body) {
     modalKind = kind;
+    $('modal').classList.remove('wide');
     $('modal-title').textContent = title;
     const box = $('modal-body');
     box.innerHTML = '';
@@ -172,7 +183,7 @@
     $('modal').hidden = false;
     chatInput.blur();
   }
-  function closeModal() { $('modal').hidden = true; modalKind = null; }
+  function closeModal() { $('modal').hidden = true; $('modal').classList.remove('wide'); modalKind = null; }
   $('modal-x').addEventListener('click', closeModal);
   $('modal').addEventListener('pointerdown', (e) => { if (e.target === $('modal')) closeModal(); });
 
@@ -245,6 +256,10 @@
     $('mp-text').textContent = `${st.mp}/${st.maxMp}`;
     $('atk-text').textContent = st.atk;
     $('def-text').textContent = st.def + (st.buffMs > 0 ? ' 🛡️' : '');
+    $('lv-text').textContent = 'Lv.' + st.level;
+    $('exp-fill').style.width = (100 * st.exp / st.expNext) + '%';
+    $('exp-text').textContent = `${st.exp}/${st.expNext}`;
+    try { localStorage.setItem('hq-level', st.level); localStorage.setItem('hq-exp', st.exp); } catch (e) {}
     const c = ST.CLASSES[myCls()];
     $('cls-text').textContent = `${c.icon} ${c.name}`;
     if (clsChanged) renderSkillbar();
@@ -286,13 +301,13 @@
       row.appendChild(b);
       box.appendChild(row);
     });
-    box.appendChild(el('p', 'modal-hint', '想換職業？到 🗺️ 指揮中心找 🧙 轉職導師聊聊。'));
+    box.appendChild(el('p', 'modal-hint', '想換職業？到 🗺️ 指揮中心找 📂 轉職資料沈理員。'));
     openModal('skills', '📖 技能', box);
   }
   // 轉職導師的對話視窗
   function openMentor() {
     const box = el('div', 'modal-list');
-    box.appendChild(el('p', 'mentor-say', '「颱風天，每個人都要找到自己的位置。你想成為哪一種防衛員呢？」'));
+    box.appendChild(el('p', 'mentor-say', '「你的資料我都整理好了。颱風天，每個人都要找到自己的位置，想轉成哪一種防衛員？」'));
     Object.entries(ST.CLASSES).forEach(([id, c]) => {
       const st = ST.statsFor(id), sk = ST.SKILLS[c.skills[1]];
       const row = el('div', 'modal-row' + (id === myCls() ? ' on' : ''));
@@ -318,11 +333,18 @@
       row.appendChild(b);
       box.appendChild(row);
     });
-    openModal('mentor', '🧙 轉職導師', box);
+    openModal('mentor', '📂 轉職資料沈理員', box);
   }
   // 慶祝煙火的輸入視窗
   function openFirework() {
     const box = el('form', 'fw-form');
+    const lv = myStats ? myStats.level : 1;
+    if (lv < ST.LEVEL.fireworkLv) {
+      box.appendChild(el('p', 'mentor-say', `🔒 升到 Lv.${ST.LEVEL.fireworkLv} 才能放煙火，你現在是 Lv.${lv}。`));
+      box.appendChild(el('p', 'modal-hint', '打颱風和野外的小怪會拿到經驗；在總部每待 10 分鐘也會自動升一等。'));
+      openModal('firework', '🎆 慶祝煙火', box);
+      return;
+    }
     box.appendChild(el('p', 'modal-hint', '輸入想放的字（最多 8 個字），煙火會在你頭上炸開拼成這幾個字，大家都看得到！'));
     const input = el('input');
     input.maxLength = 8; input.placeholder = '例如：颱風退散';
@@ -349,6 +371,97 @@
     };
     openModal('firework', '🎆 慶祝煙火', box);
     setTimeout(() => input.focus(), 50);
+  }
+
+  // ---------------- 個人資料（VIP Pass） ----------------
+  // 右鍵選單
+  function showMenu(who, cx, cy) {
+    const m = $('ctx-menu');
+    m.innerHTML = '';
+    m.appendChild(el('div', 'ctx-name', who.name_));
+    const b = el('button', null, '📇 個人資料');
+    b.onclick = () => { hideMenu(); showProfile(who.pid); };
+    m.appendChild(b);
+    m.hidden = false;
+    m.style.left = Math.min(cx, window.innerWidth - 170) + 'px';
+    m.style.top = Math.min(cy, window.innerHeight - 90) + 'px';
+  }
+  function hideMenu() { $('ctx-menu').hidden = true; }
+  window.addEventListener('pointerdown', (e) => { if (!$('ctx-menu').contains(e.target) && e.target.tagName !== 'CANVAS') hideMenu(); });
+
+  // 跟報名頁一樣的頭銜、來賓編號、條碼（由名字算出來）
+  const TIERS = ['泡麵戰略儲備官', '超市搶菜特派員', '家裡蹲首席執行長', '沙發守護隊長', '追劇值勤員', '零食補給官', '窗戶膠帶工程師', '停班停課等待員', '行動電源備援官', '棉被結界師'];
+  function hashOf(str) {
+    let h = 2166136261;
+    for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
+    return h;
+  }
+  function guestNo(name) {
+    let h = 7;
+    for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) % 997;
+    return String(h).padStart(3, '0');
+  }
+  function showProfile(id) {
+    socket.emit('profile', id, (res) => {
+      if (!res || !res.ok) { toast((res && res.error) || '讀不到這個人的資料'); return; }
+      const c = ST.CLASSES[res.cls] || ST.CLASSES.staff;
+      const box = el('div', 'modal-list');
+      box.appendChild(el('p', 'mono prof-line', `Lv.${res.level} · ${c.icon} ${c.name}`));
+      const v = res.vip;
+      if (!v) {
+        box.appendChild(el('p', 'mentor-say', `${res.name} 還沒有在報名頁生成邀請函，所以沒有 VIP Pass。`));
+        const a = el('a', 'primary small', '去報名頁生成邀請函'); a.href = '/'; a.target = '_blank';
+        if (me && id === me.id) box.appendChild(a);
+        openModal('profile', `📇 ${res.name}`, box);
+        return;
+      }
+      const card = el('div', 'vip' + (v.theme === 's' ? ' silver' : ''));
+      const main = el('div', 'vip-main');
+      const top = el('div', 'vip-top');
+      top.appendChild(el('span', 'vip-brand', 'TYPHOON DAY · VIP PASS'));
+      top.appendChild(el('span', 'vip-spark', '✦'));
+      main.appendChild(top);
+      const idRow = el('div', 'vip-id');
+      const ava = el('div', 'vip-ava');
+      if (v.photo) { const img = el('img'); img.src = 'data:image/jpeg;base64,' + v.photo; img.alt = v.name + ' 的大頭照'; ava.appendChild(img); }
+      idRow.appendChild(ava);
+      const who = el('div', 'vip-who');
+      const tier = el('span', 'vip-tier');
+      tier.appendChild(el('span', 'vip-hq', '防颱總部'));
+      tier.appendChild(el('span', null, TIERS[hashOf(v.name) % TIERS.length]));
+      who.appendChild(tier);
+      who.appendChild(el('span', 'vip-name', v.name));
+      who.appendChild(el('span', 'vip-sub', '特約職員・10.23 颱風假開趴'));
+      idRow.appendChild(who);
+      main.appendChild(idRow);
+      const facts = el('div', 'vip-facts');
+      [['ON REPEAT', v.song], ["TONIGHT'S POUR", v.drink]].forEach(([k, val]) => {
+        const f = el('div', 'vip-fact');
+        f.appendChild(el('span', 'vip-k', k));
+        f.appendChild(el('span', 'vip-v', val || '—'));
+        facts.appendChild(f);
+      });
+      main.appendChild(facts);
+      card.appendChild(main);
+      const stub = el('div', 'vip-stub');
+      stub.appendChild(el('span', 'vip-k', 'GUEST NO.'));
+      stub.appendChild(el('span', 'vip-no', guestNo(v.name)));
+      stub.appendChild(el('span', 'vip-k', '2026.10.23 / 20:00'));
+      const bar = el('div', 'vip-bar');
+      let seed = hashOf(v.name) || 1;
+      for (let i = 0; i < 30; i++) {
+        seed = (Math.imul(seed, 1103515245) + 12345) >>> 0;
+        const b = el('i'); b.style.width = (1 + (seed >>> 16) % 4) + 'px';
+        if (i % 3 === 2) b.style.marginRight = '2px';
+        bar.appendChild(b);
+      }
+      stub.appendChild(bar);
+      stub.appendChild(el('span', 'vip-k', 'ADMIT ONE · ALL ACCESS'));
+      card.appendChild(stub);
+      box.appendChild(card);
+      openModal('profile', `📇 ${res.name} 的個人資料`, box);
+      $('modal').classList.add('wide');
+    });
   }
 
   function toast(text) {
@@ -621,6 +734,33 @@
     }),
   };
 
+  // NPC 和小怪：用一般人物的畫法，再加上手上的道具（畫布比人物寬一點）
+  function drawNpc(p, prop) {
+    const c = document.createElement('canvas');
+    c.width = 96 * 2; c.height = 84 * 2;
+    const ctx = c.getContext('2d');
+    ctx.scale(2, 2);
+    ctx.save(); ctx.translate(16, 4); AV.drawAvatar(ctx, p); ctx.restore();
+    const r = CR.rng(prop === 'sign' ? 41 : 42);
+    if (prop === 'folder') {
+      // 抱著一疊資料夾
+      [['#4f7cc2', 0], ['#ff7a2f', -3], ['#f2c14e', -6]].forEach(([col, dy]) => {
+        CR.rect(ctx, 48, 56 + dy, 20, 13, r, 0.6); CR.fill(ctx, col, r, null); CR.stroke(ctx, r, 2);
+      });
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(52, 52, 12, 3);
+      ctx.fillStyle = CR.INK; ctx.font = '900 6px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('資料', 58, 64);
+    } else if (prop === 'sign') {
+      // 舉著「小心」的警告牌
+      CR.line(ctx, 78, 30, 76, 66, r, 2.6, '#8a5a3a', 0.4);
+      ctx.beginPath(); ctx.moveTo(78, 6); ctx.lineTo(92, 30); ctx.lineTo(64, 30); ctx.closePath();
+      CR.fill(ctx, '#ffd23f', r, null); CR.stroke(ctx, r, 2.4);
+      ctx.fillStyle = CR.INK; ctx.font = '900 13px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('!', 78, 27);
+      CR.rect(ctx, 64, 32, 28, 11, r, 0.6); CR.fill(ctx, '#ffffff', r, null); CR.stroke(ctx, r, 2);
+      ctx.fillStyle = '#e8384f'; ctx.font = '900 8px sans-serif'; ctx.fillText('小心', 78, 40.5);
+    }
+    return c;
+  }
+
   // 慶祝煙火：把文字畫在小畫布上，取樣成一顆顆火花的位置
   function textPoints(text, max) {
     const size = 64;
@@ -773,6 +913,31 @@
             CR.blob(ctx, px + 24, py + 20, 13, 8, r, 0.06); CR.fill(ctx, '#ff7a2f', r, null); CR.stroke(ctx, r, 2.4);
             CR.line(ctx, px + 8, py + 18, px + 2, py + 15, r, 2.4);
           }
+        } else if (ch === 'W') {
+          // 戰情室的電視牆：颱風路徑圖、雷達、新聞
+          CR.rect(ctx, px + 2, py + 2, T - 4, T - 10, r, 0.8); CR.fill(ctx, '#2b2a33', r, null); CR.stroke(ctx, r, 2.4);
+          CR.rect(ctx, px + 6, py + 6, T - 12, T - 18, r, 0.6);
+          const kind = x % 3;
+          CR.fill(ctx, kind === 0 ? '#3e6f8f' : kind === 1 ? '#2f5f4f' : '#4f7cc2', r, null);
+          ctx.save();
+          if (kind === 0) {
+            ctx.beginPath(); ctx.arc(px + 24, py + 19, 7, 0.3, 5.2); CR.stroke(ctx, r, 2.4, '#ff7a2f');
+            CR.line(ctx, px + 10, py + 30, px + 22, py + 22, r, 1.4, '#ffd23f', 0.3);
+          } else if (kind === 1) {
+            ctx.strokeStyle = '#7be08f'; ctx.lineWidth = 1.2;
+            [6, 11].forEach(rr => { ctx.beginPath(); ctx.arc(px + 24, py + 19, rr, 0, Math.PI * 2); ctx.stroke(); });
+            ctx.beginPath(); ctx.moveTo(px + 24, py + 19); ctx.lineTo(px + 33, py + 13); ctx.stroke();
+          } else {
+            ctx.fillStyle = '#ffffff'; ctx.fillRect(px + 9, py + 10, 30, 4);
+            ctx.fillStyle = '#ff6a13'; ctx.fillRect(px + 9, py + 24, 30, 5);
+          }
+          ctx.restore();
+          CR.line(ctx, px + 18, py + T - 8, px + 30, py + T - 8, r, 2.4);
+        } else if (ch === 'C') {
+          // 會議椅：靠背朝桌子的反方向
+          const up = at(x, y + 1) === 'M';
+          CR.blob(ctx, px + 24, py + 26, 13, 10, r, 0.06); CR.fill(ctx, '#2f3b55', r, null); CR.stroke(ctx, r, 2.2);
+          CR.rect(ctx, px + 12, up ? py + 6 : py + 34, 24, 8, r, 0.8); CR.fill(ctx, '#4f7cc2', r, null); CR.stroke(ctx, r, 2.2);
         } else if (ch === 'N') {
           // 轉職導師腳下的星星地毯
           CR.blob(ctx, px + 24, py + 30, 26, 15, r, 0.06); CR.fill(ctx, '#6a4fb8', r, [px - 2, py + 15, T + 4, 30]); CR.stroke(ctx, r, 2.4);
@@ -820,9 +985,18 @@
       kb.on('keydown-J', onAct);
       // K：職業的招牌技能（花魔力）
       kb.on('keydown-K', (e) => { if (!typing()) { e.preventDefault(); this.useSkill(special()); } });
+      // 右鍵點人物（手機長按）可以看個人資料
+      this.input.mouse.disableContextMenu();
+      this.input.on('pointerup', () => { if (this.pressTimer) { this.pressTimer.remove(); this.pressTimer = null; } });
       this.input.on('pointerdown', (p) => {
         if (!this.me) return;
         chatInput.blur();
+        hideMenu();
+        const who = this.playerAt(p.worldX, p.worldY);
+        if (p.rightButtonDown()) { if (who) showMenu(who, p.event.clientX, p.event.clientY); return; }
+        if (who && p.wasTouch) {
+          this.pressTimer = this.time.delayedCall(550, () => { this.target = null; showMenu(who, p.event.clientX || p.x, p.event.clientY || p.y); });
+        }
         // 點到颱風或箱子、而且夠近，就直接打；否則走過去
         const act = this.actionAt(p.worldX, p.worldY);
         if (act) { this.doAction(act); return; }
@@ -859,15 +1033,18 @@
       const big = drawBolt();
       this.textures.addCanvas('bolt-big', big);
 
-      // 指揮中心的轉職導師：戴紫色尖帽、白頭髮的老師
-      const mc = document.createElement('canvas');
-      mc.width = AV.WIDTH * 2; mc.height = AV.HEIGHT * 2;
-      const mctx = mc.getContext('2d'); mctx.scale(2, 2);
-      AV.drawAvatar(mctx, { hair: 'hat', hairColor: '#d6dae1', skin: AV.SKINS[1], outfit: '#6a4fb8', glasses: '1' });
-      this.textures.addCanvas('mentor', mc);
+      // 指揮中心的轉職資料沈理員：短髮、眼鏡、鬍渣、深藍西裝，抱著一疊資料夾
+      this.textures.addCanvas('mentor', drawNpc({ hair: 'short', hairColor: '#2b2a33', skin: AV.SKINS[1], glasses: '1',
+        cls: 'suit', suit: '#2f3b55', tie: '#4f7cc2', npc: 'shen' }, 'folder'));
+      // 野外小怪
+      this.textures.addCanvas('mob-chiang', drawNpc({ hair: 'short', hairColor: '#2b2a33', skin: AV.SKINS[0], glasses: '0',
+        cls: 'suit', suit: '#2f3b55', tie: '#e8384f', npc: 'chiang' }));
+      this.textures.addCanvas('mob-hsu', drawNpc({ hair: 'long', hairColor: '#3a2a26', skin: AV.SKINS[0], glasses: '0',
+        cls: 'suit', suit: '#f2f4f8', tie: '#f2f4f8', npc: 'hsu' }, 'sign'));
+      this.mobs = new Map();
       const mx = MAP.mentor.x, my = MAP.mentor.y + 18;
       this.add.image(mx, my, 'mentor').setScale(0.55).setOrigin(0.5, 0.95).setDepth(my);
-      this.add.text(mx, my - 92, '🧙 轉職導師', {
+      this.add.text(mx, my - 92, '📂 轉職資料沈理員', {
         fontSize: '14px', fontStyle: 'bold', color: '#ffd23f', fontFamily: FONT,
         backgroundColor: 'rgba(19,26,40,0.85)', padding: { x: 7, y: 2 },
       }).setOrigin(0.5).setDepth(my);
@@ -951,13 +1128,7 @@
     }
 
     makeAvatar(p) {
-      const key = `av-${p.hair}-${p.hairColor}-${p.skin}-${p.outfit}-${p.glasses}`;
-      if (!this.textures.exists(key)) {
-        const c = document.createElement('canvas');
-        c.width = AV.WIDTH * 2; c.height = AV.HEIGHT * 2;
-        const ctx = c.getContext('2d'); ctx.scale(2, 2); AV.drawAvatar(ctx, p);
-        this.textures.addCanvas(key, c);
-      }
+      const key = this.avatarKey(p);
       const body = this.add.image(0, 0, key).setScale(0.5).setOrigin(0.5, 0.95);
       const tag = this.add.text(0, -84, this.tagText(p), {
         fontSize: '14px', fontStyle: 'bold', color: '#f2f4f8', fontFamily: FONT,
@@ -969,6 +1140,8 @@
       cont.bar = bar;
       cont.tag = tag;
       cont.name_ = p.name;
+      cont.pid = p.id;
+      cont.look = { hair: p.hair, hairColor: p.hairColor, skin: p.skin, outfit: p.outfit, glasses: p.glasses };
       cont.texKey = key;
       this.drawHpBar(cont, p);
       cont.dir = p.dir || 1;
@@ -978,7 +1151,30 @@
       return cont;
     }
 
-    tagText(p) { const c = ST.CLASSES[p.cls] || ST.CLASSES.staff; return `${c.icon} ${p.name}`; }
+    // 外觀＋職業服裝的貼圖，第一次用到才畫
+    avatarKey(p) {
+      const key = `av-${p.hair}-${p.hairColor}-${p.skin}-${p.outfit}-${p.glasses}-${p.cls || 'staff'}`;
+      if (!this.textures.exists(key)) {
+        const c = document.createElement('canvas');
+        c.width = AV.WIDTH * 2; c.height = AV.HEIGHT * 2;
+        const ctx = c.getContext('2d'); ctx.scale(2, 2); AV.drawAvatar(ctx, p);
+        this.textures.addCanvas(key, c);
+      }
+      return key;
+    }
+
+    tagText(p) { const c = ST.CLASSES[p.cls] || ST.CLASSES.staff; return `Lv.${p.level || 1} ${c.icon} ${p.name}`; }
+
+    // 世界座標上點到的是哪個人（自己也算）
+    playerAt(x, y) {
+      let best = null, bd = 34;
+      [this.me, ...this.remotes.values()].forEach(c => {
+        if (!c) return;
+        const d = Math.hypot(x - c.x, y - (c.y - 32));
+        if (d < bd) { bd = d; best = c; }
+      });
+      return best;
+    }
 
     // 名牌上方的小血條
     drawHpBar(c, st) {
@@ -998,9 +1194,11 @@
       if (st.hp < prev.hp) this.floatText(who.x, who.y - 60, '-' + (prev.hp - st.hp), '#ff6a13', 22);
       else if (st.hp > prev.hp && !prev.dead) this.floatText(who.x, who.y - 60, '+' + (st.hp - prev.hp), '#7be08f', 22);
       if (st.cls && st.cls !== prev.cls) {
-        who.tag.setText(this.tagText({ cls: st.cls, name: who.name_ }));
+        who.texKey = this.avatarKey(Object.assign({}, who.look, { cls: st.cls }));
+        who.body_.setTexture(who.texKey);
         if (prev.cls) this.burst(who.x, who.y - 40, 10, 0xffd23f);
       }
+      if (st.cls !== prev.cls || st.level !== prev.level) who.tag.setText(this.tagText({ cls: st.cls, name: who.name_, level: st.level }));
       this.drawHpBar(who, st);
       // 防禦增益：頭上掛一個小盾牌
       if (st.buffMs > 0) {
@@ -1071,6 +1269,9 @@
       res.players.forEach(p => { if (p.id !== res.you.id) this.addRemote(p); });
       this.updateOnline();
       this.setMonster(res.monster);
+      this.mobs.forEach(m => m.destroy());
+      this.mobs.clear();
+      (res.mobs || []).forEach(m => this.setMob(m));
       renderInventory(res.you.inv);
       renderStats(res.you);
       this.emptyCrates.forEach(i => i.destroy());
@@ -1161,13 +1362,14 @@
     }
 
     // 楓之谷風格的傷害數字：連續打會往上疊
-    damageNumber(dmg, crit) {
+    damageNumber(dmg, crit, at) {
       const now = performance.now();
       if (now - (this.lastDmgAt || 0) > 700) this.dmgStack = 0;
       this.lastDmgAt = now;
-      const y = this.monster.y - 150 - this.dmgStack * 30;
+      const fx = at ? at.x : this.monster.x, fy = at ? at.y : this.monster.y - 150;
+      const y = fy - this.dmgStack * 30;
       this.dmgStack = (this.dmgStack + 1) % 5;
-      const t = this.add.text(this.monster.x + (Math.random() - 0.5) * 30, y, (crit ? '💥' : '') + dmg, {
+      const t = this.add.text(fx + (Math.random() - 0.5) * 30, y, (crit ? '💥' : '') + dmg, {
         fontSize: crit ? '42px' : '34px', fontStyle: '900', fontFamily: '"Space Mono", ' + FONT,
         color: crit ? '#ff5a2a' : '#ffb020', stroke: crit ? '#4a0d00' : '#5a2a00', strokeThickness: 7,
       }).setOrigin(0.5).setDepth(2100);
@@ -1223,7 +1425,7 @@
       });
       const say = { gust: ['🌪️ 強風來了！', '#ffffff'], rain: ['🌧️ 暴雨彈！', '#bfe6ff'], bolt: ['⚡ 落雷！', '#ffd23f'] }[a.type];
       this.floatText(this.monster.x, this.monster.y - 200, say[0], say[1], 20);
-      if (this.me && !this.isDead() && a.spots.some(sp => Math.hypot(this.me.x - sp.x, this.me.y - sp.y) <= a.r)) {
+      if (this.me && !this.isDead() && this.roomId === 'front' && a.spots.some(sp => Math.hypot(this.me.x - sp.x, this.me.y - sp.y) <= a.r)) {
         toast('⚠️ 快離開紅圈！');
       }
     }
@@ -1264,7 +1466,7 @@
       if (!this.me || this.isDead()) return;
       const near = a.spots.some(sp => Math.hypot(this.me.x - sp.x, this.me.y - sp.y) < 600);
       if (near) this.cameras.main.shake(260, a.type === 'bolt' ? 0.012 : 0.007);
-      if (a.type !== 'gust') return;
+      if (a.type !== 'gust' || this.roomId !== 'front') return; // 圍欄內是安全區
       const sp = a.spots[0];
       const dx = this.me.x - sp.x, dy = this.me.y - sp.y, d = Math.hypot(dx, dy);
       if (d > a.r) return;
@@ -1288,7 +1490,8 @@
       const who = me && fx.id === me.id ? this.me : this.remotes.get(fx.id);
       if (!who) return;
       const sk = ST.SKILLS[fx.skill];
-      const mx = this.monster.x, my = this.monster.y - 90;
+      const foe = this.foePos(fx.target);
+      const mx = foe.x, my = foe.mid;
       if (fx.skill !== 'strike') this.floatText(who.x, who.y - 130, `${sk.icon} ${sk.name}！`, '#ffd23f', 20);
       const ring = (r, color) => {
         const g = this.add.graphics({ x: who.x, y: who.y }).setDepth(-4);
@@ -1308,7 +1511,7 @@
         beam.lineStyle(4, 0xffffff, 0.9); beam.lineBetween(who.x, who.y - 140, mx, my);
         this.tweens.add({ targets: beam, alpha: 0, delay: 300, duration: 500, onComplete: () => beam.destroy() });
         this.floatText(mx, my - 80, '🔮 被削弱了！', '#d9c4ff', 22);
-        this.time.delayedCall(80, () => this.applyMonsterTint());
+        this.time.delayedCall(80, () => this.refreshFoeTint(fx.target));
       } else if (fx.skill === 'milk') {
         const b = this.add.image(who.x, who.y - 100, 'fx-milk').setDepth(2050).setScale(0.3);
         this.tweens.add({ targets: b, scale: 1, angle: { from: -20, to: 20 }, duration: 350, ease: 'Back.out' });
@@ -1340,7 +1543,7 @@
         // 本人先藏起來，替身繞著颱風溜一圈，沿路留下冰晶
         const ghost = this.add.image(who.x, who.y, who.texKey).setScale(0.5).setOrigin(0.5, 0.95).setDepth(3000);
         who.body_.setAlpha(0);
-        const cx = this.monster.x, cy = this.monster.y, R = 150;
+        const cx = foe.x, cy = foe.y, R = foe.r;
         const start = Math.atan2(who.y - cy, who.x - cx);
         const o = { t: 0 };
         this.tweens.add({ targets: o, t: 1, duration: 900, ease: 'Sine.inOut',
@@ -1356,8 +1559,8 @@
           onComplete: () => {
             ghost.destroy(); who.body_.setAlpha(who.stats && who.stats.dead ? 0.45 : 1);
             this.burst(cx, cy - 60, 14, 0xbfe6ff, 120);
-            this.floatText(cx, cy - 220, '❄️ 冰凍！', '#bfe6ff', 26);
-            this.applyMonsterTint();
+            this.floatText(cx, cy - (foe.mob ? 120 : 220), '❄️ 冰凍！', '#bfe6ff', 26);
+            this.refreshFoeTint(fx.target);
           } });
       }
     }
@@ -1438,7 +1641,12 @@
     // 世界座標 (x, y) 上可以互動的東西，夠近才算
     actionAt(x, y) {
       if (this.mState.alive && this.monster.visible && Math.hypot(x - this.monster.x, y - (this.monster.y - 70)) < 110 &&
-        Math.hypot(this.me.x - this.monster.x, this.me.y - this.monster.y) < 130) return { type: 'attack' };
+        Math.hypot(this.me.x - this.monster.x, this.me.y - this.monster.y) < 130) return { type: 'attack', target: 'boss' };
+      for (const m of this.mobs.values()) {
+        if (m.state.alive && Math.hypot(x - m.x, y - (m.y - 40)) < 50 && Math.hypot(this.me.x - m.x, this.me.y - m.y) < 130) {
+          return { type: 'attack', target: m.state.id };
+        }
+      }
       const tx = Math.floor(x / T), ty = Math.floor(y / T);
       if (MAP.crateAt(tx, ty) >= 0 && Math.hypot(this.me.x - (tx + 0.5) * T, this.me.y - (ty + 0.5) * T) < 1.7 * T) {
         return { type: 'crate', tx, ty };
@@ -1453,9 +1661,8 @@
     // 自己身邊可以互動的東西（給按鈕和空白鍵用）
     nearbyAction() {
       if (!this.me) return null;
-      if (this.mState.alive && Math.hypot(this.me.x - this.monster.x, this.me.y - this.monster.y) < 130) {
-        return { type: 'attack' };
-      }
+      const foe = this.nearestFoe(130);
+      if (foe) return { type: 'attack', target: foe.id, name: foe.name };
       const cx = Math.floor(this.me.x / T), cy = Math.floor(this.me.y / T);
       let best = null, bd = Infinity;
       for (let ty = cy - 2; ty <= cy + 2; ty++) {
@@ -1481,7 +1688,7 @@
       // 先把目前位置告訴伺服器，它才會判斷你夠近
       socket.emit('move', { x: Math.round(this.me.x), y: Math.round(this.me.y), dir: this.me.dir, moving: false });
       if (act.type === 'attack') {
-        this.castSkill(act.skill || 'strike');
+        this.castSkill(act.skill || 'strike', act.target);
       } else if (act.type === 'mentor') {
         openMentor();
       } else if (act.type === 'cook') {
@@ -1504,26 +1711,155 @@
     useSkill(id) {
       if (!this.me || this.isDead()) return;
       const sk = ST.SKILLS[id];
+      let target = 'boss';
       if (!sk.support) {
-        if (!this.mState.alive) { toast(`颱風${ST.MONSTER.name}還沒出現`); return; }
-        if (Math.hypot(this.me.x - this.monster.x, this.me.y - this.monster.y) > sk.range) {
-          toast(`離颱風太遠了，${sk.name}的射程是 ${sk.range}`); return;
-        }
+        const foe = this.nearestFoe(sk.range);
+        if (!foe) { toast(`附近沒有怪物，${sk.name}的射程是 ${sk.range}`); return; }
+        target = foe.id;
       }
       const now = performance.now();
       if (now - (this.lastActTime || 0) < 360) return;
       this.lastActTime = now;
       this.target = null;
       socket.emit('move', { x: Math.round(this.me.x), y: Math.round(this.me.y), dir: this.me.dir, moving: false });
-      this.castSkill(id);
+      this.castSkill(id, target);
     }
 
-    castSkill(id) {
+    // 射程內最近的敵人（颱風或小怪）
+    nearestFoe(range) {
+      let best = null, bd = range;
+      if (this.mState.alive && this.monster.visible) {
+        const d = Math.hypot(this.me.x - this.monster.x, this.me.y - this.monster.y);
+        if (d <= bd) { bd = d; best = { id: 'boss', name: ST.MONSTER.name }; }
+      }
+      this.mobs.forEach(m => {
+        if (!m.state.alive) return;
+        const d = Math.hypot(this.me.x - m.x, this.me.y - m.y);
+        if (d <= bd) { bd = d; best = { id: m.state.id, name: ST.MOBS[m.state.kind].name }; }
+      });
+      return best;
+    }
+
+    // 技能特效要打到的位置：x、腳底 y、身體中間 y、繞圈半徑
+    foePos(target) {
+      const m = target && target !== 'boss' ? this.mobs.get(target) : null;
+      if (m) return { x: m.x, y: m.y, mid: m.y - 40, r: 80, mob: m };
+      return { x: this.monster.x, y: this.monster.y, mid: this.monster.y - 90, r: 150, mob: null };
+    }
+
+    refreshFoeTint(target) {
+      const m = target && target !== 'boss' ? this.mobs.get(target) : null;
+      if (!m) { this.applyMonsterTint(); return; }
+      const now = performance.now();
+      if (now < m.frozenUntil) m.body_.setTint(0x9fd8ff);
+      else if (now < m.weakUntil) m.body_.setTint(0xd9c4ff);
+      else m.body_.clearTint();
+    }
+
+    // ---------- 野外小怪 ----------
+    setMob(st) {
+      let m = this.mobs.get(st.id);
+      const def = ST.MOBS[st.kind];
+      if (!m) {
+        const body = this.add.image(0, 0, 'mob-' + st.kind).setScale(0.62).setOrigin(0.5, 0.95);
+        const tag = this.add.text(0, 10, `Lv.${def.level} ${def.name}`, {
+          fontSize: '13px', fontStyle: 'bold', color: '#ffd23f', fontFamily: FONT,
+          backgroundColor: 'rgba(19,26,40,0.85)', padding: { x: 6, y: 2 },
+        }).setOrigin(0.5, 0);
+        const bar = this.add.graphics();
+        const ice = this.add.image(0, 4, 'fx-ice').setOrigin(0.5, 1).setScale(1.2, 0.9).setVisible(false);
+        m = this.add.container(st.x, st.y, [body, ice, bar, tag]);
+        m.body_ = body; m.bar = bar; m.ice = ice;
+        m.tx = st.x; m.ty = st.y;
+        this.mobs.set(st.id, m);
+      }
+      const was = m.state;
+      m.state = st;
+      const now = performance.now();
+      m.frozenUntil = now + (st.frozen || 0);
+      m.weakUntil = now + (st.weak || 0);
+      if (st.alive && (!was || !was.alive)) {
+        m.x = m.tx = st.x; m.y = m.ty = st.y;
+        this.tweens.killTweensOf(m);
+        m.setVisible(true).setAlpha(1).setAngle(0).setScale(1);
+        if (was) this.tweens.add({ targets: m, scale: { from: 0.2, to: 1 }, duration: 400, ease: 'Back.out' });
+      } else if (!st.alive && was && was.alive) {
+        this.tweens.add({ targets: m, angle: 90, alpha: 0, y: m.y - 30, duration: 600, onComplete: () => m.setVisible(false) });
+      } else if (!st.alive) m.setVisible(false);
+      this.drawMobBar(m);
+      this.refreshFoeTint(st.id);
+    }
+
+    drawMobBar(m) {
+      const w = 54, ratio = m.state.maxHp ? m.state.hp / m.state.maxHp : 0;
+      m.bar.clear();
+      m.bar.fillStyle(0x131a28, 0.9); m.bar.fillRoundedRect(-w / 2 - 2, -104, w + 4, 8, 4);
+      m.bar.fillStyle(0xff3b3b, 1); m.bar.fillRoundedRect(-w / 2, -102, Math.max(3, w * ratio), 4, 2);
+    }
+
+    moveMobs(list) {
+      list.forEach(([id, x, y]) => {
+        const m = this.mobs.get(id);
+        if (!m) return;
+        if (x !== m.tx) m.body_.setFlipX(x < m.tx);
+        m.tx = x; m.ty = y;
+      });
+    }
+
+    onMobHit(h) {
+      const delay = { arrow: 240, barbell: 330, skate: 950 }[h.skill] || 0;
+      const show = () => {
+        const m = this.mobs.get(h.mid);
+        if (!m) return;
+        m.state.hp = Math.min(m.state.hp, h.hp);
+        this.drawMobBar(m);
+        const who = me && h.id === me.id ? this.me : this.remotes.get(h.id);
+        if (who && (h.skill === 'strike' || h.skill === 'power')) this.lunge(who, m.x);
+        m.body_.setTintFill(0xffffff);
+        this.time.delayedCall(80, () => this.refreshFoeTint(h.mid));
+        this.tweens.add({ targets: m.body_, x: (who && m.x < who.x ? -8 : 8), duration: 70, yoyo: true });
+        this.damageNumber(h.dmg, h.crit, { x: m.x, y: m.y - 100 });
+      };
+      if (delay) this.time.delayedCall(delay, show); else show();
+    }
+
+    onMobAttack(a) {
+      const m = this.mobs.get(a.mid);
+      const who = me && a.id === me.id ? this.me : this.remotes.get(a.id);
+      if (!m || !who) return;
+      // 往目標撲一下，頭上冒出台詞
+      const dir = who.x < m.x ? -1 : 1;
+      this.tweens.add({ targets: m.body_, x: dir * 16, angle: dir * 10, duration: 150, yoyo: true, delay: 250 });
+      if (m.say) m.say.destroy();
+      m.say = this.add.text(0, -110, a.say, {
+        fontSize: '14px', color: '#3a3a3c', fontFamily: FONT, backgroundColor: '#ffffff', padding: { x: 8, y: 4 },
+      }).setOrigin(0.5, 1);
+      m.add(m.say);
+      const say = m.say;
+      this.time.delayedCall(1600, () => { if (m.say === say) { say.destroy(); m.say = null; } });
+      this.time.delayedCall(450, () => this.burst(who.x, who.y - 40, 6, 0xff6a13, 40));
+    }
+
+    onLevelUp(l) {
+      const who = me && l.id === me.id ? this.me : this.remotes.get(l.id);
+      if (!who) return;
+      this.burst(who.x, who.y - 50, 16, 0xffd23f, 90);
+      const t = this.add.text(who.x, who.y - 120, `LEVEL UP! Lv.${l.level}`, {
+        fontSize: '24px', fontStyle: '900', fontFamily: '"Space Mono", ' + FONT, color: '#ffd23f', stroke: '#5a2a00', strokeThickness: 6,
+      }).setOrigin(0.5).setDepth(2100);
+      this.tweens.add({ targets: t, y: who.y - 170, alpha: { from: 1, to: 0 }, delay: 600, duration: 900, onComplete: () => t.destroy() });
+      if (who === this.me) {
+        toast(l.level === ST.LEVEL.fireworkLv ? `⭐ 升到 Lv.${l.level}！可以放慶祝煙火了 🎆` : `⭐ 升到 Lv.${l.level}！`);
+        if (l.level === ST.LEVEL.fireworkLv && modalKind === 'firework') openFirework();
+      }
+    }
+
+    castSkill(id, target) {
       const sk = ST.SKILLS[id];
       const left = (cooldowns[id] || 0) - performance.now();
       if (left > 0) { if (id !== 'strike') toast(`${sk.name}還在冷卻，${Math.ceil(left / 1000)} 秒後可以再用`); return; }
       if (myStats && myStats.mp < sk.mp) { toast(`魔力不夠，${sk.name}要 ${sk.mp} 點，喝礦泉水可以補`); return; }
-      socket.emit('attack', id, (res) => {
+      socket.emit('attack', id, target || 'boss', (res) => {
         if (res && res.ok) cooldowns[id] = performance.now() + sk.cooldown;
         else if (res && res.error) toast(res.error);
       });
@@ -1603,6 +1939,19 @@
         this.lastMoving = moving;
       }
 
+      // 小怪：平滑移動、冰凍時停住
+      this.mobs.forEach(m => {
+        if (!m.visible) return;
+        m.x += (m.tx - m.x) * Math.min(1, dt * 8);
+        m.y += (m.ty - m.y) * Math.min(1, dt * 8);
+        const frozen = performance.now() < m.frozenUntil;
+        m.ice.setVisible(frozen);
+        if (m.wasFrozen && !frozen) this.refreshFoeTint(m.state.id);
+        m.wasFrozen = frozen;
+        m.body_.y = frozen ? 0 : -Math.abs(Math.sin(time / 160 + m.tx)) * 4;
+        m.setDepth(m.y);
+      });
+
       // 其他玩家：平滑移動
       this.remotes.forEach(r => {
         r.x += (r.tx - r.x) * Math.min(1, dt * 12);
@@ -1646,8 +1995,8 @@
       // 互動按鈕
       const all0 = [this.me, ...this.remotes.values()];
       const near = this.nearbyAction();
-      const LABELS = { attack: `👊 攻擊${ST.MONSTER.name}`, crate: '🔨 敲箱子', cook: '🍜 煮泡麵', mentor: '💬 跟導師說話' };
-      const label = near && !this.isDead() ? LABELS[near.type] : '';
+      const LABELS = { crate: '🔨 敲箱子', cook: '🍜 煮泡麵', mentor: '💬 找沈理員轉職' };
+      const label = !near || this.isDead() ? '' : near.type === 'attack' ? `👊 攻擊${near.name}` : LABELS[near.type];
       if (label !== this.actionLabel) {
         this.actionLabel = label;
         $('action-btn').hidden = !label;
@@ -1685,8 +2034,8 @@
         $('video-prompt').hidden = rid !== 'video';
         if (room && !first) toast(`進入 ${room.name}`);
         const tips = {
-          front: `靠近颱風${ST.MONSTER.name}按空白鍵攻擊、K 放職業技能；看到紅圈快閃開！`,
-          command: '找右上角的 🧙 轉職導師聊聊，可以換職業',
+          front: `野外有颱風${ST.MONSTER.name}和小怪！空白鍵攻擊、K 放技能，看到紅圈快閃開；回到圍欄裡就安全了`,
+          command: '找右上角的 📂 轉職資料沈理員，可以換職業',
           storage: '走到箱子旁按空白鍵（或點箱子）敲三下',
           kitchen: '站在爐台旁按空白鍵煮泡麵補血，有蔬菜會自動加進去',
         };

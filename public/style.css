@@ -1,0 +1,54 @@
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: #2d3a4a;
+  font-family: "Zen Maru Gothic", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif; color: #4a3b2c; }
+#game { position: fixed; inset: 0; }
+[hidden] { display: none !important; }
+
+.overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+  background: rgba(30, 40, 55, 0.55); backdrop-filter: blur(3px); z-index: 10; padding: 16px; }
+.card { background: #fffaf0; border: 4px solid #e8d5b5; border-radius: 28px; padding: 24px 28px;
+  max-width: 520px; width: 100%; box-shadow: 0 10px 0 #d8c09a, 0 16px 40px rgba(0,0,0,.3); }
+h1 { margin: 0; font-size: 28px; text-align: center; }
+.sub { text-align: center; margin: 6px 0 18px; color: #8a7560; }
+.create { display: flex; gap: 20px; align-items: flex-start; }
+#preview { background: #e4f3e1; border-radius: 20px; border: 3px solid #cfe5c9; flex-shrink: 0; }
+.fields { flex: 1; min-width: 0; }
+label { display: block; font-weight: bold; }
+input { width: 100%; font: inherit; padding: 10px 14px; border-radius: 14px; border: 3px solid #e8d5b5;
+  background: #fff; margin-top: 4px; outline: none; color: inherit; }
+input:focus { border-color: #f5b74a; }
+.label { font-weight: bold; margin: 12px 0 6px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chips button { font: inherit; border: 3px solid #e8d5b5; background: #fff; border-radius: 999px;
+  padding: 4px 12px; cursor: pointer; color: inherit; }
+.chips button.on { background: #ffe08a; border-color: #f5b74a; }
+.swatches { display: flex; flex-wrap: wrap; gap: 6px; }
+.swatches button { width: 28px; height: 28px; border-radius: 50%; border: 3px solid #fff;
+  box-shadow: 0 0 0 2px #e8d5b5; cursor: pointer; }
+.swatches button.on { box-shadow: 0 0 0 3px #f5b74a; }
+.primary { font: inherit; font-weight: bold; background: #6cc070; color: #fff; border: none;
+  border-radius: 999px; padding: 10px 24px; cursor: pointer; box-shadow: 0 4px 0 #4a9a4f; }
+.primary:active { transform: translateY(2px); box-shadow: 0 2px 0 #4a9a4f; }
+#join-form .primary { display: block; margin: 16px auto 0; font-size: 18px; padding: 12px 40px; }
+.error { color: #d9534f; text-align: center; min-height: 1.2em; margin: 8px 0 0; }
+
+#hud > * { position: fixed; z-index: 5; }
+#banner { top: 12px; left: 50%; transform: translateX(-50%); background: #fffaf0; border: 3px solid #e8d5b5;
+  border-radius: 999px; padding: 6px 18px; font-weight: bold; white-space: nowrap; font-size: 14px; }
+#video-prompt { top: 56px; left: 50%; transform: translateX(-50%); background: #fffaf0; border: 3px solid #9cc9f0;
+  border-radius: 20px; padding: 8px 10px 8px 16px; display: flex; gap: 12px; align-items: center; font-weight: bold; }
+#chat { left: 12px; bottom: 12px; width: min(360px, calc(100vw - 24px)); background: rgba(255,250,240,.92);
+  border: 3px solid #e8d5b5; border-radius: 20px; padding: 10px; }
+#messages { height: 180px; overflow-y: auto; font-size: 14px; line-height: 1.5; padding: 0 4px 6px; }
+#messages .sys { color: #8a7560; font-style: italic; }
+#messages b { color: #c77d2a; }
+#chat-input { margin: 0; padding: 8px 12px; }
+#help { right: 12px; bottom: 12px; background: rgba(255,250,240,.85); border-radius: 12px; padding: 6px 12px;
+  font-size: 12px; }
+
+@media (max-width: 600px) {
+  .create { flex-direction: column; align-items: center; }
+  #messages { height: 72px; font-size: 13px; }
+  #help { display: none; }
+  #banner { font-size: 12px; }
+}

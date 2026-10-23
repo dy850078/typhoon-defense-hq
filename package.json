@@ -1,0 +1,17 @@
+{
+  "name": "typhoon-defense-hq",
+  "version": "1.0.0",
+  "description": "颱風天防衛總部：小型多人線上世界",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^5.3.0",
+    "phaser": "^3.80.1",
+    "socket.io": "^4.8.4"
+  },
+  "private": true
+}

@@ -725,7 +725,7 @@
     input.value = localStorage.getItem('hq-fw') || '';
     box.appendChild(input);
     const chips = el('div', 'chips');
-    ['颱風退散', '生日快樂', '乾杯', '防衛成功', '放假囉'].forEach(t => {
+    ['颱風退散', '天天快樂', '乾杯', '防衛成功', '放假囉'].forEach(t => {
       const b = el('button', null, t); b.type = 'button';
       b.onclick = () => { input.value = t; input.focus(); };
       chips.appendChild(b);
@@ -1139,7 +1139,7 @@
       path(); CR.stroke(ctx, r, 2.2);
       CR.blob(ctx, 16, 4, 4, 4, r, 0.15, 12); CR.fill(ctx, '#ffffff', r, null); CR.stroke(ctx, r, 1.6);
     }),
-    // 慶生飄出來的音符：白底黑框，顯示時再染成粉彩色（兩倍大，顯示時縮小）
+    // 慶祝時飄出來的音符：白底黑框，顯示時再染成粉彩色（兩倍大，顯示時縮小）
     note: () => fxCanvas(56, 64, 44, (ctx, r) => {
       ctx.scale(2, 2);
       CR.line(ctx, 15, 25, 15, 5, r, 2.4, CR.INK, 0.2);
@@ -1999,7 +1999,7 @@
       }
     }
 
-    // 拿著蛋糕的慶生氛圍：腳下一圈暖暖的光、音符往上飄、彩帶灑下來，偶爾再噴一圈星星
+    // 拿著蛋糕的慶祝氛圍：腳下一圈暖暖的光、音符往上飄、彩帶灑下來，偶爾再噴一圈星星
     cakeParty(who, first) {
       const PASTEL = [0xff8fab, 0xffd23f, 0x8fd3ff, 0xb39cff, 0x7be0a6, 0xffb27a];
       const pick = () => PASTEL[Math.floor(Math.random() * PASTEL.length)];
@@ -2014,11 +2014,6 @@
         for (let i = 0; i < 10; i++) this.time.delayedCall(i * 60, () => who.cakeUntil && this.cakeNote(who, pick()));
         for (let i = 0; i < 30; i++) this.cakeConfetti(who, pick(), true);
         this.burst(who.x, who.y - 50, 16, 0xffd23f, 130);
-        const t = this.add.text(who.x, who.y - 140, '🎂 生日快樂！🎉', {
-          fontSize: '26px', fontStyle: 'bold', color: '#ffd23f', fontFamily: FONT, stroke: '#131a28', strokeThickness: 5,
-        }).setOrigin(0.5).setDepth(2060).setScale(0.3);
-        this.tweens.add({ targets: t, scale: 1, duration: 380, ease: 'Back.out' });
-        this.tweens.add({ targets: t, y: who.y - 175, alpha: 0, delay: 1800, duration: 700, onComplete: () => t.destroy() });
         who.cakeFx = { note: 0, conf: 0, star: 0 };
         return;
       }

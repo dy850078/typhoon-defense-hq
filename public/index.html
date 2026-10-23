@@ -224,13 +224,6 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outlin
 .story-prev { max-width: 280px; width: 100%; border-radius: 16px; display: block; margin-top: 10px; }
 .actions { display: flex; flex-direction: column; gap: 16px; }
 .btnrow { display: flex; flex-wrap: wrap; gap: 12px; }
-.linkbox { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-.linkbox input {
-  flex: 1 1 260px; min-width: 0;
-  font: 400 13px var(--mono); color: var(--muted);
-  background: var(--paper); border: 1.5px solid var(--line); border-radius: 10px;
-  padding: 10px 12px; min-height: 44px;
-}
 
 /* program */
 .program { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-top: 6px solid var(--accent); border-bottom: 6px solid var(--accent); }
@@ -242,7 +235,7 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outlin
 .note { font-size: clamp(15px, 1.8vw, 18px); color: var(--muted); }
 
 /* join + details */
-.join { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.join { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
 .door {
   display: flex; flex-direction: column; gap: 8px;
   padding: 20px 22px; border-radius: 20px;
@@ -411,19 +404,10 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outlin
     <div style="height: 24px"></div>
     <div class="actions">
       <div class="btnrow">
-        <a class="btn primary" id="enter-btn" href="hq.html">進入颱風天防衛總部</a>
         <button type="button" class="btn" id="dl-btn">存成 IG 限時動態</button>
         <button type="button" class="btn" id="redo-btn">重新填寫</button>
       </div>
       <div id="story-box" class="story-note" hidden></div>
-      <div>
-        <p class="label-txt" style="margin: 0 0 8px">我的專屬連結</p>
-        <div class="linkbox">
-          <input type="text" id="my-link" readonly aria-label="我的專屬連結">
-          <button type="button" class="btn dark" id="copy-btn">複製連結</button>
-        </div>
-        <p class="note-sm" id="link-note" style="margin-top: 8px">貼到群組，大家點開就能看到你的邀請函。</p>
-      </div>
     </div>
   </section>
 
@@ -449,12 +433,7 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outlin
       <a class="door" href="hq.html">
         <span class="pill alt">免帳號</span>
         <span class="door-title">進入颱風天防衛總部</span>
-        <span class="door-sub">用小動物在總部走來走去、聊天，走進「視訊會議室」就能一起視訊。手機電腦都能玩，不用註冊。</span>
-      </a>
-      <a class="door" href="https://discord.gg/kYcdCAxcZ" target="_blank" rel="noopener">
-        <span class="pill">Discord</span>
-        <span class="door-title">用 Discord 進入</span>
-        <span class="door-sub">已經有 Discord 帳號的人也可以走這裡。discord.gg/kYcdCAxcZ</span>
+        <span class="door-sub">用你的角色在總部走來走去、聊天、敲物資箱、出門打颱風，走進「視訊會議室」就能一起視訊。手機電腦都能玩，不用註冊。</span>
       </a>
     </div>
   </section>
@@ -469,29 +448,19 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outlin
 <script>
 (function () {
   var IN_CLAUDE = /claude/i.test(location.hostname) || location.protocol === 'about:';
-  var BASE = IN_CLAUDE ? 'https://claude.ai/artifact/AvoWmAi7GSToeydH4tK4eD' : location.href.split('#')[0];
-  var DISCORD = 'discord.gg/kYcdCAxcZ';
   var $ = function (id) { return document.getElementById(id); };
 
   var photoBig = null;   // data URL ~640px, this device only
   var photoSmall = null; // base64 jpeg ~96px, travels in the link
   var current = null;
 
-  /* ---------- encoding the personal link ---------- */
-  function toB64url(bytes) {
-    var s = '';
-    for (var i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
-    return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-  }
+  /* ---------- 讀取之前分享出去的專屬連結（舊連結仍可開啟） ---------- */
   function fromB64url(t) {
     t = t.replace(/-/g, '+').replace(/_/g, '/');
     while (t.length % 4) t += '=';
     var s = atob(t), out = new Uint8Array(s.length);
     for (var i = 0; i < s.length; i++) out[i] = s.charCodeAt(i);
     return out;
-  }
-  function encode(d) {
-    return 'i' + toB64url(new TextEncoder().encode(JSON.stringify({ n: d.name, s: d.song, d: d.drink, t: d.theme, p: d.photo || '' })));
   }
   function decode(tok) {
     try {
@@ -600,12 +569,8 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outlin
       if (i % 3 === 2) el.style.marginRight = '2px';
       bar.appendChild(el);
     });
-    var link = BASE + '#' + encode(d);
-    $('my-link').value = link;
     $('inv-title').textContent = mine ? '報到成功，派對見！' : d.name + ' 的邀請函';
-    $('link-note').textContent = mine ? '貼到群組，大家點開就能看到你的邀請函。' : '想要自己的邀請函？按「重新填寫」報名。';
     $('redo-btn').textContent = mine ? '重新填寫' : '我也要報名';
-    $('enter-btn').hidden = !mine;
     $('join').hidden = !mine;
     $('register').hidden = true;
     $('invite').hidden = false;
@@ -644,18 +609,6 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outlin
     }
     showForm();
     $('register').scrollIntoView({ behavior: 'smooth', block: 'start' });
-  });
-
-  /* ---------- copy link ---------- */
-  $('copy-btn').addEventListener('click', function () {
-    var btn = this, field = $('my-link');
-    function fallback() { field.focus(); field.select(); btn.textContent = '已選取，請手動複製'; }
-    try {
-      navigator.clipboard.writeText(field.value).then(function () {
-        btn.textContent = '已複製！';
-        setTimeout(function () { btn.textContent = '複製連結'; }, 1800);
-      }, fallback);
-    } catch (e) { fallback(); }
   });
 
   /* ---------- download as image ---------- */

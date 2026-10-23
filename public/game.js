@@ -8,7 +8,7 @@
   // 近距離的普攻：打到時角色往前撲一下
   const MELEE = ['strike', 'power', 'syringe', 'punch', 'kick'];
   // 會飛過去的攻擊：特效打到才跳數字（毫秒）
-  const HIT_DELAY = { arrow: 240, barbell: 330, skate: 950, shot: 260, orb: 300, ray: 120 };
+  const HIT_DELAY = { arrow: 520, barbell: 330, skate: 950, shot: 260, orb: 300, ray: 120 };
   // 人物貼圖比 64x80 大一圈，翅膀、氣球、帽子才畫得下；(16,32) 是人物框的左上角，腳底在 y=108
   const FRAME = { w: 96, h: 112, ox: 16, oy: 32 };
   const AV_ORIGIN_Y = (FRAME.oy + 76) / FRAME.h;
@@ -1080,6 +1080,25 @@
       });
       ctx.beginPath(); ctx.moveTo(78, 12); ctx.bezierCurveTo(74, 2, 62, 3, 64, 12); ctx.bezierCurveTo(62, 21, 74, 22, 78, 12); ctx.closePath();
       CR.fill(ctx, '#e8384f', r, null); CR.stroke(ctx, r, 2);
+    }),
+    // 美麗聖潔弓箭：白金色的箭身、愛心箭頭、天使羽毛箭尾（兩倍大，顯示時縮小）
+    holyarrow: () => fxCanvas(220, 64, 47, (ctx, r) => {
+      ctx.scale(2, 2);
+      CR.line(ctx, 14, 16, 88, 16, r, 4.6, CR.INK, 0.3);
+      CR.line(ctx, 14, 16, 88, 16, r, 2.6, '#fff4c9', 0.3);
+      [[2, 5], [2, 27], [10, 6], [10, 26]].forEach(([x, y]) => {
+        ctx.beginPath(); ctx.moveTo(x + 14, 16); ctx.quadraticCurveTo(x + 2, y, x, y); ctx.quadraticCurveTo(x + 8, 16, x + 14, 16); ctx.closePath();
+        CR.fill(ctx, '#ffffff', r, null); CR.stroke(ctx, r, 1.6);
+      });
+      ctx.save(); ctx.translate(98, 16); ctx.rotate(Math.PI / 2);
+      ctx.beginPath(); ctx.moveTo(0, 11); ctx.bezierCurveTo(-14, 2, -10, -11, 0, -5); ctx.bezierCurveTo(10, -11, 14, 2, 0, 11); ctx.closePath();
+      CR.fill(ctx, '#ff6b9a', r, null); CR.stroke(ctx, r, 2.2); ctx.restore();
+      ctx.fillStyle = 'rgba(255,255,255,0.8)'; ctx.beginPath(); ctx.arc(96, 12, 2, 0, Math.PI * 2); ctx.fill();
+    }),
+    // 小愛心（白底黑框，用的時候再染色）
+    heart: () => fxCanvas(36, 34, 48, (ctx, r) => {
+      ctx.beginPath(); ctx.moveTo(18, 30); ctx.bezierCurveTo(-2, 16, 4, 0, 18, 9); ctx.bezierCurveTo(32, 0, 38, 16, 18, 30); ctx.closePath();
+      CR.fill(ctx, '#ffffff', r, null); CR.stroke(ctx, r, 2);
     }),
     // 槓鈴
     barbell: () => fxCanvas(120, 50, 24, (ctx, r) => {
@@ -2168,12 +2187,59 @@
           if (t) this.burst(t.x, t.y - 40, 8, 0x7be08f, 50);
         });
       } else if (fx.skill === 'arrow') {
-        const ang = Math.atan2(my - (who.y - 40), mx - who.x);
-        const a = this.add.image(who.x, who.y - 40, 'fx-arrow').setDepth(2050).setRotation(ang);
-        this.lunge(who, mx);
-        this.tweens.add({ targets: a, x: mx, y: my, duration: 240, ease: 'Linear', onComplete: () => {
-          a.destroy(); this.burst(mx, my, 8, 0xff6b81, 60);
-        } });
+        // 先蓄力：頭上亮起光環、愛心往身上聚集；再射出一支拖著愛心的聖光箭，打中時炸出一顆大愛心
+        const dir = mx < who.x ? -1 : 1;
+        who.body_.setFlipX(dir === -1);
+        const halo = this.add.graphics({ x: who.x, y: who.y - 118 }).setDepth(2045);
+        halo.lineStyle(5, 0xffe27a, 0.95); halo.strokeEllipse(0, 0, 44, 14);
+        halo.lineStyle(2, 0xffffff, 0.9); halo.strokeEllipse(0, 0, 44, 14);
+        this.tweens.add({ targets: halo, scaleX: { from: 0.2, to: 1 }, scaleY: { from: 0.2, to: 1 }, duration: 220, ease: 'Back.out' });
+        this.tweens.add({ targets: halo, alpha: 0, delay: 520, duration: 400, onComplete: () => halo.destroy() });
+        const glow = this.add.graphics({ x: who.x, y: who.y - 40 }).setDepth(2040);
+        glow.fillStyle(0xffd6e6, 0.45); glow.fillCircle(0, 0, 46);
+        glow.fillStyle(0xfff4c9, 0.55); glow.fillCircle(0, 0, 26);
+        this.tweens.add({ targets: glow, scale: { from: 0.3, to: 1.1 }, alpha: { from: 1, to: 0 }, duration: 420, onComplete: () => glow.destroy() });
+        for (let i = 0; i < 6; i++) {
+          const a0 = (i / 6) * Math.PI * 2;
+          const h = this.add.image(who.x + Math.cos(a0) * 70, who.y - 40 + Math.sin(a0) * 50, 'fx-heart')
+            .setTint(i % 2 ? 0xff8fb8 : 0xffd23f).setScale(0.5).setDepth(2046);
+          this.tweens.add({ targets: h, x: who.x, y: who.y - 40, scale: 0.15, alpha: { from: 1, to: 0.2 }, duration: 240, ease: 'Quad.in', onComplete: () => h.destroy() });
+        }
+        this.tweens.add({ targets: who.body_, x: -dir * 6, duration: 120, yoyo: true, delay: 140 });
+        this.time.delayedCall(260, () => {
+          const sx = who.x + dir * 18, sy = who.y - 44;
+          const ang = Math.atan2(my - sy, mx - sx);
+          const a = this.add.image(sx, sy, 'fx-holyarrow').setDepth(2050).setRotation(ang).setScale(0.62);
+          // 箭後面拖一道粉紅色的光
+          const trail = this.add.graphics().setDepth(2048);
+          let last = 0;
+          this.tweens.add({ targets: a, x: mx, y: my, duration: 260, ease: 'Quad.in',
+            onUpdate: (tw) => {
+              trail.clear();
+              trail.lineStyle(10, 0xff8fb8, 0.35); trail.lineBetween(sx, sy, a.x, a.y);
+              trail.lineStyle(4, 0xfff4c9, 0.8); trail.lineBetween(sx + (a.x - sx) * 0.4, sy + (a.y - sy) * 0.4, a.x, a.y);
+              // 沿路掉下愛心和亮晶晶
+              if (tw.progress - last < 0.12) return;
+              last = tw.progress;
+              const h = this.add.image(a.x, a.y, Math.random() < 0.6 ? 'fx-heart' : 'fx-star')
+                .setTint(Math.random() < 0.5 ? 0xff8fb8 : 0xfff0a0).setScale(0.35).setDepth(2049);
+              this.tweens.add({ targets: h, y: h.y - 16 - Math.random() * 16, x: h.x + (Math.random() - 0.5) * 20, scale: 0.1, alpha: 0,
+                duration: 500, onComplete: () => h.destroy() });
+            },
+            onComplete: () => {
+              a.destroy();
+              this.tweens.add({ targets: trail, alpha: 0, duration: 300, onComplete: () => trail.destroy() });
+              const big = this.add.image(mx, my, 'fx-heart').setTint(0xff6b9a).setDepth(2055).setScale(0.4);
+              this.tweens.add({ targets: big, scale: 2.6, alpha: { from: 1, to: 0 }, duration: 520, ease: 'Quad.out', onComplete: () => big.destroy() });
+              for (let i = 0; i < 10; i++) {
+                const a1 = (i / 10) * Math.PI * 2;
+                const h = this.add.image(mx, my, 'fx-heart').setTint(i % 2 ? 0xff8fb8 : 0xffffff).setScale(0.45).setDepth(2054);
+                this.tweens.add({ targets: h, x: mx + Math.cos(a1) * 90, y: my + Math.sin(a1) * 60, angle: (Math.random() - 0.5) * 60,
+                  scale: 0.15, alpha: 0, duration: 650, ease: 'Quad.out', onComplete: () => h.destroy() });
+              }
+              this.burst(mx, my, 10, 0xffe27a, 70);
+            } });
+        });
       } else if (fx.skill === 'barbell') {
         const b = this.add.image(who.x, who.y - 110, 'fx-barbell').setDepth(2050).setScale(0.8);
         this.lunge(who, mx);

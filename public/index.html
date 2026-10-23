@@ -433,7 +433,7 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outlin
       <a class="door" href="hq.html">
         <span class="pill alt">免帳號</span>
         <span class="door-title">進入颱風天防衛總部</span>
-        <span class="door-sub">用你的角色在總部走來走去、聊天、敲物資箱、出門打颱風，走進「視訊會議室」就能一起視訊。手機電腦都能玩，不用註冊。</span>
+        <span class="door-sub">用你的角色在總部走來走去、聊天、敲物資箱、出門打颱風，走進「戰情室」就能一起視訊。手機電腦都能玩，不用註冊。</span>
       </a>
     </div>
   </section>
@@ -599,6 +599,8 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outlin
     if (miss.length) { $('form-err').textContent = '還差：' + miss.join('、'); return; }
     $('form-err').textContent = '';
     try { localStorage.setItem('hq-name', d.name.slice(0, 12)); } catch (e) {}
+    // 邀請函也存一份，進總部後別人點「個人資料」就看得到你的 VIP Pass
+    try { localStorage.setItem('hq-vip', JSON.stringify({ name: d.name, song: d.song, drink: d.drink, theme: d.theme, photo: d.photo })); } catch (e) {}
     showInvite(d, true);
   });
   $('redo-btn').addEventListener('click', function () {

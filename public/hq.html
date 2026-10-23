@@ -46,7 +46,8 @@
       <div class="boss-bar"><i id="boss-fill"></i></div>
     </div>
     <div id="stats">
-      <div id="cls-text" class="stat-cls"></div>
+      <div class="stat-row"><span id="cls-text" class="stat-cls"></span><span id="lv-text" class="stat-v lv"></span></div>
+      <div class="stat-row" title="經驗值"><span class="stat-k">EXP</span><div class="stat-bar thin"><i id="exp-fill" class="exp"></i></div><span id="exp-text" class="stat-v"></span></div>
       <div class="stat-row"><span class="stat-k">HP</span><div class="stat-bar"><i id="hp-fill" class="hp"></i></div><span id="hp-text" class="stat-v"></span></div>
       <div class="stat-row"><span class="stat-k">MP</span><div class="stat-bar"><i id="mp-fill" class="mp"></i></div><span id="mp-text" class="stat-v"></span></div>
       <div class="stat-row"><span class="stat-k">ATK</span><span id="atk-text" class="stat-v"></span>
@@ -61,7 +62,7 @@
       <button id="skill-btn" type="button"></button>
     </div>
     <div id="video-prompt" hidden>
-      <span>📹 你在視訊會議室</span>
+      <span>🎖️ 你在戰情室</span>
       <button id="video-btn" class="primary">加入視訊</button>
     </div>
     <div id="chat">
@@ -71,8 +72,10 @@
         <input id="chat-input" maxlength="200" placeholder="按 Enter 聊天…" autocomplete="off">
       </form>
     </div>
-    <div id="help">方向鍵 / WASD 移動 · 點地板也能走 · 空白鍵 互動／攻擊 · K 職業技能 · Enter 聊天</div>
+    <div id="help">方向鍵 / WASD 移動 · 點地板也能走 · 空白鍵 互動／攻擊 · K 職業技能 · 右鍵點人看個人資料 · Enter 聊天</div>
   </div>
+
+  <div id="ctx-menu" hidden></div>
 
   <!-- 彈出視窗：背包、技能、轉職、煙火共用 -->
   <div id="modal" class="overlay" hidden>

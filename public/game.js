@@ -8,7 +8,8 @@
   // 近距離的普攻：打到時角色往前撲一下
   const MELEE = ['strike', 'power', 'syringe', 'punch', 'kick'];
   // 會飛過去的攻擊：特效打到才跳數字（毫秒）
-  const HIT_DELAY = { arrow: 520, barbell: 330, skate: 950, shot: 260, orb: 300, ray: 120 };
+  const HIT_DELAY = { arrow: 520, barbell: 330, skate: 950, shot: 260, orb: 300, ray: 120,
+    defib: 150, arrowRain: 650, roar: 200, icicle: 320, mothership: 600 };
   // 人物貼圖比 64x80 大一圈，翅膀、氣球、帽子才畫得下；(16,32) 是人物框的左上角，腳底在 y=108
   const FRAME = { w: 96, h: 112, ox: 16, oy: 32 };
   const AV_ORIGIN_Y = (FRAME.oy + 76) / FRAME.h;
@@ -653,6 +654,7 @@
   const myCls = () => (myStats && ST.CLASSES[myStats.cls] ? myStats.cls : 'staff');
   const special = () => ST.CLASSES[myCls()].skills[1];
   const basic = () => ST.CLASSES[myCls()].skills[0];
+  const special2 = () => ST.CLASSES[myCls()].skills[2];
   const cooldowns = {}; // skillId -> 冷卻結束的時間（performance.now）
   function renderStats(st) {
     const clsChanged = !myStats || myStats.cls !== st.cls;
@@ -673,14 +675,15 @@
     if (modalKind === 'skills') openSkills();
   }
   function renderSkillbar() {
-    const sk = ST.SKILLS[special()];
-    const b = $('skill-btn');
-    b.innerHTML = '';
-    b.appendChild(el('i', 'cd'));
-    b.appendChild(document.createTextNode(sk.icon + ' '));
-    b.appendChild(el('span', 'sk-name', sk.name + ' '));
-    b.appendChild(el('small', null, `${sk.mp} MP · K`));
-    b.title = sk.desc;
+    [['skill-btn', special(), 'K'], ['skill2-btn', special2(), 'L']].forEach(([btn, id, key]) => {
+      const sk = ST.SKILLS[id], b = $(btn);
+      b.innerHTML = '';
+      b.appendChild(el('i', 'cd'));
+      b.appendChild(document.createTextNode(sk.icon + ' '));
+      b.appendChild(el('span', 'sk-name', sk.name + ' '));
+      b.appendChild(el('small', null, `${sk.mp} MP · ${key}`));
+      b.title = sk.desc;
+    });
   }
   function openSkills() {
     const c = ST.CLASSES[myCls()];
@@ -699,7 +702,7 @@
       row.appendChild(el('div', 'modal-icon', sk.icon));
       const inf = el('div', 'modal-info');
       inf.appendChild(el('b', null, sk.name));
-      inf.appendChild(el('span', 'mono tag', `${i ? 'K' : '空白鍵'} · ${sk.mp} MP · 冷卻 ${sk.cooldown / 1000} 秒` +
+      inf.appendChild(el('span', 'mono tag', `${['空白鍵', 'K', 'L'][i]} · ${sk.mp} MP · 冷卻 ${sk.cooldown / 1000} 秒` +
         (sk.support ? '' : ` · 射程 ${sk.range}`)));
       inf.appendChild(el('p', null, sk.desc));
       const lv = myStats ? myStats.level : 1, k = ST.boost(lv), plus = ST.bonusDef(lv);
@@ -731,7 +734,7 @@
       inf.appendChild(el('b', null, `${c.name}（${c.role}）`));
       inf.appendChild(el('p', null, c.desc));
       inf.appendChild(el('span', 'mono tag', `HP ${st.maxHp} · MP ${st.maxMp} · ATK ${st.atk} · DEF ${st.def}`));
-      inf.appendChild(el('p', null, `${sk.icon} ${sk.name}：${sk.desc}`));
+      c.skills.slice(1).forEach(sid => { const s2 = ST.SKILLS[sid]; inf.appendChild(el('p', null, `${s2.icon} ${s2.name}：${s2.desc}`)); });
       row.appendChild(inf);
       const b = el('button', 'primary small', id === myCls() ? '目前職業' : '轉職');
       b.disabled = id === myCls();
@@ -742,7 +745,7 @@
           localStorage.setItem('hq-cls', id);
           Object.keys(cooldowns).forEach(k => delete cooldowns[k]);
           closeModal();
-          toast(`轉職成功！你現在是 ${c.icon} ${c.name}，按 K 放「${sk.name}」`);
+          toast(`轉職成功！你現在是 ${c.icon} ${c.name}，按 K、L 放技能`);
         });
       };
       row.appendChild(b);
@@ -886,6 +889,7 @@
   }
   $('action-btn').addEventListener('click', () => scene && scene.doAction());
   $('skill-btn').addEventListener('click', () => scene && scene.useSkill(special()));
+  $('skill2-btn').addEventListener('click', () => scene && scene.useSkill(special2()));
   $('skills-open').addEventListener('click', openSkills);
   $('fw-btn').addEventListener('click', openFirework);
 
@@ -1483,6 +1487,7 @@
       kb.on('keydown-J', onAct);
       // K：職業的招牌技能（花魔力）
       kb.on('keydown-K', (e) => { if (!typing()) { e.preventDefault(); this.useSkill(special()); } });
+      kb.on('keydown-L', (e) => { if (!typing()) { e.preventDefault(); this.useSkill(special2()); } });
       // 右鍵點人物（手機長按）可以看個人資料
       this.input.mouse.disableContextMenu();
       this.input.on('pointerup', () => { if (this.pressTimer) { this.pressTimer.remove(); this.pressTimer = null; } });
@@ -2281,6 +2286,108 @@
               this.refreshFoeTint(t);
             });
           } });
+      } else if (fx.skill === 'sandbag') {
+        // 自己身邊疊起一圈沙包牆
+        ring(sk.teamDef.r, 0xc9a26b);
+        for (let i = 0; i < 8; i++) {
+          const a = (i / 8) * Math.PI * 2, x = who.x + Math.cos(a) * 64, y = who.y + Math.sin(a) * 30;
+          const g = this.add.graphics({ x, y: y - 120 }).setDepth(y + 1);
+          g.fillStyle(0xc9a26b, 1); g.fillRoundedRect(-14, -9, 28, 18, 7);
+          g.lineStyle(2.5, 0x2b2a33, 1); g.strokeRoundedRect(-14, -9, 28, 18, 7);
+          g.lineStyle(2, 0x8a6a3f, 1); g.lineBetween(-6, -3, 6, -3);
+          this.tweens.add({ targets: g, y, delay: i * 60, duration: 260, ease: 'Bounce.out' });
+          this.tweens.add({ targets: g, alpha: 0, delay: 1600 + i * 30, duration: 400, onComplete: () => g.destroy() });
+        }
+        fx.targets.forEach(id => {
+          const t = me && id === me.id ? this.me : this.remotes.get(id);
+          if (t) this.floatText(t.x, t.y - 100, '🧱 防禦↑', '#ffe2b0', 18);
+        });
+      } else if (fx.skill === 'forecast') {
+        // 天上出現一顆太陽，灑下陽光
+        const sun = this.add.image(who.x, who.y - 170, 'fx-star').setTint(0xffd23f).setDepth(2050).setScale(0.2);
+        this.tweens.add({ targets: sun, scale: 1.4, angle: 180, duration: 600, ease: 'Back.out' });
+        this.tweens.add({ targets: sun, alpha: 0, delay: 1200, duration: 400, onComplete: () => sun.destroy() });
+        ring(sk.heal.r, 0xffd23f);
+        fx.targets.forEach(id => {
+          const t = me && id === me.id ? this.me : this.remotes.get(id);
+          if (!t) return;
+          const beam = this.add.graphics().setDepth(2040);
+          beam.lineStyle(14, 0xfff0a0, 0.45); beam.lineBetween(who.x, who.y - 170, t.x, t.y - 40);
+          this.tweens.add({ targets: beam, alpha: 0, delay: 300, duration: 500, onComplete: () => beam.destroy() });
+          this.burst(t.x, t.y - 40, 8, 0xffd23f, 50);
+        });
+        this.floatText(who.x, who.y - 210, '☀️ 放晴！', '#fff0a0', 22);
+      } else if (fx.skill === 'defib') {
+        // 電擊器碰一下，黃色閃電劈到怪物身上
+        const dir = mx < who.x ? -1 : 1;
+        who.body_.setFlipX(dir === -1);
+        this.lunge(who, mx);
+        const bolt = this.add.graphics().setDepth(2045);
+        const pts = [[who.x + dir * 20, who.y - 44]];
+        for (let i = 1; i < 6; i++) pts.push([who.x + dir * 20 + (mx - who.x - dir * 20) * i / 6 + (Math.random() - 0.5) * 10, who.y - 44 + (my - who.y + 44) * i / 6 + (Math.random() - 0.5) * 26]);
+        pts.push([mx, my]);
+        [[10, 0xffd23f, 0.5], [4, 0xffffff, 1]].forEach(([w, c, a]) => {
+          bolt.lineStyle(w, c, a); bolt.beginPath(); bolt.moveTo(pts[0][0], pts[0][1]); pts.forEach(q => bolt.lineTo(q[0], q[1])); bolt.strokePath();
+        });
+        this.tweens.add({ targets: bolt, alpha: 0, duration: 300, onComplete: () => bolt.destroy() });
+        this.time.delayedCall(120, () => {
+          this.burst(mx, my, 12, 0xffd23f, 70);
+          this.floatText(mx, my - 50, '⚡ 電擊！', '#ffd23f', 24);
+          this.refreshFoeTint(fx.target);
+        });
+        this.cameras.main.shake(120, 0.005);
+      } else if (fx.skill === 'arrowRain' || fx.skill === 'mothership') {
+        const rain = fx.skill === 'arrowRain', R = sk.aoeAt;
+        const area = this.add.graphics({ x: mx, y: foe.y }).setDepth(-4);
+        area.fillStyle(rain ? 0xff8fb8 : 0x7be08f, 0.22); area.fillEllipse(0, 0, R * 2, R * 1.1);
+        area.lineStyle(3, rain ? 0xff8fb8 : 0x7be08f, 0.8); area.strokeEllipse(0, 0, R * 2, R * 1.1);
+        this.tweens.add({ targets: area, alpha: 0, delay: 900, duration: 500, onComplete: () => area.destroy() });
+        if (rain) {
+          // 弓往天上射，一片箭雨落在範圍裡
+          for (let i = 0; i < 16; i++) {
+            const tx = mx + (Math.random() - 0.5) * R * 1.8, ty = foe.y + (Math.random() - 0.5) * R * 0.9;
+            const a = this.add.image(tx - 40, ty - 360, 'fx-arrow').setDepth(2050).setScale(0.6).setRotation(Math.atan2(360, 40));
+            this.tweens.add({ targets: a, x: tx, y: ty, delay: 150 + i * 25, duration: 320, ease: 'Quad.in',
+              onComplete: () => { a.destroy(); this.burst(tx, ty, 3, 0xff8fb8, 25); } });
+          }
+        } else {
+          // 頭上飛來一台幽浮，往下照一道綠光
+          const ufo = this.add.graphics({ x: mx - 200, y: my - 220 }).setDepth(2055);
+          ufo.fillStyle(0x9fe8c0, 0.9); ufo.fillEllipse(0, -10, 40, 30);
+          ufo.fillStyle(0x8a5cd6, 1); ufo.fillEllipse(0, 0, 110, 30);
+          ufo.lineStyle(3, 0x2b2a33, 1); ufo.strokeEllipse(0, 0, 110, 30); ufo.strokeEllipse(0, -10, 40, 30);
+          [-36, -12, 12, 36].forEach(x => { ufo.fillStyle(0xffd23f, 1); ufo.fillCircle(x, 4, 4); });
+          this.tweens.add({ targets: ufo, x: mx, duration: 420, ease: 'Quad.out', onComplete: () => {
+            const beam = this.add.graphics().setDepth(2040);
+            beam.fillStyle(0x7be08f, 0.35);
+            beam.fillTriangle(mx - 30, my - 210, mx + 30, my - 210, mx + R, foe.y);
+            beam.fillTriangle(mx - 30, my - 210, mx - R, foe.y, mx + R, foe.y);
+            this.tweens.add({ targets: beam, alpha: 0, delay: 300, duration: 400, onComplete: () => beam.destroy() });
+            this.tweens.add({ targets: ufo, x: mx + 260, y: my - 300, alpha: 0, delay: 500, duration: 500, onComplete: () => ufo.destroy() });
+          } });
+        }
+        this.time.delayedCall(rain ? 600 : 560, () => (fx.hits || [fx.target]).forEach(t => {
+          const f = this.foePos(t);
+          this.burst(f.x, f.mid, 8, rain ? 0xff8fb8 : 0x7be08f, 60);
+          if (!rain) { this.floatText(f.x, f.y - (f.mob ? 110 : 200), '🛸 被削弱了！', '#b8f5cf', 20); this.refreshFoeTint(t); }
+        }));
+      } else if (fx.skill === 'roar') {
+        // 大吼一聲：好幾圈聲波往外擴
+        this.lunge(who, mx);
+        for (let i = 0; i < 3; i++) this.time.delayedCall(i * 120, () => ring(sk.aoe, 0xff9a3c));
+        this.floatText(who.x, who.y - 160, '吼～～！', '#ffffff', 32);
+        this.cameras.main.shake(260, 0.01);
+        this.time.delayedCall(200, () => (fx.hits || [fx.target]).forEach(t => { const f = this.foePos(t); this.burst(f.x, f.mid, 8, 0xff9a3c, 60); }));
+      } else if (fx.skill === 'icicle') {
+        // 射出一根大冰柱，打中後結冰
+        const sx = who.x + (mx < who.x ? -14 : 14), sy = who.y - 50;
+        const ic = this.add.image(sx, sy, 'fx-ice').setDepth(2050).setScale(0.7).setRotation(Math.atan2(my - sy, mx - sx));
+        this.tweens.add({ targets: ic, x: mx, y: my, duration: 300, ease: 'Quad.in', onComplete: () => {
+          ic.destroy();
+          this.burst(mx, my, 14, 0xbfe6ff, 90);
+          this.floatText(mx, my - 50, '🧊 凍住了！', '#bfe6ff', 24);
+          this.refreshFoeTint(fx.target);
+        } });
       }
     }
 
@@ -2804,15 +2911,17 @@
         $('action-btn').hidden = !label;
         $('action-btn').textContent = label;
       }
-      // 招牌技能的冷卻條
-      const sp = special(), cdLeft = Math.max(0, (cooldowns[sp] || 0) - performance.now());
-      const pct = cdLeft ? Math.round(100 * cdLeft / ST.SKILLS[sp].cooldown) : 0;
-      if (pct !== this.cdPct) {
-        this.cdPct = pct;
-        const bar = document.querySelector('#skill-btn .cd');
+      // 兩個招牌技能的冷卻條
+      this.cdPct = this.cdPct || {};
+      [['skill-btn', special()], ['skill2-btn', special2()]].forEach(([btn, sp]) => {
+        const cdLeft = Math.max(0, (cooldowns[sp] || 0) - performance.now());
+        const pct = cdLeft ? Math.round(100 * cdLeft / ST.SKILLS[sp].cooldown) : 0;
+        if (pct === this.cdPct[btn]) return;
+        this.cdPct[btn] = pct;
+        const bar = document.querySelector(`#${btn} .cd`);
         if (bar) bar.style.width = pct + '%';
-        $('skill-btn').classList.toggle('cooling', pct > 0);
-      }
+        $(btn).classList.toggle('cooling', pct > 0);
+      });
       // 防禦增益時間到就拿掉小盾牌
       all0.forEach(c => {
         if (c.shield && performance.now() > c.shieldUntil) { c.shield.destroy(); c.shield = null; }
@@ -2859,7 +2968,7 @@
         if (rid !== 'video') DRAW.close();
         if (room && !first) toast(`進入 ${room.name}`);
         const tips = {
-          front: `野外有颱風${ST.MONSTER.name}和小怪！空白鍵攻擊、K 放技能，看到紅圈快閃開；回到圍欄裡就安全了`,
+          front: `野外有颱風${ST.MONSTER.name}和小怪！空白鍵攻擊、K 和 L 放技能，看到紅圈快閃開；回到圍欄裡就安全了`,
           command: '找右上角的 📂 轉職資料沈理員，可以換職業',
           storage: '走到箱子旁按空白鍵（或點箱子）敲三下',
           kitchen: '站在爐台旁按空白鍵煮泡麵補血，有蔬菜會自動加進去',

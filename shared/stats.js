@@ -3,21 +3,21 @@
 (function (root) {
   const BASE = { maxHp: 100, maxMp: 50, atk: 10, def: 0 };
 
-  // skills[0] 是職業的普通攻擊（空白鍵），skills[1] 是招牌技能（K 鍵）
+  // skills[0] 是職業的普通攻擊（空白鍵），skills[1] 是招牌技能（K 鍵），skills[2] 是第二招（L 鍵）
   const CLASSES = {
-    staff: { name: '防颱職員', icon: '🦺', role: '新手', base: {}, skills: ['strike', 'power'],
+    staff: { name: '防颱職員', icon: '🦺', role: '新手', base: {}, skills: ['strike', 'power', 'sandbag'],
       desc: '剛報到的防颱職員，什麼都會一點。到指揮中心找導師就能轉職。' },
-    prophet: { name: '預言家', icon: '🔮', role: '輔助增益', base: { maxMp: 90, atk: 8 }, skills: ['orb', 'prophecy'],
+    prophet: { name: '預言家', icon: '🔮', role: '輔助增益', base: { maxMp: 90, atk: 8 }, skills: ['orb', 'prophecy', 'forecast'],
       desc: '看得見颱風路徑的人。削弱颱風，讓身邊的隊友防禦力上升。' },
-    nurse: { name: '南丁格爾', icon: '🩺', role: '補師', base: { maxHp: 110, maxMp: 100, atk: 7 }, skills: ['syringe', 'milk'],
+    nurse: { name: '南丁格爾', icon: '🩺', role: '補師', base: { maxHp: 110, maxMp: 100, atk: 7 }, skills: ['syringe', 'milk', 'defib'],
       desc: '前線最可靠的白衣天使。幫身邊所有人補血、補魔力。' },
-    archer: { name: '精靈射手', icon: '🏹', role: '遠距離攻擊', base: { maxHp: 90, atk: 13 }, skills: ['shot', 'arrow'],
+    archer: { name: '精靈射手', icon: '🏹', role: '遠距離攻擊', base: { maxHp: 90, atk: 13 }, skills: ['shot', 'arrow', 'arrowRain'],
       desc: '戴著紅色小斗篷的弓箭手，站得遠遠的也能射中颱風。' },
-    tank: { name: '超能力霸王', icon: '🏋️', role: '近戰坦克', base: { maxHp: 220, maxMp: 40, atk: 11, def: 6 }, skills: ['punch', 'barbell'],
+    tank: { name: '超能力霸王', icon: '🏋️', role: '近戰坦克', base: { maxHp: 220, maxMp: 40, atk: 11, def: 6 }, skills: ['punch', 'barbell', 'roar'],
       desc: '血超厚、超耐打。扛著槓鈴衝第一線，搥完還會變得更硬。' },
-    skater: { name: '陵媒', icon: '⛸️', role: '控場', base: { maxMp: 70, atk: 11 }, skills: ['kick', 'skate'],
+    skater: { name: '陵媒', icon: '⛸️', role: '控場', base: { maxMp: 70, atk: 11 }, skills: ['kick', 'skate', 'icicle'],
       desc: '冰上起舞的嬪妃，繞著颱風溜一圈就能把它凍住。' },
-    summoner: { name: '召喚師', icon: '🛸', role: '召喚', base: { maxHp: 95, maxMp: 90, atk: 9 }, skills: ['ray', 'summon'],
+    summoner: { name: '召喚師', icon: '🛸', role: '召喚', base: { maxHp: 95, maxMp: 90, atk: 9 }, skills: ['ray', 'summon', 'mothership'],
       desc: '跟外星朋友很熟的人。在颱風前線召喚奇異生物，牠們會自己去打怪。' },
   };
 
@@ -58,6 +58,27 @@
     summon: { name: '召喚奇異生物', icon: '👽', mp: 35, cooldown: 8000, power: 0, support: true, summon: true,
       desc: '在颱風前線召喚一隻隨機的奇異生物（共五種，有強有弱），牠會自己去打怪。最多同時 3 隻，被打倒就不會回來。' },
   };
+
+  // 第二招（L 鍵）。aoe：以自己為中心的範圍；aoeAt：以目標為中心的範圍
+  Object.assign(SKILLS, {
+    sandbag: { name: '堆沙包', icon: '🧱', mp: 20, cooldown: 12000, power: 0, support: true,
+      teamDef: { v: 6, ms: 10000, r: 240 },
+      desc: '在身邊堆起一圈防颱沙包，身邊隊友（包含自己）防禦 +6，持續 10 秒。哪裡都能用。' },
+    forecast: { name: '放晴預報', icon: '🌤️', mp: 25, cooldown: 14000, power: 0, support: true,
+      heal: { hp: 20, mp: 30, r: 420 },
+      desc: '預言明天會放晴！大範圍的隊友回復 20 血、30 魔力，魔力回得特別多。' },
+    defib: { name: '電擊器', icon: '⚡', mp: 18, cooldown: 5000, power: 2.6, range: 150, weaken: 6000,
+      desc: '拿電擊器往怪物身上電下去！普攻 2.6 倍傷害，並讓它 6 秒內受到的傷害 +30%。' },
+    arrowRain: { name: '箭雨', icon: '🌧️', mp: 25, cooldown: 8000, power: 1.6, range: 480, aoeAt: 200,
+      desc: '往天上射一把箭，落在目標附近一大片，範圍裡每隻怪都受到普攻 1.6 倍傷害。' },
+    roar: { name: '霸王怒吼', icon: '🦁', mp: 25, cooldown: 12000, power: 1.2, range: 200, aoe: 200,
+      selfDef: { v: 20, ms: 8000 },
+      desc: '大吼一聲震飛身邊的怪（範圍傷害，普攻 1.2 倍），自己 8 秒內防禦 +20，專門扛颱風。' },
+    icicle: { name: '冰錐', icon: '🧊', mp: 20, cooldown: 4500, power: 3.4, range: 340, freeze: 1500,
+      desc: '射出一根大冰錐，普攻 3.4 倍傷害，打中的怪凍住 1.5 秒。' },
+    mothership: { name: '母艦光束', icon: '🛸', mp: 30, cooldown: 10000, power: 1.8, range: 420, aoeAt: 220, weaken: 5000,
+      desc: '呼叫外星母艦從天上照下一道光束，目標附近的怪都受到普攻 1.8 倍傷害，並被削弱 5 秒。' },
+  });
 
   // 召喚師叫出來的奇異生物：weight 越大越常出現，越強的越少見
   const SUMMONS = {

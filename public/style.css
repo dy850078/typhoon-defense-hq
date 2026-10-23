@@ -306,6 +306,9 @@ button.inv-item:hover { border-color: var(--accent); }
   border-radius: 12px; padding: 6px 10px; font-size: 14px; line-height: 1.55; }
 .draw-log .dl-sys { color: var(--muted); }
 .draw-log .dl-right { color: #2f8f4f; font-weight: 900; }
+/* 金曲猜歌王：歌手和歌名都答對的那一行加底色 */
+.draw-log .dl-both { color: #7a4a00; font-weight: 900; background: linear-gradient(90deg, #ffe58a, #fff4c9); border-left: 4px solid #ffb020;
+  border-radius: 8px; padding: 4px 8px; margin: 3px 0; }
 .draw-log .dl-answer { color: var(--accent-ink); font-weight: 900; }
 .draw-guess { display: flex; gap: 6px; }
 .draw-guess input { flex: 1; margin: 0; min-width: 0; }

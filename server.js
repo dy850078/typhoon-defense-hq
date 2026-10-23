@@ -532,7 +532,7 @@ function makeGame(key, label, game) {
   g.addScore = (p, n) => { g.scores.set(p.name, (g.scores.get(p.name) || 0) + n); g.scoreIds.set(p.name, p.id); };
   // 發裝備，拿到什麼也寫在遊戲紀錄裡
   const prize = (id) => { const it = id && GEAR.GEAR[id]; return it ? `，獲得【${it.rarity}】${it.icon} ${it.name}` : '（裝備已經全部收集完了）'; };
-  g.reward = (p, text) => { const id = giveGear(p); g.log(text + prize(id), 'right'); return id; };
+  g.reward = (p, text, kind) => { const id = giveGear(p); g.log(text + prize(id), kind || 'right'); return id; };
   // 有人答對，主持人每題也拿一件
   g.rewardHost = () => {
     const host = players.get(g.host);
@@ -1084,7 +1084,7 @@ io.on('connection', (socket) => {
     }
     let item = null;
     const both = song.gotSinger.has(p.id) && song.gotTitle.has(p.id);
-    if (both) { item = song.reward(p, `🏆 ${p.name} 歌手和歌名都答對了`); song.rewardHost(); }
+    if (both) { item = song.reward(p, `🏆 ${p.name} 歌手和歌名都答對了`, 'both'); song.rewardHost(); }
     ack({ ok: true, correct: true, singer: hitS, title: hitT, both, item });
     const done = song.done().length, guessers = song.guessers();
     if (done >= song.goal) song.end(`已經有 ${done} 人全部答對，達標！`);

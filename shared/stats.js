@@ -22,6 +22,9 @@
   };
 
   const REGEN = { mpPerSec: 1, hpPerSec: 0 };
+
+  // 颱風怪的顯示資料（血量在伺服器用 MONSTER_HP 設定）
+  const MONSTER = { name: '颱風怪', level: 30 };
   const RESPAWN_MS = 5000; // 倒下後幾秒回到總部
 
   function statsFor(cls) {
@@ -29,7 +32,7 @@
     return Object.assign({}, BASE, c.base);
   }
 
-  const stats = { BASE, CLASSES, SKILLS, FOODS, REGEN, RESPAWN_MS, statsFor };
+  const stats = { BASE, CLASSES, SKILLS, FOODS, REGEN, MONSTER, RESPAWN_MS, statsFor };
   if (typeof module !== 'undefined' && module.exports) module.exports = stats;
   else root.HQ_STATS = stats;
 })(this);

@@ -193,39 +193,67 @@
 
   // ---------------- 畫颱風怪物（軟綿綿的雲朵怪） ----------------
   const CR = window.HQ_CRAYON;
+  // 楓之谷小怪的比例：圓滾滾的身體、大眼睛、小手，畫在 240x240 裡，腳底在 y=200
   function drawTyphoonCloud() {
-    const S = 260, c = document.createElement('canvas');
+    const S = 240, c = document.createElement('canvas');
     c.width = S; c.height = S;
     const ctx = c.getContext('2d');
     const r = CR.rng(2026);
-    ctx.translate(S / 2, S / 2);
-    // 外圈被風扯出來的尖角雲（像怪物的刺）
-    for (let i = 0; i < 9; i++) {
-      const a = (i / 9) * Math.PI * 2 + 0.2, a1 = a - 0.22, a2 = a + 0.22;
+    // 身體輪廓：上面一顆顆雲朵，底部比較平
+    const body = (rr) => {
       ctx.beginPath();
-      ctx.moveTo(Math.cos(a1) * 70, Math.sin(a1) * 62);
-      ctx.quadraticCurveTo(Math.cos(a) * 100, Math.sin(a) * 92, Math.cos(a + 0.35) * 122, Math.sin(a + 0.35) * 112);
-      ctx.quadraticCurveTo(Math.cos(a) * 90, Math.sin(a) * 80, Math.cos(a2) * 70, Math.sin(a2) * 62);
+      ctx.moveTo(30, 170);
+      ctx.bezierCurveTo(14, 150, 22, 112, 48, 104);
+      ctx.bezierCurveTo(40, 72, 70, 52, 94, 64);
+      ctx.bezierCurveTo(100, 34, 142, 30, 152, 60);
+      ctx.bezierCurveTo(180, 50, 206, 78, 196, 104);
+      ctx.bezierCurveTo(222, 112, 228, 152, 210, 172);
+      ctx.bezierCurveTo(200 + rr() * 2, 196, 40, 198, 30, 170);
       ctx.closePath();
-      CR.fill(ctx, '#3d4a63', r, [-125, -125, 250, 250], 0.4); CR.stroke(ctx, r, 3);
-    }
-    // 一團一團的烏雲
-    const puffs = [];
-    for (let i = 0; i < 13; i++) {
-      const a = (i / 13) * Math.PI * 2;
-      puffs.push([Math.cos(a) * 58, Math.sin(a) * 50, 30 + r() * 12]);
-    }
-    puffs.push([0, 0, 62]);
-    puffs.forEach(([x, y, rad]) => { CR.blob(ctx, x, y, rad, rad * 0.92, r, 0.06, 16); CR.stroke(ctx, r, 6); });
-    puffs.forEach(([x, y, rad]) => {
-      const g = ctx.createRadialGradient(x - rad * 0.3, y - rad * 0.4, rad * 0.1, x, y, rad);
-      g.addColorStop(0, '#8d9ab0'); g.addColorStop(1, '#4b5873');
-      CR.blob(ctx, x, y, rad, rad * 0.92, CR.rng(x * 31 + y), 0.06, 16);
-      CR.fill(ctx, g, r, [x - rad, y - rad, rad * 2, rad * 2], 0.8);
+    };
+    // 小手（雲朵做的）
+    [[24, 140, -0.5], [216, 140, 0.5]].forEach(([x, y, a]) => {
+      ctx.save(); ctx.translate(x, y); ctx.rotate(a);
+      CR.blob(ctx, 0, 0, 16, 12, r, 0.1, 14); CR.fill(ctx, '#8193b2', r, [-16, -12, 32, 24]); CR.stroke(ctx, r, 3.5);
+      ctx.restore();
     });
-    CR.dots(ctx, -90, -80, 180, 160, 50, 'rgba(255,255,255,0.25)', r, 2);
+    body(r);
+    const g = ctx.createLinearGradient(0, 40, 0, 195);
+    g.addColorStop(0, '#d9e2f0'); g.addColorStop(0.55, '#97a8c4'); g.addColorStop(1, '#5d6f8e');
+    CR.fill(ctx, g, r, [14, 30, 214, 168], 0.6);
+    // 卡通的亮面
+    ctx.save(); body(CR.rng(1)); ctx.clip();
+    ctx.fillStyle = 'rgba(255,255,255,0.55)';
+    ctx.beginPath(); ctx.ellipse(80, 82, 26, 13, -0.5, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(118, 66, 9, 5, -0.3, 0, Math.PI * 2); ctx.fill();
+    // 底部的陰影帶
+    ctx.fillStyle = 'rgba(47,59,85,0.35)';
+    ctx.beginPath(); ctx.ellipse(120, 196, 110, 26, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    body(CR.rng(1)); CR.stroke(ctx, r, 4.5);
+    // 頭頂翹起來的橘色漩渦呆毛
+    ctx.beginPath();
+    for (let t = 0; t <= 1; t += 0.04) {
+      const rad = 3 + t * 15, a = t * Math.PI * 3.2;
+      const x = 124 + Math.cos(a) * rad, y = 28 + Math.sin(a) * rad * 0.8;
+      if (t === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.lineTo(132, 46);
+    CR.stroke(ctx, r, 7, '#2b2a33');
+    ctx.beginPath();
+    for (let t = 0; t <= 1; t += 0.04) {
+      const rad = 3 + t * 15, a = t * Math.PI * 3.2;
+      const x = 124 + Math.cos(a) * rad, y = 28 + Math.sin(a) * rad * 0.8;
+      if (t === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.lineTo(132, 46);
+    ctx.save(); ctx.strokeStyle = '#ff7a2f'; ctx.lineWidth = 4; ctx.lineCap = 'round'; ctx.stroke(); ctx.restore();
+    // 腳底的影子
+    ctx.fillStyle = 'rgba(19,26,40,0.25)';
+    ctx.beginPath(); ctx.ellipse(120, 204, 86, 10, 0, 0, Math.PI * 2); ctx.fill();
     return c;
   }
+  // 腳邊一圈在轉的風
   function drawTyphoonSwirl() {
     const S = 260, c = document.createElement('canvas');
     c.width = S; c.height = S;
@@ -236,52 +264,50 @@
       ctx.save(); ctx.rotate((arm * Math.PI * 2) / 3);
       ctx.beginPath();
       for (let t = 0; t <= 1; t += 0.05) {
-        const rad = 18 + t * 96, a = t * 2.4;
-        const x = Math.cos(a) * rad, y = Math.sin(a) * rad * 0.85;
+        const rad = 60 + t * 60, a = t * 1.6;
+        const x = Math.cos(a) * rad, y = Math.sin(a) * rad;
         if (t === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
       }
-      CR.stroke(ctx, r, 6, '#d6dae1');
+      CR.stroke(ctx, r, 5, '#ffffff');
       ctx.restore();
     }
     return c;
   }
-  function drawTyphoonFace() {
+  // 表情：normal 是兇巴巴的大眼睛，hit 是被打到的 >< 臉
+  function drawTyphoonFace(mood) {
     const c = document.createElement('canvas');
-    c.width = 150; c.height = 100;
+    c.width = 150; c.height = 90;
     const ctx = c.getContext('2d');
-    const r = CR.rng(11);
-    // 發光的橘色眼睛
-    [[48, 34, -0.25], [102, 34, 0.25]].forEach(([x, y, tilt]) => {
-      const g = ctx.createRadialGradient(x, y, 2, x, y, 26);
-      g.addColorStop(0, 'rgba(255,170,60,0.9)'); g.addColorStop(1, 'rgba(255,106,19,0)');
-      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, 26, 0, Math.PI * 2); ctx.fill();
-      ctx.save(); ctx.translate(x, y); ctx.rotate(tilt);
-      // 上緣切平，變成瞇起來的兇眼
-      ctx.beginPath(); ctx.moveTo(-15, -3); ctx.quadraticCurveTo(0, -9, 15, -3); ctx.quadraticCurveTo(14, 12, 0, 12);
-      ctx.quadraticCurveTo(-14, 12, -15, -3); ctx.closePath();
-      CR.fill(ctx, '#ffd23f', r, null); CR.stroke(ctx, r, 3);
-      ctx.fillStyle = CR.INK; ctx.beginPath(); ctx.ellipse(0, 4, 3.2, 6, 0, 0, Math.PI * 2); ctx.fill();
-      ctx.restore();
-    });
-    // 粗眉毛
-    CR.line(ctx, 26, 12, 64, 26, r, 7); CR.line(ctx, 124, 12, 86, 26, r, 7);
-    // 大嘴巴 + 尖牙
-    ctx.beginPath(); ctx.moveTo(40, 62); ctx.quadraticCurveTo(75, 52, 110, 62); ctx.quadraticCurveTo(100, 92, 75, 92);
-    ctx.quadraticCurveTo(50, 92, 40, 62); ctx.closePath();
-    CR.fill(ctx, '#2b2a33', r, null);
-    ctx.save(); ctx.clip();
-    ctx.fillStyle = '#c0391b'; ctx.beginPath(); ctx.ellipse(75, 92, 22, 12, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#ffffff';
-    for (let i = 0; i < 6; i++) {
-      const x = 46 + i * 11.5;
-      ctx.beginPath(); ctx.moveTo(x, 56); ctx.lineTo(x + 9, 56); ctx.lineTo(x + 4.5, 70); ctx.closePath(); ctx.fill();
+    const r = CR.rng(mood === 'hit' ? 12 : 11);
+    // 臉頰
+    ctx.fillStyle = 'rgba(244,120,120,0.55)';
+    [[22, 58], [128, 58]].forEach(([x, y]) => { ctx.beginPath(); ctx.ellipse(x, y, 13, 8, 0, 0, Math.PI * 2); ctx.fill(); });
+    if (mood === 'hit') {
+      CR.line(ctx, 32, 22, 54, 34, r, 6); CR.line(ctx, 32, 46, 54, 34, r, 6);
+      CR.line(ctx, 118, 22, 96, 34, r, 6); CR.line(ctx, 118, 46, 96, 34, r, 6);
+      CR.blob(ctx, 75, 66, 14, 12, r, 0.08); CR.fill(ctx, '#2b2a33', r, null); CR.stroke(ctx, r, 3);
+      ctx.fillStyle = '#c0391b'; ctx.beginPath(); ctx.ellipse(75, 72, 8, 5, 0, 0, Math.PI * 2); ctx.fill();
+      return c;
     }
-    [[58, 92], [90, 92]].forEach(([x, y]) => { ctx.beginPath(); ctx.moveTo(x - 5, y); ctx.lineTo(x + 5, y); ctx.lineTo(x, y - 11); ctx.closePath(); ctx.fill(); });
-    ctx.restore();
-    ctx.beginPath(); ctx.moveTo(40, 62); ctx.quadraticCurveTo(75, 52, 110, 62); ctx.quadraticCurveTo(100, 92, 75, 92);
-    ctx.quadraticCurveTo(50, 92, 40, 62); ctx.closePath(); CR.stroke(ctx, r, 3.5);
+    // 大大亮亮的眼睛
+    [[44, 36], [106, 36]].forEach(([x, y]) => {
+      CR.blob(ctx, x, y, 17, 19, r, 0.04); CR.fill(ctx, '#ffffff', r, null); CR.stroke(ctx, r, 3.5);
+      ctx.fillStyle = CR.INK; ctx.beginPath(); ctx.ellipse(x + (x < 75 ? 4 : -4), y + 4, 10, 12, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#ff7a2f'; ctx.beginPath(); ctx.ellipse(x + (x < 75 ? 4 : -4), y + 8, 6, 5, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath(); ctx.arc(x + (x < 75 ? 0 : -8), y - 2, 4, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(x + (x < 75 ? 8 : 0), y + 10, 2, 0, Math.PI * 2); ctx.fill();
+    });
+    // 生氣的眉毛
+    CR.line(ctx, 24, 10, 60, 22, r, 7); CR.line(ctx, 126, 10, 90, 22, r, 7);
+    // 歪嘴 + 兩顆小尖牙
+    ctx.beginPath(); ctx.moveTo(58, 66); ctx.quadraticCurveTo(75, 60, 92, 66); ctx.quadraticCurveTo(75, 80, 58, 66); ctx.closePath();
+    CR.fill(ctx, '#2b2a33', r, null); CR.stroke(ctx, r, 3);
+    ctx.fillStyle = '#ffffff';
+    [[63, 65], [81, 64]].forEach(([x, y]) => { ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 7, y); ctx.lineTo(x + 3.5, y + 8); ctx.closePath(); ctx.fill(); });
     return c;
   }
+
   // 小閃電
   function drawBolt() {
     const c = document.createElement('canvas');
@@ -478,7 +504,8 @@
       // 颱風怪物
       this.textures.addCanvas('typhoon-cloud', drawTyphoonCloud());
       this.textures.addCanvas('typhoon', drawTyphoonSwirl());
-      this.textures.addCanvas('typhoon-face', drawTyphoonFace());
+      this.textures.addCanvas('typhoon-face', drawTyphoonFace('normal'));
+      this.textures.addCanvas('typhoon-face-hit', drawTyphoonFace('hit'));
       const crate = document.createElement('canvas');
       crate.width = T; crate.height = T;
       const cc = crate.getContext('2d');
@@ -502,16 +529,21 @@
       this.emptyCrates = new Map();
 
       const Z = MAP.MONSTER_ZONE;
-      this.mBody = this.add.image(0, 0, 'typhoon-cloud');
-      this.mSwirl = this.add.image(0, 0, 'typhoon').setAlpha(0.35);
-      this.mFace = this.add.image(0, 6, 'typhoon-face');
+      // 容器原點在颱風腳底；body 會上下彈跳
+      this.mSwirl = this.add.image(0, -6, 'typhoon').setScale(1.1, 0.32).setAlpha(0.5);
+      this.mBody = this.add.image(0, 0, 'typhoon-cloud').setOrigin(0.5, 200 / 240);
+      this.mFace = this.add.image(0, -66, 'typhoon-face');
       this.mBar = this.add.graphics();
-      this.mName = this.add.text(0, -150, '颱風怪', {
-        fontSize: '16px', fontStyle: 'bold', color: '#ffffff', fontFamily: FONT,
-        backgroundColor: '#131a28', padding: { x: 8, y: 3 },
-      }).setOrigin(0.5);
+      // 楓之谷風格：名牌掛在怪物腳下
+      this.mName = this.add.text(0, 22, `Lv.${ST.MONSTER.level} ${ST.MONSTER.name}`, {
+        fontSize: '14px', fontStyle: 'bold', color: '#ffd23f', fontFamily: FONT,
+        backgroundColor: 'rgba(19,26,40,0.85)', padding: { x: 8, y: 2 },
+      }).setOrigin(0.5, 0);
       this.monster = this.add.container((Z.x1 + Z.x2) / 2, (Z.y1 + Z.y2) / 2,
-        [this.mBody, this.mSwirl, this.mFace, this.mBar, this.mName]);
+        [this.mSwirl, this.mBody, this.mFace, this.mBar, this.mName]);
+      this.dmgStack = 0;
+      document.querySelector('#boss .boss-lv').textContent = 'Lv.' + ST.MONSTER.level;
+      document.querySelector('#boss .boss-lv').nextSibling.textContent = ' ' + ST.MONSTER.name + ' ';
       this.monster.tx = this.monster.x; this.monster.ty = this.monster.y;
       this.mState = { alive: true, hp: 1, maxHp: 1 };
       this.mDead = this.add.text((Z.x1 + Z.x2) / 2, (Z.y1 + Z.y2) / 2, '', {
@@ -684,25 +716,55 @@
     // ---------- 颱風 ----------
     setMonster(m) {
       if (!m) return;
+      const wasAlive = this.mState && this.mState.alive && this.monster.visible;
       this.mState = m;
-      this.monster.setVisible(m.alive);
       if (m.alive) {
+        this.tweens.killTweensOf(this.monster);
+        this.monster.setVisible(true).setAlpha(1).setScale(1).setAngle(0);
         this.monster.x = this.monster.tx = m.x; this.monster.y = this.monster.ty = m.y;
         this.mDead.setVisible(false);
+        // 出場：從地上彈出來
+        this.tweens.add({ targets: this.monster, scale: { from: 0.2, to: 1 }, duration: 500, ease: 'Back.out' });
       } else {
         this.respawnAt = performance.now() + m.respawnIn;
         this.mDead.setVisible(true);
+        if (wasAlive) {
+          // 倒下：轉一圈縮小消失
+          this.mFace.setTexture('typhoon-face-hit');
+          this.tweens.add({ targets: this.monster, angle: 360, scale: 0.1, alpha: 0, y: this.monster.y - 60,
+            duration: 900, ease: 'Quad.in', onComplete: () => this.monster.setVisible(false) });
+        } else this.monster.setVisible(false);
       }
       this.drawMonsterBar();
     }
 
     moveMonster(m) { this.monster.tx = m.x; this.monster.ty = m.y; }
 
+    // 楓之谷的頭目血條放在畫面上方（DOM），怪物頭上再留一條細的
     drawMonsterBar() {
-      const g = this.mBar, w = 160, ratio = this.mState.maxHp ? this.mState.hp / this.mState.maxHp : 0;
+      const ratio = this.mState.maxHp ? this.mState.hp / this.mState.maxHp : 0;
+      $('boss-fill').style.width = (ratio * 100) + '%';
+      $('boss-pct').textContent = Math.ceil(ratio * 100) + '%';
+      const g = this.mBar, w = 120;
       g.clear();
-      g.fillStyle(0x131a28, 0.9); g.fillRoundedRect(-w / 2 - 3, -132, w + 6, 16, 8);
-      g.fillStyle(0xff6a13, 1); g.fillRoundedRect(-w / 2, -129, Math.max(6, w * ratio), 10, 5);
+      g.fillStyle(0x131a28, 0.9); g.fillRoundedRect(-w / 2 - 2, -178, w + 4, 10, 5);
+      g.fillStyle(0xff3b3b, 1); g.fillRoundedRect(-w / 2, -176, Math.max(4, w * ratio), 6, 3);
+    }
+
+    // 楓之谷風格的傷害數字：連續打會往上疊
+    damageNumber(dmg, crit) {
+      const now = performance.now();
+      if (now - (this.lastDmgAt || 0) > 700) this.dmgStack = 0;
+      this.lastDmgAt = now;
+      const y = this.monster.y - 150 - this.dmgStack * 30;
+      this.dmgStack = (this.dmgStack + 1) % 5;
+      const t = this.add.text(this.monster.x + (Math.random() - 0.5) * 30, y, (crit ? '💥' : '') + dmg, {
+        fontSize: crit ? '42px' : '34px', fontStyle: '900', fontFamily: '"Space Mono", ' + FONT,
+        color: crit ? '#ff5a2a' : '#ffb020', stroke: crit ? '#4a0d00' : '#5a2a00', strokeThickness: 7,
+      }).setOrigin(0.5).setDepth(2100);
+      t.setShadow(0, 3, 'rgba(0,0,0,0.35)', 0, true, true);
+      this.tweens.add({ targets: t, scale: { from: 1.5, to: 1 }, duration: 140, ease: 'Back.out' });
+      this.tweens.add({ targets: t, y: y - 50, alpha: 0, delay: 450, duration: 600, onComplete: () => t.destroy() });
     }
 
     onMonsterHit(m) {
@@ -711,9 +773,16 @@
       const who = me && m.id === me.id ? this.me : this.remotes.get(m.id);
       if (who) this.lunge(who, this.monster.x);
       if (m.skill === 'power') this.cameras.main.shake(180, 0.006);
-      this.tweens.add({ targets: this.mBody, scale: { from: 0.9, to: 1 }, duration: 160 });
-      this.floatText(this.monster.x + (Math.random() - 0.5) * 80, this.monster.y - 60,
-        (m.crit ? '暴擊！' : '') + '-' + m.dmg, m.crit ? '#ff6a13' : '#ffffff', m.crit ? 30 : 22);
+      // 被打：閃白、換成 >< 臉、往後縮一下
+      this.mBody.setTintFill(0xffffff);
+      this.mFace.setTexture('typhoon-face-hit');
+      this.mHitUntil = performance.now() + 260;
+      this.time.delayedCall(80, () => this.mBody.clearTint());
+      if (who) {
+        const dir = this.monster.x < who.x ? -1 : 1;
+        this.tweens.add({ targets: [this.mBody, this.mFace], x: dir * 10, duration: 70, yoyo: true });
+      }
+      this.damageNumber(m.dmg, m.crit);
     }
 
     onGust(gst) {
@@ -744,7 +813,7 @@
 
     // 世界座標 (x, y) 上可以互動的東西，夠近才算
     actionAt(x, y) {
-      if (this.mState.alive && this.monster.visible && Math.hypot(x - this.monster.x, y - this.monster.y) < 110 &&
+      if (this.mState.alive && this.monster.visible && Math.hypot(x - this.monster.x, y - (this.monster.y - 70)) < 110 &&
         Math.hypot(this.me.x - this.monster.x, this.me.y - this.monster.y) < 130) return { type: 'attack' };
       const tx = Math.floor(x / T), ty = Math.floor(y / T);
       if (MAP.crateAt(tx, ty) >= 0 && Math.hypot(this.me.x - (tx + 0.5) * T, this.me.y - (ty + 0.5) * T) < 1.7 * T) {
@@ -890,11 +959,21 @@
       if (this.monster.visible) {
         this.monster.x += (this.monster.tx - this.monster.x) * Math.min(1, dt * 6);
         this.monster.y += (this.monster.ty - this.monster.y) * Math.min(1, dt * 6);
-        this.mSwirl.rotation -= dt * 1.6;
-        this.mFace.y = 4 + Math.sin(time / 300) * 3;
-        this.mBody.setScale(1 + Math.sin(time / 420) * 0.03, 1 - Math.sin(time / 420) * 0.03);
-        this.monster.setDepth(this.monster.y + 40);
+        this.mSwirl.rotation -= dt * 2.4;
+        // 楓之谷式的彈跳：跳起來、落地時壓扁
+        const ph = (time % 900) / 900;
+        const hop = Math.sin(ph * Math.PI);
+        const squash = ph < 0.12 || ph > 0.88 ? 0.1 : 0;
+        this.mBody.y = -hop * 16;
+        this.mBody.setScale(1 + squash, 1 - squash + hop * 0.04);
+        this.mFace.y = -66 * (1 - squash) - hop * 16;
+        if (this.mHitUntil && performance.now() > this.mHitUntil) { this.mHitUntil = 0; this.mFace.setTexture('typhoon-face'); }
+        this.monster.setDepth(this.monster.y);
       }
+      // 頭目血條：在前線或看得到颱風的時候才顯示
+      const showBoss = this.mState.alive && (this.roomId === 'front' ||
+        Math.hypot(this.me.x - this.monster.x, this.me.y - this.monster.y) < 700);
+      if (showBoss !== this.showBoss) { this.showBoss = showBoss; $('boss').hidden = !showBoss; }
       if (!this.mState.alive && this.respawnAt) {
         const left = Math.max(0, Math.ceil((this.respawnAt - performance.now()) / 1000));
         this.mDead.setText(`🎉 颱風被擊退了！\n${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')} 後重新生成`);

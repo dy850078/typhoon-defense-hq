@@ -514,12 +514,13 @@ const draw = makeGame('draw', '你畫我猜', {
 
 const SONG_GOAL_MAX = 20;
 const song = makeGame('song', '金曲猜歌王', {
-  singer: '', title: '', goal: 1, gotSinger: new Set(), gotTitle: new Set(),
+  singer: '', title: '', goal: 1, gotSinger: new Set(), gotTitle: new Set(), singerPts: [1], titlePts: [1],
   playing() { return !!this.title; },
   done() { return [...this.gotSinger].filter(id => this.gotTitle.has(id)); },
   extra() {
     return { singerLen: [...norm(this.singer)].length, titleLen: [...norm(this.title)].length, goal: this.goal,
-      gotSinger: [...this.gotSinger], gotTitle: [...this.gotTitle], done: this.done().length };
+      gotSinger: [...this.gotSinger], gotTitle: [...this.gotTitle], done: this.done().length,
+      singerPts: this.singerPts, titlePts: this.titlePts };
   },
   clearRound() { this.singer = ''; this.title = ''; this.gotSinger.clear(); this.gotTitle.clear(); },
   joinData(p) { return this.host === p.id ? { singer: this.singer, title: this.title } : {}; },
@@ -532,6 +533,13 @@ const song = makeGame('song', '金曲猜歌王', {
 });
 // 猜的字跟答案一樣就算對；答案兩個字以上時，猜的字裡有包含答案也算（像「周杰倫 晴天」一次猜兩個）
 const songHit = (guess, ans) => { const a = norm(ans); return !!a && (guess === a || (a.length >= 2 && guess.includes(a))); };
+// 各名次答對的分數，例如 [3, 2, 1]：第 1 個答對 3 分、第 2 個 2 分，之後的人都拿最後一個分數
+const SONG_PTS_MAX = 10;
+const songPts = (v) => {
+  const a = (Array.isArray(v) ? v : []).slice(0, SONG_PTS_MAX).map(n => clamp(Math.round(Number(n)) || 0, 0, 100));
+  return a.length ? a : [1];
+};
+const rankPts = (pts, rank) => pts[Math.min(rank, pts.length - 1)];
 const GAMES = [draw, song];
 
 io.on('connection', (socket) => {
@@ -999,6 +1007,7 @@ io.on('connection', (socket) => {
     if (!norm(singer) || !norm(title)) return ack({ ok: false, error: '歌手和歌名都要填' });
     if (song.title) song.end('換題了，');
     song.singer = singer; song.title = title; song.goal = clamp(Math.round(Number(q.goal)) || 1, 1, SONG_GOAL_MAX);
+    song.singerPts = songPts(q.singerPts); song.titlePts = songPts(q.titlePts);
     song.gotSinger.clear(); song.gotTitle.clear(); song.hostRewarded = false;
     song.round++; song.lastHostAct = Date.now();
     song.log(`🎤 第 ${song.round} 首開始！歌手 ${[...norm(singer)].length} 個字、歌名 ${[...norm(title)].length} 個字，${song.goal} 人全部答對就結束`);
@@ -1017,8 +1026,16 @@ io.on('connection', (socket) => {
     if (hadS && hadT) return ack({ ok: false, error: '你已經全部答對了，等下一首' });
     const g = norm(t), hitS = !hadS && songHit(g, song.singer), hitT = !hadT && songHit(g, song.title);
     if (!hitS && !hitT) { song.log(`${p.name}：${t}`, 'guess'); return ack({ ok: true, correct: false }); }
-    if (hitS) { song.gotSinger.add(p.id); song.addScore(p, 1); song.log(`🎙️ ${p.name} 猜對歌手了！+1 分`, 'right'); }
-    if (hitT) { song.gotTitle.add(p.id); song.addScore(p, 1); song.log(`🎵 ${p.name} 猜對歌名了！+1 分`, 'right'); }
+    if (hitS) {
+      const rank = song.gotSinger.size, pts = rankPts(song.singerPts, rank);
+      song.gotSinger.add(p.id); song.addScore(p, pts);
+      song.log(`🎙️ ${p.name} 第 ${rank + 1} 個猜對歌手！+${pts} 分`, 'right');
+    }
+    if (hitT) {
+      const rank = song.gotTitle.size, pts = rankPts(song.titlePts, rank);
+      song.gotTitle.add(p.id); song.addScore(p, pts);
+      song.log(`🎵 ${p.name} 第 ${rank + 1} 個猜對歌名！+${pts} 分`, 'right');
+    }
     let item = null;
     const both = song.gotSinger.has(p.id) && song.gotTitle.has(p.id);
     if (both) { item = song.reward(p, `🏆 ${p.name} 歌手和歌名都答對了`); song.rewardHost(); }

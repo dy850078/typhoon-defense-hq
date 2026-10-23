@@ -135,12 +135,15 @@
               <div class="song-slot"><small>🎵 歌名</small><b id="song-title-slot"></b></div>
             </div>
             <p id="song-goal-text" class="song-goal"></p>
-            <p class="song-tip">主持人可以在視訊裡唱一段、哼旋律或播前奏，大家在右邊輸入歌手或歌名。歌手、歌名分開算分，兩個都答對才算達標！</p>
+            <p id="song-pts-text" class="song-tip"></p>
+            <p class="song-tip">主持人可以在視訊裡唱一段、哼旋律或播前奏，大家在右邊輸入歌手或歌名。歌手、歌名分開算分，越早答對分數越高，兩個都答對才算達標！</p>
           </div>
           <form id="song-start-form" class="draw-start song-start host-only">
             <input id="song-singer" maxlength="20" placeholder="歌手（別人看不到）" autocomplete="off">
             <input id="song-title" maxlength="30" placeholder="歌名（別人看不到）" autocomplete="off">
             <label class="song-goal-in">幾人答對就結束 <input id="song-goal" type="number" min="1" max="20" value="1"></label>
+            <label class="song-goal-in" title="第 1、2、3… 個答對的分數，用逗號分開；之後的人都拿最後一個分數">歌手分數 <input id="song-singer-pts" class="song-pts" value="3,2,1" autocomplete="off"></label>
+            <label class="song-goal-in" title="第 1、2、3… 個答對的分數，用逗號分開；之後的人都拿最後一個分數">歌名分數 <input id="song-title-pts" class="song-pts" value="3,2,1" autocomplete="off"></label>
             <button class="primary small" type="submit">出題</button>
             <button id="song-reveal" class="hud-btn tiny" type="button">公布答案</button>
           </form>

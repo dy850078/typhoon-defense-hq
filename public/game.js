@@ -687,6 +687,8 @@
       slot('song-singer-slot', state.singerLen, gotS, answer && answer.singer);
       slot('song-title-slot', state.titleLen, gotT, answer && answer.title);
       $('song-goal-text').textContent = state.playing ? `🏁 ${state.done} / ${state.goal} 人歌手＋歌名都答對` : '';
+      const ptsText = (a) => a.map((n, i) => `第${i + 1}名 ${n}`).join('、') + (a.length > 1 ? `，之後 ${a[a.length - 1]}` : '') + ' 分';
+      $('song-pts-text').textContent = state.playing ? `🎙️ 歌手：${ptsText(state.singerPts)}　🎵 歌名：${ptsText(state.titlePts)}` : '';
       gameRender('song', state, { info,
         tag: (id) => { const s = state.gotSinger.includes(id), t = state.gotTitle.includes(id); return s && t ? '🏆 ' : s ? '🎙️ ' : t ? '🎵 ' : ''; },
         placeholder: !state.playing ? '聊天…' : gotS && gotT ? '你全部答對了！' : gotS ? '再猜歌名…' : gotT ? '再猜歌手…' : '猜歌手或歌名…' });
@@ -695,7 +697,10 @@
     function onState(st) { state = st; if (!amHost() || !st.playing) answer = null; render(); }
     $('song-start-form').onsubmit = (e) => {
       e.preventDefault();
-      const q = { singer: $('song-singer').value.trim(), title: $('song-title').value.trim(), goal: Number($('song-goal').value) || 1 };
+      // 分數用逗號（或空白、頓號）分開，例如 3,2,1
+      const pts = (id) => $(id).value.split(/[,，、\s]+/).filter(Boolean).map(Number).filter(n => Number.isFinite(n) && n >= 0);
+      const q = { singer: $('song-singer').value.trim(), title: $('song-title').value.trim(), goal: Number($('song-goal').value) || 1,
+        singerPts: pts('song-singer-pts'), titlePts: pts('song-title-pts') };
       socket.emit('songStart', q, (res) => {
         if (!res || !res.ok) { if (res && res.error) toast(res.error); return; }
         answer = { singer: q.singer, title: q.title };

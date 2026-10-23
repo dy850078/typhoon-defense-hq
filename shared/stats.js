@@ -23,8 +23,8 @@
 
   const REGEN = { mpPerSec: 1, hpPerSec: 0 };
 
-  // 颱風怪的顯示資料（血量在伺服器用 MONSTER_HP 設定）
-  const MONSTER = { name: '颱風怪', level: 30 };
+  // 颱風怪的顯示資料（血量在伺服器用 MONSTER_HP 設定），名字跟著現在的颱風
+  const MONSTER = { name: '薔琵', level: 30 };
   const RESPAWN_MS = 5000; // 倒下後幾秒回到總部
 
   function statsFor(cls) {

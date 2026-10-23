@@ -52,7 +52,7 @@ function spawnMonster() {
   monster.damage.clear();
   pickMonsterTarget();
   io.emit('monster', monsterState());
-  pushChat({ system: true, text: '🌀 颱風又生成了！大家快到颱風前線集合！', t: Date.now() });
+  pushChat({ system: true, text: `🌀 颱風${STATS.MONSTER.name}又生成了！大家快到颱風前線集合！`, t: Date.now() });
 }
 
 function pickMonsterTarget() {
@@ -108,7 +108,7 @@ function hurt(p, dmg) {
   if (p.hp > 0) return sendStats(p);
   p.dead = true;
   sendStats(p);
-  pushChat({ system: true, text: `💫 ${p.name} 被颱風吹倒了，${STATS.RESPAWN_MS / 1000} 秒後回到總部`, t: Date.now() });
+  pushChat({ system: true, text: `💫 ${p.name} 被颱風${STATS.MONSTER.name}吹倒了，${STATS.RESPAWN_MS / 1000} 秒後回到總部`, t: Date.now() });
   setTimeout(() => {
     if (!players.has(p.id)) return;
     p.dead = false;
@@ -237,7 +237,7 @@ io.on('connection', (socket) => {
     const top = [...monster.damage.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3);
     io.emit('monster', monsterState());
     const mins = Math.round(RESPAWN_MS / 60000);
-    pushChat({ system: true, text: `🎉 ${p.name} 打出最後一擊，颱風被擊退了！${mins} 分鐘後會再生成。`, t: now });
+    pushChat({ system: true, text: `🎉 ${p.name} 打出最後一擊，颱風${STATS.MONSTER.name}被擊退了！${mins} 分鐘後會再生成。`, t: now });
     if (top.length) pushChat({ system: true, text: '🏅 輸出排行：' + top.map(([n, d], i) => `${i + 1}. ${n} ${d}`).join('、'), t: now });
   });
 

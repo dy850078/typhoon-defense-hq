@@ -294,7 +294,7 @@ button.inv-item:hover { border-color: var(--accent); }
   padding: 0; font-size: 15px; line-height: 1; }
 .draw-sizes .sz i { display: block; border-radius: 50%; background: var(--ink); }
 .draw-colors .on, .draw-sizes .on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
-.draw-side { width: 260px; flex-shrink: 0; display: flex; flex-direction: column; gap: 8px; }
+.draw-side { width: var(--game-side, 260px); flex-shrink: 0; display: flex; flex-direction: column; gap: 8px; }
 .draw-members { display: flex; flex-wrap: wrap; gap: 4px; }
 .draw-members .chip { font-size: 12px; font-weight: 700; background: var(--silver); border-radius: 999px; padding: 2px 9px; }
 .draw-members .chip.me { background: #ffe1cf; }
@@ -305,6 +305,11 @@ button.inv-item:hover { border-color: var(--accent); }
 .draw-log .dl-answer { color: var(--accent-ink); font-weight: 900; }
 .draw-guess { display: flex; gap: 6px; }
 .draw-guess input { flex: 1; margin: 0; min-width: 0; }
+/* 畫板和對話框中間的分隔線，左右拖曳調整對話框寬度 */
+.draw-main { gap: 0; }
+.game-split { flex: none; width: 14px; margin: 0 2px; cursor: col-resize; touch-action: none; position: relative; }
+.game-split::before { content: ''; position: absolute; left: 5px; top: 40%; height: 20%; width: 4px; border-radius: 2px; background: var(--line); }
+.game-split:hover::before, .game-split.dragging::before { background: var(--accent); }
 .draw-log .dl-prize { color: #8a5cd6; font-weight: 700; }
 .game-tabs { display: flex; gap: 6px; margin: 4px 0 10px; }
 .game-tabs button { font: 700 15px var(--display); padding: 7px 16px; border-radius: 999px; border: 2px solid var(--ink);
@@ -331,7 +336,8 @@ button.inv-item:hover { border-color: var(--accent); }
 .song-start .song-goal-in { display: flex; align-items: center; gap: 4px; font-weight: 700; font-size: 13px; white-space: nowrap; }
 .song-start .song-goal-in input { width: 56px; min-width: 0; flex: none; margin: 0; }
 @media (max-width: 760px) {
-  .draw-main { flex-direction: column; }
+  .draw-main { flex-direction: column; gap: 14px; }
+  .game-split { display: none; }
   .draw-side { width: auto; }
   .draw-log { min-height: 90px; max-height: 140px; }
 }

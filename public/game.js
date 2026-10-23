@@ -759,6 +759,27 @@
       GAMES[k].join(() => show(k));
     });
     $('games-x').onclick = () => close();
+    // 拖曳分隔線調整對話框寬度（兩個遊戲一起變），記在這台裝置上
+    const card = document.querySelector('.draw-card');
+    const setSide = (w) => card.style.setProperty('--game-side', w + 'px');
+    try { const w = Number(localStorage.getItem('hq-game-side')); if (w) setSide(w); } catch (e) {}
+    document.querySelectorAll('.game-split').forEach(sp => {
+      sp.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        sp.setPointerCapture(e.pointerId);
+        sp.classList.add('dragging');
+        const main = sp.parentNode.getBoundingClientRect();
+        const move = (ev) => {
+          const w = Math.round(Math.max(200, Math.min(main.width * 0.7, main.right - ev.clientX)));
+          setSide(w);
+          try { localStorage.setItem('hq-game-side', w); } catch (err) {}
+        };
+        const up = () => { sp.classList.remove('dragging'); sp.removeEventListener('pointermove', move); sp.removeEventListener('pointerup', up); sp.removeEventListener('pointercancel', up); };
+        sp.addEventListener('pointermove', move);
+        sp.addEventListener('pointerup', up);
+        sp.addEventListener('pointercancel', up);
+      });
+    });
     return { open, close };
   })();
   $('games-btn').addEventListener('click', () => ROOM.open());

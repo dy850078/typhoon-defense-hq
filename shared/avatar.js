@@ -11,6 +11,8 @@
     tank: { body: '#2f3b55', sleeve: null }, // 背心＋露出粗手臂＋頭帶
     skater: { body: '#a9d4f0', sleeve: '#a9d4f0' }, // 清宮旗裝＋大拉翅＋冰刀
     summoner: { body: '#f6c6d6', sleeve: '#f6c6d6' }, // 粉紅太空衣＋外星觸角髮箍
+    singer: { body: '#5b3f8f', sleeve: '#5b3f8f' }, // 紫色亮片晚禮服＋耳麥＋音符髮夾
+    painter: { body: '#f4efe4', sleeve: '#4f7cc2' }, // 沾滿顏料的畫家圍裙＋條紋袖＋紅色貝雷帽
     suit: { body: '#2f3b55', sleeve: '#2f3b55' }, // NPC 西裝
   };
   const SKINS = ['#fde6d4', '#f6cfae', '#e2a983', '#b77a55'];
@@ -73,7 +75,7 @@
 
     // 雨衣身體
     // 長袍、旗裝比較長，蓋住一點腿
-    const hem = cos === 'prophet' || cos === 'skater' ? 71 : 66;
+    const hem = cos === 'prophet' || cos === 'skater' || cos === 'singer' ? 71 : 66;
     ctx.beginPath();
     ctx.moveTo(19, 47); ctx.quadraticCurveTo(32, 41 + r(), 45, 47);
     ctx.quadraticCurveTo(49 + r(), 58, 48 + (hem - 66) * 0.3, hem); ctx.quadraticCurveTo(32, hem + 3 + r(), 16 - (hem - 66) * 0.3, hem);
@@ -259,6 +261,18 @@
       C.blob(ctx, 32, 53.2, 2.4, 1.8, r, 0.1, 10); C.fill(ctx, '#bfe6ff', r, null); C.stroke(ctx, r, 1);
       C.line(ctx, 17, 62, 47, 62, r, 2.6, '#e8384f', 0.3);
       [[20, 50], [44, 52]].forEach(([x, y]) => dot(x, y, 1.3, '#ffffff'));
+    } else if (cos === 'singer') {
+      // 晚禮服：亮片、金色腰帶、裙襬一圈星光
+      [[22, 55], [41, 52], [27, 64], [38, 62], [44, 68], [20, 68], [33, 58]].forEach(([x, y], i) => dot(x, y, i % 2 ? 1 : 1.5, i % 3 ? '#ffd23f' : '#ffffff'));
+      C.line(ctx, 18, 54, 46, 54, r, 2.4, '#ffd23f', 0.3);
+      C.blob(ctx, 32, 54, 3, 2.4, r, 0.08, 10); C.fill(ctx, '#f4a3c0', r, null); C.stroke(ctx, r, 1.2);
+      C.line(ctx, 16, hem - 2, 48, hem - 2, r, 2.2, '#b9a3ec', 0.4);
+    } else if (cos === 'painter') {
+      // 圍裙：口袋插著畫筆，到處是顏料點點
+      C.rect(ctx, 23, 50, 18, 14, r, 0.6); C.fill(ctx, '#e7dcc6', r, null); C.stroke(ctx, r, 1.4);
+      C.line(ctx, 37, 51, 41, 43, r, 2, '#8a5a3a', 0.2); dot(41.5, 42.5, 1.6, '#e8384f');
+      C.line(ctx, 34, 51, 35, 44, r, 2, '#8a5a3a', 0.2); dot(35, 43.5, 1.6, '#4f7cc2');
+      [[20, 57, '#e8384f'], [44, 60, '#3f9f5a'], [26, 66, '#ffd23f'], [40, 66, '#4f7cc2'], [30, 47, '#ff7a2f']].forEach(([x, y, c]) => dot(x, y, 1.8, c));
     } else if (cos === 'suit') {
       // 白襯衫 V 領＋領帶
       ctx.beginPath(); ctx.moveTo(26, 46); ctx.lineTo(38, 46); ctx.lineTo(32, 56); ctx.closePath();
@@ -294,6 +308,18 @@
         C.blob(ctx, x + k * 5, -2, 4, 4, r, 0.1, 12); C.fill(ctx, '#7be08f', r, null); C.stroke(ctx, r, 1.8);
         C.blob(ctx, x + k * 5 - 1, -3, 1.2, 1.2, r, 0.1, 8); ctx.fillStyle = '#ffffff'; ctx.fill();
       });
+    } else if (cos === 'singer') {
+      // 耳麥＋音符髮夾
+      ctx.beginPath(); ctx.arc(32, 27, 19.5, Math.PI * 1.05, Math.PI * 1.95); C.stroke(ctx, r, 2.4, C.INK);
+      ctx.beginPath(); ctx.moveTo(14, 30); ctx.quadraticCurveTo(16, 40, 25, 40.5); C.stroke(ctx, r, 1.8, C.INK);
+      C.blob(ctx, 25.5, 40.5, 2, 1.6, r, 0.1, 8); C.fill(ctx, '#2b2a33', r, null);
+      C.blob(ctx, 14, 29, 3, 4, r, 0.1, 10); C.fill(ctx, '#2b2a33', r, null); C.stroke(ctx, r, 1.4);
+      C.blob(ctx, 44, 12, 3, 2.4, r, 0.1, 10); C.fill(ctx, '#ffd23f', r, null); C.stroke(ctx, r, 1.2);
+      C.line(ctx, 46.5, 12, 46.5, 4, r, 1.6, C.INK, 0.2); C.line(ctx, 46.5, 4, 50, 6, r, 1.6, C.INK, 0.2);
+    } else if (cos === 'painter') {
+      // 歪戴的紅色貝雷帽，頂端一個小尾巴
+      C.blob(ctx, 29, 11, 19, 6.5, r, 0.08, 14); C.fill(ctx, '#d9384a', r, [10, 4, 38, 14]); C.stroke(ctx, r, W);
+      C.line(ctx, 30, 5, 31, 1, r, 2.2, C.INK, 0.2);
     } else if (cos === 'skater') {
       // 大拉翅：頭上一片黑色扁扁的大板子，插著粉紅花
       C.rect(ctx, 8, 2, 48, 9, r, 0.8); C.fill(ctx, '#2b2a33', r, null); C.stroke(ctx, r, W);

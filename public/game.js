@@ -12,7 +12,7 @@
   const MELEE = ['strike', 'power', 'syringe', 'punch', 'kick'];
   // 會飛過去的攻擊：特效打到才跳數字（毫秒）
   const HIT_DELAY = { arrow: 520, barbell: 330, skate: 950, shot: 260, orb: 300, ray: 120,
-    defib: 150, arrowRain: 650, roar: 200, icicle: 330, mothership: 600 };
+    defib: 150, arrowRain: 650, roar: 200, icicle: 330, mothership: 600, note: 280, paint: 260, noteBlade: 760 };
   // 人物貼圖比 64x80 大一圈，翅膀、氣球、帽子才畫得下；(16,32) 是人物框的左上角，腳底在 y=108
   const FRAME = { w: 96, h: 112, ox: 16, oy: 32 };
   const AV_ORIGIN_Y = (FRAME.oy + 76) / FRAME.h;
@@ -158,6 +158,8 @@
   socket.on('summonHurt', (h) => scene && scene.onSummonHurt(h));
   socket.on('summonGone', (g) => scene && scene.onSummonGone(g));
   socket.on('decor', (d) => scene && scene.setDecor(d));
+  socket.on('wall', (w) => scene && scene.onWall(w));
+  socket.on('wallGone', (w) => scene && scene.onWallGone(w.id));
   socket.on('decorGot', (g) => {
     myFurn = g.furn;
     store('hq-furn', myFurn);
@@ -916,7 +918,7 @@
     $('mp-fill').style.width = (100 * st.mp / st.maxMp) + '%';
     $('hp-text').textContent = `${st.hp}/${st.maxHp}`;
     $('mp-text').textContent = `${st.mp}/${st.maxMp}`;
-    $('atk-text').textContent = st.atk;
+    $('atk-text').textContent = st.atk + (st.atkBuffMs > 0 ? ' 🎶' : '');
     $('def-text').textContent = st.def + (st.buffMs > 0 ? ' 🛡️' : '');
     $('lv-text').textContent = 'Lv.' + st.level;
     $('exp-fill').style.width = (100 * st.exp / st.expNext) + '%';
@@ -964,6 +966,7 @@
       if (sk.heal) now.push(`補 ${Math.round(sk.heal.hp * k)} 血、${Math.round(sk.heal.mp * k)} 魔力`);
       if (sk.teamDef) now.push(`隊友防禦 +${sk.teamDef.v + plus}`);
       if (sk.selfDef) now.push(`自己防禦 +${sk.selfDef.v + plus}`);
+      if (sk.teamAtk) now.push(`隊友攻擊 +${Math.round(sk.teamAtk.mul * 100)}%`);
       if (sk.summon) now.push(`召喚物攻擊和血量 ×${k.toFixed(2)}`);
       if (now.length) inf.appendChild(el('p', 'mono', `Lv.${lv} 目前效果：${now.join('、')}`));
       row.appendChild(inf);
@@ -1397,6 +1400,28 @@
         ctx.restore();
       });
     }),
+    // 音符（歌姬的普攻、靈魂之歌）
+    note: () => fxCanvas(34, 40, 41, (ctx, r) => {
+      CR.blob(ctx, 11, 31, 8, 6, r, 0.08, 12); CR.fill(ctx, '#8a5cd6', r, null); CR.stroke(ctx, r, 2.2);
+      CR.line(ctx, 18, 30, 18, 6, r, 3, CR.INK, 0.2);
+      ctx.beginPath(); ctx.moveTo(18, 6); ctx.quadraticCurveTo(30, 10, 30, 20); ctx.quadraticCurveTo(26, 14, 18, 14); ctx.closePath();
+      CR.fill(ctx, '#8a5cd6', r, null); CR.stroke(ctx, r, 2);
+      ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.ellipse(8.5, 29, 2.2, 1.4, -0.5, 0, Math.PI * 2); ctx.fill();
+    }),
+    // 音符變成的小刀：刀尖朝右
+    blade: () => fxCanvas(64, 22, 42, (ctx, r) => {
+      ctx.beginPath(); ctx.moveTo(18, 4); ctx.lineTo(50, 5); ctx.lineTo(62, 11); ctx.lineTo(50, 17); ctx.lineTo(18, 18); ctx.closePath();
+      CR.fill(ctx, '#eef2fb', r, null); CR.stroke(ctx, r, 2, '#5b3f8f');
+      CR.line(ctx, 20, 11, 54, 11, r, 1.4, '#b9a3ec', 0.3);
+      CR.rect(ctx, 12, 2, 5, 18, r, 0.4); CR.fill(ctx, '#ffd23f', r, null); CR.stroke(ctx, r, 1.6);
+      CR.rect(ctx, 2, 8, 10, 6, r, 0.4); CR.fill(ctx, '#8a5cd6', r, null); CR.stroke(ctx, r, 1.6);
+    }),
+    // 一坨顏料（畫的時候染成別的顏色）
+    paint: () => fxCanvas(40, 34, 43, (ctx, r) => {
+      CR.blob(ctx, 20, 17, 15, 12, r, 0.22, 14); CR.fill(ctx, '#ffffff', r, null); CR.stroke(ctx, r, 2.2);
+      [[6, 6, 3], [34, 28, 2.6], [35, 7, 2]].forEach(([x, y, rad]) => { CR.blob(ctx, x, y, rad, rad, r, 0.2, 10); CR.fill(ctx, '#ffffff', r, null); CR.stroke(ctx, r, 1.4); });
+      ctx.fillStyle = 'rgba(255,255,255,0.9)'; ctx.beginPath(); ctx.ellipse(14, 12, 4, 2.5, -0.5, 0, Math.PI * 2); ctx.fill();
+    }),
     // 冰錐：尖端朝下的一根長冰柱
     icicle: () => fxCanvas(44, 120, 31, (ctx, r) => {
       ctx.beginPath(); ctx.moveTo(4, 4); ctx.lineTo(40, 4); ctx.lineTo(30, 40); ctx.lineTo(22, 116); ctx.lineTo(14, 40); ctx.closePath();
@@ -1738,7 +1763,7 @@
 
   // ---------------- Phaser 場景 ----------------
   class HQScene extends Phaser.Scene {
-    constructor() { super('hq'); this.remotes = new Map(); this.drops = []; this.told = {}; }
+    constructor() { super('hq'); this.remotes = new Map(); this.drops = []; this.told = {}; this.walls = new Map(); this.drawing = null; }
 
     create() {
       this.textures.addCanvas('map', drawMap());
@@ -1759,9 +1784,17 @@
       kb.on('keydown-L', (e) => { if (!typing()) { e.preventDefault(); this.useSkill(special2()); } });
       // 右鍵點人物（手機長按）可以看個人資料
       this.input.mouse.disableContextMenu();
-      this.input.on('pointerup', () => { if (this.pressTimer) { this.pressTimer.remove(); this.pressTimer = null; } });
+      this.input.on('pointerup', () => {
+        if (this.pressTimer) { this.pressTimer.remove(); this.pressTimer = null; }
+        if (this.drawing && this.drawing.pts.length) this.finishWall();
+      });
+      // 畫城牆時手指滑到按鈕上才放開，也要算畫完
+      this.input.on('pointerupoutside', () => { if (this.drawing && this.drawing.pts.length) this.finishWall(); });
+      this.input.on('pointermove', (p) => { if (this.drawing && this.drawing.pts.length && p.isDown) this.extendWall(p.worldX, p.worldY); });
       this.input.on('pointerdown', (p) => {
         if (!this.me) return;
+        // 插畫家畫城牆中：按下去就開始畫，不會走路
+        if (this.drawing && !p.rightButtonDown()) { chatInput.blur(); this.target = null; this.drawing.pts = [[p.worldX, p.worldY]]; this.drawing.len = 0; this.drawPreview(); return; }
         chatInput.blur();
         hideMenu();
         const who = this.playerAt(p.worldX, p.worldY);
@@ -2056,6 +2089,11 @@
         if (!who.shield) { who.shield = this.add.image(26, -70, 'fx-shield').setScale(0.6); who.add(who.shield); }
         who.shieldUntil = performance.now() + st.buffMs;
       }
+      // 攻擊增益（靈魂之歌）：頭上另一邊掛一個音符
+      if (st.atkBuffMs > 0) {
+        if (!who.atkIcon) { who.atkIcon = this.add.image(-26, -70, 'fx-note').setScale(0.55); who.add(who.atkIcon); }
+        who.atkUntil = performance.now() + st.atkBuffMs;
+      }
       if (who === this.me) {
         if (st.dead && !prev.dead) { toast(`你被${ST.MONSTER.name}吹倒了！${ST.RESPAWN_MS / 1000} 秒後回到總部`); this.target = null; }
         renderStats(st);
@@ -2130,6 +2168,8 @@
       this.decor.forEach(d => d.destroy());
       this.decor.clear();
       (res.decor || []).forEach(d => this.setDecor(d));
+      this.walls.forEach((w, id) => this.onWallGone(id, true));
+      (res.walls || []).forEach(w => this.onWall(w));
       renderStats(res.you);
       this.emptyCrates.forEach(i => i.destroy());
       this.emptyCrates.clear();
@@ -2716,13 +2756,110 @@
           this.burst(f.x, f.mid, 8, rain ? 0xff8fb8 : 0x7be08f, 60);
           if (!rain) { this.floatText(f.x, f.y - (f.mob ? 110 : 200), '🛸 被削弱了！', '#b8f5cf', 20); this.refreshFoeTint(t); }
         }));
+      } else if (fx.skill === 'note') {
+        // 飆高音：音符一跳一跳飛過去
+        fly('fx-note', 280, 0x8a5cd6, { scale: 0.9 });
+      } else if (fx.skill === 'paint') {
+        // 甩一坨顏料，打中潑一片
+        const colors = [0xff6a13, 0x4f7cc2, 0xe8384f, 0x3f9f5a, 0xffd23f, 0x8a5cd6], c = colors[Math.floor(Math.random() * colors.length)];
+        const sx = who.x + (mx < who.x ? -14 : 14), sy = who.y - 44;
+        const b = this.add.image(sx, sy, 'fx-paint').setTint(c).setDepth(2050).setScale(0.6);
+        this.tweens.add({ targets: b, x: mx, y: my, angle: 360, duration: 260, ease: 'Quad.in', onComplete: () => {
+          b.destroy();
+          const sp = this.add.image(mx, my, 'fx-paint').setTint(c).setDepth(2050).setScale(0.6);
+          this.tweens.add({ targets: sp, scale: 1.8, alpha: 0, duration: 420, ease: 'Quad.out', onComplete: () => sp.destroy() });
+          this.burst(mx, my, 8, c, 50);
+        } });
+      } else if (fx.skill === 'noteBlade') {
+        // 先唱出一圈音符，音符一顆顆變成小刀，連續射向目標
+        const dir = mx < who.x ? -1 : 1;
+        who.body_.setFlipX(dir === -1);
+        for (let i = 0; i < 5; i++) {
+          const a = -Math.PI / 2 + (i - 2) * 0.55, ox = who.x + Math.cos(a) * 58, oy = who.y - 60 + Math.sin(a) * 40;
+          const n = this.add.image(who.x, who.y - 50, 'fx-note').setDepth(2050).setScale(0.3);
+          this.tweens.add({ targets: n, x: ox, y: oy, scale: 0.9, duration: 220, delay: i * 50, ease: 'Back.out', onComplete: () => {
+            // 音符一閃變成刀
+            this.burst(ox, oy, 4, 0xb9a3ec, 24);
+            n.destroy();
+            const k = this.add.image(ox, oy, 'fx-blade').setDepth(2052).setScale(0.75).setRotation(Math.atan2(my - oy, mx - ox));
+            this.time.delayedCall(140 + i * 70, () => {
+              this.tweens.add({ targets: k, x: mx + (Math.random() - 0.5) * 30, y: my + (Math.random() - 0.5) * 30, duration: 170, ease: 'Quad.in', onComplete: () => {
+                k.destroy();
+                const slash = this.add.graphics({ x: mx, y: my }).setDepth(2055).setRotation(Math.random() * Math.PI);
+                slash.lineStyle(6, 0xb9a3ec, 0.9); slash.lineBetween(-36, 0, 36, 0);
+                slash.lineStyle(2, 0xffffff, 1); slash.lineBetween(-36, 0, 36, 0);
+                this.tweens.add({ targets: slash, scaleX: 1.6, alpha: 0, duration: 220, onComplete: () => slash.destroy() });
+                if (i === 4) this.floatText(mx, my - 60, '刷刷刷！', '#d9c4ff', 26);
+              } });
+            });
+          } });
+        }
+      } else if (fx.skill === 'anthem') {
+        // 靈魂之歌：腳下一圈紫金色的光，音符從每個被加持的人身上飄起來
+        ring(sk.teamAtk.r, 0xb98cff);
+        const mic = this.add.text(who.x, who.y - 100, '🎤', { fontSize: '30px' }).setOrigin(0.5).setDepth(2055);
+        this.tweens.add({ targets: mic, y: who.y - 140, angle: { from: -15, to: 15 }, duration: 500, yoyo: true, onComplete: () => mic.destroy() });
+        fx.targets.forEach(id => {
+          const t = me && id === me.id ? this.me : this.remotes.get(id);
+          if (!t) return;
+          for (let i = 0; i < 4; i++) {
+            const n = this.add.image(t.x + (Math.random() - 0.5) * 40, t.y - 30, 'fx-note').setDepth(2050).setScale(0.6)
+              .setTint(i % 2 ? 0xffd23f : 0xffffff);
+            this.tweens.add({ targets: n, y: t.y - 110 - Math.random() * 40, x: n.x + (Math.random() - 0.5) * 50, alpha: 0, angle: (Math.random() - 0.5) * 60,
+              delay: i * 120, duration: 900, onComplete: () => n.destroy() });
+          }
+          this.floatText(t.x, t.y - 120, '⚔️ 攻擊 +30%', '#ffd23f', 18);
+        });
       } else if (fx.skill === 'roar') {
-        // 大吼一聲：好幾圈聲波往外擴
-        this.lunge(who, mx);
-        for (let i = 0; i < 3; i++) this.time.delayedCall(i * 120, () => ring(sk.aoe, 0xff9a3c));
-        this.floatText(who.x, who.y - 160, '吼～～！', '#ffffff', 32);
-        this.cameras.main.shake(260, 0.01);
-        this.time.delayedCall(200, () => (fx.hits || [fx.target]).forEach(t => { const f = this.foePos(t); this.burst(f.x, f.mid, 8, 0xff9a3c, 60); }));
+        // 霸王怒吼：先蹲低蓄力，頭上冒出一顆金色獅子頭，接著一圈圈衝擊波＋放射狀的風壓線往外炸，怪全部被震飛
+        const dir = mx < who.x ? -1 : 1;
+        this.tweens.add({ targets: who.body_, scaleY: 0.42, duration: 140, yoyo: true });
+        const lion = this.add.text(who.x, who.y - 90, '🦁', { fontSize: '40px' }).setOrigin(0.5).setDepth(2058).setScale(0.3);
+        this.tweens.add({ targets: lion, scale: 2.2, y: who.y - 150, duration: 320, ease: 'Back.out' });
+        this.tweens.add({ targets: lion, scale: 3, alpha: 0, delay: 650, duration: 300, onComplete: () => lion.destroy() });
+        const aura = this.add.graphics({ x: who.x, y: who.y - 40 }).setDepth(2040);
+        aura.fillStyle(0xffd23f, 0.35); aura.fillCircle(0, 0, 60); aura.fillStyle(0xfff4c9, 0.5); aura.fillCircle(0, 0, 32);
+        this.tweens.add({ targets: aura, scale: { from: 0.3, to: 1.6 }, alpha: { from: 1, to: 0 }, duration: 500, onComplete: () => aura.destroy() });
+        this.time.delayedCall(180, () => {
+          this.floatText(who.x, who.y - 190, '吼～～！！', '#ffd23f', 40);
+          this.cameras.main.shake(420, 0.016);
+          this.cameras.main.flash(160, 255, 210, 120);
+          // 三圈衝擊波：外圈金色、中圈橘色、內圈白色
+          [[0, 0xffd23f, 10], [110, 0xff9a3c, 7], [220, 0xffffff, 4]].forEach(([d, color, w]) => this.time.delayedCall(d, () => {
+            const g = this.add.graphics({ x: who.x, y: who.y - 20 }).setDepth(2045);
+            g.lineStyle(w, color, 0.95); g.strokeEllipse(0, 0, sk.aoe * 2, sk.aoe * 1.3);
+            g.lineStyle(w * 2.5, color, 0.25); g.strokeEllipse(0, 0, sk.aoe * 2, sk.aoe * 1.3);
+            this.tweens.add({ targets: g, scale: { from: 0.15, to: 1.25 }, alpha: { from: 1, to: 0 }, duration: 620, ease: 'Cubic.out', onComplete: () => g.destroy() });
+          }));
+          ring(sk.aoe, 0xff9a3c);
+          // 放射狀的風壓線
+          const lines = this.add.graphics({ x: who.x, y: who.y - 30 }).setDepth(2044);
+          for (let i = 0; i < 18; i++) {
+            const a = (i / 18) * Math.PI * 2 + Math.random() * 0.2, r0 = 40 + Math.random() * 20, r1 = sk.aoe * (0.8 + Math.random() * 0.4);
+            lines.lineStyle(i % 2 ? 3 : 5, i % 3 ? 0xffffff : 0xffd23f, 0.9);
+            lines.lineBetween(Math.cos(a) * r0, Math.sin(a) * r0 * 0.65, Math.cos(a) * r1, Math.sin(a) * r1 * 0.65);
+          }
+          this.tweens.add({ targets: lines, scale: { from: 0.4, to: 1.3 }, alpha: { from: 1, to: 0 }, duration: 450, ease: 'Quad.out', onComplete: () => lines.destroy() });
+          // 腳下噴出一圈塵土
+          for (let i = 0; i < 14; i++) {
+            const a = (i / 14) * Math.PI * 2;
+            const dust = this.add.graphics({ x: who.x, y: who.y }).setDepth(who.y + 2);
+            dust.fillStyle(0xd8c7a8, 0.8); dust.fillCircle(0, 0, 8 + Math.random() * 6);
+            this.tweens.add({ targets: dust, x: who.x + Math.cos(a) * 110, y: who.y + Math.sin(a) * 50, scale: 2, alpha: 0, duration: 550, ease: 'Quad.out', onComplete: () => dust.destroy() });
+          }
+          // 被震飛的怪：往外滑出去、轉一圈，冒出「震飛！」
+          (fx.knock || []).forEach(([id, x, y]) => {
+            const t = id === 'boss' ? this.monster : this.mobs.get(id);
+            if (!t) return;
+            t.tx = x; t.ty = y;
+            this.tweens.add({ targets: t, x, y, duration: 380, ease: 'Cubic.out' });
+            const body = id === 'boss' ? null : t.body_;
+            if (body) this.tweens.add({ targets: body, angle: (x < who.x ? -1 : 1) * 360, duration: 420, onComplete: () => body.setAngle(0) });
+            this.floatText(x, y - (id === 'boss' ? 200 : 110), '💥 震飛！', '#ff9a3c', 24);
+            this.burst(x, y - 30, 10, 0xffd23f, 70);
+          });
+        });
+        who.dir = dir;
       } else if (fx.skill === 'icicle') {
         // 頭頂先出現陰影，一根大冰錐從天上插下來，旁邊再掉兩根小的，砸中後地上結冰
         const gy = foe.y, big = foe.mob ? 1 : 1.6;
@@ -2909,6 +3046,7 @@
     useSkill(id) {
       if (!this.me || this.isDead()) return;
       const sk = ST.SKILLS[id];
+      if (sk.wall) return this.startWall(id);
       let target = 'boss';
       if (!sk.support) {
         const foe = this.nearestFoe(sk.range);
@@ -2921,6 +3059,97 @@
       this.target = null;
       socket.emit('move', { x: Math.round(this.me.x), y: Math.round(this.me.y), dir: this.me.dir, moving: false });
       this.castSkill(id, target);
+    }
+
+    // ---------- 插畫家的城牆 ----------
+    // 按技能進入畫線模式，在地上拖曳畫一條線，放開就變成城牆；再按一次技能取消
+    startWall(id) {
+      const sk = ST.SKILLS[id];
+      if (this.drawing) { const same = this.drawing.id === id; this.cancelWall(); if (same) { toast('取消畫城牆'); return; } }
+      const left = (cooldowns[id] || 0) - performance.now();
+      if (left > 0) { toast(`${sk.name}還在冷卻，${Math.ceil(left / 1000)} 秒後可以再用`); return; }
+      if (myStats && myStats.mp < sk.mp) { toast(`魔力不夠，${sk.name}要 ${sk.mp} 點`); return; }
+      const room = MAP.roomAt(this.me.x, this.me.y);
+      if (!room || room.id !== 'front') { toast('要在 🌀 颱風前線才能畫城牆'); return; }
+      this.target = null;
+      this.drawing = { id, pts: [], len: 0, max: sk.wall.len, g: this.add.graphics().setDepth(2060),
+        timer: this.time.delayedCall(10000, () => { if (this.drawing) { this.cancelWall(); toast('太久沒畫，取消畫城牆'); } }) };
+      toast(`${sk.icon} 在地上拖曳畫一條線（最長 ${sk.wall.len}），放開就變成${sk.name}`);
+    }
+    extendWall(x, y) {
+      const d = this.drawing, [lx, ly] = d.pts[d.pts.length - 1], seg = Math.hypot(x - lx, y - ly);
+      if (seg < 10 || d.len >= d.max) return;
+      const k = Math.min(1, (d.max - d.len) / seg);
+      d.pts.push([lx + (x - lx) * k, ly + (y - ly) * k]);
+      d.len += seg * k;
+      this.drawPreview();
+      if (d.len >= d.max) this.finishWall();
+    }
+    drawPreview() {
+      const d = this.drawing, g = d.g, fire = ST.SKILLS[d.id].wall.kind === 'fire';
+      g.clear();
+      if (d.pts.length < 2) { g.fillStyle(fire ? 0xff6a13 : 0x7fc4f0, 0.8); g.fillCircle(d.pts[0][0], d.pts[0][1], 6); return; }
+      g.lineStyle(14, fire ? 0xff6a13 : 0x7fc4f0, 0.35); g.strokePoints(d.pts.map(([x, y]) => ({ x, y })));
+      g.lineStyle(4, 0xffffff, 0.9); g.strokePoints(d.pts.map(([x, y]) => ({ x, y })));
+      // 用掉多少長度：線的最後面標一個百分比
+      const [ex, ey] = d.pts[d.pts.length - 1];
+      g.fillStyle(0x131a28, 0.85); g.fillRoundedRect(ex + 10, ey - 30, 50, 20, 8);
+      if (!d.label) d.label = this.add.text(0, 0, '', { fontSize: '12px', fontStyle: 'bold', color: '#ffffff', fontFamily: FONT }).setOrigin(0.5).setDepth(2061);
+      d.label.setPosition(ex + 35, ey - 20).setText(Math.round(100 * d.len / d.max) + '%');
+    }
+    finishWall() {
+      const d = this.drawing;
+      const pts = d.pts.map(([x, y]) => [Math.round(x), Math.round(y)]);
+      this.cancelWall();
+      if (pts.length < 2 || d.len < 40) { toast('線太短了，再按一次技能重畫'); return; }
+      this.castSkill(d.id, { pts });
+    }
+    cancelWall() {
+      const d = this.drawing;
+      if (!d) return;
+      d.g.destroy(); if (d.label) d.label.destroy(); d.timer.remove();
+      this.drawing = null;
+    }
+    // 城牆：沿著線排火焰或冰晶，時間快到了會閃爍再消失
+    onWall(w) {
+      if (this.walls.has(w.id)) return;
+      const fire = w.kind === 'fire', pts = w.pts.map(([x, y]) => ({ x, y }));
+      const g = this.add.graphics().setDepth(-3);
+      g.lineStyle(26, fire ? 0xff6a13 : 0x7fc4f0, 0.28); g.strokePoints(pts);
+      g.lineStyle(10, fire ? 0xffb020 : 0xbfe6ff, 0.75); g.strokePoints(pts);
+      g.lineStyle(3, 0xffffff, 0.9); g.strokePoints(pts);
+      const deco = [];
+      for (let i = 1; i < pts.length; i++) {
+        const a = pts[i - 1], b = pts[i], n = Math.max(1, Math.round(Math.hypot(b.x - a.x, b.y - a.y) / 28));
+        for (let j = 0; j < n; j++) {
+          const x = a.x + (b.x - a.x) * (j / n), y = a.y + (b.y - a.y) * (j / n);
+          const img = this.add.image(x, y + 4, fire ? 'fx-flame' : 'fx-ice').setOrigin(0.5, 1).setDepth(y + 1)
+            .setScale(fire ? 0.9 + Math.random() * 0.4 : 0.55 + Math.random() * 0.25);
+          if (!fire) img.setAngle((Math.random() - 0.5) * 16);
+          img.setScale(img.scaleX, 0.05);
+          this.tweens.add({ targets: img, scaleY: fire ? img.scaleX : img.scaleX, duration: 260, delay: (deco.length % 30) * 18, ease: 'Back.out' });
+          if (fire) this.tweens.add({ targets: img, scaleY: { from: img.scaleX * 0.8, to: img.scaleX * 1.15 }, duration: 260 + Math.random() * 200,
+            yoyo: true, repeat: -1, delay: 300 + Math.random() * 200 });
+          deco.push(img);
+        }
+      }
+      const wall = { g, deco };
+      this.walls.set(w.id, wall);
+      this.burst(pts[0].x, pts[0].y - 10, 10, fire ? 0xff6a13 : 0xbfe6ff, 60);
+      // 最後 2 秒一閃一閃
+      wall.blink = this.time.delayedCall(Math.max(0, (w.ms || 10000) - 2000), () => {
+        this.tweens.add({ targets: [g, ...deco], alpha: 0.35, duration: 220, yoyo: true, repeat: 4 });
+      });
+    }
+    onWallGone(id, now) {
+      const w = this.walls.get(id);
+      if (!w) return;
+      this.walls.delete(id);
+      w.blink.remove();
+      const all = [w.g, ...w.deco];
+      if (now) { all.forEach(o => o.destroy()); return; }
+      all.forEach(o => this.tweens.killTweensOf(o));
+      this.tweens.add({ targets: all, alpha: 0, duration: 350, onComplete: () => all.forEach(o => o.destroy()) });
     }
 
     // 射程內最近的敵人（颱風或小怪）
@@ -3293,6 +3522,7 @@
       // 防禦增益時間到就拿掉小盾牌
       all0.forEach(c => {
         if (c.shield && performance.now() > c.shieldUntil) { c.shield.destroy(); c.shield = null; }
+        if (c.atkIcon && performance.now() > c.atkUntil) { c.atkIcon.destroy(); c.atkIcon = null; }
       });
       this.updateSparks(dt);
 

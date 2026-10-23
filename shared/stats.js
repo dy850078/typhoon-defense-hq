@@ -19,6 +19,10 @@
       desc: '冰上起舞的嬪妃，繞著颱風溜一圈就能把它凍住。' },
     summoner: { name: '召喚師', icon: '🛸', role: '召喚', base: { maxHp: 95, maxMp: 90, atk: 9 }, skills: ['ray', 'summon', 'mothership'],
       desc: '跟外星朋友很熟的人。在颱風前線召喚奇異生物，牠們會自己去打怪。' },
+    singer: { name: '靈魂歌姬', icon: '🎤', role: '刺客', base: { maxHp: 85, maxMp: 70, atk: 15 }, skills: ['note', 'noteBlade', 'anthem'],
+      desc: '一開口就讓颱風安靜下來的歌姬。唱出來的音符會變成刀，爆擊特別高；也能唱歌幫全隊加攻擊。' },
+    painter: { name: '插畫家', icon: '🎨', role: '控場', base: { maxHp: 95, maxMp: 90, atk: 10 }, skills: ['paint', 'fireWall', 'iceWall'],
+      desc: '畫什麼就變出什麼的插畫家。在颱風前線畫一條線，就變成擋住怪物的火牆或冰牆。' },
   };
 
   // power：傷害倍率；mp：消耗魔力；cooldown：毫秒；range：離颱風多近才能放
@@ -39,6 +43,10 @@
       desc: '轉一圈用冰刀踢過去，帶出一道冰痕。' },
     ray: { name: '外星光線', icon: '🛸', mp: 0, cooldown: 500, power: 0.8, range: 320, basic: true,
       desc: '用外星玩具槍射出一道綠光，中距離。' },
+    note: { name: '高音音符', icon: '🎵', mp: 0, cooldown: 450, power: 1, range: 300, basic: true, crit: 0.25,
+      desc: '飆一個高音，音符飛過去打人，中距離，爆擊率比較高。' },
+    paint: { name: '顏料彈', icon: '🖌️', mp: 0, cooldown: 500, power: 0.9, range: 320, basic: true,
+      desc: '甩出一坨顏料潑在怪物身上，中距離。' },
     // 招牌技能
     power: { name: '強力一擊', icon: '⚡', mp: 15, cooldown: 1000, power: 3, range: 130,
       desc: '用力揍一下，傷害是普攻的 3 倍。' },
@@ -71,11 +79,22 @@
       desc: '拿電擊器往怪物身上電下去！普攻 2.6 倍傷害，並讓它 6 秒內受到的傷害 +30%。' },
     arrowRain: { name: '箭雨', icon: '🌧️', mp: 25, cooldown: 8000, power: 1.6, range: 480, aoeAt: 200,
       desc: '往天上射一把箭，落在目標附近一大片，範圍裡每隻怪都受到普攻 1.6 倍傷害。' },
-    roar: { name: '霸王怒吼', icon: '🦁', mp: 25, cooldown: 12000, power: 1.2, range: 200, aoe: 200,
-      selfDef: { v: 20, ms: 8000 },
-      desc: '大吼一聲震飛身邊的怪（範圍傷害，普攻 1.2 倍），自己 8 秒內防禦 +20，專門扛颱風。' },
+    roar: { name: '霸王怒吼', icon: '🦁', mp: 25, cooldown: 10000, power: 1.6, range: 220, aoe: 220,
+      selfDef: { v: 20, ms: 8000 }, knock: { mob: 260, boss: 140, stun: 1200 },
+      desc: '大吼一聲把身邊的怪全部震飛出去（範圍傷害，普攻 1.6 倍），被震飛的怪暈 1.2 秒，自己 8 秒內防禦 +20。' },
     icicle: { name: '冰錐', icon: '🧊', mp: 20, cooldown: 4500, power: 3.4, range: 340, freeze: 1500,
       desc: '召喚一根大冰錐從天上插下來，普攻 3.4 倍傷害，打中的怪凍住 1.5 秒。' },
+    noteBlade: { name: '音刃狂想曲', icon: '🗡️', mp: 18, cooldown: 3000, power: 3.8, range: 340, crit: 0.4,
+      desc: '唱出一串音符，音符在空中變成五把刀射過去，普攻 3.8 倍傷害，爆擊率 40%。' },
+    anthem: { name: '靈魂之歌', icon: '🎶', mp: 30, cooldown: 15000, power: 0, support: true,
+      teamAtk: { mul: 0.3, ms: 12000, r: 380 },
+      desc: '唱一首振奮人心的歌，身邊隊友（包含自己）攻擊力 +30%，持續 12 秒。哪裡都能用。' },
+    fireWall: { name: '火焰城牆', icon: '🔥', mp: 25, cooldown: 9000, power: 0, support: true,
+      wall: { kind: 'fire', ms: 10000, len: 420, burn: 0.5 },
+      desc: '在颱風前線拖曳畫一條線（最長 420），變成 10 秒的火牆：怪物過不去，碰到還會被燒（每秒普攻 0.5 倍）。' },
+    iceWall: { name: '冰霜城牆', icon: '🧊', mp: 25, cooldown: 9000, power: 0, support: true,
+      wall: { kind: 'ice', ms: 10000, len: 420, freeze: 2000 },
+      desc: '在颱風前線拖曳畫一條線（最長 420），變成 10 秒的冰牆：怪物過不去，第一次碰到會被凍住 2 秒。' },
     mothership: { name: '母艦光束', icon: '🛸', mp: 30, cooldown: 10000, power: 1.8, range: 420, aoeAt: 220, weaken: 5000,
       desc: '呼叫外星母艦從天上照下一道光束，目標附近的怪都受到普攻 1.8 倍傷害，並被削弱 5 秒。' },
   });
@@ -104,7 +123,8 @@
     chicken: { name: '台灣雞排', hp: 70, mp: 10 },
   };
 
-  const REGEN = { mpPerSec: 1, hpPerSec: 0 };
+  // 魔力每秒回 1 點；另外每 8 秒自動回一點點血和魔力（最大值的 4%）
+  const REGEN = { mpPerSec: 1, tickMs: 8000, hpPct: 0.04, mpPct: 0.04 };
 
   // 颱風怪的顯示資料（血量在伺服器設定），名字跟著現在的颱風
   const MONSTER = { name: '薔琵', level: 30 };

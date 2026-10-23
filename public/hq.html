@@ -66,7 +66,7 @@
     <div id="video-prompt" hidden>
       <span>🎖️ 你在戰情室</span>
       <button id="video-btn" class="primary">加入視訊</button>
-      <button id="draw-btn" class="hud-btn" type="button">🎨 你畫我猜</button>
+      <button id="games-btn" class="primary" type="button">🎮 遊戲室</button>
     </div>
     <div id="chat">
       <button id="chat-toggle" type="button">CHAT <span>▾</span></button>
@@ -80,11 +80,16 @@
 
   <div id="ctx-menu" hidden></div>
 
-  <!-- 你畫我猜（戰情室） -->
-  <div id="draw" class="overlay" hidden>
-    <div class="card draw-card" role="dialog" aria-modal="true" aria-labelledby="draw-title">
-      <button id="draw-x" type="button" aria-label="離開">✕</button>
-      <h2 id="draw-title">🎨 你畫我猜</h2>
+  <!-- 遊戲室（戰情室）：你畫我猜、金曲猜歌王 -->
+  <div id="games" class="overlay" hidden>
+    <div class="card draw-card" role="dialog" aria-modal="true" aria-labelledby="games-title">
+      <button id="games-x" type="button" aria-label="離開">✕</button>
+      <h2 id="games-title">🎮 遊戲室</h2>
+      <div class="game-tabs" role="tablist">
+        <button type="button" role="tab" data-game="draw" class="on">🎨 你畫我猜</button>
+        <button type="button" role="tab" data-game="song">🎤 金曲猜歌王</button>
+      </div>
+      <section id="draw-panel" class="game-panel">
       <p id="draw-info" class="draw-info"></p>
       <div id="draw-vote" class="draw-vote" hidden><span id="draw-vote-text"></span><button id="draw-vote-yes" class="primary small" type="button">同意</button></div>
       <div class="draw-main">
@@ -110,8 +115,50 @@
             <button class="primary small" type="submit">送出</button>
           </form>
           <button id="draw-claim" class="hud-btn" type="button">🎤 搶主持棒</button>
+          <div class="game-scores">
+            <div class="gs-head"><b>🏆 記分板</b><button id="draw-score-reset" class="hud-btn tiny host-only" type="button">🧹 清空重算</button></div>
+            <ol id="draw-scores"></ol>
+          </div>
         </div>
       </div>
+      </section>
+      <section id="song-panel" class="game-panel" hidden>
+      <p id="song-info" class="draw-info"></p>
+      <div id="song-vote" class="draw-vote" hidden><span id="song-vote-text"></span><button id="song-vote-yes" class="primary small" type="button">同意</button></div>
+      <div class="draw-main">
+        <div class="draw-board">
+          <div class="song-stage">
+            <div class="song-disc">💿</div>
+            <div class="song-slots">
+              <div class="song-slot"><small>🎙️ 歌手</small><b id="song-singer-slot"></b></div>
+              <div class="song-slot"><small>🎵 歌名</small><b id="song-title-slot"></b></div>
+            </div>
+            <p id="song-goal-text" class="song-goal"></p>
+            <p class="song-tip">主持人可以在視訊裡唱一段、哼旋律或播前奏，大家在右邊輸入歌手或歌名。歌手、歌名分開算分，兩個都答對才算達標！</p>
+          </div>
+          <form id="song-start-form" class="draw-start song-start host-only">
+            <input id="song-singer" maxlength="20" placeholder="歌手（別人看不到）" autocomplete="off">
+            <input id="song-title" maxlength="30" placeholder="歌名（別人看不到）" autocomplete="off">
+            <label class="song-goal-in">幾人答對就結束 <input id="song-goal" type="number" min="1" max="20" value="1"></label>
+            <button class="primary small" type="submit">出題</button>
+            <button id="song-reveal" class="hud-btn tiny" type="button">公布答案</button>
+          </form>
+        </div>
+        <div class="draw-side">
+          <div id="song-members" class="draw-members"></div>
+          <div id="song-log" class="draw-log"></div>
+          <form id="song-guess-form" class="draw-guess">
+            <input id="song-guess" maxlength="40" autocomplete="off">
+            <button class="primary small" type="submit">送出</button>
+          </form>
+          <button id="song-claim" class="hud-btn" type="button">🎤 搶主持棒</button>
+          <div class="game-scores">
+            <div class="gs-head"><b>🏆 記分板</b><button id="song-score-reset" class="hud-btn tiny host-only" type="button">🧹 清空重算</button></div>
+            <ol id="song-scores"></ol>
+          </div>
+        </div>
+      </div>
+      </section>
     </div>
   </div>
 

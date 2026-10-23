@@ -166,6 +166,8 @@
   socket.on('drawLog', (l) => DRAW.log(l));
   socket.on('drawStroke', (st) => DRAW.paint(st));
   socket.on('drawClear', () => DRAW.clear());
+  socket.on('songState', (st) => SONG.onState(st));
+  socket.on('songLog', (l) => SONG.log(l));
   socket.on('chat', (msg) => {
     addMessage(msg);
     if (!msg.system && scene) scene.showBubble(msg.id, msg.text);
@@ -197,11 +199,11 @@
   window.addEventListener('keydown', (e) => {
     if (!joined) return;
     if (e.key === 'Enter' && !typing()) { e.preventDefault(); chatInput.focus(); }
-    else if (e.key === 'Escape') { chatInput.blur(); closeModal(); if (!$('draw').hidden) DRAW.close(); }
+    else if (e.key === 'Escape') { chatInput.blur(); closeModal(); if (!$('games').hidden) ROOM.close(); }
   });
   // 正在打字或開著視窗的時候，鍵盤不控制角色
   const typing = () => document.activeElement === chatInput ||
-    (document.activeElement && document.activeElement.tagName === 'INPUT') || !$('modal').hidden || !$('draw').hidden;
+    (document.activeElement && document.activeElement.tagName === 'INPUT') || !$('modal').hidden || !$('games').hidden;
   $('chat-toggle').addEventListener('click', () => $('chat').classList.toggle('collapsed'));
   if (window.innerWidth < 600 || window.innerHeight < 520) $('chat').classList.add('collapsed');
 
@@ -455,7 +457,55 @@
   }
   $('cake-btn').addEventListener('click', () => socket.emit('cakeDown'));
 
-  // ---------------- 你畫我猜（戰情室） ----------------
+  // ---------------- 遊戲室（戰情室）：兩個遊戲共用的部分 ----------------
+  // 遊戲紀錄、主持棒、投票、參加的人、記分板；k 是元素 id 的前綴（draw / song）
+  function gameLog(k, l) {
+    const box = $(k + '-log');
+    const line = el('div', 'dl-' + (l.kind || 'sys'), l.text);
+    box.appendChild(line);
+    while (box.children.length > 80) box.firstChild.remove();
+    box.scrollTop = box.scrollHeight;
+  }
+  function gameRender(k, state, { info, tag, placeholder }) {
+    const host = !!(me && state.host === me.id);
+    $(k + '-panel').classList.toggle('is-host', host);
+    $(k + '-info').textContent = info;
+    const claim = $(k + '-claim');
+    claim.hidden = host;
+    claim.textContent = state.host ? '🎤 搶主持棒' : '🎤 當主持人';
+    const v = state.vote;
+    $(k + '-vote').hidden = !v;
+    if (v) {
+      $(k + '-vote-text').textContent = `📣 ${v.byName} 想搶主持棒（${v.yes.length} / ${v.need} 人同意）`;
+      $(k + '-vote-yes').hidden = v.yes.includes(me && me.id);
+    }
+    const who = $(k + '-members');
+    who.innerHTML = '';
+    state.members.forEach(m => who.appendChild(el('span', 'chip' + (me && m.id === me.id ? ' me' : ''), (m.id === state.host ? '🎤 ' : tag(m.id)) + m.name)));
+    const g = $(k + '-guess');
+    g.placeholder = host ? '主持人不能猜喔' : placeholder;
+    g.disabled = host;
+    const sc = $(k + '-scores');
+    sc.innerHTML = '';
+    if (!state.scores.length) sc.appendChild(el('li', 'empty', '還沒有人得分'));
+    state.scores.forEach(r => { const li = el('li', null, r.name + ' '); li.appendChild(el('b', null, r.pts + ' 分')); sc.appendChild(li); });
+  }
+  function gameWire(k) {
+    $(k + '-claim').onclick = () => socket.emit(k + 'Claim', (res) => { if (res && res.error) toast(res.error); });
+    $(k + '-vote-yes').onclick = () => socket.emit(k + 'Vote');
+    $(k + '-reveal').onclick = () => socket.emit(k + 'Reveal');
+    $(k + '-score-reset').onclick = () => socket.emit(k + 'ScoreReset');
+  }
+  // 加入某一個遊戲：伺服器回傳目前狀態後，交給 onJoin 畫出來
+  function gameJoin(k, onJoin) {
+    socket.emit(k + 'Join', (res) => {
+      if (!res || !res.ok) { if (res && res.error) toast(res.error); return; }
+      $(k + '-log').innerHTML = '';
+      onJoin(res);
+    });
+  }
+
+  // ---------------- 你畫我猜 ----------------
   const DRAW = (() => {
     const cv = $('draw-canvas'), ctx = cv.getContext('2d');
     const COLORS = ['#2b2a33', '#e8384f', '#ff7a2f', '#ffd23f', '#6baf7b', '#4f7cc2', '#7a5cc8', '#a0663e'];
@@ -483,42 +533,18 @@
       if (st.pts.length === 1) { ctx.arc(st.pts[0][0] * k, st.pts[0][1] * ky, st.w * k / 2, 0, Math.PI * 2); ctx.fill(); } else ctx.stroke();
       ctx.restore();
     }
-    function log(l) {
-      const box = $('draw-log');
-      const line = el('div', 'dl-' + (l.kind || 'sys'), l.text);
-      box.appendChild(line);
-      while (box.children.length > 80) box.firstChild.remove();
-      box.scrollTop = box.scrollHeight;
-    }
     function render() {
       if (!state) return;
       const host = amHost();
-      $('draw').classList.toggle('is-host', host);
-      $('draw').classList.toggle('can-paint', host && state.playing);
+      $('draw-panel').classList.toggle('can-paint', host && state.playing);
       const guessers = state.members.filter(m => m.id !== state.host);
       const right = guessers.filter(m => state.correct.includes(m.id)).length;
       let info;
       if (!state.host) info = '還沒有主持人，按「🎤 當主持人」來出題！';
       else if (!state.playing) info = host ? '你是主持人：先輸入答案、按「出題」，出題後才能開始畫！' : `主持人 ${state.hostName} 正在想題目…`;
       else info = host ? `答案「${answer}」· 已猜對 ${right} / ${guessers.length}` : `${state.hostName} 出題中 · 答案有 ${state.len} 個字 · 已猜對 ${right} / ${guessers.length}`;
-      $('draw-info').textContent = info;
-      const claim = $('draw-claim');
-      claim.hidden = host;
-      claim.textContent = state.host ? '🎤 搶主持棒' : '🎤 當主持人';
-      const v = state.vote;
-      $('draw-vote').hidden = !v;
-      if (v) {
-        $('draw-vote-text').textContent = `📣 ${v.byName} 想搶主持棒（${v.yes.length} / ${v.need} 人同意）`;
-        $('draw-vote-yes').hidden = v.yes.includes(me && me.id);
-      }
-      const who = $('draw-members');
-      who.innerHTML = '';
-      state.members.forEach(m => {
-        const tag = m.id === state.host ? '🎤 ' : state.correct.includes(m.id) ? '✅ ' : '';
-        who.appendChild(el('span', 'chip' + (me && m.id === me.id ? ' me' : ''), tag + m.name));
-      });
-      $('draw-guess').placeholder = host ? '主持人不能猜喔' : state.playing ? `猜猜看（${state.len} 個字）` : '聊天…';
-      $('draw-guess').disabled = host;
+      gameRender('draw', state, { info, tag: (id) => (state.correct.includes(id) ? '✅ ' : ''),
+        placeholder: state.playing ? `猜猜看（${state.len} 個字）` : '聊天…' });
     }
     function onState(st) { state = st; if (!amHost()) answer = ''; render(); }
 
@@ -599,7 +625,6 @@
       sz.appendChild(b);
     });
     $('draw-clear').onclick = () => { if (amHost()) { clear(); socket.emit('drawClear'); } };
-    $('draw-reveal').onclick = () => socket.emit('drawReveal');
     $('draw-start-form').onsubmit = (e) => {
       e.preventDefault();
       const a = $('draw-answer').value.trim();
@@ -618,36 +643,125 @@
         if (res && res.correct) toast(res.item ? '🎉 猜對了！拿到一件新裝備' : '🎉 猜對了！（裝備已經全部收集完了）');
       });
     };
-    $('draw-claim').onclick = () => socket.emit('drawClaim', (res) => { if (res && res.error) toast(res.error); });
-    $('draw-vote-yes').onclick = () => socket.emit('drawVote');
-    $('draw-x').onclick = () => close();
+    gameWire('draw');
 
-    function open() {
-      // 先把目前位置告訴伺服器，它才知道你在戰情室裡
-      const m = scene && scene.me;
-      if (m) socket.emit('move', { x: Math.round(m.x), y: Math.round(m.y), dir: m.dir, moving: false });
-      socket.emit('drawJoin', (res) => {
-        if (!res || !res.ok) { if (res && res.error) toast(res.error); return; }
-        $('draw-log').innerHTML = '';
+    function join(done) {
+      gameJoin('draw', (res) => {
         clear();
         res.strokes.forEach(paint);
         answer = res.answer || '';
-        $('draw').hidden = false;
-        chatInput.blur();
         onState(res.state);
+        done();
       });
     }
-    function close() {
-      if ($('draw').hidden) return;
+    function leave() {
+      if (!state) return;
       end();
-      $('draw').hidden = true;
       socket.emit('drawLeave');
       state = null;
     }
     clear();
-    return { open, close, onState, log, paint, clear };
+    return { join, leave, onState, log: (l) => gameLog('draw', l), paint, clear };
   })();
-  $('draw-btn').addEventListener('click', () => DRAW.open());
+
+  // ---------------- 金曲猜歌王 ----------------
+  // 主持人輸入歌手和歌名，大家分開猜；設定幾個人兩個都答對就結束
+  const SONG = (() => {
+    let state = null, answer = null; // answer：主持人自己才知道的 { singer, title }
+    const amHost = () => state && me && state.host === me.id;
+    const blanks = (n) => '＿'.repeat(n);
+    function render() {
+      if (!state) return;
+      const host = amHost(), mine = me && me.id;
+      const gotS = state.gotSinger.includes(mine), gotT = state.gotTitle.includes(mine);
+      const guessers = state.members.filter(m => m.id !== state.host);
+      let info;
+      if (!state.host) info = '還沒有主持人，按「🎤 當主持人」來出題！';
+      else if (!state.playing) info = host ? '你是主持人：輸入歌手、歌名和達標人數，按「出題」開始！' : `主持人 ${state.hostName} 正在選歌…`;
+      else info = `${host ? '你' : state.hostName} 出題中 · 全部答對 ${state.done} / ${state.goal} 人就結束`;
+      $('song-panel').querySelector('.song-stage').classList.toggle('playing', state.playing);
+      const slot = (id, len, got, real) => {
+        $(id).textContent = !state.playing ? '？' : host && real ? real : got ? '✅ 答對了！' : `${blanks(len)}（${len} 個字）`;
+        $(id).parentNode.classList.toggle('got', state.playing && got);
+      };
+      slot('song-singer-slot', state.singerLen, gotS, answer && answer.singer);
+      slot('song-title-slot', state.titleLen, gotT, answer && answer.title);
+      $('song-goal-text').textContent = state.playing ? `🏁 ${state.done} / ${state.goal} 人歌手＋歌名都答對` : '';
+      gameRender('song', state, { info,
+        tag: (id) => { const s = state.gotSinger.includes(id), t = state.gotTitle.includes(id); return s && t ? '🏆 ' : s ? '🎙️ ' : t ? '🎵 ' : ''; },
+        placeholder: !state.playing ? '聊天…' : gotS && gotT ? '你全部答對了！' : gotS ? '再猜歌名…' : gotT ? '再猜歌手…' : '猜歌手或歌名…' });
+      $('song-guess').disabled = host || (state.playing && gotS && gotT);
+    }
+    function onState(st) { state = st; if (!amHost() || !st.playing) answer = null; render(); }
+    $('song-start-form').onsubmit = (e) => {
+      e.preventDefault();
+      const q = { singer: $('song-singer').value.trim(), title: $('song-title').value.trim(), goal: Number($('song-goal').value) || 1 };
+      socket.emit('songStart', q, (res) => {
+        if (!res || !res.ok) { if (res && res.error) toast(res.error); return; }
+        answer = { singer: q.singer, title: q.title };
+        $('song-singer').value = ''; $('song-title').value = '';
+        render();
+      });
+    };
+    $('song-guess-form').onsubmit = (e) => {
+      e.preventDefault();
+      const t = $('song-guess').value.trim();
+      if (!t) return;
+      $('song-guess').value = '';
+      socket.emit('songGuess', t, (res) => {
+        if (res && res.error) toast(res.error);
+        if (!res || !res.correct) return;
+        if (res.both) toast(res.item ? '🏆 歌手和歌名都答對了！拿到一件新裝備' : '🏆 歌手和歌名都答對了！（裝備已經全部收集完了）');
+        else toast(res.singer && res.title ? '🎉 歌手和歌名都對了！' : res.singer ? '🎉 歌手答對了！再猜歌名' : '🎉 歌名答對了！再猜歌手');
+      });
+    };
+    gameWire('song');
+    function join(done) {
+      gameJoin('song', (res) => {
+        answer = res.title ? { singer: res.singer, title: res.title } : null;
+        onState(res.state);
+        done();
+      });
+    }
+    function leave() {
+      if (!state) return;
+      socket.emit('songLeave');
+      state = null; answer = null;
+    }
+    return { join, leave, onState, log: (l) => gameLog('song', l) };
+  })();
+
+  // ---------------- 遊戲室：分頁切換 ----------------
+  const ROOM = (() => {
+    const GAMES = { draw: DRAW, song: SONG };
+    let tab = 'draw';
+    const tabs = [...document.querySelectorAll('.game-tabs button')];
+    function show(k) {
+      tab = k;
+      tabs.forEach(b => b.classList.toggle('on', b.dataset.game === k));
+      Object.keys(GAMES).forEach(g => { $(g + '-panel').hidden = g !== k; });
+    }
+    function open() {
+      // 先把目前位置告訴伺服器，它才知道你在戰情室裡
+      const m = scene && scene.me;
+      if (m) socket.emit('move', { x: Math.round(m.x), y: Math.round(m.y), dir: m.dir, moving: false });
+      GAMES[tab].join(() => { show(tab); $('games').hidden = false; chatInput.blur(); });
+    }
+    function close() {
+      if ($('games').hidden) return;
+      $('games').hidden = true;
+      Object.values(GAMES).forEach(g => g.leave());
+    }
+    tabs.forEach(b => b.onclick = () => {
+      const k = b.dataset.game;
+      if (k === tab) return;
+      GAMES[tab].leave();
+      GAMES[k].join(() => show(k));
+    });
+    $('games-x').onclick = () => close();
+    return { open, close };
+  })();
+  $('games-btn').addEventListener('click', () => ROOM.open());
 
   // ---------------- 數值、技能欄 ----------------
   let myStats = null;
@@ -2965,7 +3079,7 @@
         this.roomId = rid;
         $('room-name').textContent = room ? room.name : '🌧️ 戶外（風雨很大！）';
         $('video-prompt').hidden = rid !== 'video';
-        if (rid !== 'video') DRAW.close();
+        if (rid !== 'video') ROOM.close();
         if (room && !first) toast(`進入 ${room.name}`);
         const tips = {
           front: `野外有颱風${ST.MONSTER.name}和小怪！空白鍵攻擊、K 和 L 放技能，看到紅圈快閃開；回到圍欄裡就安全了`,

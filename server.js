@@ -437,57 +437,102 @@ function giveGear(p, rare) {
   return id;
 }
 
-// ---------------- 你畫我猜（在戰情室） ----------------
-// 主持人畫畫、設答案，其他人猜；猜對的人和主持人都會拿到裝備
+// ---------------- 遊戲室（在戰情室）：你畫我猜、金曲猜歌王 ----------------
+// 兩個遊戲共用：參加的人、主持棒（搶主持要過半同意）、遊戲紀錄、記分板
 const DRAW_MAX_STROKES = 4000;
-const DRAW_VOTE_MS = 20000;
-const DRAW_IDLE_MS = 60000; // 主持人這麼久沒動作，別人可以直接接手
-const draw = { host: null, answer: '', round: 0, strokes: [], correct: new Set(), members: new Set(),
-  vote: null, hostRewarded: false, lastHostAct: 0 };
+const GAME_VOTE_MS = 20000;
+const GAME_IDLE_MS = 60000; // 主持人這麼久沒動作，別人可以直接接手
 const norm = (s) => String(s || '').normalize('NFKC').toLowerCase().replace(/\s+/g, '');
 const nameOf = (id) => (players.get(id) || {}).name || '';
-function drawPublic() {
-  const v = draw.vote;
-  return {
-    host: draw.host, hostName: nameOf(draw.host), round: draw.round, playing: !!draw.answer,
-    len: draw.answer ? [...norm(draw.answer)].length : 0,
-    members: [...draw.members].map(id => ({ id, name: nameOf(id) })), correct: [...draw.correct],
-    vote: v && { by: v.by, byName: nameOf(v.by), yes: [...v.yes], need: Math.floor(draw.members.size / 2) + 1, ms: v.until - Date.now() },
+function makeGame(key, label, game) {
+  const g = Object.assign(game, { key, label, host: null, round: 0, members: new Set(), vote: null,
+    hostRewarded: false, lastHostAct: 0, scores: new Map() });
+  g.pub = () => {
+    const v = g.vote;
+    return Object.assign({
+      host: g.host, hostName: nameOf(g.host), round: g.round, playing: g.playing(),
+      members: [...g.members].map(id => ({ id, name: nameOf(id) })),
+      vote: v && { by: v.by, byName: nameOf(v.by), yes: [...v.yes], need: Math.floor(g.members.size / 2) + 1, ms: v.until - Date.now() },
+      scores: [...g.scores].sort((x, y) => y[1] - x[1]).map(([name, pts]) => ({ name, pts })),
+    }, g.extra());
   };
+  g.state = () => io.to(key).emit(key + 'State', g.pub());
+  g.log = (text, kind) => io.to(key).emit(key + 'Log', { text, kind: kind || 'sys' });
+  g.guessers = () => [...g.members].filter(id => id !== g.host);
+  // 換主持人，這一題作廢，遊戲重新開始
+  g.reset = (host) => {
+    g.host = host; g.vote = null; g.lastHostAct = Date.now();
+    g.clearRound();
+    g.state();
+  };
+  g.checkVote = () => {
+    const v = g.vote;
+    if (!v) return;
+    v.yes.forEach(id => { if (!g.members.has(id)) v.yes.delete(id); });
+    if (!g.members.has(v.by)) { g.vote = null; return g.state(); }
+    if (v.yes.size >= Math.floor(g.members.size / 2) + 1) {
+      g.log(`🎤 ${nameOf(v.by)} 搶到主持棒了！遊戲重新開始`);
+      g.reset(v.by);
+    } else g.state();
+  };
+  g.remove = (id) => {
+    if (!g.members.delete(id)) return;
+    if (g.host === id) {
+      g.log(`${nameOf(id)} 放下了主持棒，誰要來當主持人？`);
+      g.reset(null);
+    } else if (g.vote) g.checkVote();
+    else g.state();
+  };
+  g.addScore = (p, n) => g.scores.set(p.name, (g.scores.get(p.name) || 0) + n);
+  // 發裝備，拿到什麼也寫在遊戲紀錄裡
+  const prize = (id) => { const it = id && GEAR.GEAR[id]; return it ? `，獲得【${it.rarity}】${it.icon} ${it.name}` : '（裝備已經全部收集完了）'; };
+  g.reward = (p, text) => { const id = giveGear(p); g.log(text + prize(id), 'right'); return id; };
+  // 有人答對，主持人每題也拿一件
+  g.rewardHost = () => {
+    const host = players.get(g.host);
+    if (!host || g.hostRewarded) return;
+    g.hostRewarded = true;
+    const id = giveGear(host);
+    if (id) g.log(`🎤 主持人 ${host.name}${prize(id)}`, 'prize');
+  };
+  return g;
 }
-const drawState = () => io.to('draw').emit('drawState', drawPublic());
-const drawLog = (text, kind) => io.to('draw').emit('drawLog', { text, kind: kind || 'sys' });
-// 換主持人、清空畫布，遊戲重新開始
-function drawReset(host) {
-  draw.host = host; draw.answer = ''; draw.strokes = []; draw.correct.clear(); draw.vote = null;
-  draw.lastHostAct = Date.now();
-  io.to('draw').emit('drawClear');
-  drawState();
-}
-function drawCheckVote() {
-  const v = draw.vote;
-  if (!v) return;
-  v.yes.forEach(id => { if (!draw.members.has(id)) v.yes.delete(id); });
-  if (!draw.members.has(v.by)) { draw.vote = null; return drawState(); }
-  if (v.yes.size >= Math.floor(draw.members.size / 2) + 1) {
-    drawLog(`🎤 ${nameOf(v.by)} 搶到主持棒了！遊戲重新開始`);
-    drawReset(v.by);
-  } else drawState();
-}
-function drawEnd(reason) {
-  if (!draw.answer) return;
-  drawLog(`${reason}答案是「${draw.answer}」`, 'answer');
-  draw.answer = '';
-  drawState();
-}
-function drawRemove(id) {
-  if (!draw.members.delete(id)) return;
-  if (draw.host === id) {
-    drawLog(`${nameOf(id)} 放下了主持棒，誰要來當主持人？`);
-    drawReset(null);
-  } else if (draw.vote) drawCheckVote();
-  else drawState();
-}
+
+const draw = makeGame('draw', '你畫我猜', {
+  answer: '', strokes: [], correct: new Set(),
+  playing() { return !!this.answer; },
+  extra() { return { len: this.answer ? [...norm(this.answer)].length : 0, correct: [...this.correct] }; },
+  clearRound() { this.answer = ''; this.strokes = []; this.correct.clear(); io.to('draw').emit('drawClear'); },
+  joinData(p) { return { strokes: this.strokes, answer: this.host === p.id ? this.answer : '' }; },
+  end(reason) {
+    if (!this.answer) return;
+    this.log(`${reason}答案是「${this.answer}」`, 'answer');
+    this.answer = '';
+    this.state();
+  },
+});
+
+const SONG_GOAL_MAX = 20;
+const song = makeGame('song', '金曲猜歌王', {
+  singer: '', title: '', goal: 1, gotSinger: new Set(), gotTitle: new Set(),
+  playing() { return !!this.title; },
+  done() { return [...this.gotSinger].filter(id => this.gotTitle.has(id)); },
+  extra() {
+    return { singerLen: [...norm(this.singer)].length, titleLen: [...norm(this.title)].length, goal: this.goal,
+      gotSinger: [...this.gotSinger], gotTitle: [...this.gotTitle], done: this.done().length };
+  },
+  clearRound() { this.singer = ''; this.title = ''; this.gotSinger.clear(); this.gotTitle.clear(); },
+  joinData(p) { return this.host === p.id ? { singer: this.singer, title: this.title } : {}; },
+  end(reason) {
+    if (!this.title) return;
+    this.log(`${reason}答案是「${this.singer}－${this.title}」`, 'answer');
+    this.singer = ''; this.title = '';
+    this.state();
+  },
+});
+// 猜的字跟答案一樣就算對；答案兩個字以上時，猜的字裡有包含答案也算（像「周杰倫 晴天」一次猜兩個）
+const songHit = (guess, ans) => { const a = norm(ans); return !!a && (guess === a || (a.length >= 2 && guess.includes(a))); };
+const GAMES = [draw, song];
 
 io.on('connection', (socket) => {
   let lastChat = 0;
@@ -835,63 +880,75 @@ io.on('connection', (socket) => {
     io.emit('cake', { id: p.id, ms: 0 });
   });
 
+  // ----- 遊戲室 -----
+  GAMES.forEach(g => {
+    const k = g.key;
+    socket.on(k + 'Join', (ack) => {
+      const p = players.get(socket.id);
+      if (typeof ack !== 'function' || !p) return;
+      const room = MAP.roomAt(p.x, p.y);
+      if (!room || room.id !== 'video') return ack({ ok: false, error: `要在戰情室裡才能玩${g.label}` });
+      if (!g.members.has(p.id)) {
+        g.members.add(p.id);
+        socket.join(k);
+        g.log(`👋 ${p.name} 加入了${g.label}`);
+      }
+      ack(Object.assign({ ok: true, state: g.pub() }, g.joinData(p)));
+      g.state();
+    });
+    socket.on(k + 'Leave', () => { socket.leave(k); g.remove(socket.id); });
+    // 搶主持棒：沒有主持人（或主持人一直沒動）就直接拿到，不然要過半的參與者同意
+    socket.on(k + 'Claim', (ack) => {
+      const p = g.members.has(socket.id) && players.get(socket.id);
+      if (typeof ack !== 'function' || !p) return;
+      if (g.host === p.id) return ack({ ok: false, error: '你已經是主持人了' });
+      const now = Date.now();
+      if (!g.host || (!g.playing() && now - g.lastHostAct > GAME_IDLE_MS)) {
+        g.log(`🎤 ${p.name} 拿起了主持棒`);
+        g.reset(p.id);
+        return ack({ ok: true, host: true });
+      }
+      if (g.vote) return ack({ ok: false, error: `${nameOf(g.vote.by)} 正在搶主持棒，先投票吧` });
+      const vote = { by: p.id, yes: new Set([p.id]), until: now + GAME_VOTE_MS };
+      g.vote = vote;
+      g.log(`📣 ${p.name} 想搶主持棒！過半的人同意就換人`);
+      setTimeout(() => {
+        if (g.vote !== vote) return;
+        g.vote = null;
+        g.log('投票時間到，主持棒沒有換人');
+        g.state();
+      }, GAME_VOTE_MS);
+      g.checkVote();
+      ack({ ok: true });
+    });
+    socket.on(k + 'Vote', () => {
+      if (!g.members.has(socket.id) || !g.vote) return;
+      g.vote.yes.add(socket.id);
+      g.checkVote();
+    });
+    socket.on(k + 'Reveal', () => { if (g.members.has(socket.id) && g.host === socket.id) g.end('主持人公布了，'); });
+    // 主持人清空記分板，重新計分
+    socket.on(k + 'ScoreReset', () => {
+      if (!g.members.has(socket.id) || g.host !== socket.id) return;
+      g.scores.clear();
+      g.log(`🧹 主持人 ${nameOf(socket.id)} 清空了記分板，重新計分！`);
+      g.state();
+    });
+  });
+
   // ----- 你畫我猜 -----
-  const inDraw = () => draw.members.has(socket.id) && players.get(socket.id);
-  const isHost = () => inDraw() && draw.host === socket.id;
-  socket.on('drawJoin', (ack) => {
-    const p = players.get(socket.id);
-    if (typeof ack !== 'function' || !p) return;
-    const room = MAP.roomAt(p.x, p.y);
-    if (!room || room.id !== 'video') return ack({ ok: false, error: '要在戰情室裡才能玩你畫我猜' });
-    if (!draw.members.has(p.id)) {
-      draw.members.add(p.id);
-      socket.join('draw');
-      drawLog(`👋 ${p.name} 加入了你畫我猜`);
-    }
-    ack({ ok: true, state: drawPublic(), strokes: draw.strokes, answer: draw.host === p.id ? draw.answer : '' });
-    drawState();
-  });
-  socket.on('drawLeave', () => { socket.leave('draw'); drawRemove(socket.id); });
-  // 搶主持棒：沒有主持人（或主持人一直沒動）就直接拿到，不然要過半的參與者同意
-  socket.on('drawClaim', (ack) => {
-    const p = inDraw();
-    if (typeof ack !== 'function' || !p) return;
-    if (draw.host === p.id) return ack({ ok: false, error: '你已經是主持人了' });
-    const now = Date.now();
-    if (!draw.host || (!draw.answer && now - draw.lastHostAct > DRAW_IDLE_MS)) {
-      drawLog(`🎤 ${p.name} 拿起了主持棒`);
-      drawReset(p.id);
-      return ack({ ok: true, host: true });
-    }
-    if (draw.vote) return ack({ ok: false, error: `${nameOf(draw.vote.by)} 正在搶主持棒，先投票吧` });
-    const vote = { by: p.id, yes: new Set([p.id]), until: now + DRAW_VOTE_MS };
-    draw.vote = vote;
-    drawLog(`📣 ${p.name} 想搶主持棒！過半的人同意就換人`);
-    setTimeout(() => {
-      if (draw.vote !== vote) return;
-      draw.vote = null;
-      drawLog('投票時間到，主持棒沒有換人');
-      drawState();
-    }, DRAW_VOTE_MS);
-    drawCheckVote();
-    ack({ ok: true });
-  });
-  socket.on('drawVote', () => {
-    if (!inDraw() || !draw.vote) return;
-    draw.vote.yes.add(socket.id);
-    drawCheckVote();
-  });
+  const isHost = () => draw.members.has(socket.id) && players.get(socket.id) && draw.host === socket.id;
   socket.on('drawStart', (answer, ack) => {
     if (typeof ack !== 'function') return;
     if (!isHost()) return ack({ ok: false, error: '只有主持人可以出題' });
     const a = clean(answer, 12);
     if (!norm(a)) return ack({ ok: false, error: '請先輸入答案' });
-    if (draw.answer) drawEnd('換題了，');
+    if (draw.answer) draw.end('換題了，');
     draw.answer = a; draw.strokes = []; draw.correct.clear(); draw.hostRewarded = false;
     draw.round++; draw.lastHostAct = Date.now();
     io.to('draw').emit('drawClear');
-    drawLog(`🎨 第 ${draw.round} 題開始！答案有 ${[...norm(a)].length} 個字`);
-    drawState();
+    draw.log(`🎨 第 ${draw.round} 題開始！答案有 ${[...norm(a)].length} 個字`);
+    draw.state();
     ack({ ok: true });
   });
   socket.on('drawStroke', (st) => {
@@ -912,30 +969,64 @@ io.on('connection', (socket) => {
     draw.strokes = [];
     io.to('draw').emit('drawClear');
   });
-  socket.on('drawReveal', () => { if (isHost()) drawEnd('主持人公布了，'); });
   let lastGuess = 0;
+  const guessOk = () => { const now = Date.now(); if (now - lastGuess < 600) return false; lastGuess = now; return true; };
   socket.on('drawGuess', (text, ack) => {
-    const p = inDraw();
+    const p = draw.members.has(socket.id) && players.get(socket.id);
     if (typeof ack !== 'function' || !p) return;
-    const now = Date.now();
-    if (now - lastGuess < 600) return ack({ ok: false });
-    lastGuess = now;
+    if (!guessOk()) return ack({ ok: false });
     const t = clean(text, 20);
     if (!t) return ack({ ok: false });
     if (draw.host === p.id) return ack({ ok: false, error: '主持人不能猜啦' });
-    if (!draw.answer) { drawLog(`${p.name}：${t}`, 'chat'); return ack({ ok: true }); }
+    if (!draw.answer) { draw.log(`${p.name}：${t}`, 'chat'); return ack({ ok: true }); }
     if (draw.correct.has(p.id)) return ack({ ok: false, error: '你已經猜對了，等下一題' });
-    if (norm(t) !== norm(draw.answer)) { drawLog(`${p.name}：${t}`, 'guess'); return ack({ ok: true, correct: false }); }
+    if (norm(t) !== norm(draw.answer)) { draw.log(`${p.name}：${t}`, 'guess'); return ack({ ok: true, correct: false }); }
     draw.correct.add(p.id);
-    drawLog(`✅ ${p.name} 猜對了！`, 'right');
-    const item = giveGear(p);
-    // 有人猜對，主持人每題也拿一件
-    const host = players.get(draw.host);
-    if (host && !draw.hostRewarded) { draw.hostRewarded = true; giveGear(host); }
+    draw.addScore(p, 1);
+    const item = draw.reward(p, `✅ ${p.name} 猜對了！+1 分`);
+    draw.rewardHost();
     ack({ ok: true, correct: true, item });
-    const guessers = [...draw.members].filter(id => id !== draw.host);
-    if (guessers.every(id => draw.correct.has(id))) drawEnd('大家都猜對了！');
-    else drawState();
+    if (draw.guessers().every(id => draw.correct.has(id))) draw.end('大家都猜對了！');
+    else draw.state();
+  });
+
+  // ----- 金曲猜歌王 -----
+  // 主持人出歌手和歌名，大家分開猜；同時猜對兩個的人數到達標人數就結束
+  socket.on('songStart', (q, ack) => {
+    if (typeof ack !== 'function') return;
+    if (!(song.members.has(socket.id) && song.host === socket.id)) return ack({ ok: false, error: '只有主持人可以出題' });
+    const singer = clean(q && q.singer, 20), title = clean(q && q.title, 30);
+    if (!norm(singer) || !norm(title)) return ack({ ok: false, error: '歌手和歌名都要填' });
+    if (song.title) song.end('換題了，');
+    song.singer = singer; song.title = title; song.goal = clamp(Math.round(Number(q.goal)) || 1, 1, SONG_GOAL_MAX);
+    song.gotSinger.clear(); song.gotTitle.clear(); song.hostRewarded = false;
+    song.round++; song.lastHostAct = Date.now();
+    song.log(`🎤 第 ${song.round} 首開始！歌手 ${[...norm(singer)].length} 個字、歌名 ${[...norm(title)].length} 個字，${song.goal} 人全部答對就結束`);
+    song.state();
+    ack({ ok: true });
+  });
+  socket.on('songGuess', (text, ack) => {
+    const p = song.members.has(socket.id) && players.get(socket.id);
+    if (typeof ack !== 'function' || !p) return;
+    if (!guessOk()) return ack({ ok: false });
+    const t = clean(text, 40);
+    if (!t) return ack({ ok: false });
+    if (song.host === p.id) return ack({ ok: false, error: '主持人不能猜啦' });
+    if (!song.title) { song.log(`${p.name}：${t}`, 'chat'); return ack({ ok: true }); }
+    const hadS = song.gotSinger.has(p.id), hadT = song.gotTitle.has(p.id);
+    if (hadS && hadT) return ack({ ok: false, error: '你已經全部答對了，等下一首' });
+    const g = norm(t), hitS = !hadS && songHit(g, song.singer), hitT = !hadT && songHit(g, song.title);
+    if (!hitS && !hitT) { song.log(`${p.name}：${t}`, 'guess'); return ack({ ok: true, correct: false }); }
+    if (hitS) { song.gotSinger.add(p.id); song.addScore(p, 1); song.log(`🎙️ ${p.name} 猜對歌手了！+1 分`, 'right'); }
+    if (hitT) { song.gotTitle.add(p.id); song.addScore(p, 1); song.log(`🎵 ${p.name} 猜對歌名了！+1 分`, 'right'); }
+    let item = null;
+    const both = song.gotSinger.has(p.id) && song.gotTitle.has(p.id);
+    if (both) { item = song.reward(p, `🏆 ${p.name} 歌手和歌名都答對了`); song.rewardHost(); }
+    ack({ ok: true, correct: true, singer: hitS, title: hitT, both, item });
+    const done = song.done().length, guessers = song.guessers();
+    if (done >= song.goal) song.end(`已經有 ${done} 人全部答對，達標！`);
+    else if (guessers.length && guessers.every(id => song.gotSinger.has(id) && song.gotTitle.has(id))) song.end('大家都答對了！');
+    else song.state();
   });
 
   socket.on('chat', (text) => {
@@ -953,7 +1044,7 @@ io.on('connection', (socket) => {
     if (process.env.DEBUG) console.log('disconnect', socket.id, reason);
     const p = players.get(socket.id);
     if (!p) return;
-    drawRemove(socket.id);
+    GAMES.forEach(g => g.remove(socket.id));
     summons.filter(sm => sm.owner === socket.id).forEach(sm => removeSummon(sm));
     players.delete(socket.id);
     io.emit('playerLeft', socket.id);

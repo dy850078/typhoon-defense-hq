@@ -2186,10 +2186,14 @@
         } });
         ring(60, 0x4f7cc2);
       } else if (fx.skill === 'skate') {
-        // 本人先藏起來，替身繞著颱風溜一圈，沿路留下冰晶
+        // 本人先藏起來，替身在自己身邊溜一大圈（就是技能範圍），沿路留下冰晶
         const ghost = this.add.image(who.x, who.y, who.texKey).setScale(0.5).setOrigin(0.5, AV_ORIGIN_Y).setDepth(3000);
         who.body_.setAlpha(0);
-        const cx = foe.x, cy = foe.y, R = foe.r;
+        const cx = who.x, cy = who.y, R = sk.aoe || foe.r;
+        const ice = this.add.graphics({ x: cx, y: cy }).setDepth(-4);
+        ice.fillStyle(0xbfe6ff, 0.28); ice.fillEllipse(0, 0, R * 2, R * 1.1);
+        ice.lineStyle(3, 0x9fd8ff, 0.8); ice.strokeEllipse(0, 0, R * 2, R * 1.1);
+        this.tweens.add({ targets: ice, alpha: 0, delay: 900, duration: 600, onComplete: () => ice.destroy() });
         const start = Math.atan2(who.y - cy, who.x - cx);
         const o = { t: 0 };
         this.tweens.add({ targets: o, t: 1, duration: 900, ease: 'Sine.inOut',
@@ -2204,9 +2208,12 @@
           },
           onComplete: () => {
             ghost.destroy(); who.body_.setAlpha(who.stats && who.stats.dead ? 0.45 : 1);
-            this.burst(cx, cy - 60, 14, 0xbfe6ff, 120);
-            this.floatText(cx, cy - (foe.mob ? 120 : 220), '❄️ 冰凍！', '#bfe6ff', 26);
-            this.refreshFoeTint(fx.target);
+            (fx.hits || [fx.target]).forEach(t => {
+              const f = this.foePos(t);
+              this.burst(f.x, f.mid, 14, 0xbfe6ff, 120);
+              this.floatText(f.x, f.y - (f.mob ? 120 : 220), '❄️ 冰凍！', '#bfe6ff', 26);
+              this.refreshFoeTint(t);
+            });
           } });
       }
     }

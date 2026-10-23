@@ -356,7 +356,8 @@ function tickSummon(sm, now) {
   if (!owner) return removeSummon(sm);
   const def = STATS.SUMMONS[sm.kind];
   // 找最近的敵人：小怪或颱風
-  let foe = null, isBoss = false, fd = 700;
+  // 整個前線都找得到，離最近的那隻走過去打
+  let foe = null, isBoss = false, fd = 1600;
   mobs.forEach(m => { if (!m.alive) return; const d = dist(m.x, m.y, sm.x, sm.y); if (d < fd) { fd = d; foe = m; isBoss = false; } });
   if (monster.alive) { const d = dist(monster.x, monster.y, sm.x, sm.y); if (d < fd) { fd = d; foe = monster; isBoss = true; } }
   let tx, ty, stop;
@@ -649,19 +650,30 @@ io.on('connection', (socket) => {
       pushChat({ system: true, text: `👽 ${p.name} 召喚了${def.name}！`, t: now });
       support += 20;
     }
+    // 範圍技能：身邊範圍內的颱風和小怪全部打到
+    const hits = skill.aoe
+      ? [...(monster.alive && STATS.foeGap(p, monster, true) <= skill.aoe ? [[monster, true]] : []),
+         ...mobs.filter(m => m.alive && STATS.foeGap(p, m, false) <= skill.aoe).map(m => [m, false])]
+      : foe ? [[foe, isBoss]] : [];
+    if (skill.aoe) fx.hits = hits.map(([f, b]) => b ? 'boss' : f.id);
     if (foe && skill.weaken) foe.weakUntil = now + skill.weaken;
-    if (foe && skill.freeze) foe.frozenUntil = now + skill.freeze;
+    if (skill.freeze) hits.forEach(([f]) => { f.frozenUntil = now + skill.freeze; });
     if (support) gainExp(p, support);
     sendStats(p);
     io.emit('skillFx', fx);
-    if (foe && (skill.weaken || skill.freeze)) io.emit(isBoss ? 'monster' : 'mob', isBoss ? monsterState() : mobState(foe));
+    if (skill.weaken || skill.freeze) hits.forEach(([f, b]) => io.emit(b ? 'monster' : 'mob', b ? monsterState() : mobState(f)));
 
     if (!skill.power) return ack({ ok: true });
-    const crit = Math.random() < 0.12;
-    const weak = now < foe.weakUntil ? STATS.WEAKEN.dmgTaken : 1;
-    const dmg = Math.round(p.atk * skill.power * (0.6 + Math.random() * 0.6) * (crit ? 2.5 : 1) * weak);
-    ack({ ok: true, dmg });
-    damageFoe(p, foe, isBoss, dmg, crit, skillId);
+    let total = 0;
+    hits.forEach(([f, b]) => {
+      if (!f.alive) return;
+      const crit = Math.random() < 0.12;
+      const weak = now < f.weakUntil ? STATS.WEAKEN.dmgTaken : 1;
+      const dmg = Math.round(p.atk * skill.power * (0.6 + Math.random() * 0.6) * (crit ? 2.5 : 1) * weak);
+      total += dmg;
+      damageFoe(p, f, b, dmg, crit, skillId);
+    });
+    ack({ ok: true, dmg: total });
   });
 
   // 看某個人的個人資料（報名時的 VIP Pass）

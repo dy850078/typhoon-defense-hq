@@ -108,6 +108,8 @@
 
   // 颱風怪的顯示資料（血量在伺服器設定），名字跟著現在的颱風
   const MONSTER = { name: '薔琵', level: 30 };
+  // 第一次被打倒會變身成第二階段：更大、更硬、出招更快，還有新招式
+  const MONSTER2 = { name: '超級薔琵', level: 45, scale: 1.4, hpMul: 1.5, transformMs: 3000 };
   const RESPAWN_MS = 5000; // 倒下後幾秒回到總部
   const WEAKEN = { dmgTaken: 1.3, dmgDealt: 0.7 }; // 被預言家削弱時
 
@@ -144,13 +146,14 @@
   // 攻擊距離量到敵人身體的邊緣，不是量到腳底中心：颱風雲很大，站在雲旁邊也要打得到
   // 再多給一點寬限，抵掉位置同步的延遲（颱風和人都在動）
   function foeGap(p, foe, isBoss) {
-    const half = isBoss ? 100 : 26, top = isBoss ? 180 : 70, bottom = isBoss ? 30 : 10;
+    const k = isBoss && foe.phase === 2 ? MONSTER2.scale : 1; // 變身後體型變大，打得到的範圍也跟著變大
+    const half = isBoss ? 100 * k : 26, top = isBoss ? 180 * k : 70, bottom = isBoss ? 30 * k : 10;
     const dx = Math.max(0, Math.abs(p.x - foe.x) - half);
     const dy = Math.max(0, foe.y - top - p.y, p.y - (foe.y + bottom));
     return Math.hypot(dx, dy) - 40;
   }
 
-  const stats = { BASE, CLASSES, SKILLS, SUMMONS, SUMMON_MAX, SUMMON_HIT_MS, FOODS, REGEN, MONSTER, RESPAWN_MS, WEAKEN, LEVEL,
+  const stats = { BASE, CLASSES, SKILLS, SUMMONS, SUMMON_MAX, SUMMON_HIT_MS, FOODS, REGEN, MONSTER, MONSTER2, RESPAWN_MS, WEAKEN, LEVEL,
     MOBS, MOB_RESPAWN_MS, statsFor, reduce, boost, bonusDef, foeGap };
   if (typeof module !== 'undefined' && module.exports) module.exports = stats;
   else root.HQ_STATS = stats;

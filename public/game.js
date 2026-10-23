@@ -208,12 +208,67 @@
   if (window.innerWidth < 600 || window.innerHeight < 520) $('chat').classList.add('collapsed');
 
   // ---------------- 視訊 ----------------
-  $('video-btn').addEventListener('click', () => {
+  // 按「加入視訊」先打開房間列表：可以開新房間、輸入房號，或直接加入別人開的
+  function openJitsi(code) {
     const name = encodeURIComponent(JSON.stringify(me ? me.name : ''));
-    const url = `https://${config.jitsiDomain}/${encodeURIComponent(config.jitsiRoom)}` +
+    const url = `https://${config.jitsiDomain}/${encodeURIComponent(code)}` +
       `#userInfo.displayName=${name}&config.prejoinConfig.enabled=false`;
     window.open(url, '_blank', 'noopener');
-  });
+  }
+  const videoCode = (s) => String(s || '').trim().replace(/[^A-Za-z0-9_-]/g, '').slice(0, 40);
+  let videoRooms = [];
+  function joinVideo(code) {
+    // 先開分頁（要在按下去的當下開，不然會被瀏覽器擋），再告訴伺服器
+    openJitsi(code);
+    socket.emit('videoJoin', code, (res) => { if (res && res.error) toast(res.error); });
+    closeModal();
+  }
+  function renderVideo() {
+    const box = el('div', 'modal-list video-list');
+    const mins = (ms) => { const m = Math.floor(ms / 60000); return m < 1 ? '剛開' : m < 60 ? `開了 ${m} 分鐘` : `開了 ${Math.floor(m / 60)} 小時 ${m % 60} 分`; };
+    videoRooms.forEach((r, i) => {
+      const row = el('div', 'modal-row' + (i === 1 ? ' on' : ''));
+      row.appendChild(el('div', 'modal-icon', i ? '📹' : '🏠'));
+      const inf = el('div', 'modal-info');
+      inf.appendChild(el('b', null, r.name + (i === 1 ? '（最新）' : '')));
+      inf.appendChild(el('span', 'mono tag', `房號 ${r.code}`));
+      inf.appendChild(el('p', null, [r.by && `${r.by} 開的`, mins(r.ago), `👥 ${r.count} 人在裡面`].filter(Boolean).join(' · ')));
+      row.appendChild(inf);
+      const b = el('button', 'primary small', '加入');
+      b.onclick = () => joinVideo(r.code);
+      row.appendChild(b);
+      box.appendChild(row);
+    });
+    // 開新房間
+    const mk = el('form', 'video-form');
+    const nm = el('input'); nm.maxLength = 16; nm.placeholder = '新房間名稱（可以不填）'; nm.autocomplete = 'off';
+    mk.appendChild(nm); mk.appendChild(el('button', 'primary small', '＋ 開新房間'));
+    mk.onsubmit = (e) => {
+      e.preventDefault();
+      const code = 'TyphoonHQ-' + Math.random().toString(36).slice(2, 8);
+      openJitsi(code);
+      socket.emit('videoCreate', { code, name: nm.value.trim() }, (res) => { if (res && res.error) toast(res.error); });
+      closeModal();
+    };
+    // 輸入房號
+    const jn = el('form', 'video-form');
+    const cd = el('input'); cd.maxLength = 40; cd.placeholder = '輸入房號，例如 TyphoonHQ-ab12cd'; cd.autocomplete = 'off';
+    jn.appendChild(cd); jn.appendChild(el('button', 'hud-btn tiny', '用房號加入'));
+    jn.onsubmit = (e) => {
+      e.preventDefault();
+      const code = videoCode(cd.value);
+      if (code.length < 3) { toast('房號至少要 3 個英文或數字'); return; }
+      joinVideo(code);
+    };
+    box.appendChild(mk); box.appendChild(jn);
+    box.appendChild(el('p', 'modal-hint', '視訊斷掉或會議過期了？開一個新房間，大家就能從這裡看到房號一起換過去。'));
+    openModal('video', '📹 視訊房間', box);
+  }
+  $('video-btn').addEventListener('click', () => socket.emit('videoList', (res) => {
+    videoRooms = (res && res.rooms) || [{ code: config.jitsiRoom, name: '總部大廳', by: '', ago: 0, count: 0 }];
+    renderVideo();
+  }));
+  socket.on('videoRooms', (rooms) => { videoRooms = rooms; if (modalKind === 'video' && !$('modal').hidden) renderVideo(); });
 
   // ---------------- 彈出視窗 ----------------
   const el = (tag, cls, text) => {
@@ -2091,14 +2146,22 @@
       const now = performance.now();
       this.frozenUntil = now + (m.frozen || 0);
       this.weakUntil = now + (m.weak || 0);
-      if (m.alive && wasAlive) { this.drawMonsterBar(); return; } // 只是狀態更新（冰凍、削弱、血量上限）
+      const phaseUp = m.phase === 2 && this.monster.phase !== 2;
+      this.monster.phase = m.phase || 1; // foeGap 用：變身後體型變大
+      this.applyMonsterLook();
+      if (m.alive && wasAlive) {
+        if (phaseUp) this.transformMonster(m);
+        this.drawMonsterBar(); return; // 只是狀態更新（冰凍、削弱、血量上限）
+      }
+      const base = this.monsterScale();
       if (m.alive) {
         this.tweens.killTweensOf(this.monster);
-        this.monster.setVisible(true).setAlpha(1).setScale(1).setAngle(0);
+        this.monster.setVisible(true).setAlpha(1).setScale(base).setAngle(0);
         this.monster.x = this.monster.tx = m.x; this.monster.y = this.monster.ty = m.y;
         this.mDead.setVisible(false);
         // 出場：從地上彈出來
-        this.tweens.add({ targets: this.monster, scale: { from: 0.2, to: 1 }, duration: 500, ease: 'Back.out' });
+        this.tweens.add({ targets: this.monster, scale: { from: 0.2, to: base }, duration: 500, ease: 'Back.out' });
+        if (phaseUp) this.transformMonster(m); // 剛連進來就遇到變身中
       } else {
         this.respawnAt = performance.now() + m.respawnIn;
         this.mDead.setVisible(true);
@@ -2113,6 +2176,40 @@
     }
 
     moveMonster(m) { this.monster.tx = m.x; this.monster.ty = m.y; }
+
+    monsterScale() { return this.monster.phase === 2 ? ST.MONSTER2.scale : 1; }
+    // 名字、頭目血條、顏色跟著階段換
+    applyMonsterLook() {
+      const M = this.monster.phase === 2 ? ST.MONSTER2 : ST.MONSTER;
+      const label = `Lv.${M.level} ${M.name}`;
+      if (this.mName.text !== label) this.mName.setText(label);
+      document.querySelector('#boss .boss-lv').textContent = 'Lv.' + M.level;
+      document.querySelector('#boss .boss-lv').nextSibling.textContent = ' ' + M.name + ' ';
+      $('boss').classList.toggle('phase2', this.monster.phase === 2);
+      this.mSwirl.setTint(this.monster.phase === 2 ? 0xff5a7a : 0xffffff);
+      this.applyMonsterTint();
+    }
+    // 變身：被打倒的瞬間原地爆出一圈閃光，旋轉著長大，畫面震動
+    transformMonster(m) {
+      const x = this.monster.x, y = this.monster.y, big = ST.MONSTER2.scale;
+      this.tweens.killTweensOf(this.monster);
+      this.monster.setAngle(0).setAlpha(1);
+      this.mFace.setTexture('typhoon-face-hit');
+      this.tweens.add({ targets: this.monster, angle: 720, scale: { from: 0.6, to: big }, duration: Math.min(2600, m.transforming || 2600),
+        ease: 'Cubic.inOut', onComplete: () => { this.monster.setAngle(0); this.mFace.setTexture('typhoon-face'); } });
+      for (let i = 0; i < 3; i++) this.time.delayedCall(i * 450, () => {
+        const g = this.add.graphics({ x, y }).setDepth(-3);
+        g.lineStyle(8, i % 2 ? 0xffd23f : 0xff5a7a, 0.9); g.strokeEllipse(0, 0, 220, 130);
+        this.tweens.add({ targets: g, scale: 3, alpha: 0, duration: 900, ease: 'Quad.out', onComplete: () => g.destroy() });
+        this.burst(x, y - 120, 16, i % 2 ? 0xffd23f : 0xff5a7a, 220);
+      });
+      if (this.me && Math.hypot(this.me.x - x, this.me.y - y) < 1400) {
+        this.cameras.main.shake(1200, 0.008);
+        this.flash.setSize(this.scale.width, this.scale.height);
+        this.tweens.add({ targets: this.flash, alpha: { from: 0.6, to: 0 }, duration: 600, delay: 2200 });
+      }
+      this.floatText(x, y - 260, `🌪️ ${ST.MONSTER.name}變身成「${ST.MONSTER2.name}」了！`, '#ff8fab', 28);
+    }
 
     // 楓之谷的頭目血條放在畫面上方（DOM），怪物頭上再留一條細的
     drawMonsterBar() {
@@ -2153,7 +2250,8 @@
     }
 
     showMonsterHit(m) {
-      this.mState.hp = Math.min(this.mState.hp, m.hp);
+      // 傷害數字會晚一點才跳；變身前打的那一下不要把變身後的新血條歸零
+      if (!m.phase || m.phase === this.monster.phase) this.mState.hp = Math.min(this.mState.hp, m.hp);
       this.drawMonsterBar();
       const who = this.actorOf(m.id);
       if (who && (MELEE.includes(m.skill) || m.skill === 'pet')) this.lunge(who, this.monster.x);
@@ -2174,12 +2272,13 @@
       const now = performance.now();
       if (now < this.frozenUntil) this.mBody.setTint(0x9fd8ff);
       else if (now < this.weakUntil) this.mBody.setTint(0xd9c4ff);
+      else if (this.monster.phase === 2) this.mBody.setTint(0xffb3c6); // 第二階段：整隻變成暴怒的粉紅色
       else this.mBody.clearTint();
     }
 
     // 颱風出招前：地上先出現紅圈圈，裡面的圓慢慢長大，滿了就打下來
     onMonsterAttack(a) {
-      const color = { gust: 0xffffff, rain: 0x4f7cc2, bolt: 0xffd23f }[a.type];
+      const color = { gust: 0xffffff, rain: 0x4f7cc2, bolt: 0xffd23f, tornado: 0xff5a7a, hail: 0xbfe6ff }[a.type];
       a.spots.forEach(sp => {
         const ring = this.add.graphics({ x: sp.x, y: sp.y }).setDepth(-5);
         ring.fillStyle(0xff3b3b, 0.16); ring.fillEllipse(0, 0, a.r * 2, a.r * 1.4);
@@ -2190,8 +2289,9 @@
         this.tweens.add({ targets: ring, alpha: { from: 1, to: 0.5 }, duration: 160, yoyo: true, repeat: -1 });
         this.time.delayedCall(a.delay + 60, () => { this.tweens.killTweensOf(ring); ring.destroy(); fill.destroy(); });
       });
-      const say = { gust: ['🌪️ 強風來了！', '#ffffff'], rain: ['🌧️ 暴雨彈！', '#bfe6ff'], bolt: ['⚡ 落雷！', '#ffd23f'] }[a.type];
-      this.floatText(this.monster.x, this.monster.y - 200, say[0], say[1], 20);
+      const say = { gust: ['🌪️ 強風來了！', '#ffffff'], rain: ['🌧️ 暴雨彈！', '#bfe6ff'], bolt: ['⚡ 落雷！', '#ffd23f'],
+        tornado: ['🌪️🌪️ 超級龍捲風！', '#ff8fab'], hail: ['🧊 冰雹轟炸！', '#bfe6ff'] }[a.type];
+      this.floatText(this.monster.x, this.monster.y - 200 * this.monsterScale(), say[0], say[1], a.type === 'tornado' || a.type === 'hail' ? 26 : 20);
       if (this.me && !this.isDead() && this.roomId === 'front' && a.spots.some(sp => Math.hypot(this.me.x - sp.x, this.me.y - sp.y) <= a.r)) {
         toast('⚠️ 快離開紅圈！');
       }
@@ -2199,14 +2299,32 @@
 
     onMonsterAttackHit(a) {
       a.spots.forEach(sp => {
-        if (a.type === 'gust') {
-          // 一圈往外捲的風
-          [0, 120].forEach(d => {
+        if (a.type === 'gust' || a.type === 'tornado') {
+          // 一圈往外捲的風；龍捲風捲得更多圈、更大、帶紅色
+          const big = a.type === 'tornado';
+          (big ? [0, 100, 200, 300] : [0, 120]).forEach(d => {
             const w = this.add.image(sp.x, sp.y - 20, 'typhoon').setDepth(sp.y + 200).setAlpha(0.9).setScale(0.4, 0.15);
-            this.tweens.add({ targets: w, scaleX: 2.2, scaleY: 0.8, alpha: 0, angle: -200, delay: d, duration: 650,
-              ease: 'Quad.out', onComplete: () => w.destroy() });
+            if (big) w.setTint(d % 200 ? 0xff8fab : 0xffffff);
+            this.tweens.add({ targets: w, scaleX: big ? 3.2 : 2.2, scaleY: big ? 1.2 : 0.8, alpha: 0, angle: big ? -480 : -200, delay: d,
+              duration: big ? 900 : 650, ease: 'Quad.out', onComplete: () => w.destroy() });
           });
-          this.burst(sp.x, sp.y - 30, 14, 0xffffff, a.r);
+          if (big) {
+            // 中間拔起一根旋轉的風柱
+            const col = this.add.image(sp.x, sp.y, 'typhoon').setOrigin(0.5, 1).setDepth(sp.y + 201).setTint(0xff8fab).setScale(0.6, 0.2);
+            this.tweens.add({ targets: col, scaleY: 1.6, angle: 360, alpha: { from: 0.9, to: 0 }, duration: 1000, ease: 'Quad.out', onComplete: () => col.destroy() });
+          }
+          this.burst(sp.x, sp.y - 30, big ? 22 : 14, big ? 0xff8fab : 0xffffff, a.r);
+        } else if (a.type === 'hail') {
+          // 一顆冰塊從天上砸下來碎成一地
+          const ice = this.add.image(sp.x + 60, sp.y - 460, 'fx-ice').setDepth(sp.y + 200).setScale(0.8).setAngle(-20);
+          this.tweens.add({ targets: ice, x: sp.x, y: sp.y - 20, angle: 20, duration: 220 + Math.random() * 120, ease: 'Quad.in', onComplete: () => {
+            ice.destroy();
+            const crack = this.add.graphics({ x: sp.x, y: sp.y }).setDepth(-4);
+            crack.fillStyle(0xbfe6ff, 0.75); crack.fillEllipse(0, 0, a.r * 2, a.r * 1.3);
+            crack.lineStyle(3, 0x4f7cc2, 0.8); crack.strokeEllipse(0, 0, a.r * 2, a.r * 1.3);
+            this.tweens.add({ targets: crack, alpha: 0, delay: 500, duration: 900, onComplete: () => crack.destroy() });
+            this.burst(sp.x, sp.y - 10, 10, 0xffffff, a.r);
+          } });
         } else if (a.type === 'rain') {
           const d = this.add.image(sp.x, sp.y - 420, 'fx-drop').setDepth(sp.y + 200).setScale(1.2);
           this.tweens.add({ targets: d, y: sp.y - 20, duration: 180, ease: 'Quad.in', onComplete: () => {
@@ -2232,13 +2350,14 @@
       });
       if (!this.me || this.isDead()) return;
       const near = a.spots.some(sp => Math.hypot(this.me.x - sp.x, this.me.y - sp.y) < 600);
-      if (near) this.cameras.main.shake(260, a.type === 'bolt' ? 0.012 : 0.007);
-      if (a.type !== 'gust' || this.roomId !== 'front') return; // 圍欄內是安全區
+      if (near) this.cameras.main.shake(260, a.type === 'bolt' || a.type === 'tornado' ? 0.012 : 0.007);
+      if ((a.type !== 'gust' && a.type !== 'tornado') || this.roomId !== 'front') return; // 圍欄內是安全區
       const sp = a.spots[0];
       const dx = this.me.x - sp.x, dy = this.me.y - sp.y, d = Math.hypot(dx, dy);
       if (d > a.r) return;
       // 被強風往外吹
-      this.push = { x: (dx || 1) / (d || 1) * 620, y: (dy || 0) / (d || 1) * 620, t: 0.35 };
+      const f = a.type === 'tornado' ? 820 : 620;
+      this.push = { x: (dx || 1) / (d || 1) * f, y: (dy || 0) / (d || 1) * f, t: 0.35 };
       this.floatText(this.me.x, this.me.y - 100, '💨 被風吹走了！', '#ffffff', 18);
     }
 
@@ -3075,7 +3194,7 @@
         const hop = Math.sin(ph * Math.PI);
         const squash = ph < 0.12 || ph > 0.88 ? 0.1 : 0;
         this.mBody.y = -hop * 16;
-        this.mBody.setScale(1 + squash, 1 - squash + hop * 0.04);
+        this.mBody.setScale(1 + squash, 1 - squash + hop * 0.04); // 整體大小由 container 的 scale 決定
         this.mFace.y = -100 * (1 - squash) - hop * 16;
         if (this.mHitUntil && performance.now() > this.mHitUntil) { this.mHitUntil = 0; this.mFace.setTexture('typhoon-face'); this.applyMonsterTint(); }
         this.monster.setDepth(this.monster.y);

@@ -1139,6 +1139,29 @@
       path(); CR.stroke(ctx, r, 2.2);
       CR.blob(ctx, 16, 4, 4, 4, r, 0.15, 12); CR.fill(ctx, '#ffffff', r, null); CR.stroke(ctx, r, 1.6);
     }),
+    // 慶生飄出來的音符：白底黑框，顯示時再染成粉彩色（兩倍大，顯示時縮小）
+    note: () => fxCanvas(56, 64, 44, (ctx, r) => {
+      ctx.scale(2, 2);
+      CR.line(ctx, 15, 25, 15, 5, r, 2.4, CR.INK, 0.2);
+      ctx.beginPath(); ctx.moveTo(15, 5); ctx.quadraticCurveTo(25, 9, 24, 18); ctx.quadraticCurveTo(22, 12, 15, 11);
+      ctx.fillStyle = '#ffffff'; ctx.fill(); CR.stroke(ctx, r, 1.8);
+      ctx.save(); ctx.translate(10, 26); ctx.rotate(-0.4);
+      CR.blob(ctx, 0, 0, 6, 4.4, r, 0.06, 12); CR.fill(ctx, '#ffffff', r, null); CR.stroke(ctx, r, 2); ctx.restore();
+    }),
+    notes: () => fxCanvas(64, 64, 45, (ctx, r) => {
+      ctx.scale(2, 2);
+      CR.line(ctx, 11, 25, 11, 7, r, 2.4, CR.INK, 0.2); CR.line(ctx, 25, 22, 25, 4, r, 2.4, CR.INK, 0.2);
+      ctx.beginPath(); ctx.moveTo(10, 5); ctx.lineTo(26, 1); ctx.lineTo(26, 7); ctx.lineTo(10, 11); ctx.closePath();
+      ctx.fillStyle = '#ffffff'; ctx.fill(); CR.stroke(ctx, r, 1.8);
+      [[6, 26], [20, 23]].forEach(([x, y]) => {
+        ctx.save(); ctx.translate(x, y); ctx.rotate(-0.4);
+        CR.blob(ctx, 0, 0, 5.6, 4.2, r, 0.06, 12); CR.fill(ctx, '#ffffff', r, null); CR.stroke(ctx, r, 2); ctx.restore();
+      });
+    }),
+    // 彩帶小紙片
+    confetti: () => fxCanvas(16, 10, 46, (ctx, r) => {
+      CR.rect(ctx, 2, 2, 12, 6, r, 0.4); CR.fill(ctx, '#ffffff', r, null); CR.stroke(ctx, r, 1.2);
+    }),
   };
 
   // NPC 和小怪：用一般人物的畫法，再加上手上的道具（畫布比人物寬一點）
@@ -1635,7 +1658,11 @@
         who.cake = this.add.image(0, -6, 'fx-cake').setScale(0.36).setOrigin(0.5, 0.75);
         who.add(who.cake);
         this.burst(who.x, who.y - 40, 12, 0xff6b81);
-      } else if (!(ms > 0) && who.cake) { who.cake.destroy(); who.cake = null; }
+        this.cakeParty(who, true);
+      } else if (!(ms > 0) && who.cake) {
+        who.cake.destroy(); who.cake = null;
+        if (who.cakeGlow) { who.cakeGlow.destroy(); who.cakeGlow = null; }
+      }
       // 蛋糕放下了，因為它戴上的帽子也一起拿掉
       if (!(ms > 0)) [this.me, ...this.remotes.values()].forEach(c => { if (c && c.hatBy === id) c.hatUntil = 0; });
       if (who === this.me) $('cake-btn').hidden = !(ms > 0);
@@ -1970,6 +1997,63 @@
         this.tweens.add({ targets: st, x: x + Math.cos(a) * spread, y: y + Math.sin(a) * spread * 0.6,
           scale: 0.2, alpha: 0, angle: 180, duration: 600, ease: 'Quad.out', onComplete: () => st.destroy() });
       }
+    }
+
+    // 拿著蛋糕的慶生氛圍：腳下一圈暖暖的光、音符往上飄、彩帶灑下來，偶爾再噴一圈星星
+    cakeParty(who, first) {
+      const PASTEL = [0xff8fab, 0xffd23f, 0x8fd3ff, 0xb39cff, 0x7be0a6, 0xffb27a];
+      const pick = () => PASTEL[Math.floor(Math.random() * PASTEL.length)];
+      if (first) {
+        if (!who.cakeGlow) {
+          const g = this.add.graphics();
+          g.fillStyle(0xffd23f, 0.3); g.fillEllipse(0, 0, 160, 56);
+          g.fillStyle(0xff8fab, 0.35); g.fillEllipse(0, 0, 100, 34);
+          who.cakeGlow = g; who.addAt(g, 0);
+          this.tweens.add({ targets: g, scaleX: 1.12, scaleY: 1.12, alpha: 0.7, duration: 700, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
+        }
+        for (let i = 0; i < 10; i++) this.time.delayedCall(i * 60, () => who.cakeUntil && this.cakeNote(who, pick()));
+        for (let i = 0; i < 30; i++) this.cakeConfetti(who, pick(), true);
+        this.burst(who.x, who.y - 50, 16, 0xffd23f, 130);
+        const t = this.add.text(who.x, who.y - 140, '🎂 生日快樂！🎉', {
+          fontSize: '26px', fontStyle: 'bold', color: '#ffd23f', fontFamily: FONT, stroke: '#131a28', strokeThickness: 5,
+        }).setOrigin(0.5).setDepth(2060).setScale(0.3);
+        this.tweens.add({ targets: t, scale: 1, duration: 380, ease: 'Back.out' });
+        this.tweens.add({ targets: t, y: who.y - 175, alpha: 0, delay: 1800, duration: 700, onComplete: () => t.destroy() });
+        who.cakeFx = { note: 0, conf: 0, star: 0 };
+        return;
+      }
+      const now = performance.now(), f = who.cakeFx || (who.cakeFx = { note: 0, conf: 0, star: 0 });
+      if (now > f.note) { f.note = now + 240 + Math.random() * 160; this.cakeNote(who, pick()); }
+      if (now > f.conf) { f.conf = now + 110 + Math.random() * 80; this.cakeConfetti(who, pick()); }
+      if (now > f.star) { f.star = now + 1800 + Math.random() * 900; this.burst(who.x + (Math.random() - 0.5) * 80, who.y - 70 - Math.random() * 40, 8, pick(), 60); }
+    }
+
+    cakeNote(who, tint) {
+      const a = Math.random() * Math.PI * 2;
+      const x = who.x + Math.cos(a) * (30 + Math.random() * 40), y = who.y - 30 + Math.sin(a) * 18;
+      const n = this.add.image(x, y, Math.random() < 0.5 ? 'fx-note' : 'fx-notes').setTint(tint)
+        .setScale(0.2).setAlpha(0).setAngle((Math.random() - 0.5) * 30).setDepth(2040);
+      const rise = 110 + Math.random() * 70, sway = (Math.random() < 0.5 ? -1 : 1) * (14 + Math.random() * 16);
+      this.tweens.add({ targets: n, scale: 0.52 + Math.random() * 0.16, alpha: 1, duration: 260, ease: 'Back.out' });
+      this.tweens.add({ targets: n, x: x + sway, duration: 520, yoyo: true, repeat: 1, ease: 'Sine.inOut' });
+      this.tweens.add({ targets: n, angle: n.angle - sway, duration: 520, yoyo: true, repeat: 1, ease: 'Sine.inOut' });
+      this.tweens.add({ targets: n, y: y - rise, duration: 2100, ease: 'Sine.out' });
+      this.tweens.add({ targets: n, alpha: 0, delay: 1500, duration: 600, onComplete: () => n.destroy() });
+    }
+
+    cakeConfetti(who, tint, pop) {
+      const c = this.add.image(who.x + (Math.random() - 0.5) * (pop ? 30 : 180), who.y - (pop ? 60 : 120 + Math.random() * 50), 'fx-confetti')
+        .setTint(tint).setScale(0.6 + Math.random() * 0.5).setAngle(Math.random() * 360).setDepth(2030);
+      const dx = (Math.random() - 0.5) * (pop ? 260 : 60);
+      if (pop) {
+        // 一開始往上噴，再慢慢飄下來
+        this.tweens.add({ targets: c, y: c.y - 60 - Math.random() * 60, duration: 350, ease: 'Quad.out' });
+        this.tweens.add({ targets: c, y: who.y + 10, delay: 350, duration: 1200 + Math.random() * 500, ease: 'Sine.in' });
+      } else {
+        this.tweens.add({ targets: c, y: who.y + 10 + Math.random() * 20, duration: 1500 + Math.random() * 700, ease: 'Sine.in' });
+      }
+      this.tweens.add({ targets: c, x: c.x + dx, angle: c.angle + (Math.random() < 0.5 ? -1 : 1) * 540, scaleY: 0.2, duration: 1700, ease: 'Sine.out' });
+      this.tweens.add({ targets: c, alpha: 0, delay: 1400, duration: 500, onComplete: () => c.destroy() });
     }
 
     // 職業技能的特效
@@ -2628,7 +2712,7 @@
 
       // 拿著蛋糕的人：時間到自動放下；靠近的人（包含自己）戴上慶祝帽，直到那個蛋糕放下
       const holders = all0.filter(c => c.cakeUntil);
-      holders.forEach(h => { if (now > h.cakeUntil) this.onCake(h.pid, 0, h); });
+      holders.forEach(h => { if (now > h.cakeUntil) this.onCake(h.pid, 0, h); else if (h.cake) this.cakeParty(h); });
       all0.forEach(c => {
         holders.forEach(h => {
           if (h.cakeUntil && Math.hypot(h.x - c.x, h.y - c.y) < 160 && h.cakeUntil > c.hatUntil) { c.hatUntil = h.cakeUntil; c.hatBy = h.pid; }

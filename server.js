@@ -1,4 +1,5 @@
 const path = require('path');
+const fs = require('fs');
 const http = require('http');
 const express = require('express');
 const { Server } = require('socket.io');
@@ -6,6 +7,7 @@ const MAP = require('./shared/map');
 const AVATAR = require('./shared/avatar');
 const STATS = require('./shared/stats');
 const GEAR = require('./shared/gear');
+const DECOR = require('./shared/decor');
 
 const PORT = Number(process.env.PORT) || 3000;
 const MAX_PLAYERS = Number(process.env.MAX_PLAYERS) || 40;
@@ -115,6 +117,9 @@ function monsterAttack(now) {
     fieldPlayers().forEach(p => {
       if (spots.some(s => dist(p.x, p.y, s.x, s.y) <= atk.r)) hurt(p, Math.round(rand(atk.dmg) * weak), `颱風${STATS.MONSTER.name}`);
     });
+    summons.slice().forEach(sm => {
+      if (spots.some(s => dist(sm.x, sm.y, s.x, s.y) <= atk.r)) hurtSummon(sm, Math.round(rand(atk.dmg) * weak), `颱風${STATS.MONSTER.name}`);
+    });
   }, atk.delay);
 }
 
@@ -148,9 +153,9 @@ function tickMob(m, now) {
     return;
   }
   if (now < m.frozenUntil) return;
-  // 追最近的人（只追在前線的）
+  // 追最近的人（只追在前線的），召喚物也會被追
   let prey = null, pd = 280;
-  fieldPlayers().forEach(p => { const d = dist(p.x, p.y, m.x, m.y); if (d < pd) { pd = d; prey = p; } });
+  fieldPlayers().concat(summons).forEach(p => { const d = dist(p.x, p.y, m.x, m.y); if (d < pd) { pd = d; prey = p; } });
   if (prey) { m.tx = prey.x; m.ty = prey.y; }
   else if (dist(m.x, m.y, m.tx, m.ty) < 10) {
     m.tx = clamp(m.x + (Math.random() - 0.5) * 400, Z.x1, Z.x2);
@@ -166,10 +171,13 @@ function tickMob(m, now) {
     m.nextHit = now + 2200 + Math.random() * 800;
     io.emit('mobAttack', { mid: m.id, id: prey.id, say: def.say[Math.floor(Math.random() * def.say.length)] });
     setTimeout(() => {
-      if (!m.alive || Date.now() < m.frozenUntil || !players.has(prey.id) || !inField(prey)) return;
+      if (!m.alive || Date.now() < m.frozenUntil) return;
       if (dist(prey.x, prey.y, m.x, m.y) > def.range * 1.3) return; // 跑掉就沒打到
       const weak = Date.now() < m.weakUntil ? STATS.WEAKEN.dmgDealt : 1;
-      hurt(prey, Math.round(rand(def.dmg) * weak), def.name);
+      const dmg = Math.round(rand(def.dmg) * weak);
+      if (prey.summon) return hurtSummon(prey, dmg, def.name);
+      if (!players.has(prey.id) || !inField(prey)) return;
+      hurt(prey, dmg, def.name);
     }, 450);
   }
 }
@@ -179,6 +187,8 @@ setInterval(() => {
   const now = Date.now();
   mobs.forEach(m => tickMob(m, now));
   io.volatile.emit('mobsMove', mobs.filter(m => m.alive).map(m => [m.id, Math.round(m.x), Math.round(m.y)]));
+  summons.slice().forEach(sm => tickSummon(sm, now));
+  if (summons.length) io.volatile.emit('summonsMove', summons.map(sm => [sm.id, Math.round(sm.x), Math.round(sm.y)]));
   if (!monster.alive) {
     if (now >= monster.respawnAt) spawnMonster();
     return;
@@ -276,9 +286,129 @@ function emptyCrates() {
   return [...crates.entries()].filter(([, c]) => c.emptyUntil > now).map(([k]) => k);
 }
 
+// ---------------- 打怪：扣血、打倒、掉落 ----------------
+// p 是拿到傷害和經驗的玩家，hitBy 是實際出手的人或召喚物（給畫面用）
+function damageFoe(p, foe, isBoss, dmg, crit, skillId, hitBy) {
+  const now = Date.now();
+  foe.hp = Math.max(0, foe.hp - dmg);
+  foe.damage.set(p.name, (foe.damage.get(p.name) || 0) + dmg);
+  gainExp(p, dmg);
+  if (!isBoss) {
+    io.emit('mobHit', { mid: foe.id, id: hitBy || p.id, dmg, crit, hp: foe.hp, skill: skillId });
+    if (foe.hp > 0) return;
+    foe.alive = false;
+    foe.respawnAt = now + STATS.MOB_RESPAWN_MS;
+    io.emit('mob', mobState(foe));
+    gainExp(p, STATS.MOBS[foe.kind].exp);
+    pushChat({ system: true, text: `👏 ${p.name} 打倒了${STATS.MOBS[foe.kind].name}！`, t: now });
+    if (Math.random() < MOB_DROP_RATE) giveDecor(p);
+    return;
+  }
+  io.emit('monsterHit', { id: hitBy || p.id, dmg, crit, hp: monster.hp, skill: skillId });
+  if (monster.hp > 0) return;
+  monster.alive = false;
+  monster.respawnAt = now + RESPAWN_MS;
+  const top = [...monster.damage.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3);
+  io.emit('monster', monsterState());
+  // 有打到颱風的人都多拿一筆經驗，還會掉一件家具
+  players.forEach(q => { if (monster.damage.has(q.name)) { gainExp(q, 400); giveDecor(q); } });
+  const mins = Math.round(RESPAWN_MS / 60000);
+  pushChat({ system: true, text: `🎉 ${p.name} 打出最後一擊，颱風${STATS.MONSTER.name}被擊退了！${mins} 分鐘後會再生成。`, t: now });
+  if (top.length) pushChat({ system: true, text: '🏅 輸出排行：' + top.map(([n, d], i) => `${i + 1}. ${n} ${d}`).join('、'), t: now });
+}
+
+// ---------------- 召喚物 ----------------
+// 召喚師在前線叫出來的奇異生物：自己找最近的怪去打，有血量，被打倒就不會回來
+const summons = [];
+let summonSeq = 0;
+function summonState(sm) {
+  return { id: sm.id, kind: sm.kind, owner: sm.owner, ownerName: sm.ownerName, x: Math.round(sm.x), y: Math.round(sm.y), hp: sm.hp, maxHp: sm.maxHp };
+}
+function pickSummonKind() {
+  const list = Object.entries(STATS.SUMMONS);
+  let x = Math.random() * list.reduce((t, [, d]) => t + d.weight, 0);
+  for (const [k, d] of list) { x -= d.weight; if (x <= 0) return k; }
+  return list[0][0];
+}
+function removeSummon(sm, dead) {
+  const i = summons.indexOf(sm);
+  if (i < 0) return;
+  summons.splice(i, 1);
+  io.emit('summonGone', { id: sm.id, dead: !!dead });
+}
+function hurtSummon(sm, dmg, by) {
+  if (!summons.includes(sm)) return;
+  sm.hp = Math.max(0, sm.hp - dmg);
+  io.emit('summonHurt', { id: sm.id, hp: sm.hp, dmg });
+  if (sm.hp > 0) return;
+  removeSummon(sm, true);
+  pushChat({ system: true, text: `💫 ${sm.ownerName} 的${STATS.SUMMONS[sm.kind].name}被${by}打倒了`, t: Date.now() });
+}
+function tickSummon(sm, now) {
+  const owner = players.get(sm.owner);
+  if (!owner) return removeSummon(sm);
+  const def = STATS.SUMMONS[sm.kind];
+  // 找最近的敵人：小怪或颱風
+  let foe = null, isBoss = false, fd = 700;
+  mobs.forEach(m => { if (!m.alive) return; const d = dist(m.x, m.y, sm.x, sm.y); if (d < fd) { fd = d; foe = m; isBoss = false; } });
+  if (monster.alive) { const d = dist(monster.x, monster.y, sm.x, sm.y); if (d < fd) { fd = d; foe = monster; isBoss = true; } }
+  let tx, ty, stop;
+  if (foe) { tx = foe.x; ty = foe.y; stop = isBoss ? 110 : 60; }
+  else if (inField(owner)) { tx = owner.x + 50; ty = owner.y + 10; stop = 40; }
+  else { tx = sm.x; ty = sm.y; stop = 1e9; }
+  const d = dist(sm.x, sm.y, tx, ty);
+  if (d > stop) {
+    const step = Math.min(d - stop, def.speed * TICK / 1000);
+    sm.x = clamp(sm.x + (tx - sm.x) / d * step, Z.x1 - 3 * T, Z.x2 + 3 * T);
+    sm.y = clamp(sm.y + (ty - sm.y) / d * step, 32 * T, Z.y2 + T);
+  }
+  if (foe && d <= stop + 20 && now >= sm.nextHit) {
+    sm.nextHit = now + STATS.SUMMON_HIT_MS;
+    const weak = now < foe.weakUntil ? STATS.WEAKEN.dmgTaken : 1;
+    const crit = Math.random() < 0.1;
+    const dmg = Math.round(sm.atk * (0.8 + Math.random() * 0.4) * (crit ? 2 : 1) * weak);
+    damageFoe(owner, foe, isBoss, dmg, crit, 'pet', sm.id);
+  }
+}
+
+// ---------------- 室內設計：家具 ----------------
+// 打怪掉落的家具可以擺在總部室內，擺好的家具存在 data/decor.json，伺服器重開也還在
+const MOB_DROP_RATE = 0.5;
+const DATA_DIR = path.join(__dirname, 'data');
+const DECOR_FILE = path.join(DATA_DIR, 'decor.json');
+const decor = new Map(); // 'tx,ty' -> { k, by }
+try {
+  const saved = JSON.parse(fs.readFileSync(DECOR_FILE, 'utf8'));
+  Object.entries(saved).forEach(([key, d]) => { if (DECOR.DECOR[d.k]) decor.set(key, { k: d.k, by: String(d.by || '') }); });
+} catch (e) { /* 第一次啟動還沒有檔案 */ }
+let decorSaveTimer = null;
+function saveDecor() {
+  clearTimeout(decorSaveTimer);
+  decorSaveTimer = setTimeout(() => {
+    try {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+      fs.writeFileSync(DECOR_FILE, JSON.stringify(Object.fromEntries(decor)));
+    } catch (e) { console.error('家具存檔失敗', e.message); }
+  }, 1500);
+}
+const decorList = () => [...decor.entries()].map(([key, d]) => ({ key, k: d.k, by: d.by }));
+function giveDecor(p) {
+  const k = DECOR.roll();
+  p.furn[k] = (p.furn[k] || 0) + 1;
+  io.to(p.id).emit('decorGot', { k, furn: p.furn });
+  pushChat({ system: true, text: `🎁 ${p.name} 撿到了家具 ${DECOR.DECOR[k].icon} ${DECOR.DECOR[k].name}`, t: Date.now() });
+}
+// 這格能不能擺家具：要在室內、不能是牆或門、不能擋到東西
+function canDecorate(tx, ty) {
+  const room = MAP.roomAt((tx + 0.5) * T, (ty + 0.5) * T);
+  if (!room || room.id === 'front') return false;
+  const ch = MAP.tiles[ty] && MAP.tiles[ty][tx];
+  return !!ch && !MAP.BLOCKING.has(ch) && ch !== '=' && ch !== ',';
+}
+
 // 傳給別人的玩家資料（不含冷卻、增益這些內部狀態）
 function publicPlayer(p) {
-  const { cooldowns, buffs, cooking, vip, owned, cakeUntil, ...rest } = p;
+  const { cooldowns, buffs, cooking, vip, owned, cakeUntil, furn, ...rest } = p;
   return Object.assign(rest, publicStats(p), { hasVip: !!vip, cakeMs: Math.max(0, cakeUntil - Date.now()) });
 }
 
@@ -376,7 +506,7 @@ io.on('connection', (socket) => {
       x: MAP.spawn.x + (Math.random() - 0.5) * 60,
       y: MAP.spawn.y + (Math.random() - 0.5) * 40,
       dir: 1, moving: false,
-      inv: { noodle: 0, water: 0, veggie: 0 },
+      inv: Object.fromEntries(Object.keys(MAP.ITEMS).map(k => [k, 0])),
       // 重新連線時沿用上次的職業
       cls: STATS.CLASSES[data.cls] ? data.cls : 'staff', dead: false, cooldowns: {}, buffs: {},
       // 等級存在玩家自己的瀏覽器，伺服器重開也不會不見
@@ -385,6 +515,8 @@ io.on('connection', (socket) => {
       // 裝備也存在玩家自己的瀏覽器
       owned: [...new Set((Array.isArray(data.owned) ? data.owned : []).filter(id => GEAR.GEAR[id]))],
       equip: {}, cakeUntil: 0,
+      // 還沒擺出去的家具
+      furn: Object.fromEntries(Object.keys(DECOR.DECOR).map(k => [k, clamp(Math.floor(Number(data.furn && data.furn[k])) || 0, 0, 50)])),
     };
     if (data.equip && typeof data.equip === 'object') Object.keys(GEAR.SLOTS).forEach(slot => {
       const id = data.equip[slot];
@@ -395,8 +527,9 @@ io.on('connection', (socket) => {
     players.set(socket.id, p);
 
     growMonster();
-    ack({ ok: true, you: Object.assign(publicPlayer(p), { owned: p.owned }), players: [...players.values()].map(publicPlayer), history,
-      monster: monsterState(), mobs: mobs.map(mobState), emptyCrates: emptyCrates() });
+    ack({ ok: true, you: Object.assign(publicPlayer(p), { owned: p.owned, furn: p.furn }), players: [...players.values()].map(publicPlayer), history,
+      monster: monsterState(), mobs: mobs.map(mobState), emptyCrates: emptyCrates(),
+      summons: summons.map(summonState), decor: decorList() });
     socket.broadcast.emit('playerJoined', publicPlayer(p));
     pushChat({ system: true, text: `${name} 進入了防衛總部 🌀`, t: Date.now() });
   });
@@ -434,7 +567,9 @@ io.on('connection', (socket) => {
     c.hits = 0;
     c.emptyUntil = now + CRATE_RESTOCK_MS;
     const keys = Object.keys(MAP.ITEMS);
-    const item = MAP.CRATES[ci].item || keys[Math.floor(Math.random() * keys.length)];
+    const pile = MAP.CRATES[ci].item;
+    const pool = Array.isArray(pile) ? pile : pile ? [pile] : keys;
+    const item = pool[Math.floor(Math.random() * pool.length)];
     p.inv[item]++;
     io.emit('itemGot', { id: p.id, item });
     io.emit('crateEmpty', { tx, ty });
@@ -461,6 +596,12 @@ io.on('connection', (socket) => {
       if (dist(p.x, p.y, foe.x, foe.y) > skill.range) return ack({ ok: false, error: `離${foeName}太遠了` });
     }
     if (p.mp < skill.mp) return ack({ ok: false, error: '魔力不夠' });
+    let kind = null;
+    if (skill.summon) {
+      if (!inField(p)) return ack({ ok: false, error: '要在 🌀 颱風前線才能召喚' });
+      if (summons.filter(sm => sm.owner === p.id).length >= STATS.SUMMON_MAX) return ack({ ok: false, error: `最多同時召喚 ${STATS.SUMMON_MAX} 隻` });
+      kind = pickSummonKind();
+    }
     lastAction = now;
     p.cooldowns[skillId] = now + skill.cooldown;
     if (skill.mp) p.mp -= skill.mp;
@@ -469,24 +610,37 @@ io.on('connection', (socket) => {
     const fx = { id: p.id, skill: skillId, x: Math.round(p.x), y: Math.round(p.y), target: isBoss ? 'boss' : foe.id, targets: [] };
     const around = (r) => alivePlayers().filter(q => dist(q.x, q.y, p.x, p.y) <= r);
     let support = 0; // 補血、加防也算經驗
+    // 補血、加防的量跟著等級變強
+    const boost = STATS.boost(p.level), plusDef = STATS.bonusDef(p.level);
     if (skill.heal) {
+      const hp = Math.round(skill.heal.hp * boost), mp = Math.round(skill.heal.mp * boost);
       around(skill.heal.r).forEach(q => {
-        support += Math.min(skill.heal.hp, q.maxHp - q.hp);
-        q.hp = Math.min(q.maxHp, q.hp + skill.heal.hp);
-        q.mp = Math.min(q.maxMp, q.mp + skill.heal.mp);
+        support += Math.min(hp, q.maxHp - q.hp);
+        q.hp = Math.min(q.maxHp, q.hp + hp);
+        q.mp = Math.min(q.maxMp, q.mp + mp);
         fx.targets.push(q.id);
         if (q !== p) sendStats(q);
       });
     }
     if (skill.teamDef) {
       around(skill.teamDef.r).forEach(q => {
-        q.buffs.team = { v: skill.teamDef.v, until: now + skill.teamDef.ms };
+        q.buffs.team = { v: skill.teamDef.v + plusDef, until: now + skill.teamDef.ms };
         fx.targets.push(q.id);
         support += 15;
         if (q !== p) sendStats(q);
       });
     }
-    if (skill.selfDef) p.buffs.self = { v: skill.selfDef.v, until: now + skill.selfDef.ms };
+    if (skill.selfDef) p.buffs.self = { v: skill.selfDef.v + plusDef, until: now + skill.selfDef.ms };
+    if (skill.summon) {
+      const def = STATS.SUMMONS[kind];
+      const sm = { id: 's' + (++summonSeq), summon: true, kind, owner: p.id, ownerName: p.name,
+        x: p.x + (Math.random() < 0.5 ? -50 : 50), y: p.y + 10, hp: Math.round(def.hp * boost), maxHp: Math.round(def.hp * boost),
+        atk: Math.round(def.atk * boost), nextHit: now + 800 };
+      summons.push(sm);
+      io.emit('summon', summonState(sm));
+      pushChat({ system: true, text: `👽 ${p.name} 召喚了${def.name}！`, t: now });
+      support += 20;
+    }
     if (foe && skill.weaken) foe.weakUntil = now + skill.weaken;
     if (foe && skill.freeze) foe.frozenUntil = now + skill.freeze;
     if (support) gainExp(p, support);
@@ -498,31 +652,8 @@ io.on('connection', (socket) => {
     const crit = Math.random() < 0.12;
     const weak = now < foe.weakUntil ? STATS.WEAKEN.dmgTaken : 1;
     const dmg = Math.round(p.atk * skill.power * (0.6 + Math.random() * 0.6) * (crit ? 2.5 : 1) * weak);
-    foe.hp = Math.max(0, foe.hp - dmg);
-    foe.damage.set(p.name, (foe.damage.get(p.name) || 0) + dmg);
-    gainExp(p, dmg);
     ack({ ok: true, dmg });
-    if (!isBoss) {
-      io.emit('mobHit', { mid: foe.id, id: p.id, dmg, crit, hp: foe.hp, skill: skillId });
-      if (foe.hp > 0) return;
-      foe.alive = false;
-      foe.respawnAt = now + STATS.MOB_RESPAWN_MS;
-      io.emit('mob', mobState(foe));
-      gainExp(p, STATS.MOBS[foe.kind].exp);
-      pushChat({ system: true, text: `👏 ${p.name} 打倒了${foeName}！`, t: now });
-      return;
-    }
-    io.emit('monsterHit', { id: p.id, dmg, crit, hp: monster.hp, skill: skillId });
-    if (monster.hp > 0) return;
-    monster.alive = false;
-    monster.respawnAt = now + RESPAWN_MS;
-    const top = [...monster.damage.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3);
-    io.emit('monster', monsterState());
-    // 有打到颱風的人都多拿一筆經驗
-    players.forEach(q => { if (monster.damage.has(q.name)) gainExp(q, 400); });
-    const mins = Math.round(RESPAWN_MS / 60000);
-    pushChat({ system: true, text: `🎉 ${p.name} 打出最後一擊，颱風${STATS.MONSTER.name}被擊退了！${mins} 分鐘後會再生成。`, t: now });
-    if (top.length) pushChat({ system: true, text: '🏅 輸出排行：' + top.map(([n, d], i) => `${i + 1}. ${n} ${d}`).join('、'), t: now });
+    damageFoe(p, foe, isBoss, dmg, crit, skillId);
   });
 
   // 看某個人的個人資料（報名時的 VIP Pass）
@@ -600,6 +731,51 @@ io.on('connection', (socket) => {
     p.mp = Math.min(p.maxMp, p.mp + STATS.FOODS.water.mp);
     sendStats(p);
     ack({ ok: true, inv: p.inv, mp: STATS.FOODS.water.mp });
+  });
+
+  // 台灣珍奶、雞排：在哪裡都能吃，補血也補魔
+  socket.on('eat', (item, ack) => {
+    const p = players.get(socket.id);
+    if (typeof ack !== 'function') return;
+    const food = STATS.FOODS[item];
+    if (!p || p.dead || !food || !['bubbletea', 'chicken'].includes(item) || p.inv[item] < 1) return ack({ ok: false });
+    p.inv[item]--;
+    p.hp = Math.min(p.maxHp, p.hp + (food.hp || 0));
+    p.mp = Math.min(p.maxMp, p.mp + (food.mp || 0));
+    sendStats(p);
+    io.emit('itemGot', { id: p.id, item });
+    ack({ ok: true, inv: p.inv, food: food.name, hp: food.hp || 0, mp: food.mp || 0 });
+  });
+
+  // 擺家具：擺在自己腳下那一格
+  socket.on('placeDecor', (k, ack) => {
+    const p = players.get(socket.id);
+    if (typeof ack !== 'function' || !p) return;
+    if (!DECOR.DECOR[k] || !(p.furn[k] > 0)) return ack({ ok: false });
+    const tx = Math.floor(p.x / T), ty = Math.floor(p.y / T), key = tx + ',' + ty;
+    if (!canDecorate(tx, ty)) return ack({ ok: false, error: '家具只能擺在總部室內的地板上' });
+    if (decor.has(key)) return ack({ ok: false, error: '這格已經有家具了，往旁邊站一點' });
+    if (decor.size >= DECOR.MAX_PLACED) return ack({ ok: false, error: '總部已經塞滿家具了' });
+    p.furn[k]--;
+    decor.set(key, { k, by: p.name });
+    io.emit('decor', { key, k, by: p.name });
+    saveDecor();
+    ack({ ok: true, furn: p.furn });
+  });
+  // 收回自己擺的家具（要站在旁邊）
+  socket.on('pickDecor', (key, ack) => {
+    const p = players.get(socket.id);
+    if (typeof ack !== 'function' || !p) return;
+    const d = decor.get(String(key));
+    if (!d) return ack({ ok: false });
+    if (d.by !== p.name) return ack({ ok: false, error: `這是 ${d.by} 擺的` });
+    const [tx, ty] = String(key).split(',').map(Number);
+    if (dist(p.x, p.y, (tx + 0.5) * T, (ty + 0.5) * T) > 2.6 * T) return ack({ ok: false, error: '要走到家具旁邊才能收回' });
+    decor.delete(String(key));
+    p.furn[d.k] = (p.furn[d.k] || 0) + 1;
+    io.emit('decor', { key: String(key), removed: true });
+    saveDecor();
+    ack({ ok: true, furn: p.furn });
   });
 
   // 穿上 / 脫下裝備（id 是 null 就是脫掉）
@@ -748,6 +924,7 @@ io.on('connection', (socket) => {
     const p = players.get(socket.id);
     if (!p) return;
     drawRemove(socket.id);
+    summons.filter(sm => sm.owner === socket.id).forEach(sm => removeSummon(sm));
     players.delete(socket.id);
     io.emit('playerLeft', socket.id);
     pushChat({ system: true, text: `${p.name} 離開了總部`, t: Date.now() });

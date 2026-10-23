@@ -4,6 +4,11 @@
   const AV = HQ_AVATAR;
   const ST = HQ_STATS;
   const GR = HQ_GEAR;
+  const DC = HQ_DECOR;
+  // 近距離的普攻：打到時角色往前撲一下
+  const MELEE = ['strike', 'power', 'syringe', 'punch', 'kick'];
+  // 會飛過去的攻擊：特效打到才跳數字（毫秒）
+  const HIT_DELAY = { arrow: 240, barbell: 330, skate: 950, shot: 260, orb: 300, ray: 120 };
   // 人物貼圖比 64x80 大一圈，翅膀、氣球、帽子才畫得下；(16,32) 是人物框的左上角，腳底在 y=108
   const FRAME = { w: 96, h: 112, ox: 16, oy: 32 };
   const AV_ORIGIN_Y = (FRAME.oy + 76) / FRAME.h;
@@ -77,16 +82,18 @@
   // 拿到的裝備、身上穿的裝備也存在瀏覽器
   let myOwned = savedJson('hq-owned', []);
   let myEquip = savedJson('hq-equip', {});
+  let myFurn = savedJson('hq-furn', {});
   function doJoin() {
     const vip = savedJson('hq-vip', null);
     const data = Object.assign({}, profile, { level: Number(saved('hq-level')) || 1, exp: Number(saved('hq-exp')) || 0, vip,
-      owned: myOwned, equip: myEquip });
+      owned: myOwned, equip: myEquip, furn: myFurn });
     socket.emit('join', data, (res) => {
       if (!res.ok) { $('join-error').textContent = res.error; return; }
       joined = true;
       me = res.you;
       myOwned = res.you.owned || [];
       myEquip = res.you.equip || {};
+      myFurn = res.you.furn || {};
       $('join').hidden = true;
       $('hud').hidden = false;
       $('messages').innerHTML = '';
@@ -139,6 +146,18 @@
     if (modalKind === 'gear') openGear();
   });
   socket.on('cake', (c) => scene && scene.onCake(c.id, c.ms));
+  socket.on('summon', (sm) => scene && scene.onSummon(sm));
+  socket.on('summonsMove', (list) => scene && scene.moveSummons(list));
+  socket.on('summonHurt', (h) => scene && scene.onSummonHurt(h));
+  socket.on('summonGone', (g) => scene && scene.onSummonGone(g));
+  socket.on('decor', (d) => scene && scene.setDecor(d));
+  socket.on('decorGot', (g) => {
+    myFurn = g.furn;
+    store('hq-furn', myFurn);
+    const it = DC.DECOR[g.k];
+    if (it) toast(`🎁 撿到家具 ${it.icon} ${it.name}！按右上角 🪑 家具 擺到總部裡`);
+    if (modalKind === 'furn') openFurn();
+  });
   socket.on('drawState', (st) => DRAW.onState(st));
   socket.on('drawLog', (l) => DRAW.log(l));
   socket.on('drawStroke', (st) => DRAW.paint(st));
@@ -217,17 +236,21 @@
     noodle: { desc: '到休息區的煮泡麵區，站在爐台旁煮來吃，補 35 血。', use: '去煮泡麵區' },
     water: { desc: '喝了補 25 魔力，在哪裡都能喝。', use: '喝一瓶' },
     veggie: { desc: '煮泡麵時會自動加進去，變成蔬菜泡麵，補 65 血。', use: null },
+    bubbletea: { desc: `全糖去冰！補 ${ST.FOODS.bubbletea.hp} 血、${ST.FOODS.bubbletea.mp} 魔力，在哪裡都能喝。`, use: '喝一杯' },
+    chicken: { desc: `大大一片、不要切不要辣。補 ${ST.FOODS.chicken.hp} 血、${ST.FOODS.chicken.mp} 魔力，在哪裡都能吃。`, use: '吃一片' },
   };
+  const EDIBLE = ['water', 'bubbletea', 'chicken'];
   let myInv = {};
   function renderInventory(inv) {
     myInv = inv || {};
     const box = $('inventory');
     box.innerHTML = '';
     Object.entries(MAP.ITEMS).forEach(([k, it]) => {
-      // 礦泉水可以直接點來喝
-      const e = el(k === 'water' ? 'button' : 'span', 'inv-item', `${it.icon} ${myInv[k] || 0}`);
-      e.title = k === 'water' ? '點一下喝水，補魔力' : it.name;
-      if (k === 'water') e.onclick = drink;
+      // 礦泉水、珍奶、雞排可以直接點來吃
+      const can = EDIBLE.includes(k);
+      const e = el(can ? 'button' : 'span', 'inv-item', `${it.icon} ${myInv[k] || 0}`);
+      e.title = can ? `點一下${ITEM_INFO[k].use}` : it.name;
+      if (can) e.onclick = () => eat(k);
       box.appendChild(e);
     });
     const bag = el('button', 'inv-item bag-btn', '🎒 背包');
@@ -236,6 +259,9 @@
     const gear = el('button', 'inv-item bag-btn', '👗 裝備');
     gear.onclick = openGear;
     box.appendChild(gear);
+    const furn = el('button', 'inv-item bag-btn', '🪑 家具');
+    furn.onclick = openFurn;
+    box.appendChild(furn);
     if (modalKind === 'bag') openBag();
   }
   function openBag() {
@@ -251,7 +277,7 @@
         const b = el('button', 'primary small', ITEM_INFO[k].use);
         b.disabled = !myInv[k];
         b.onclick = () => {
-          if (k === 'water') drink();
+          if (EDIBLE.includes(k)) eat(k);
           else { closeModal(); toast('煮泡麵區在休息區的右下角，站到爐台旁按空白鍵'); }
         };
         row.appendChild(b);
@@ -260,6 +286,15 @@
     });
     list.appendChild(el('p', 'modal-hint', '到 📦 物資倉庫敲箱子可以拿到更多物資，箱子被拿光後過一陣子會補貨。'));
     openModal('bag', '🎒 背包', list);
+  }
+  function eat(k) {
+    if (k === 'water') return drink();
+    if (!myInv[k]) { toast(`沒有${MAP.ITEMS[k].name}了，去物資倉庫敲「台灣小吃」箱子`); return; }
+    socket.emit('eat', k, (res) => {
+      if (!res || !res.ok) return;
+      renderInventory(res.inv);
+      toast(`${MAP.ITEMS[k].icon} ${res.food}：血量 +${res.hp}、魔力 +${res.mp}`);
+    });
   }
   function drink() {
     if (!myInv.water) { toast('沒有礦泉水，去物資倉庫敲箱子'); return; }
@@ -339,6 +374,60 @@
     let best = -1;
     Object.values(equip || {}).forEach(id => { const g = GR.GEAR[id]; if (g) best = Math.max(best, order.indexOf(g.rarity)); });
     return best >= 1 ? order[best] : null;
+  }
+
+  // ---------------- 家具（室內設計） ----------------
+  function decorPic(k) {
+    const c = document.createElement('canvas');
+    c.width = DC.WIDTH * 2; c.height = DC.HEIGHT * 2;
+    const ctx = c.getContext('2d'); ctx.scale(2, 2); DC.drawDecor(ctx, k);
+    c.className = 'furn-pic';
+    return c;
+  }
+  function openFurn() {
+    const box = el('div', 'furn');
+    box.appendChild(el('p', 'modal-hint', '打倒野外的小怪有機會掉家具，打退颱風每個有出力的人都拿一件。站在總部室內的地板上按「擺在腳下」，大家都看得到！'));
+    const grid = el('div', 'gear-grid');
+    Object.entries(DC.DECOR).forEach(([k, d]) => {
+      const n = myFurn[k] || 0;
+      const cell = el('div', 'gear-item furn-item' + (n ? '' : ' locked'));
+      cell.appendChild(decorPic(k));
+      cell.appendChild(el('span', 'gear-name', `${d.name} × ${n}`));
+      const b = el('button', 'primary small', '擺在腳下');
+      b.disabled = !n;
+      b.onclick = () => {
+        if (scene && scene.me) socket.emit('move', { x: Math.round(scene.me.x), y: Math.round(scene.me.y), dir: scene.me.dir, moving: false });
+        socket.emit('placeDecor', k, (res) => {
+          if (!res || !res.ok) { if (res && res.error) toast(res.error); return; }
+          myFurn = res.furn; store('hq-furn', myFurn);
+          closeModal(); toast(`擺好了 ${d.icon} ${d.name}`);
+        });
+      };
+      cell.appendChild(b);
+      grid.appendChild(cell);
+    });
+    box.appendChild(grid);
+    // 附近自己擺的家具可以收回來
+    const mine = scene ? scene.nearbyDecor() : [];
+    if (mine.length) {
+      box.appendChild(el('h3', 'gear-h', '旁邊你擺的家具'));
+      const list = el('div', 'modal-list');
+      mine.forEach(({ key, k }) => {
+        const row = el('div', 'modal-row');
+        row.appendChild(el('div', 'modal-icon', DC.DECOR[k].icon));
+        row.appendChild(el('div', 'modal-info', DC.DECOR[k].name));
+        const b = el('button', 'hud-btn tiny', '收回');
+        b.onclick = () => socket.emit('pickDecor', key, (res) => {
+          if (!res || !res.ok) { if (res && res.error) toast(res.error); return; }
+          myFurn = res.furn; store('hq-furn', myFurn); openFurn();
+        });
+        row.appendChild(b);
+        list.appendChild(row);
+      });
+      box.appendChild(list);
+    }
+    openModal('furn', '🪑 家具', box);
+    $('modal').classList.add('wide');
   }
 
   // ---------------- 冰箱（隱藏的蛋糕） ----------------
@@ -522,6 +611,7 @@
   let myStats = null;
   const myCls = () => (myStats && ST.CLASSES[myStats.cls] ? myStats.cls : 'staff');
   const special = () => ST.CLASSES[myCls()].skills[1];
+  const basic = () => ST.CLASSES[myCls()].skills[0];
   const cooldowns = {}; // skillId -> 冷卻結束的時間（performance.now）
   function renderStats(st) {
     const clsChanged = !myStats || myStats.cls !== st.cls;
@@ -571,6 +661,14 @@
       inf.appendChild(el('span', 'mono tag', `${i ? 'K' : '空白鍵'} · ${sk.mp} MP · 冷卻 ${sk.cooldown / 1000} 秒` +
         (sk.support ? '' : ` · 射程 ${sk.range}`)));
       inf.appendChild(el('p', null, sk.desc));
+      const lv = myStats ? myStats.level : 1, k = ST.boost(lv), plus = ST.bonusDef(lv);
+      const now = [];
+      if (sk.power && myStats) now.push(`傷害約 ${Math.round(myStats.atk * sk.power * 0.6)}～${Math.round(myStats.atk * sk.power * 1.2)}`);
+      if (sk.heal) now.push(`補 ${Math.round(sk.heal.hp * k)} 血、${Math.round(sk.heal.mp * k)} 魔力`);
+      if (sk.teamDef) now.push(`隊友防禦 +${sk.teamDef.v + plus}`);
+      if (sk.selfDef) now.push(`自己防禦 +${sk.selfDef.v + plus}`);
+      if (sk.summon) now.push(`召喚物攻擊和血量 ×${k.toFixed(2)}`);
+      if (now.length) inf.appendChild(el('p', 'mono', `Lv.${lv} 目前效果：${now.join('、')}`));
       row.appendChild(inf);
       const b = el('button', 'primary small', '使用');
       b.onclick = () => { closeModal(); if (scene) scene.useSkill(id); };
@@ -1008,6 +1106,14 @@
       ctx.beginPath(); ctx.moveTo(18, 9); ctx.lineTo(27, 12); ctx.quadraticCurveTo(27, 26, 18, 31); ctx.closePath();
       ctx.fillStyle = '#86a8dd'; ctx.fill();
     }),
+    // 南丁格爾的大針筒
+    syringe: () => fxCanvas(56, 20, 43, (ctx, r) => {
+      CR.rect(ctx, 10, 5, 30, 10, r, 0.5); CR.fill(ctx, '#e8f4ff', r, null); CR.stroke(ctx, r, 2);
+      ctx.fillStyle = 'rgba(232,56,79,0.7)'; ctx.fillRect(22, 7, 17, 6);
+      [16, 22, 28, 34].forEach(x => CR.line(ctx, x, 5, x, 9, r, 1, CR.INK, 0.2));
+      CR.line(ctx, 2, 10, 10, 10, r, 2.4, '#9aa3b5', 0.2); CR.line(ctx, 2, 6, 2, 14, r, 2.4, CR.INK, 0.2);
+      CR.line(ctx, 40, 10, 54, 10, r, 1.4, '#9aa3b5', 0.1);
+    }),
     // 隱藏蛋糕：兩層草莓鮮奶油蛋糕＋蠟燭（畫成兩倍大，顯示時縮小）
     cake: () => fxCanvas(96, 96, 41, (ctx, r) => {
       ctx.scale(2, 2);
@@ -1267,7 +1373,8 @@
       const r = CR.rng(i + 99);
       const cx = ((cr.x1 + cr.x2 + 1) / 2) * T, cy = ((cr.y1 + cr.y2 + 1) / 2) * T;
       CR.blob(ctx, cx, cy, 17, 17, r, 0.06); CR.fill(ctx, '#fafaf7', r, null); CR.stroke(ctx, r, 2.4);
-      ctx.fillText(cr.item ? MAP.ITEMS[cr.item].icon : '❓', cx, cy + 1);
+      ctx.font = cr.icon ? '15px sans-serif' : '22px sans-serif';
+      ctx.fillText(cr.icon || (cr.item ? MAP.ITEMS[cr.item].icon : '❓'), cx, cy + 1);
     });
     ctx.textBaseline = 'alphabetic';
     return c;
@@ -1337,6 +1444,21 @@
       this.textures.addCanvas('crate-empty', empty);
       this.textures.addCanvas('bolt', drawBolt());
       Object.entries(FX).forEach(([k, f]) => this.textures.addCanvas('fx-' + k, f()));
+      // 召喚物、家具（畫成兩倍大）
+      Object.keys(ST.SUMMONS).forEach(k => {
+        const c = document.createElement('canvas');
+        c.width = HQ_CREATURES.WIDTH * 2; c.height = HQ_CREATURES.HEIGHT * 2;
+        const ctx = c.getContext('2d'); ctx.scale(2, 2); HQ_CREATURES.drawCreature(ctx, k);
+        this.textures.addCanvas('cr-' + k, c);
+      });
+      Object.keys(DC.DECOR).forEach(k => {
+        const c = document.createElement('canvas');
+        c.width = DC.WIDTH * 2; c.height = DC.HEIGHT * 2;
+        const ctx = c.getContext('2d'); ctx.scale(2, 2); DC.drawDecor(ctx, k);
+        this.textures.addCanvas('dc-' + k, c);
+      });
+      this.summons = new Map();
+      this.decor = new Map();
       // 大閃電（落雷用）
       const big = drawBolt();
       this.textures.addCanvas('bolt-big', big);
@@ -1496,11 +1618,12 @@
       img.preFX.clear();
       const rar = topRarity(c.look.equip);
       if (!rar) return;
+      // 光一亮一暗慢慢呼吸，最亮的時候也只是淡淡一圈，不會刺眼
       img.preFX.setPadding(8);
-      const glow = img.preFX.addGlow(rar === 'SSR' ? 0xffc8f0 : 0xffd23f, 1, 0, false, 0.1, 10);
-      c.glowTween = this.tweens.add({ targets: glow, outerStrength: rar === 'SSR' ? 3 : 2.4, duration: rar === 'SSR' ? 1400 : 900,
+      const glow = img.preFX.addGlow(rar === 'SSR' ? 0xffd6f4 : 0xffdf80, 0.2, 0, false, 0.1, 8);
+      c.glowTween = this.tweens.add({ targets: glow, outerStrength: rar === 'SSR' ? 1.5 : 1.3, duration: rar === 'SSR' ? 1800 : 1300,
         yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-      if (rar === 'SSR') { c.glowFx = glow; img.preFX.addShine(0.35, 0.25, 4); }
+      if (rar === 'SSR') { c.glowFx = glow; img.preFX.addShine(0.18, 0.18, 6); }
     }
 
     // 拿蛋糕：手上捧著蛋糕，ms 是 0 就是放下
@@ -1628,6 +1751,12 @@
       this.mobs.clear();
       (res.mobs || []).forEach(m => this.setMob(m));
       renderInventory(res.you.inv);
+      this.summons.forEach(sm => sm.destroy());
+      this.summons.clear();
+      (res.summons || []).forEach(sm => this.onSummon(sm));
+      this.decor.forEach(d => d.destroy());
+      this.decor.clear();
+      (res.decor || []).forEach(d => this.setDecor(d));
       renderStats(res.you);
       this.emptyCrates.forEach(i => i.destroy());
       this.emptyCrates.clear();
@@ -1733,9 +1862,12 @@
       this.tweens.add({ targets: t, y: y - 50, alpha: 0, delay: 450, duration: 600, onComplete: () => t.destroy() });
     }
 
+    // 出手的是玩家還是召喚物
+    actorOf(id) { return (me && id === me.id ? this.me : this.remotes.get(id)) || this.summons.get(id) || null; }
+
     onMonsterHit(m) {
       // 弓箭、槓鈴、溜冰要等特效打到才跳數字
-      const delay = { arrow: 240, barbell: 330, skate: 950 }[m.skill] || 0;
+      const delay = HIT_DELAY[m.skill] || 0;
       if (delay) { this.time.delayedCall(delay, () => this.showMonsterHit(m)); return; }
       this.showMonsterHit(m);
     }
@@ -1743,8 +1875,8 @@
     showMonsterHit(m) {
       this.mState.hp = Math.min(this.mState.hp, m.hp);
       this.drawMonsterBar();
-      const who = me && m.id === me.id ? this.me : this.remotes.get(m.id);
-      if (who && (m.skill === 'strike' || m.skill === 'power')) this.lunge(who, this.monster.x);
+      const who = this.actorOf(m.id);
+      if (who && (MELEE.includes(m.skill) || m.skill === 'pet')) this.lunge(who, this.monster.x);
       if (m.skill === 'power' || m.skill === 'barbell') this.cameras.main.shake(200, m.skill === 'barbell' ? 0.012 : 0.006);
       // 被打：閃白、換成 >< 臉、往後縮一下
       this.mBody.setTintFill(0xffffff);
@@ -1847,7 +1979,7 @@
       const sk = ST.SKILLS[fx.skill];
       const foe = this.foePos(fx.target);
       const mx = foe.x, my = foe.mid;
-      if (fx.skill !== 'strike') this.floatText(who.x, who.y - 130, `${sk.icon} ${sk.name}！`, '#ffd23f', 20);
+      if (!sk.basic) this.floatText(who.x, who.y - 130, `${sk.icon} ${sk.name}！`, '#ffd23f', 20);
       const ring = (r, color) => {
         const g = this.add.graphics({ x: who.x, y: who.y }).setDepth(-4);
         g.fillStyle(color, 0.25); g.fillEllipse(0, 0, r * 2, r * 1.4);
@@ -1855,7 +1987,46 @@
         this.tweens.add({ targets: g, scale: { from: 0.2, to: 1 }, alpha: { from: 1, to: 0 }, duration: 800,
           ease: 'Quad.out', onComplete: () => g.destroy() });
       };
-      if (fx.skill === 'prophecy') {
+      // 飛向怪物的東西：tex 貼圖，ms 飛行時間，打到後炸一圈
+      const fly = (tex, ms, tint, opts = {}) => {
+        const sx = who.x + (mx < who.x ? -14 : 14), sy = who.y - 44;
+        const p = this.add.image(sx, sy, tex).setDepth(2050).setScale(opts.scale || 1).setRotation(Math.atan2(my - sy, mx - sx));
+        if (opts.tint) p.setTint(opts.tint);
+        this.tweens.add({ targets: p, x: mx, y: my, duration: ms, ease: 'Linear', onComplete: () => { p.destroy(); this.burst(mx, my, 6, tint, 45); } });
+      };
+      if (fx.skill === 'shot') {
+        // 拉弓：人往後仰一下再射出去
+        const dir = mx < who.x ? -1 : 1;
+        who.body_.setFlipX(dir === -1);
+        this.tweens.add({ targets: who.body_, x: -dir * 5, duration: 90, yoyo: true });
+        this.time.delayedCall(60, () => fly('fx-arrow', 200, 0xff6b81, { scale: 0.8 }));
+      } else if (fx.skill === 'orb') {
+        fly('fx-crystal', 260, 0x9b7be8, { scale: 0.32 });
+      } else if (fx.skill === 'ray') {
+        const beam = this.add.graphics().setDepth(2040);
+        beam.lineStyle(9, 0x7be08f, 0.55); beam.lineBetween(who.x, who.y - 44, mx, my);
+        beam.lineStyle(3, 0xffffff, 0.9); beam.lineBetween(who.x, who.y - 44, mx, my);
+        this.tweens.add({ targets: beam, alpha: 0, duration: 260, onComplete: () => beam.destroy() });
+        this.time.delayedCall(100, () => this.burst(mx, my, 6, 0x7be08f, 40));
+      } else if (fx.skill === 'syringe') {
+        // 拿針筒往前刺
+        const dir = mx < who.x ? -1 : 1;
+        const n = this.add.image(who.x + dir * 18, who.y - 36, 'fx-syringe').setDepth(2050).setFlipX(dir === -1);
+        this.tweens.add({ targets: n, x: who.x + dir * 44, duration: 110, yoyo: true, hold: 120, onComplete: () => n.destroy() });
+        this.time.delayedCall(110, () => this.floatText(mx, my - 40, '💉', '#ffffff', 22));
+      } else if (fx.skill === 'punch') {
+        this.time.delayedCall(70, () => { this.burst(mx, my, 8, 0xffb020, 50); this.floatText(mx, my - 40, '碰！', '#ffd23f', 22); });
+        this.cameras.main.shake(90, 0.003);
+      } else if (fx.skill === 'kick') {
+        // 冰刀劃過的一道冰痕
+        const dir = mx < who.x ? -1 : 1;
+        const arc = this.add.graphics({ x: mx, y: my }).setDepth(2045);
+        arc.lineStyle(8, 0xbfe6ff, 0.8); arc.beginPath(); arc.arc(0, 0, 34, dir > 0 ? -2.4 : -0.7, dir > 0 ? 0.6 : 2.4); arc.strokePath();
+        arc.lineStyle(3, 0xffffff, 1); arc.beginPath(); arc.arc(0, 0, 34, dir > 0 ? -2.4 : -0.7, dir > 0 ? 0.6 : 2.4); arc.strokePath();
+        this.tweens.add({ targets: arc, alpha: 0, scale: 1.3, duration: 320, onComplete: () => arc.destroy() });
+      } else if (fx.skill === 'summon') {
+        ring(70, 0x7be08f);
+      } else if (fx.skill === 'prophecy') {
         const c = this.add.image(who.x, who.y - 90, 'fx-crystal').setDepth(2050).setScale(0.3);
         this.tweens.add({ targets: c, scale: 1, y: who.y - 150, duration: 400, ease: 'Back.out' });
         this.tweens.add({ targets: c, alpha: 0, delay: 1100, duration: 400, onComplete: () => c.destroy() });
@@ -1995,10 +2166,11 @@
 
     // 世界座標 (x, y) 上可以互動的東西，夠近才算
     actionAt(x, y) {
+      const reach = Math.max(130, ST.SKILLS[basic()].range);
       if (this.mState.alive && this.monster.visible && Math.hypot(x - this.monster.x, y - (this.monster.y - 70)) < 110 &&
-        Math.hypot(this.me.x - this.monster.x, this.me.y - this.monster.y) < 130) return { type: 'attack', target: 'boss' };
+        Math.hypot(this.me.x - this.monster.x, this.me.y - this.monster.y) < reach) return { type: 'attack', target: 'boss' };
       for (const m of this.mobs.values()) {
-        if (m.state.alive && Math.hypot(x - m.x, y - (m.y - 40)) < 50 && Math.hypot(this.me.x - m.x, this.me.y - m.y) < 130) {
+        if (m.state.alive && Math.hypot(x - m.x, y - (m.y - 40)) < 50 && Math.hypot(this.me.x - m.x, this.me.y - m.y) < reach) {
           return { type: 'attack', target: m.state.id };
         }
       }
@@ -2017,7 +2189,7 @@
     // 自己身邊可以互動的東西（給按鈕和空白鍵用）
     nearbyAction() {
       if (!this.me) return null;
-      const foe = this.nearestFoe(130);
+      const foe = this.nearestFoe(Math.max(130, ST.SKILLS[basic()].range));
       if (foe) return { type: 'attack', target: foe.id, name: foe.name };
       const cx = Math.floor(this.me.x / T), cy = Math.floor(this.me.y / T);
       let best = null, bd = Infinity;
@@ -2044,7 +2216,7 @@
       // 先把目前位置告訴伺服器，它才會判斷你夠近
       socket.emit('move', { x: Math.round(this.me.x), y: Math.round(this.me.y), dir: this.me.dir, moving: false });
       if (act.type === 'attack') {
-        this.castSkill(act.skill || 'strike', act.target);
+        this.castSkill(act.skill || basic(), act.target);
       } else if (act.type === 'mentor') {
         openMentor();
       } else if (act.type === 'fridge') {
@@ -2165,14 +2337,14 @@
     }
 
     onMobHit(h) {
-      const delay = { arrow: 240, barbell: 330, skate: 950 }[h.skill] || 0;
+      const delay = HIT_DELAY[h.skill] || 0;
       const show = () => {
         const m = this.mobs.get(h.mid);
         if (!m) return;
         m.state.hp = Math.min(m.state.hp, h.hp);
         this.drawMobBar(m);
-        const who = me && h.id === me.id ? this.me : this.remotes.get(h.id);
-        if (who && (h.skill === 'strike' || h.skill === 'power')) this.lunge(who, m.x);
+        const who = this.actorOf(h.id);
+        if (who && (MELEE.includes(h.skill) || h.skill === 'pet')) this.lunge(who, m.x);
         m.body_.setTintFill(0xffffff);
         this.time.delayedCall(80, () => this.refreshFoeTint(h.mid));
         this.tweens.add({ targets: m.body_, x: (who && m.x < who.x ? -8 : 8), duration: 70, yoyo: true });
@@ -2183,7 +2355,7 @@
 
     onMobAttack(a) {
       const m = this.mobs.get(a.mid);
-      const who = me && a.id === me.id ? this.me : this.remotes.get(a.id);
+      const who = this.actorOf(a.id);
       if (!m || !who) return;
       // 往目標撲一下，頭上冒出台詞
       const dir = who.x < m.x ? -1 : 1;
@@ -2196,6 +2368,77 @@
       const say = m.say;
       this.time.delayedCall(1600, () => { if (m.say === say) { say.destroy(); m.say = null; } });
       this.time.delayedCall(450, () => this.burst(who.x, who.y - 40, 6, 0xff6a13, 40));
+    }
+
+    // ---------- 召喚物 ----------
+    onSummon(st) {
+      if (this.summons.has(st.id)) return;
+      const def = ST.SUMMONS[st.kind];
+      const body = this.add.image(0, 0, 'cr-' + st.kind).setScale(0.62).setOrigin(0.5, 76 / 80);
+      const tag = this.add.text(0, 8, `${st.ownerName}的${def.name}`, {
+        fontSize: '12px', fontStyle: 'bold', color: '#7be08f', fontFamily: FONT,
+        backgroundColor: 'rgba(19,26,40,0.8)', padding: { x: 5, y: 1 },
+      }).setOrigin(0.5, 0);
+      const bar = this.add.graphics();
+      const c = this.add.container(st.x, st.y, [body, bar, tag]);
+      c.body_ = body; c.bar = bar; c.summon_ = true; c.state = st;
+      c.tx = st.x; c.ty = st.y; c.dir = 1; c.phase = Math.random() * 6;
+      this.summons.set(st.id, c);
+      this.drawSummonBar(c);
+      c.setScale(0.1);
+      this.tweens.add({ targets: c, scale: 1, duration: 450, ease: 'Back.out' });
+      this.burst(st.x, st.y - 30, 12, 0x7be08f, 70);
+    }
+    drawSummonBar(c) {
+      const w = 40, ratio = c.state.maxHp ? c.state.hp / c.state.maxHp : 0;
+      c.bar.clear();
+      c.bar.fillStyle(0x131a28, 0.85); c.bar.fillRoundedRect(-w / 2 - 2, -56, w + 4, 7, 3);
+      c.bar.fillStyle(0x7be08f, 1); c.bar.fillRoundedRect(-w / 2, -54.5, Math.max(2, w * ratio), 4, 2);
+    }
+    moveSummons(list) {
+      list.forEach(([id, x, y]) => {
+        const c = this.summons.get(id);
+        if (!c) return;
+        if (Math.abs(x - c.tx) > 1) c.body_.setFlipX(x > c.tx);
+        c.tx = x; c.ty = y;
+      });
+    }
+    onSummonHurt(h) {
+      const c = this.summons.get(h.id);
+      if (!c) return;
+      c.state.hp = h.hp;
+      this.drawSummonBar(c);
+      c.body_.setTintFill(0xffffff);
+      this.time.delayedCall(90, () => c.body_ && c.body_.clearTint());
+      this.floatText(c.x, c.y - 56, '-' + h.dmg, '#ff6a13', 18);
+    }
+    onSummonGone(g) {
+      const c = this.summons.get(g.id);
+      if (!c) return;
+      this.summons.delete(g.id);
+      this.tweens.add({ targets: c, alpha: 0, angle: g.dead ? 90 : 0, y: c.y - 20, duration: 500, onComplete: () => c.destroy() });
+      if (g.dead) this.burst(c.x, c.y - 20, 8, 0x9aa3b5, 50);
+    }
+
+    // ---------- 家具 ----------
+    setDecor(d) {
+      const old = this.decor.get(d.key);
+      if (old) { old.destroy(); this.decor.delete(d.key); }
+      if (d.removed || !DC.DECOR[d.k]) return;
+      const [tx, ty] = d.key.split(',').map(Number);
+      const img = this.add.image((tx + 0.5) * T, (ty + 1) * T, 'dc-' + d.k).setScale(0.5).setOrigin(0.5, 60 / 64);
+      img.setDepth(DC.DECOR[d.k].flat ? -8 : (ty + 1) * T - 6);
+      img.k = d.k; img.by = d.by;
+      this.decor.set(d.key, img);
+      if (old === undefined && this.me) this.tweens.add({ targets: img, scale: { from: 0.2, to: 0.5 }, duration: 300, ease: 'Back.out' });
+    }
+    // 自己旁邊、自己擺的家具
+    nearbyDecor() {
+      if (!this.me || !me) return [];
+      return [...this.decor.entries()].filter(([key, img]) => {
+        const [tx, ty] = key.split(',').map(Number);
+        return img.by === me.name && Math.hypot(this.me.x - (tx + 0.5) * T, this.me.y - (ty + 0.5) * T) < 2.6 * T;
+      }).map(([key, img]) => ({ key, k: img.k }));
     }
 
     onLevelUp(l) {
@@ -2215,7 +2458,7 @@
     castSkill(id, target) {
       const sk = ST.SKILLS[id];
       const left = (cooldowns[id] || 0) - performance.now();
-      if (left > 0) { if (id !== 'strike') toast(`${sk.name}還在冷卻，${Math.ceil(left / 1000)} 秒後可以再用`); return; }
+      if (left > 0) { if (!sk.basic) toast(`${sk.name}還在冷卻，${Math.ceil(left / 1000)} 秒後可以再用`); return; }
       if (myStats && myStats.mp < sk.mp) { toast(`魔力不夠，${sk.name}要 ${sk.mp} 點，喝礦泉水可以補`); return; }
       socket.emit('attack', id, target || 'boss', (res) => {
         if (res && res.ok) cooldowns[id] = performance.now() + sk.cooldown;
@@ -2225,7 +2468,7 @@
 
     lunge(who, towardX) {
       const dir = towardX < who.x ? -1 : 1;
-      who.dir = dir; who.body_.setFlipX(dir === -1);
+      who.dir = dir; who.body_.setFlipX(who.summon_ ? dir === 1 : dir === -1);
       this.tweens.add({ targets: who.body_, x: dir * 10, angle: dir * 12, duration: 70, yoyo: true });
     }
 
@@ -2310,6 +2553,14 @@
         m.setDepth(m.y);
       });
 
+      // 召喚物：平滑移動、一跳一跳
+      this.summons.forEach(c => {
+        c.x += (c.tx - c.x) * Math.min(1, dt * 8);
+        c.y += (c.ty - c.y) * Math.min(1, dt * 8);
+        c.body_.y = -Math.abs(Math.sin(time / 140 + c.phase)) * 4;
+        c.setDepth(c.y);
+      });
+
       // 其他玩家：平滑移動
       this.remotes.forEach(r => {
         r.x += (r.tx - r.x) * Math.min(1, dt * 12);
@@ -2354,7 +2605,7 @@
       const all0 = [this.me, ...this.remotes.values()];
       const near = this.nearbyAction();
       const LABELS = { crate: '🔨 敲箱子', cook: '🍜 煮泡麵', mentor: '💬 找沈理員轉職' };
-      const label = !near || this.isDead() ? '' : near.type === 'attack' ? `👊 攻擊${near.name}` : LABELS[near.type];
+      const label = !near || this.isDead() ? '' : near.type === 'attack' ? `${ST.SKILLS[basic()].icon} 攻擊${near.name}` : LABELS[near.type];
       if (label !== this.actionLabel) {
         this.actionLabel = label;
         $('action-btn').hidden = !label;
@@ -2385,7 +2636,7 @@
         const hat = now < c.hatUntil;
         if (hat && !c.hat) { c.hat = this.add.image(4, -60, 'fx-partyhat').setScale(0.5).setOrigin(0.5, 0.9).setAngle(12); c.add(c.hat); }
         else if (!hat && c.hat) { c.hat.destroy(); c.hat = null; }
-        const up = c.hat ? -22 : 0;
+        const up = (c.hat ? -22 : 0) + (c.look && c.look.equip && c.look.equip.head ? -12 : 0);
         if (c.tag.y !== -84 + up) { c.tag.y = -84 + up; c.bar.y = up; }
         if (c.glowFx) c.glowFx.color = Phaser.Display.Color.HSVToRGB((time / 4000) % 1, 0.35, 1).color;
       });

@@ -195,7 +195,7 @@ function tickMob(m, now) {
     io.emit('mob', mobState(m));
     return;
   }
-  if (now < m.frozenUntil) return;
+  if (now < m.frozenUntil || now < (m.stunUntil || 0)) return;
   // 追最近的人（只追在前線的），召喚物也會被追
   let prey = null, pd = 280;
   fieldPlayers().concat(summons).forEach(p => { const d = dist(p.x, p.y, m.x, m.y); if (d < pd) { pd = d; prey = p; } });
@@ -207,15 +207,17 @@ function tickMob(m, now) {
   const d = dist(m.x, m.y, m.tx, m.ty);
   if (d > (prey ? def.range * 0.6 : 10)) {
     const step = Math.min(d, def.speed * TICK / 1000);
-    m.x = clamp(m.x + (m.tx - m.x) / d * step, Z.x1, Z.x2);
-    m.y = clamp(m.y + (m.ty - m.y) / d * step, Z.y1, Z.y2);
+    const nx = clamp(m.x + (m.tx - m.x) / d * step, Z.x1, Z.x2), ny = clamp(m.y + (m.ty - m.y) / d * step, Z.y1, Z.y2);
+    if (wallBlocks(m.x, m.y, nx, ny, WALL_R.mob)) { if (!prey) { m.tx = m.x; m.ty = m.y; } } // 被城牆擋住：原地不動
+    else { m.x = nx; m.y = ny; }
   }
-  if (prey && pd <= def.range && now >= m.nextHit) {
+  if (prey && pd <= def.range && now >= m.nextHit && !behindWall(m.x, m.y, prey.x, prey.y)) {
     m.nextHit = now + 2200 + Math.random() * 800;
     io.emit('mobAttack', { mid: m.id, id: prey.id, say: def.say[Math.floor(Math.random() * def.say.length)] });
     setTimeout(() => {
       if (!m.alive || Date.now() < m.frozenUntil) return;
       if (dist(prey.x, prey.y, m.x, m.y) > def.range * 1.3) return; // 跑掉就沒打到
+      if (behindWall(m.x, m.y, prey.x, prey.y)) return; // 中間多了一道城牆
       const weak = Date.now() < m.weakUntil ? STATS.WEAKEN.dmgDealt : 1;
       const dmg = Math.round(rand(def.dmg) * weak);
       if (prey.summon) return hurtSummon(prey, dmg, def.name);
@@ -231,6 +233,7 @@ setInterval(() => {
   mobs.forEach(m => tickMob(m, now));
   summons.slice().forEach(sm => tickSummon(sm, now));
   tickMonster(now);
+  tickWalls(now);
   // 所有會動的東西合成一則送出：volatile 在同一個 tick 連送好幾則時，後面的常常被丟掉（颱風位置就一直沒更新）
   io.volatile.emit('world', {
     mobs: mobs.filter(m => m.alive).map(m => [m.id, Math.round(m.x), Math.round(m.y)]),
@@ -244,15 +247,16 @@ function tickMonster(now) {
     if (now >= monster.respawnAt) spawnMonster();
     return;
   }
-  if (now < monster.frozenUntil || now < monster.transformUntil) return; // 冰凍、變身中：不動也不出招
+  if (now < monster.frozenUntil || now < monster.transformUntil || now < (monster.stunUntil || 0)) return; // 冰凍、暈眩、變身中：不動也不出招
   // 慢慢在前線飄來飄去（變身後飄得比較快）
   const p2 = monster.phase === 2;
   const d = dist(monster.x, monster.y, monster.tx, monster.ty);
   if (d < 10) pickMonsterTarget();
   else {
     const step = Math.min(d, (p2 ? 110 : 70) * TICK / 1000);
-    monster.x += (monster.tx - monster.x) / d * step;
-    monster.y += (monster.ty - monster.y) / d * step;
+    const nx = monster.x + (monster.tx - monster.x) / d * step, ny = monster.y + (monster.ty - monster.y) / d * step;
+    if (wallBlocks(monster.x, monster.y, nx, ny, WALL_R.boss)) pickMonsterTarget(); // 被城牆擋住就換個方向
+    else { monster.x = nx; monster.y = ny; }
   }
   if (now >= monster.nextAttack) {
     monster.nextAttack = now + (p2 ? 2300 + Math.random() * 1700 : 3500 + Math.random() * 2500);
@@ -272,11 +276,14 @@ function defOf(p) {
   const now = Date.now();
   return p.def + Object.values(p.buffs).reduce((s, b) => s + (b.until > now ? b.v : 0), 0);
 }
+// 攻擊力 = 職業的攻擊 × 靈魂之歌的加成
+const atkBuffMs = (p) => p.atkBuff ? Math.max(0, p.atkBuff.until - Date.now()) : 0;
+const atkOf = (p) => p.atk * (atkBuffMs(p) > 0 ? 1 + p.atkBuff.mul : 1);
 function publicStats(p) {
   const now = Date.now();
   const buff = Math.max(0, ...Object.values(p.buffs).map(b => b.until - now));
-  return { id: p.id, cls: p.cls, hp: p.hp, maxHp: p.maxHp, mp: p.mp, maxMp: p.maxMp, atk: p.atk,
-    def: defOf(p), buffMs: buff, dead: p.dead,
+  return { id: p.id, cls: p.cls, hp: p.hp, maxHp: p.maxHp, mp: p.mp, maxMp: p.maxMp, atk: Math.round(atkOf(p)),
+    def: defOf(p), buffMs: buff, atkBuffMs: atkBuffMs(p), dead: p.dead,
     level: p.level, exp: p.exp, expNext: STATS.LEVEL.expFor(p.level), onlineLeft: STATS.LEVEL.onlineMs - p.onlineMs };
 }
 function sendStats(p) { io.emit('stats', publicStats(p)); }
@@ -318,16 +325,97 @@ function hurt(p, raw, by) {
   }, STATS.RESPAWN_MS);
 }
 
-// 魔力慢慢回復；在線時間滿 10 分鐘升一等
+// 魔力慢慢回復、定時自動回一點血；在線時間滿 10 分鐘升一等
 setInterval(() => {
   players.forEach(p => {
     p.onlineMs += 1000;
     if (p.onlineMs >= STATS.LEVEL.onlineMs) { p.onlineMs = 0; levelUp(p, true); }
-    if (p.dead || p.mp >= p.maxMp) return;
-    p.mp = Math.min(p.maxMp, p.mp + STATS.REGEN.mpPerSec);
-    sendStats(p);
+    if (p.dead) return;
+    const R = STATS.REGEN, hp0 = p.hp, mp0 = p.mp;
+    p.mp = Math.min(p.maxMp, p.mp + R.mpPerSec);
+    // 每隔一段時間自動回一點點血和魔力
+    p.regenMs = (p.regenMs || 0) + 1000;
+    if (p.regenMs >= R.tickMs) {
+      p.regenMs = 0;
+      p.hp = Math.min(p.maxHp, p.hp + Math.max(1, Math.round(p.maxHp * R.hpPct)));
+      p.mp = Math.min(p.maxMp, p.mp + Math.max(1, Math.round(p.maxMp * R.mpPct)));
+    }
+    if (p.hp !== hp0 || p.mp !== mp0) sendStats(p);
   });
 }, 1000);
+
+// ---------------- 插畫家的城牆 ----------------
+// 畫在前線的一條折線，存活 ms 毫秒；怪物走不過去，火牆會燒、冰牆第一次碰到會凍住
+const walls = [];
+let wallSeq = 0;
+const WALL_R = { mob: 26, boss: 70 }; // 離線多近就算撞到
+function segDist(px, py, ax, ay, bx, by) {
+  const dx = bx - ax, dy = by - ay, l2 = dx * dx + dy * dy;
+  const t = l2 ? clamp(((px - ax) * dx + (py - ay) * dy) / l2, 0, 1) : 0;
+  return dist(px, py, ax + dx * t, ay + dy * t);
+}
+const wallDist = (w, x, y) => Math.min(...w.pts.slice(1).map((b, i) => segDist(x, y, w.pts[i][0], w.pts[i][1], b[0], b[1])));
+// 從 (x0,y0) 走到 (x1,y1) 會不會撞牆：越來越靠近牆、而且進到 r 以內就擋下（已經卡在牆裡的可以往外走）
+function wallBlocks(x0, y0, x1, y1, r) {
+  return walls.some(w => { const d1 = wallDist(w, x1, y1); return d1 < r && d1 < wallDist(w, x0, y0); });
+}
+// 兩點之間有沒有隔著城牆（隔著牆打不到人）
+const cross = (ax, ay, bx, by, cx, cy, dx, dy) => {
+  const d = (bx - ax) * (dy - cy) - (by - ay) * (dx - cx);
+  if (!d) return false;
+  const t = ((cx - ax) * (dy - cy) - (cy - ay) * (dx - cx)) / d, u = ((cx - ax) * (by - ay) - (cy - ay) * (bx - ax)) / d;
+  return t >= 0 && t <= 1 && u >= 0 && u <= 1;
+};
+const behindWall = (ax, ay, bx, by) => walls.some(w => w.pts.slice(1).some((q, i) => cross(ax, ay, bx, by, w.pts[i][0], w.pts[i][1], q[0], q[1])));
+// 檢查玩家畫的線：點要在前線、離自己不太遠，總長度超過上限就截斷
+function wallLine(p, pts, maxLen) {
+  if (!inField(p) || !Array.isArray(pts) || pts.length < 2) return null;
+  const out = [];
+  let len = 0;
+  for (const q of pts.slice(0, 80)) {
+    if (!Array.isArray(q)) return null;
+    let x = Number(q[0]), y = Number(q[1]);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+    x = clamp(x, Z.x1 - 2 * T, Z.x2 + 2 * T); y = clamp(y, Z.y1 - 2 * T, Z.y2 + 2 * T);
+    if (dist(x, y, p.x, p.y) > 700) return null;
+    if (out.length) {
+      const [lx, ly] = out[out.length - 1], seg = dist(x, y, lx, ly);
+      if (seg < 4) continue;
+      if (len + seg > maxLen) { const k = (maxLen - len) / seg; out.push([Math.round(lx + (x - lx) * k), Math.round(ly + (y - ly) * k)]); len = maxLen; break; }
+      len += seg;
+    }
+    out.push([Math.round(x), Math.round(y)]);
+  }
+  return out.length >= 2 && len >= 40 ? out : null;
+}
+function addWall(p, def, pts, now) {
+  const w = { id: 'w' + (++wallSeq), kind: def.kind, owner: p.id, pts, until: now + def.ms, def, frozen: new Set(), nextBurn: now + 1000 };
+  walls.push(w);
+  io.emit('wall', { id: w.id, kind: w.kind, pts, ms: def.ms, by: p.id });
+}
+function tickWalls(now) {
+  for (let i = walls.length - 1; i >= 0; i--) {
+    const w = walls[i];
+    if (now >= w.until) { walls.splice(i, 1); io.emit('wallGone', { id: w.id }); continue; }
+    const owner = players.get(w.owner);
+    const foes = [...(monster.alive ? [[monster, true]] : []), ...mobs.filter(m => m.alive).map(m => [m, false])]
+      .filter(([f, b]) => wallDist(w, f.x, f.y) < (b ? WALL_R.boss : WALL_R.mob) + 24);
+    if (w.kind === 'ice') {
+      foes.forEach(([f, b]) => {
+        const key = b ? 'boss' : f.id;
+        if (w.frozen.has(key)) return;
+        w.frozen.add(key);
+        f.frozenUntil = Math.max(f.frozenUntil, now + w.def.freeze);
+        io.emit(b ? 'monster' : 'mob', b ? monsterState() : mobState(f));
+      });
+    } else if (now >= w.nextBurn) {
+      w.nextBurn = now + 1000;
+      if (owner) foes.forEach(([f, b]) => {
+        if (f.alive) damageFoe(owner, f, b, Math.max(1, Math.round(atkOf(owner) * w.def.burn * (0.8 + Math.random() * 0.4))), false, 'fireWall');
+      });
+    }
+  }
+}
 
 // ---------------- 物資箱 ----------------
 // key 'tx,ty' -> { hits, emptyUntil }；被敲開的箱子會空一段時間再補貨
@@ -499,7 +587,7 @@ function canDecorate(tx, ty) {
 
 // 傳給別人的玩家資料（不含冷卻、增益這些內部狀態）
 function publicPlayer(p) {
-  const { cooldowns, buffs, cooking, vip, owned, cakeUntil, furn, ...rest } = p;
+  const { cooldowns, buffs, atkBuff, regenMs, cooking, vip, owned, cakeUntil, furn, ...rest } = p;
   return Object.assign(rest, publicStats(p), { hasVip: !!vip, cakeMs: Math.max(0, cakeUntil - Date.now()) });
 }
 
@@ -674,7 +762,8 @@ io.on('connection', (socket) => {
     growMonster();
     ack({ ok: true, you: Object.assign(publicPlayer(p), { owned: p.owned, furn: p.furn }), players: [...players.values()].map(publicPlayer), history,
       monster: monsterState(), mobs: mobs.map(mobState), emptyCrates: emptyCrates(),
-      summons: summons.map(summonState), decor: decorList() });
+      summons: summons.map(summonState), decor: decorList(),
+      walls: walls.map(w => ({ id: w.id, kind: w.kind, pts: w.pts, ms: w.until - Date.now() })) });
     socket.broadcast.emit('playerJoined', publicPlayer(p));
     pushChat({ system: true, text: `${name} 進入了防衛總部 🌀`, t: Date.now() });
   });
@@ -734,6 +823,10 @@ io.on('connection', (socket) => {
     if (!skill || !STATS.CLASSES[p.cls].skills.includes(skillId)) return ack({ ok: false });
     const now = Date.now();
     if (now - lastAction < 300 || now < (p.cooldowns[skillId] || 0)) return ack({ ok: false });
+    // 插畫家的城牆：target 是畫出來的線
+    const line = skill.wall ? wallLine(p, target && target.pts, skill.wall.len) : null;
+    if (skill.wall && !line) return ack({ ok: false, error: '要在 🌀 颱風前線、自己附近畫一條線' });
+    if (skill.wall) target = 'boss';
     const isBoss = !target || target === 'boss';
     const foe = isBoss ? monster : mobs.find(m => m.id === target);
     const foeName = isBoss ? `颱風${STATS.MONSTER.name}` : foe ? STATS.MOBS[foe.kind].name : '';
@@ -753,7 +846,7 @@ io.on('connection', (socket) => {
     if (skill.mp) p.mp -= skill.mp;
 
     // 各種效果
-    const fx = { id: p.id, skill: skillId, x: Math.round(p.x), y: Math.round(p.y), target: isBoss ? 'boss' : foe.id, targets: [] };
+    const fx = { id: p.id, skill: skillId, x: Math.round(p.x), y: Math.round(p.y), target: isBoss || !foe ? 'boss' : foe.id, targets: [] };
     const around = (r) => alivePlayers().filter(q => dist(q.x, q.y, p.x, p.y) <= r);
     let support = 0; // 補血、加防也算經驗
     // 補血、加防的量跟著等級變強
@@ -777,6 +870,18 @@ io.on('connection', (socket) => {
       });
     }
     if (skill.selfDef) p.buffs.self = { v: skill.selfDef.v + plusDef, until: now + skill.selfDef.ms };
+    if (skill.teamAtk) {
+      around(skill.teamAtk.r).forEach(q => {
+        q.atkBuff = { mul: skill.teamAtk.mul, until: now + skill.teamAtk.ms };
+        fx.targets.push(q.id);
+        support += 15;
+        if (q !== p) sendStats(q);
+      });
+    }
+    if (line) {
+      addWall(p, skill.wall, line, now);
+      support += 15;
+    }
     if (skill.summon) {
       const def = STATS.SUMMONS[kind];
       const sm = { id: 's' + (++summonSeq), summon: true, kind, owner: p.id, ownerName: p.name,
@@ -797,6 +902,18 @@ io.on('connection', (socket) => {
     if (center) fx.hits = hits.map(([f, b]) => b ? 'boss' : f.id);
     if (skill.weaken) hits.forEach(([f]) => { f.weakUntil = now + skill.weaken; });
     if (skill.freeze) hits.forEach(([f]) => { f.frozenUntil = now + skill.freeze; });
+    // 震飛：從自己的位置往外推，推到前線的邊邊就停
+    if (skill.knock) {
+      fx.knock = [];
+      hits.forEach(([f, b]) => {
+        const d = Math.max(1, dist(f.x, f.y, p.x, p.y)), push = b ? skill.knock.boss : skill.knock.mob;
+        const ux = d > 5 ? (f.x - p.x) / d : (Math.random() < 0.5 ? -1 : 1), uy = d > 5 ? (f.y - p.y) / d : 0;
+        f.x = clamp(f.x + ux * push, Z.x1, Z.x2); f.y = clamp(f.y + uy * push, Z.y1, Z.y2);
+        f.tx = f.x; f.ty = f.y;
+        f.stunUntil = now + skill.knock.stun;
+        fx.knock.push([b ? 'boss' : f.id, Math.round(f.x), Math.round(f.y)]);
+      });
+    }
     if (support) gainExp(p, support);
     sendStats(p);
     io.emit('skillFx', fx);
@@ -806,9 +923,9 @@ io.on('connection', (socket) => {
     let total = 0;
     hits.forEach(([f, b]) => {
       if (!f.alive) return;
-      const crit = Math.random() < 0.12;
+      const crit = Math.random() < (skill.crit || 0.12);
       const weak = now < f.weakUntil ? STATS.WEAKEN.dmgTaken : 1;
-      const dmg = Math.round(p.atk * skill.power * (0.6 + Math.random() * 0.6) * (crit ? 2.5 : 1) * weak);
+      const dmg = Math.round(atkOf(p) * skill.power * (0.6 + Math.random() * 0.6) * (crit ? 2.5 : 1) * weak);
       total += dmg;
       damageFoe(p, f, b, dmg, crit, skillId);
     });

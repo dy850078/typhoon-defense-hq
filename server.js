@@ -96,12 +96,14 @@ io.on('connection', (socket) => {
 
     const name = clean(data && data.name, 12);
     if (!name) return ack({ ok: false, error: '請輸入名字' });
-    const animal = AVATAR.ANIMALS[data.animal] ? data.animal : 'cat';
-    const color = AVATAR.COLORS.includes(data.color) ? data.color : AVATAR.COLORS[0];
+    const hair = AVATAR.HAIRS[data.hair] ? data.hair : 'short';
+    const skin = AVATAR.SKINS.includes(data.skin) ? data.skin : AVATAR.SKINS[0];
+    const hairColor = AVATAR.HAIR_COLORS.includes(data.hairColor) ? data.hairColor : AVATAR.HAIR_COLORS[0];
     const outfit = AVATAR.OUTFITS.includes(data.outfit) ? data.outfit : AVATAR.OUTFITS[0];
+    const glasses = String(data.glasses) === '0' ? '0' : '1';
 
     const p = {
-      id: socket.id, name, animal, color, outfit,
+      id: socket.id, name, hair, skin, hairColor, outfit, glasses,
       x: MAP.spawn.x + (Math.random() - 0.5) * 60,
       y: MAP.spawn.y + (Math.random() - 0.5) * 40,
       dir: 1, moving: false,

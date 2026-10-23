@@ -10,10 +10,15 @@
   // ---------------- 角色創建 ----------------
   const profile = {
     name: localStorage.getItem('hq-name') || '',
-    animal: localStorage.getItem('hq-animal') || 'cat',
-    color: localStorage.getItem('hq-color') || AV.COLORS[0],
+    hair: localStorage.getItem('hq-hair') || 'short',
+    hairColor: localStorage.getItem('hq-hairColor') || AV.HAIR_COLORS[0],
+    skin: localStorage.getItem('hq-skin') || AV.SKINS[0],
     outfit: localStorage.getItem('hq-outfit') || AV.OUTFITS[0],
+    glasses: localStorage.getItem('hq-glasses') || '1',
   };
+  // 舊版存的是動物的顏色，對不上就換回預設
+  if (!AV.HAIRS[profile.hair]) profile.hair = 'short';
+  if (!AV.OUTFITS.includes(profile.outfit)) profile.outfit = AV.OUTFITS[0];
 
   function renderPreview() {
     const c = $('preview');
@@ -39,9 +44,12 @@
     });
   }
 
-  buildPicker($('animals'), Object.entries(AV.ANIMALS), 'animal', (b, v, l) => { b.textContent = l; });
-  buildPicker($('colors'), AV.COLORS.map(c => [c]), 'color', (b, v) => { b.style.background = v; });
-  buildPicker($('outfits'), AV.OUTFITS.map(c => [c]), 'outfit', (b, v) => { b.style.background = v; });
+  const swatch = (b, v) => { b.style.background = v; };
+  buildPicker($('hairs'), Object.entries(AV.HAIRS), 'hair', (b, v, l) => { b.textContent = l; });
+  buildPicker($('hair-colors'), AV.HAIR_COLORS.map(c => [c]), 'hairColor', swatch);
+  buildPicker($('skins'), AV.SKINS.map(c => [c]), 'skin', swatch);
+  buildPicker($('outfits'), AV.OUTFITS.map(c => [c]), 'outfit', swatch);
+  buildPicker($('glasses'), [['1', AV.GLASSES[1]], ['0', AV.GLASSES[0]]], 'glasses', (b, v, l) => { b.textContent = l; });
   $('name').value = profile.name;
   renderPreview();
 
@@ -155,144 +163,197 @@
   }
   $('action-btn').addEventListener('click', () => scene && scene.doAction());
 
-  // ---------------- 畫颱風怪物 ----------------
-  function drawTyphoon() {
-    const S = 220, c = document.createElement('canvas');
+  // ---------------- 畫颱風怪物（軟綿綿的雲朵怪） ----------------
+  const CR = window.HQ_CRAYON;
+  function drawTyphoonCloud() {
+    const S = 240, c = document.createElement('canvas');
     c.width = S; c.height = S;
     const ctx = c.getContext('2d');
+    const r = CR.rng(2026);
     ctx.translate(S / 2, S / 2);
-    const g = ctx.createRadialGradient(0, 0, 10, 0, 0, 100);
-    g.addColorStop(0, 'rgba(242,244,248,1)');
-    g.addColorStop(0.55, 'rgba(154,163,181,0.95)');
-    g.addColorStop(0.85, 'rgba(42,50,68,0.85)');
-    g.addColorStop(1, 'rgba(19,26,40,0)');
-    ctx.fillStyle = g;
-    ctx.beginPath(); ctx.arc(0, 0, 100, 0, Math.PI * 2); ctx.fill();
-    // 螺旋雲帶
-    for (let arm = 0; arm < 4; arm++) {
-      ctx.save(); ctx.rotate(arm * Math.PI / 2);
-      ctx.strokeStyle = arm % 2 ? 'rgba(255,255,255,0.75)' : 'rgba(19,26,40,0.55)';
-      ctx.lineWidth = 12; ctx.lineCap = 'round';
+    // 一團一團蓬蓬的雲
+    const puffs = [];
+    for (let i = 0; i < 14; i++) {
+      const a = (i / 14) * Math.PI * 2;
+      puffs.push([Math.cos(a) * 62, Math.sin(a) * 52, 34 + r() * 12]);
+    }
+    puffs.push([0, 0, 64]);
+    const layer = (shade, dy, alpha) => puffs.forEach(([x, y, rad]) => {
+      const g = ctx.createRadialGradient(x - rad * 0.3, y - rad * 0.4 + dy, rad * 0.1, x, y + dy, rad);
+      g.addColorStop(0, shade[0]); g.addColorStop(0.7, shade[1]); g.addColorStop(1, 'rgba(174,182,196,0)');
+      ctx.globalAlpha = alpha; ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(x, y + dy, rad, 0, Math.PI * 2); ctx.fill();
+    });
+    layer(['#6f7d93', '#55637a'], 10, 0.9);
+    layer(['#ffffff', '#d6dae1'], 0, 1);
+    ctx.globalAlpha = 1;
+    CR.dots(ctx, -90, -80, 180, 160, 80, 'rgba(255,255,255,0.5)', r, 2);
+    return c;
+  }
+  function drawTyphoonSwirl() {
+    const S = 240, c = document.createElement('canvas');
+    c.width = S; c.height = S;
+    const ctx = c.getContext('2d');
+    const r = CR.rng(7);
+    ctx.translate(S / 2, S / 2);
+    for (let arm = 0; arm < 3; arm++) {
+      ctx.save(); ctx.rotate((arm * Math.PI * 2) / 3);
       ctx.beginPath();
       for (let t = 0; t <= 1; t += 0.05) {
-        const r = 20 + t * 80, a = t * 2.6;
-        const x = Math.cos(a) * r, y = Math.sin(a) * r;
+        const rad = 18 + t * 92, a = t * 2.4;
+        const x = Math.cos(a) * rad, y = Math.sin(a) * rad * 0.85;
         if (t === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
       }
-      ctx.stroke(); ctx.restore();
+      CR.stroke(ctx, r, 7, '#4f7cc2');
+      ctx.restore();
     }
-    // 颱風眼
-    ctx.fillStyle = '#131a28'; ctx.beginPath(); ctx.arc(0, 0, 22, 0, Math.PI * 2); ctx.fill();
     return c;
   }
   function drawTyphoonFace() {
     const c = document.createElement('canvas');
-    c.width = 120; c.height = 60;
+    c.width = 120; c.height = 70;
     const ctx = c.getContext('2d');
-    ctx.fillStyle = '#fff';
-    [[38, 30], [82, 30]].forEach(([x, y]) => { ctx.beginPath(); ctx.ellipse(x, y, 14, 12, 0, 0, Math.PI * 2); ctx.fill(); });
-    ctx.fillStyle = '#ff6a13';
-    [[40, 32], [80, 32]].forEach(([x, y]) => { ctx.beginPath(); ctx.arc(x, y, 7, 0, Math.PI * 2); ctx.fill(); });
-    // 生氣的眉毛
-    ctx.strokeStyle = '#131a28'; ctx.lineWidth = 6; ctx.lineCap = 'round';
-    ctx.beginPath(); ctx.moveTo(22, 10); ctx.lineTo(50, 20); ctx.moveTo(98, 10); ctx.lineTo(70, 20); ctx.stroke();
+    const r = CR.rng(11);
+    // 臉頰
+    ctx.fillStyle = 'rgba(244,120,120,0.5)';
+    [[24, 42], [96, 42]].forEach(([x, y]) => { ctx.beginPath(); ctx.ellipse(x, y, 11, 7, 0, 0, Math.PI * 2); ctx.fill(); });
+    // 豆豆眼 + 生氣的眉毛
+    ctx.fillStyle = CR.INK;
+    [[42, 32], [78, 32]].forEach(([x, y]) => { ctx.beginPath(); ctx.ellipse(x, y, 4.5, 5.5, 0, 0, Math.PI * 2); ctx.fill(); });
+    CR.line(ctx, 32, 18, 50, 25, r, 4); CR.line(ctx, 88, 18, 70, 25, r, 4);
+    // 橘色鳥嘴
+    ctx.beginPath(); ctx.moveTo(52, 42); ctx.quadraticCurveTo(60, 37, 70, 42); ctx.quadraticCurveTo(61, 52, 52, 42); ctx.closePath();
+    CR.fill(ctx, '#ff7a2f', r, null); CR.stroke(ctx, r, 2.5);
     return c;
   }
 
-  // ---------------- 畫地圖 ----------------
-  function rand(x, y, s = 0) { // 固定亂數，讓草地花紋每次都一樣
-    const n = Math.sin(x * 127.1 + y * 311.7 + s * 74.7) * 43758.5453;
-    return n - Math.floor(n);
-  }
-
+  // ---------------- 畫地圖（蠟筆手繪風） ----------------
   function drawMap() {
     const c = document.createElement('canvas');
     c.width = MAP.W * T; c.height = MAP.H * T;
     const ctx = c.getContext('2d');
-    const floorOf = (ch, y) => (y > 30 && ':T~'.includes(ch) ? 'mud'
-      : ch === 'V' ? 'carpet' : ',T~BF'.includes(ch) ? 'grass' : 'wood');
+    const at = (x, y) => (x < 0 || y < 0 || x >= MAP.W || y >= MAP.H ? ' ' : MAP.tiles[y][x]);
+    const inVideo = (x, y) => y >= 4 && y <= 13 && x >= 21 && x <= 34;
+    const floorOf = (ch, x, y) => {
+      if (y > 30 && ':T~'.includes(ch)) return 'mud';
+      if (',T~BF'.includes(ch)) return 'grass';
+      if (ch === '#') return 'wall';
+      return inVideo(x, y) ? 'carpet' : 'wood';
+    };
 
+    // 1. 地板
     for (let y = 0; y < MAP.H; y++) {
       for (let x = 0; x < MAP.W; x++) {
-        const ch = MAP.tiles[y][x];
-        const px = x * T, py = y * T;
-        // 地板
-        let base = floorOf(ch, y);
-        if (ch === 'M' || ch === 'S' || ch === 'K' || ch === 'P' || ch === '=') {
-          base = (y >= 4 && y <= 13 && x >= 21) ? 'carpet' : 'wood';
-        }
+        const ch = at(x, y), px = x * T, py = y * T;
+        const r = CR.rng(x * 7919 + y * 104729 + 1);
+        const base = floorOf(ch, x, y);
         if (base === 'grass') {
-          ctx.fillStyle = '#8fcf7a'; ctx.fillRect(px, py, T, T);
-          ctx.fillStyle = '#7dbf69';
-          for (let i = 0; i < 3; i++) {
-            const gx = px + rand(x, y, i) * (T - 8) + 4, gy = py + rand(y, x, i) * (T - 8) + 4;
-            ctx.fillRect(gx, gy, 3, 6); ctx.fillRect(gx + 4, gy + 2, 3, 4);
-          }
-          if (rand(x, y, 9) > 0.93) { ctx.fillStyle = '#fff4a8'; ctx.beginPath(); ctx.arc(px + 24, py + 24, 4, 0, 7); ctx.fill(); }
-        } else if (base === 'mud') {
-          ctx.fillStyle = (x + y) % 2 ? '#8b96a3' : '#85909d'; ctx.fillRect(px, py, T, T);
-          ctx.fillStyle = '#76818e';
+          ctx.fillStyle = (x * 3 + y) % 5 ? '#a9d18e' : '#a2cc88'; ctx.fillRect(px, py, T, T);
+          CR.dots(ctx, px, py, T, T, 6, 'rgba(255,255,255,0.45)', r, 2.2);
           for (let i = 0; i < 2; i++) {
-            ctx.beginPath(); ctx.arc(px + rand(x, y, i) * T, py + rand(y, x, i + 3) * T, 3 + rand(x, y, i + 5) * 4, 0, 7); ctx.fill();
+            const gx = px + 6 + r() * (T - 12), gy = py + 8 + r() * (T - 14);
+            CR.line(ctx, gx, gy, gx - 2, gy - 6, r, 1.6, '#6f9c5c', 0.6);
+            CR.line(ctx, gx + 3, gy, gx + 4, gy - 5, r, 1.6, '#6f9c5c', 0.6);
           }
+        } else if (base === 'mud') {
+          ctx.fillStyle = (x + y) % 2 ? '#8494aa' : '#7f8fa5'; ctx.fillRect(px, py, T, T);
+          CR.dots(ctx, px, py, T, T, 4, 'rgba(255,255,255,0.5)', r, 2);
+          CR.dots(ctx, px, py, T, T, 1, 'rgba(47,59,85,0.3)', r, 3);
         } else if (base === 'carpet') {
-          ctx.fillStyle = (x + y) % 2 ? '#cfe3f5' : '#c3dbf0'; ctx.fillRect(px, py, T, T);
-        } else {
-          ctx.fillStyle = '#f1dcb5'; ctx.fillRect(px, py, T, T);
-          ctx.fillStyle = '#e3c99c'; ctx.fillRect(px, py + (y % 2 ? 0 : T / 2), T, 2);
-          ctx.fillRect(px + (y % 2 ? T / 3 : (2 * T) / 3), py, 2, T);
-        }
-
-        // 物件
-        if (ch === '#') {
-          ctx.fillStyle = '#c9b294'; ctx.fillRect(px, py, T, T);
-          ctx.fillStyle = '#e2d0b4'; ctx.fillRect(px, py, T, T * 0.35);
-          ctx.strokeStyle = '#a89275'; ctx.lineWidth = 2; ctx.strokeRect(px + 1, py + 1, T - 2, T - 2);
-        } else if (ch === 'F') {
-          ctx.fillStyle = '#c9ced6'; ctx.fillRect(px, py + 14, T, 6); ctx.fillRect(px, py + 30, T, 6);
-          ctx.fillStyle = '#ff6a13'; ctx.fillRect(px + 4, py + 6, 8, 36); ctx.fillRect(px + 28, py + 6, 8, 36);
-          ctx.fillStyle = '#3a3a3c'; ctx.fillRect(px + 4, py + 18, 8, 6); ctx.fillRect(px + 28, py + 18, 8, 6);
-        } else if (ch === '=') {
-          ctx.fillStyle = '#c96b5a'; ctx.fillRect(px + 4, py + 10, T - 8, T - 20);
-        } else if (ch === '~') {
-          ctx.fillStyle = '#7fb8e6'; ctx.beginPath(); ctx.ellipse(px + 24, py + 24, 22, 14, 0, 0, 7); ctx.fill();
-          ctx.fillStyle = '#b5daf5'; ctx.beginPath(); ctx.ellipse(px + 18, py + 20, 7, 3, 0, 0, 7); ctx.fill();
-        } else if (ch === 'T') {
-          ctx.fillStyle = 'rgba(0,0,0,.15)'; ctx.beginPath(); ctx.ellipse(px + 24, py + 42, 18, 5, 0, 0, 7); ctx.fill();
-          ctx.fillStyle = '#8b5e3c'; ctx.fillRect(px + 19, py + 26, 10, 18);
-          ctx.fillStyle = '#4f9e4a'; ctx.beginPath(); ctx.arc(px + 24, py + 18, 20, 0, 7); ctx.fill();
-          ctx.fillStyle = '#66b85f'; ctx.beginPath(); ctx.arc(px + 18, py + 12, 9, 0, 7); ctx.fill();
-        } else if (ch === 'B') {
-          ctx.fillStyle = '#d8c08e'; ctx.strokeStyle = '#a58c5c'; ctx.lineWidth = 2;
-          [[12, 34], [36, 34], [24, 20]].forEach(([dx, dy]) => {
-            ctx.beginPath(); ctx.ellipse(px + dx, py + dy, 12, 8, 0, 0, 7); ctx.fill(); ctx.stroke();
-          });
-        } else if (ch === 'K') {
-          ctx.fillStyle = '#c28b52'; ctx.fillRect(px + 4, py + 4, T - 8, T - 8);
-          ctx.strokeStyle = '#8f5f30'; ctx.lineWidth = 3; ctx.strokeRect(px + 4, py + 4, T - 8, T - 8);
-          ctx.beginPath(); ctx.moveTo(px + 4, py + 4); ctx.lineTo(px + T - 4, py + T - 4);
-          ctx.moveTo(px + T - 4, py + 4); ctx.lineTo(px + 4, py + T - 4); ctx.stroke();
-        } else if (ch === 'M') {
-          ctx.fillStyle = '#a8794e'; ctx.fillRect(px, py + 2, T, T - 4);
-          ctx.fillStyle = '#bf8f62'; ctx.fillRect(px, py + 2, T, 8);
-        } else if (ch === 'P') {
-          ctx.fillStyle = '#3b4252'; ctx.fillRect(px + 2, py + 4, T - 4, T - 10);
-          ctx.fillStyle = '#1f5f3a'; ctx.fillRect(px + 6, py + 8, T - 12, T - 18);
-          ctx.strokeStyle = '#7dff9a'; ctx.lineWidth = 2;
-          ctx.beginPath(); ctx.arc(px + 24, py + 19, 7, 0, 5); ctx.stroke();
-        } else if (ch === 'S') {
-          ctx.fillStyle = '#f29fae'; ctx.beginPath(); ctx.roundRect(px + 1, py + 6, T - 2, T - 12, 10); ctx.fill();
-          ctx.fillStyle = '#f7c0ca'; ctx.fillRect(px + 4, py + 10, T - 8, 10);
+          ctx.fillStyle = '#bcd4ea'; ctx.fillRect(px, py, T, T);
+          CR.plaid(ctx, px, py, T, T, 24, 'rgba(255,255,255,0.85)', r, 2.2);
+          CR.plaid(ctx, px + 12, py + 12, T, T, 24, 'rgba(79,124,194,0.2)', r, 1.2);
+        } else if (base === 'wood') {
+          ctx.fillStyle = '#f5ecd9'; ctx.fillRect(px, py, T, T);
+          CR.plaid(ctx, px, py, T, T, 24, 'rgba(255,122,47,0.18)', r, 2.4);
+          CR.plaid(ctx, px + 12, py + 12, T, T, 24, 'rgba(255,255,255,0.9)', r, 1.4);
         }
       }
     }
-    // 給物資箱貼上標籤
-    ctx.font = 'bold 15px sans-serif'; ctx.textAlign = 'center';
-    MAP.CRATES.forEach(c => {
-      const cx = ((c.x1 + c.x2 + 1) / 2) * T, cy = ((c.y1 + c.y2 + 1) / 2) * T;
-      const w = ctx.measureText(c.label).width + 16;
-      ctx.fillStyle = 'rgba(58,58,60,0.85)'; ctx.fillRect(cx - w / 2, cy - 12, w, 24);
-      ctx.fillStyle = '#fff'; ctx.fillText(c.label, cx, cy + 5);
+
+    // 2. 物件
+    for (let y = 0; y < MAP.H; y++) {
+      for (let x = 0; x < MAP.W; x++) {
+        const ch = at(x, y), px = x * T, py = y * T;
+        const r = CR.rng(x * 15485863 + y * 32452843 + 7);
+        if (ch === '#') {
+          ctx.fillStyle = '#c3c9d3'; ctx.fillRect(px, py, T, T);
+          if (at(x, y - 1) !== '#') { ctx.fillStyle = '#dfe3ea'; ctx.fillRect(px, py, T, T * 0.4); }
+          CR.dots(ctx, px, py, T, T, 10, 'rgba(255,255,255,0.4)', r, 1.6);
+          // 只在牆的外緣描邊，看起來是一整片手畫的牆
+          if (at(x, y - 1) !== '#') CR.line(ctx, px - 1, py, px + T + 1, py, r, 3);
+          if (at(x, y + 1) !== '#') CR.line(ctx, px - 1, py + T, px + T + 1, py + T, r, 3);
+          if (at(x - 1, y) !== '#') CR.line(ctx, px, py - 1, px, py + T + 1, r, 3);
+          if (at(x + 1, y) !== '#') CR.line(ctx, px + T, py - 1, px + T, py + T + 1, r, 3);
+        } else if (ch === '=') {
+          // 門口的腳踏墊
+          CR.rect(ctx, px + 5, py + 10, T - 10, T - 20, r, 1.5); CR.fill(ctx, '#2f3b55', r, [px, py + 10, T, T - 20]);
+          CR.dots(ctx, px + 6, py + 12, T - 12, T - 24, 6, 'rgba(255,255,255,0.5)', r, 1.6);
+          CR.rect(ctx, px + 5, py + 10, T - 10, T - 20, r, 1.5); CR.stroke(ctx, r, 2.2);
+        } else if (ch === 'F') {
+          CR.line(ctx, px - 2, py + 18, px + T + 2, py + 18, r, 3);
+          CR.line(ctx, px - 2, py + 32, px + T + 2, py + 32, r, 3);
+          [6, 28].forEach(dx => {
+            CR.rect(ctx, px + dx, py + 6, 11, 34, r, 1.2); CR.fill(ctx, '#ff7a2f', r, [px + dx, py + 6, 11, 34]);
+            CR.rect(ctx, px + dx, py + 6, 11, 34, r, 1.2); CR.stroke(ctx, r, 2.4);
+          });
+        } else if (ch === '~') {
+          CR.blob(ctx, px + 24, py + 26, 21, 13, r, 0.1); CR.fill(ctx, '#7fb2e5', r, [px, py + 12, T, 28]); CR.stroke(ctx, r, 2.2, '#2f3b55');
+          CR.line(ctx, px + 13, py + 22, px + 22, py + 20, r, 2.2, '#ffffff', 0.5);
+        } else if (ch === 'T') {
+          ctx.fillStyle = 'rgba(19,26,40,0.16)'; ctx.beginPath(); ctx.ellipse(px + 24, py + 44, 18, 4, 0, 0, Math.PI * 2); ctx.fill();
+          CR.rect(ctx, px + 18, py + 26, 12, 18, r, 1); CR.fill(ctx, '#2f6b45', r, null);
+          CR.plaid(ctx, px + 18, py + 26, 12, 18, 6, 'rgba(255,255,255,0.4)', r, 1);
+          CR.rect(ctx, px + 18, py + 26, 12, 18, r, 1); CR.stroke(ctx, r, 2.2);
+          CR.blob(ctx, px + 24, py + 16, 20, 18, r, 0.08); CR.fill(ctx, '#bfe0a4', r, [px + 4, py - 2, 40, 36]);
+          ctx.save(); CR.blob(ctx, px + 24, py + 16, 20, 18, CR.rng(x + y), 0.08); ctx.clip();
+          CR.plaid(ctx, px + 2, py - 4, 44, 40, 7, 'rgba(255,255,255,0.8)', r, 1.4); ctx.restore();
+          // 點點虛線外框，像插畫裡的樹
+          ctx.save(); ctx.setLineDash([2, 5]);
+          CR.blob(ctx, px + 24, py + 16, 20, 18, CR.rng(x + y), 0.08); CR.stroke(ctx, r, 3.2, '#2f6b45'); ctx.restore();
+        } else if (ch === 'B') {
+          [[12, 34], [36, 34], [24, 20]].forEach(([dx, dy]) => {
+            CR.blob(ctx, px + dx, py + dy, 12, 8, r, 0.1, 14); CR.fill(ctx, '#e8d6ae', r, [px + dx - 12, py + dy - 8, 24, 16]); CR.stroke(ctx, r, 2.2);
+          });
+        } else if (ch === 'K') {
+          // 像俄羅斯方塊的橘色箱子
+          CR.rect(ctx, px + 3, py + 3, T - 6, T - 6, r, 1.2); CR.fill(ctx, '#ff8a3d', r, [px, py, T, T], 1.3);
+          ctx.fillStyle = 'rgba(255,255,255,0.35)'; ctx.fillRect(px + 6, py + 6, T - 12, 6);
+          CR.line(ctx, px + T / 2, py + 5, px + T / 2, py + T - 5, r, 1.8, 'rgba(43,42,51,0.6)');
+          CR.line(ctx, px + 5, py + T / 2, px + T - 5, py + T / 2, r, 1.8, 'rgba(43,42,51,0.6)');
+          CR.rect(ctx, px + 3, py + 3, T - 6, T - 6, r, 1.2); CR.stroke(ctx, r, 2.6);
+        } else if (ch === 'M') {
+          ctx.fillStyle = '#b98457'; ctx.fillRect(px, py + 3, T, T - 6);
+          ctx.fillStyle = '#cf9a6a'; ctx.fillRect(px, py + 3, T, 9);
+          CR.dots(ctx, px, py + 3, T, T - 6, 6, 'rgba(255,255,255,0.3)', r, 1.6);
+          if (at(x, y - 1) !== 'M') CR.line(ctx, px - 1, py + 3, px + T + 1, py + 3, r, 2.6);
+          if (at(x, y + 1) !== 'M') CR.line(ctx, px - 1, py + T - 3, px + T + 1, py + T - 3, r, 2.6);
+          if (at(x - 1, y) !== 'M') CR.line(ctx, px, py + 2, px, py + T - 2, r, 2.6);
+          if (at(x + 1, y) !== 'M') CR.line(ctx, px + T, py + 2, px + T, py + T - 2, r, 2.6);
+        } else if (ch === 'P') {
+          CR.rect(ctx, px + 3, py + 4, T - 6, T - 12, r, 1); CR.fill(ctx, '#2f3b55', r, null); CR.stroke(ctx, r, 2.4);
+          CR.rect(ctx, px + 8, py + 9, T - 16, T - 22, r, 1); CR.fill(ctx, '#3e6f8f', r, null);
+          ctx.save(); ctx.beginPath(); ctx.arc(px + 24, py + 19, 7, 0.3, 5.2);
+          CR.stroke(ctx, r, 2.4, '#ff7a2f'); ctx.restore();
+        } else if (ch === 'S') {
+          CR.rect(ctx, px + 1, py + 6, T - 2, T - 12, r, 1.2); CR.fill(ctx, '#4f7cc2', r, [px, py + 6, T, T - 12], 1.2);
+          CR.rect(ctx, px + 5, py + 10, T - 10, 12, r, 1); CR.fill(ctx, '#86a8dd', r, null);
+          if (at(x - 1, y) !== 'S') CR.line(ctx, px + 1, py + 6, px + 1, py + T - 6, r, 2.6);
+          if (at(x + 1, y) !== 'S') CR.line(ctx, px + T - 1, py + 6, px + T - 1, py + T - 6, r, 2.6);
+          CR.line(ctx, px - 1, py + 6, px + T + 1, py + 6, r, 2.6);
+          CR.line(ctx, px - 1, py + T - 6, px + T + 1, py + T - 6, r, 2.6);
+        }
+      }
+    }
+
+    // 3. 給物資箱貼上標籤
+    ctx.font = '900 15px "Noto Sans TC", sans-serif'; ctx.textAlign = 'center';
+    MAP.CRATES.forEach((cr, i) => {
+      const r = CR.rng(i + 99);
+      const cx = ((cr.x1 + cr.x2 + 1) / 2) * T, cy = ((cr.y1 + cr.y2 + 1) / 2) * T;
+      const w = ctx.measureText(cr.label).width + 18;
+      CR.rect(ctx, cx - w / 2, cy - 13, w, 26, r, 1.2); CR.fill(ctx, '#fafaf7', r, null); CR.stroke(ctx, r, 2.2);
+      ctx.fillStyle = CR.INK; ctx.fillText(cr.label, cx, cy + 5);
     });
     return c;
   }
@@ -331,7 +392,8 @@
       });
 
       // 颱風怪物
-      this.textures.addCanvas('typhoon', drawTyphoon());
+      this.textures.addCanvas('typhoon-cloud', drawTyphoonCloud());
+      this.textures.addCanvas('typhoon', drawTyphoonSwirl());
       this.textures.addCanvas('typhoon-face', drawTyphoonFace());
       const crate = document.createElement('canvas');
       crate.width = T; crate.height = T;
@@ -342,15 +404,16 @@
       this.textures.addCanvas('crate', crate);
 
       const Z = MAP.MONSTER_ZONE;
-      this.mSwirl = this.add.image(0, 0, 'typhoon');
-      this.mFace = this.add.image(0, 4, 'typhoon-face').setScale(0.8);
+      this.mBody = this.add.image(0, 0, 'typhoon-cloud');
+      this.mSwirl = this.add.image(0, 0, 'typhoon').setAlpha(0.45);
+      this.mFace = this.add.image(0, 4, 'typhoon-face');
       this.mBar = this.add.graphics();
-      this.mName = this.add.text(0, -132, '颱風怪', {
+      this.mName = this.add.text(0, -144, '颱風怪', {
         fontSize: '16px', fontStyle: 'bold', color: '#ffffff', fontFamily: FONT,
         backgroundColor: '#131a28', padding: { x: 8, y: 3 },
       }).setOrigin(0.5);
       this.monster = this.add.container((Z.x1 + Z.x2) / 2, (Z.y1 + Z.y2) / 2,
-        [this.mSwirl, this.mFace, this.mBar, this.mName]);
+        [this.mBody, this.mSwirl, this.mFace, this.mBar, this.mName]);
       this.monster.tx = this.monster.x; this.monster.ty = this.monster.y;
       this.mState = { alive: true, hp: 1, maxHp: 1 };
       this.mDead = this.add.text((Z.x1 + Z.x2) / 2, (Z.y1 + Z.y2) / 2, '', {
@@ -393,7 +456,7 @@
     }
 
     makeAvatar(p) {
-      const key = `av-${p.animal}-${p.color}-${p.outfit}`;
+      const key = `av-${p.hair}-${p.hairColor}-${p.skin}-${p.outfit}-${p.glasses}`;
       if (!this.textures.exists(key)) {
         const c = document.createElement('canvas');
         c.width = AV.WIDTH * 2; c.height = AV.HEIGHT * 2;
@@ -480,8 +543,8 @@
     drawMonsterBar() {
       const g = this.mBar, w = 160, ratio = this.mState.maxHp ? this.mState.hp / this.mState.maxHp : 0;
       g.clear();
-      g.fillStyle(0x131a28, 0.9); g.fillRoundedRect(-w / 2 - 3, -116, w + 6, 16, 8);
-      g.fillStyle(0xff6a13, 1); g.fillRoundedRect(-w / 2, -113, Math.max(6, w * ratio), 10, 5);
+      g.fillStyle(0x131a28, 0.9); g.fillRoundedRect(-w / 2 - 3, -126, w + 6, 16, 8);
+      g.fillStyle(0xff6a13, 1); g.fillRoundedRect(-w / 2, -123, Math.max(6, w * ratio), 10, 5);
     }
 
     onMonsterHit(m) {
@@ -489,7 +552,7 @@
       this.drawMonsterBar();
       const who = me && m.id === me.id ? this.me : this.remotes.get(m.id);
       if (who) this.lunge(who, this.monster.x);
-      this.tweens.add({ targets: this.mSwirl, scale: { from: 0.9, to: 1 }, duration: 160 });
+      this.tweens.add({ targets: this.mBody, scale: { from: 0.9, to: 1 }, duration: 160 });
       this.floatText(this.monster.x + (Math.random() - 0.5) * 80, this.monster.y - 60,
         (m.crit ? '暴擊！' : '') + '-' + m.dmg, m.crit ? '#ff6a13' : '#ffffff', m.crit ? 30 : 22);
     }
@@ -656,6 +719,7 @@
         this.monster.y += (this.monster.ty - this.monster.y) * Math.min(1, dt * 6);
         this.mSwirl.rotation -= dt * 1.6;
         this.mFace.y = 4 + Math.sin(time / 300) * 3;
+        this.mBody.setScale(1 + Math.sin(time / 420) * 0.03, 1 - Math.sin(time / 420) * 0.03);
         this.monster.setDepth(this.monster.y + 40);
       }
       if (!this.mState.alive && this.respawnAt) {

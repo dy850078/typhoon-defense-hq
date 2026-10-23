@@ -21,12 +21,16 @@
         <canvas id="preview" width="128" height="160"></canvas>
         <div class="fields">
           <label>名字<input id="name" maxlength="12" placeholder="你的名字" autocomplete="off" required></label>
-          <div class="label">動物</div>
-          <div id="animals" class="chips"></div>
-          <div class="label">毛色</div>
-          <div id="colors" class="swatches"></div>
+          <div class="label">髮型</div>
+          <div id="hairs" class="chips"></div>
+          <div class="label">髮色</div>
+          <div id="hair-colors" class="swatches"></div>
+          <div class="label">膚色</div>
+          <div id="skins" class="swatches"></div>
           <div class="label">雨衣</div>
           <div id="outfits" class="swatches"></div>
+          <div class="label">眼鏡</div>
+          <div id="glasses" class="chips"></div>
         </div>
       </div>
       <p id="join-error" class="error"></p>
@@ -57,6 +61,7 @@
   <script src="/vendor/phaser.min.js"></script>
   <script src="/socket.io/socket.io.js"></script>
   <script src="/shared/map.js"></script>
+  <script src="crayon.js"></script>
   <script src="/shared/avatar.js"></script>
   <script src="game.js"></script>
 </body>

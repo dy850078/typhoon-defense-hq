@@ -5,6 +5,7 @@ const { Server } = require('socket.io');
 const MAP = require('./shared/map');
 const AVATAR = require('./shared/avatar');
 const STATS = require('./shared/stats');
+const GEAR = require('./shared/gear');
 
 const PORT = Number(process.env.PORT) || 3000;
 const MAX_PLAYERS = Number(process.env.MAX_PLAYERS) || 40;
@@ -25,6 +26,9 @@ const ATTACKS = {
   bolt: { r: 70, delay: 900, dmg: [30, 40], reach: 520 }, // 落雷：劈一個人，最痛
 };
 const FIREWORK_MS = 6000; // 每個人放煙火的間隔
+// 隱藏蛋糕：在冰箱前輸入暗號就能拿到，拿在手上 3 分鐘
+const CAKE_CODE = String(process.env.CAKE_CODE || 'CAKE');
+const CAKE_MS = 3 * 60 * 1000;
 const T = MAP.TILE;
 
 const app = express();
@@ -274,8 +278,72 @@ function emptyCrates() {
 
 // 傳給別人的玩家資料（不含冷卻、增益這些內部狀態）
 function publicPlayer(p) {
-  const { cooldowns, buffs, cooking, vip, ...rest } = p;
-  return Object.assign(rest, publicStats(p), { hasVip: !!vip });
+  const { cooldowns, buffs, cooking, vip, owned, cakeUntil, ...rest } = p;
+  return Object.assign(rest, publicStats(p), { hasVip: !!vip, cakeMs: Math.max(0, cakeUntil - Date.now()) });
+}
+
+// ---------------- 裝備 ----------------
+// 抽一件還沒有的裝備送給玩家，全部都有了就回傳 null
+function giveGear(p) {
+  const id = GEAR.roll(p.owned);
+  if (!id) return null;
+  p.owned.push(id);
+  const g = GEAR.GEAR[id];
+  io.to(p.id).emit('gearGot', { item: id, owned: p.owned });
+  pushChat({ system: true, text: `🎁 ${p.name} 獲得了【${g.rarity}】${g.icon} ${g.name}！`, t: Date.now() });
+  return id;
+}
+
+// ---------------- 你畫我猜（在戰情室） ----------------
+// 主持人畫畫、設答案，其他人猜；猜對的人和主持人都會拿到裝備
+const DRAW_MAX_STROKES = 4000;
+const DRAW_VOTE_MS = 20000;
+const DRAW_IDLE_MS = 60000; // 主持人這麼久沒動作，別人可以直接接手
+const draw = { host: null, answer: '', round: 0, strokes: [], correct: new Set(), members: new Set(),
+  vote: null, hostRewarded: false, lastHostAct: 0 };
+const norm = (s) => String(s || '').normalize('NFKC').toLowerCase().replace(/\s+/g, '');
+const nameOf = (id) => (players.get(id) || {}).name || '';
+function drawPublic() {
+  const v = draw.vote;
+  return {
+    host: draw.host, hostName: nameOf(draw.host), round: draw.round, playing: !!draw.answer,
+    len: draw.answer ? [...norm(draw.answer)].length : 0,
+    members: [...draw.members].map(id => ({ id, name: nameOf(id) })), correct: [...draw.correct],
+    vote: v && { by: v.by, byName: nameOf(v.by), yes: [...v.yes], need: Math.floor(draw.members.size / 2) + 1, ms: v.until - Date.now() },
+  };
+}
+const drawState = () => io.to('draw').emit('drawState', drawPublic());
+const drawLog = (text, kind) => io.to('draw').emit('drawLog', { text, kind: kind || 'sys' });
+// 換主持人、清空畫布，遊戲重新開始
+function drawReset(host) {
+  draw.host = host; draw.answer = ''; draw.strokes = []; draw.correct.clear(); draw.vote = null;
+  draw.lastHostAct = Date.now();
+  io.to('draw').emit('drawClear');
+  drawState();
+}
+function drawCheckVote() {
+  const v = draw.vote;
+  if (!v) return;
+  v.yes.forEach(id => { if (!draw.members.has(id)) v.yes.delete(id); });
+  if (!draw.members.has(v.by)) { draw.vote = null; return drawState(); }
+  if (v.yes.size >= Math.floor(draw.members.size / 2) + 1) {
+    drawLog(`🎤 ${nameOf(v.by)} 搶到主持棒了！遊戲重新開始`);
+    drawReset(v.by);
+  } else drawState();
+}
+function drawEnd(reason) {
+  if (!draw.answer) return;
+  drawLog(`${reason}答案是「${draw.answer}」`, 'answer');
+  draw.answer = '';
+  drawState();
+}
+function drawRemove(id) {
+  if (!draw.members.delete(id)) return;
+  if (draw.host === id) {
+    drawLog(`${nameOf(id)} 放下了主持棒，誰要來當主持人？`);
+    drawReset(null);
+  } else if (draw.vote) drawCheckVote();
+  else drawState();
 }
 
 io.on('connection', (socket) => {
@@ -314,13 +382,20 @@ io.on('connection', (socket) => {
       // 等級存在玩家自己的瀏覽器，伺服器重開也不會不見
       level: clamp(Math.floor(Number(data.level)) || 1, 1, STATS.LEVEL.max),
       exp: Math.max(0, Math.floor(Number(data.exp)) || 0), onlineMs: 0, vip,
+      // 裝備也存在玩家自己的瀏覽器
+      owned: [...new Set((Array.isArray(data.owned) ? data.owned : []).filter(id => GEAR.GEAR[id]))],
+      equip: {}, cakeUntil: 0,
     };
+    if (data.equip && typeof data.equip === 'object') Object.keys(GEAR.SLOTS).forEach(slot => {
+      const id = data.equip[slot];
+      if (p.owned.includes(id) && GEAR.GEAR[id].slot === slot) p.equip[slot] = id;
+    });
     Object.assign(p, STATS.statsFor(p.cls, p.level));
     p.hp = p.maxHp; p.mp = p.maxMp;
     players.set(socket.id, p);
 
     growMonster();
-    ack({ ok: true, you: publicPlayer(p), players: [...players.values()].map(publicPlayer), history,
+    ack({ ok: true, you: Object.assign(publicPlayer(p), { owned: p.owned }), players: [...players.values()].map(publicPlayer), history,
       monster: monsterState(), mobs: mobs.map(mobState), emptyCrates: emptyCrates() });
     socket.broadcast.emit('playerJoined', publicPlayer(p));
     pushChat({ system: true, text: `${name} 進入了防衛總部 🌀`, t: Date.now() });
@@ -527,6 +602,136 @@ io.on('connection', (socket) => {
     ack({ ok: true, inv: p.inv, mp: STATS.FOODS.water.mp });
   });
 
+  // 穿上 / 脫下裝備（id 是 null 就是脫掉）
+  socket.on('equip', (slot, id, ack) => {
+    const p = players.get(socket.id);
+    if (!p || !GEAR.SLOTS[slot]) return;
+    if (id == null) delete p.equip[slot];
+    else if (p.owned.includes(id) && GEAR.GEAR[id].slot === slot) p.equip[slot] = id;
+    else return typeof ack === 'function' && ack({ ok: false });
+    io.emit('playerGear', { id: p.id, equip: p.equip });
+    if (typeof ack === 'function') ack({ ok: true, equip: p.equip });
+  });
+
+  // 隱藏的蛋糕：在冰箱前輸入暗號
+  socket.on('cake', (code, ack) => {
+    const p = players.get(socket.id);
+    if (typeof ack !== 'function' || !p) return;
+    if (!MAP.nearFridge(p.x, p.y)) return ack({ ok: false });
+    if (norm(code) !== norm(CAKE_CODE)) return ack({ ok: false });
+    const fresh = p.cakeUntil < Date.now();
+    p.cakeUntil = Date.now() + CAKE_MS;
+    io.emit('cake', { id: p.id, ms: CAKE_MS });
+    if (fresh) pushChat({ system: true, text: `🎂 ${p.name} 拿出了蛋糕！靠過去一起慶祝吧`, t: Date.now() });
+    ack({ ok: true, ms: CAKE_MS });
+  });
+  socket.on('cakeDown', () => {
+    const p = players.get(socket.id);
+    if (!p || !p.cakeUntil) return;
+    p.cakeUntil = 0;
+    io.emit('cake', { id: p.id, ms: 0 });
+  });
+
+  // ----- 你畫我猜 -----
+  const inDraw = () => draw.members.has(socket.id) && players.get(socket.id);
+  const isHost = () => inDraw() && draw.host === socket.id;
+  socket.on('drawJoin', (ack) => {
+    const p = players.get(socket.id);
+    if (typeof ack !== 'function' || !p) return;
+    const room = MAP.roomAt(p.x, p.y);
+    if (!room || room.id !== 'video') return ack({ ok: false, error: '要在戰情室裡才能玩你畫我猜' });
+    if (!draw.members.has(p.id)) {
+      draw.members.add(p.id);
+      socket.join('draw');
+      drawLog(`👋 ${p.name} 加入了你畫我猜`);
+    }
+    ack({ ok: true, state: drawPublic(), strokes: draw.strokes, answer: draw.host === p.id ? draw.answer : '' });
+    drawState();
+  });
+  socket.on('drawLeave', () => { socket.leave('draw'); drawRemove(socket.id); });
+  // 搶主持棒：沒有主持人（或主持人一直沒動）就直接拿到，不然要過半的參與者同意
+  socket.on('drawClaim', (ack) => {
+    const p = inDraw();
+    if (typeof ack !== 'function' || !p) return;
+    if (draw.host === p.id) return ack({ ok: false, error: '你已經是主持人了' });
+    const now = Date.now();
+    if (!draw.host || (!draw.answer && now - draw.lastHostAct > DRAW_IDLE_MS)) {
+      drawLog(`🎤 ${p.name} 拿起了主持棒`);
+      drawReset(p.id);
+      return ack({ ok: true, host: true });
+    }
+    if (draw.vote) return ack({ ok: false, error: `${nameOf(draw.vote.by)} 正在搶主持棒，先投票吧` });
+    const vote = { by: p.id, yes: new Set([p.id]), until: now + DRAW_VOTE_MS };
+    draw.vote = vote;
+    drawLog(`📣 ${p.name} 想搶主持棒！過半的人同意就換人`);
+    setTimeout(() => {
+      if (draw.vote !== vote) return;
+      draw.vote = null;
+      drawLog('投票時間到，主持棒沒有換人');
+      drawState();
+    }, DRAW_VOTE_MS);
+    drawCheckVote();
+    ack({ ok: true });
+  });
+  socket.on('drawVote', () => {
+    if (!inDraw() || !draw.vote) return;
+    draw.vote.yes.add(socket.id);
+    drawCheckVote();
+  });
+  socket.on('drawStart', (answer, ack) => {
+    if (typeof ack !== 'function') return;
+    if (!isHost()) return ack({ ok: false, error: '只有主持人可以出題' });
+    const a = clean(answer, 12);
+    if (!norm(a)) return ack({ ok: false, error: '請先輸入答案' });
+    if (draw.answer) drawEnd('換題了，');
+    draw.answer = a; draw.strokes = []; draw.correct.clear(); draw.hostRewarded = false;
+    draw.round++; draw.lastHostAct = Date.now();
+    io.to('draw').emit('drawClear');
+    drawLog(`🎨 第 ${draw.round} 題開始！答案有 ${[...norm(a)].length} 個字`);
+    drawState();
+    ack({ ok: true });
+  });
+  socket.on('drawStroke', (st) => {
+    if (!isHost() || !st || !Array.isArray(st.pts)) return;
+    if (draw.strokes.length >= DRAW_MAX_STROKES) return;
+    const pts = st.pts.slice(0, 200).map(q => Array.isArray(q) ? [clamp(Math.round(q[0]) || 0, 0, 1000), clamp(Math.round(q[1]) || 0, 0, 1000)] : null).filter(Boolean);
+    if (!pts.length) return;
+    const s2 = { c: /^#[0-9a-f]{6}$/i.test(st.c) ? st.c : '#2b2a33', w: clamp(Number(st.w) || 6, 1, 60), pts };
+    draw.strokes.push(s2);
+    draw.lastHostAct = Date.now();
+    socket.to('draw').emit('drawStroke', s2);
+  });
+  socket.on('drawClear', () => {
+    if (!isHost()) return;
+    draw.strokes = [];
+    io.to('draw').emit('drawClear');
+  });
+  socket.on('drawReveal', () => { if (isHost()) drawEnd('主持人公布了，'); });
+  let lastGuess = 0;
+  socket.on('drawGuess', (text, ack) => {
+    const p = inDraw();
+    if (typeof ack !== 'function' || !p) return;
+    const now = Date.now();
+    if (now - lastGuess < 600) return ack({ ok: false });
+    lastGuess = now;
+    const t = clean(text, 20);
+    if (!t) return ack({ ok: false });
+    if (draw.host === p.id) return ack({ ok: false, error: '主持人不能猜啦' });
+    if (!draw.answer) { drawLog(`${p.name}：${t}`, 'chat'); return ack({ ok: true }); }
+    if (draw.correct.has(p.id)) return ack({ ok: false, error: '你已經猜對了，等下一題' });
+    if (norm(t) !== norm(draw.answer)) { drawLog(`${p.name}：${t}`, 'guess'); return ack({ ok: true, correct: false }); }
+    draw.correct.add(p.id);
+    drawLog(`✅ ${p.name} 猜對了！`, 'right');
+    const item = giveGear(p);
+    // 有人猜對，主持人每題也拿一件
+    const host = players.get(draw.host);
+    if (host && !draw.hostRewarded) { draw.hostRewarded = true; giveGear(host); }
+    ack({ ok: true, correct: true, item });
+    const guessers = [...draw.members].filter(id => id !== draw.host);
+    if (guessers.every(id => draw.correct.has(id))) drawEnd('大家都猜對了！');
+    else drawState();
+  });
+
   socket.on('chat', (text) => {
     const p = players.get(socket.id);
     if (!p) return;
@@ -542,6 +747,7 @@ io.on('connection', (socket) => {
     if (process.env.DEBUG) console.log('disconnect', socket.id, reason);
     const p = players.get(socket.id);
     if (!p) return;
+    drawRemove(socket.id);
     players.delete(socket.id);
     io.emit('playerLeft', socket.id);
     pushChat({ system: true, text: `${p.name} 離開了總部`, t: Date.now() });

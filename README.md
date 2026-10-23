@@ -23,6 +23,9 @@
 - 🎆 升到 Lv.5 後，按右下角的煙火按鈕，輸入文字，煙火就會在頭上炸開拼成那幾個字
 - 📇 右鍵點別人（手機長按）→「個人資料」，可以看他在報名頁生成的 VIP Pass（要先在報名頁生成邀請函）
 - 📹 走進「戰情室」按一下，就能和大家一起進 Jitsi 視訊
+- 🎨 戰情室裡還有「你畫我猜」：主持人用滑鼠（手機用手指）畫畫、偷偷設好答案，其他人猜；猜對的人和主持人都會拿到一件裝備。沒有主持人時誰都可以拿起主持棒；想換人就按「搶主持棒」，超過一半的參與者同意就換人、遊戲重新開始（主持人一分鐘沒動作也可以直接接手）
+- 👗 裝備：服裝 10 件、頭飾 5 件、披風 5 件，分成 R / SR / SSR。SR 會閃金光、SSR 有淡淡的彩虹玻璃光。按右上角「裝備」可以穿上或脫下，脫掉就回到職業原本的衣服；拿到的裝備存在自己的瀏覽器（清單在 `shared/gear.js`）
+- 🆕 從報名頁（邀請函）進來的人，一律從新手「防颱職員」開始
 - 🌧️ 窗外下著大雨，偶爾還會打雷
 
 技術：Phaser 3（前端 2D 遊戲引擎）+ Node.js + Express + Socket.IO（即時多人同步）。不需要資料庫，也不需要物理引擎。
@@ -86,6 +89,7 @@ npm start
 | `MONSTER_HP_PER_PLAYER` | `2000` | 每多一位在線玩家，颱風多幾點血 |
 | `RESPAWN_MINUTES` | `5` | 颱風被打倒後幾分鐘重新生成 |
 | `CRATE_RESTOCK_SECONDS` | `60` | 物資箱被拿走後幾秒補貨 |
+| `CAKE_CODE` | `CAKE` | 隱藏彩蛋的暗號（不分大小寫） |
 
 例如：`JITSI_ROOM=OurTyphoonParty2026 npm start`（Windows PowerShell：`$env:JITSI_ROOM="OurTyphoonParty2026"; npm start`）
 
@@ -101,6 +105,7 @@ server.js          伺服器：玩家同步、聊天、設定
 shared/map.js      地圖資料（前後端共用）
 shared/avatar.js   角色外觀選項與繪圖
 shared/stats.js    角色數值、職業、技能、食物效果（調整職業和技能就改這裡）
+shared/gear.js     裝備清單、稀有度和每件裝備的畫法
 public/index.html  首頁：颱風假開趴報名頁（專屬 VIP 邀請函、IG 限時動態影片）
 public/hq.html     遊戲頁：角色創建、聊天框
 public/game.js     遊戲主程式（Phaser 場景、地圖與颱風的繪製）

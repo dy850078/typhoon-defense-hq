@@ -3,6 +3,10 @@
   const MAP = HQ_MAP;
   const AV = HQ_AVATAR;
   const ST = HQ_STATS;
+  const GR = HQ_GEAR;
+  // 人物貼圖比 64x80 大一圈，翅膀、氣球、帽子才畫得下；(16,32) 是人物框的左上角，腳底在 y=108
+  const FRAME = { w: 96, h: 112, ox: 16, oy: 32 };
+  const AV_ORIGIN_Y = (FRAME.oy + 76) / FRAME.h;
   const T = MAP.TILE;
   const SPEED = 220;
   const FONT = '"Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif';
@@ -68,14 +72,21 @@
 
   // 等級、經驗存在自己的瀏覽器；報名頁的邀請函也一起帶進總部
   const saved = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+  const savedJson = (k, d) => { try { return JSON.parse(saved(k) || 'null') || d; } catch (e) { return d; } };
+  const store = (k, v) => { try { localStorage.setItem(k, typeof v === 'string' ? v : JSON.stringify(v)); } catch (e) { /* 無痕模式 */ } };
+  // 拿到的裝備、身上穿的裝備也存在瀏覽器
+  let myOwned = savedJson('hq-owned', []);
+  let myEquip = savedJson('hq-equip', {});
   function doJoin() {
-    let vip = null;
-    try { vip = JSON.parse(saved('hq-vip') || 'null'); } catch (e) { vip = null; }
-    const data = Object.assign({}, profile, { level: Number(saved('hq-level')) || 1, exp: Number(saved('hq-exp')) || 0, vip });
+    const vip = savedJson('hq-vip', null);
+    const data = Object.assign({}, profile, { level: Number(saved('hq-level')) || 1, exp: Number(saved('hq-exp')) || 0, vip,
+      owned: myOwned, equip: myEquip });
     socket.emit('join', data, (res) => {
       if (!res.ok) { $('join-error').textContent = res.error; return; }
       joined = true;
       me = res.you;
+      myOwned = res.you.owned || [];
+      myEquip = res.you.equip || {};
       $('join').hidden = true;
       $('hud').hidden = false;
       $('messages').innerHTML = '';
@@ -118,6 +129,20 @@
   socket.on('stats', (st) => scene && scene.onStats(st));
   socket.on('cooking', (c) => scene && scene.onCooking(c));
   socket.on('ate', (a) => toast(`吃了 ${a.food}，血量 +${a.hp} ❤️`));
+  socket.on('playerGear', (g) => scene && scene.onGear(g));
+  socket.on('gearGot', (g) => {
+    myOwned = g.owned;
+    store('hq-owned', myOwned);
+    const it = GR.GEAR[g.item];
+    if (it) toast(`🎁 獲得【${it.rarity}】${it.icon} ${it.name}！到 👗 裝備 穿上看看`);
+    if (scene && scene.me) scene.burst(scene.me.x, scene.me.y - 40, 16, 0xffd23f);
+    if (modalKind === 'gear') openGear();
+  });
+  socket.on('cake', (c) => scene && scene.onCake(c.id, c.ms));
+  socket.on('drawState', (st) => DRAW.onState(st));
+  socket.on('drawLog', (l) => DRAW.log(l));
+  socket.on('drawStroke', (st) => DRAW.paint(st));
+  socket.on('drawClear', () => DRAW.clear());
   socket.on('chat', (msg) => {
     addMessage(msg);
     if (!msg.system && scene) scene.showBubble(msg.id, msg.text);
@@ -149,11 +174,11 @@
   window.addEventListener('keydown', (e) => {
     if (!joined) return;
     if (e.key === 'Enter' && !typing()) { e.preventDefault(); chatInput.focus(); }
-    else if (e.key === 'Escape') { chatInput.blur(); closeModal(); }
+    else if (e.key === 'Escape') { chatInput.blur(); closeModal(); if (!$('draw').hidden) DRAW.close(); }
   });
   // 正在打字或開著視窗的時候，鍵盤不控制角色
   const typing = () => document.activeElement === chatInput ||
-    (document.activeElement && document.activeElement.tagName === 'INPUT') || !$('modal').hidden;
+    (document.activeElement && document.activeElement.tagName === 'INPUT') || !$('modal').hidden || !$('draw').hidden;
   $('chat-toggle').addEventListener('click', () => $('chat').classList.toggle('collapsed'));
   if (window.innerWidth < 600) $('chat').classList.add('collapsed');
 
@@ -208,6 +233,9 @@
     const bag = el('button', 'inv-item bag-btn', '🎒 背包');
     bag.onclick = openBag;
     box.appendChild(bag);
+    const gear = el('button', 'inv-item bag-btn', '👗 裝備');
+    gear.onclick = openGear;
+    box.appendChild(gear);
     if (modalKind === 'bag') openBag();
   }
   function openBag() {
@@ -241,6 +269,254 @@
       toast(`喝了礦泉水，魔力 +${res.mp} 💧`);
     });
   }
+
+  // ---------------- 裝備欄 ----------------
+  // 把某個人（套上某些裝備）畫成一張小圖
+  function gearPortrait(equip, scale) {
+    const c = document.createElement('canvas');
+    c.width = FRAME.w * scale; c.height = FRAME.h * scale;
+    const ctx = c.getContext('2d');
+    ctx.scale(scale, scale); ctx.translate(FRAME.ox, FRAME.oy);
+    AV.drawAvatar(ctx, Object.assign({}, profile, { cls: myCls(), equip }));
+    return c;
+  }
+  function equipGear(slot, id) {
+    socket.emit('equip', slot, id, (res) => {
+      if (!res || !res.ok) return;
+      myEquip = res.equip;
+      store('hq-equip', myEquip);
+      if (modalKind === 'gear') openGear();
+    });
+  }
+  function openGear() {
+    const box = el('div', 'gear');
+    const top = el('div', 'gear-top');
+    const pic = gearPortrait(myEquip, 2);
+    pic.className = 'gear-me' + (topRarity(myEquip) ? ' r-' + topRarity(myEquip) : '');
+    top.appendChild(pic);
+    const slots = el('div', 'gear-slots');
+    Object.entries(GR.SLOTS).forEach(([slot, label]) => {
+      const id = myEquip[slot], it = GR.GEAR[id];
+      const row = el('div', 'gear-slot' + (it ? ' r-' + it.rarity : ''));
+      row.appendChild(el('span', 'gear-slot-k', label));
+      row.appendChild(el('b', null, it ? `${it.icon} ${it.name}` : '—'));
+      if (it) { const off = el('button', 'hud-btn tiny', '脫下'); off.onclick = () => equipGear(slot, null); row.appendChild(off); }
+      slots.appendChild(row);
+    });
+    slots.appendChild(el('p', 'modal-hint', `收集 ${myOwned.length} / ${Object.keys(GR.GEAR).length} 件。到 🎖️ 戰情室玩 🎨 你畫我猜，猜對就會拿到新裝備！`));
+    top.appendChild(slots);
+    box.appendChild(top);
+    Object.entries(GR.SLOTS).forEach(([slot, label]) => {
+      box.appendChild(el('h3', 'gear-h', label));
+      const grid = el('div', 'gear-grid');
+      Object.entries(GR.GEAR).filter(([, g]) => g.slot === slot).forEach(([id, g]) => {
+        const have = myOwned.includes(id), on = myEquip[slot] === id;
+        const cell = el('button', `gear-item r-${g.rarity}${have ? '' : ' locked'}${on ? ' on' : ''}`);
+        cell.type = 'button';
+        cell.appendChild(el('span', 'gear-rar', g.rarity));
+        if (have) {
+          const thumb = gearPortrait({ [slot]: id }, 1);
+          thumb.className = 'gear-thumb';
+          cell.appendChild(thumb);
+          cell.appendChild(el('span', 'gear-name', g.name));
+          cell.appendChild(el('span', 'gear-act', on ? '✓ 穿著（點一下脫下）' : '點一下穿上'));
+          cell.onclick = () => equipGear(slot, on ? null : id);
+        } else {
+          cell.appendChild(el('span', 'gear-lock', '？'));
+          cell.appendChild(el('span', 'gear-name', '？？？'));
+          cell.disabled = true;
+        }
+        grid.appendChild(cell);
+      });
+      box.appendChild(grid);
+    });
+    openModal('gear', '👗 裝備', box);
+    $('modal').classList.add('wide');
+  }
+  // 身上最稀有的裝備等級（決定光芒）
+  function topRarity(equip) {
+    const order = ['R', 'SR', 'SSR'];
+    let best = -1;
+    Object.values(equip || {}).forEach(id => { const g = GR.GEAR[id]; if (g) best = Math.max(best, order.indexOf(g.rarity)); });
+    return best >= 1 ? order[best] : null;
+  }
+
+  // ---------------- 冰箱（隱藏的蛋糕） ----------------
+  function openFridge() {
+    const box = el('form', 'fw-form');
+    const input = el('input');
+    input.maxLength = 12; input.autocomplete = 'off';
+    box.appendChild(input);
+    const go = el('button', 'primary', '確定'); go.type = 'submit';
+    box.appendChild(go);
+    box.onsubmit = (e) => {
+      e.preventDefault();
+      socket.emit('cake', input.value, (res) => {
+        closeModal();
+        if (res && res.ok) toast('🎂 拿到蛋糕了！靠近你的人都會戴上慶祝帽');
+        else toast('🧊 冰箱裡只有幾瓶礦泉水…');
+      });
+    };
+    openModal('fridge', '🧊', box);
+    setTimeout(() => input.focus(), 30);
+  }
+  $('cake-btn').addEventListener('click', () => socket.emit('cakeDown'));
+
+  // ---------------- 你畫我猜（戰情室） ----------------
+  const DRAW = (() => {
+    const cv = $('draw-canvas'), ctx = cv.getContext('2d');
+    const COLORS = ['#2b2a33', '#e8384f', '#ff7a2f', '#ffd23f', '#6baf7b', '#4f7cc2', '#7a5cc8', '#a0663e'];
+    const SIZES = [4, 10, 22];
+    let state = null, answer = '', color = COLORS[0], size = SIZES[1], cur = null, sendTimer = 0;
+    const amHost = () => state && me && state.host === me.id;
+
+    function clear() { ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, cv.width, cv.height); }
+    function paint(st) {
+      const k = cv.width / 1000, ky = cv.height / 1000;
+      ctx.save(); ctx.strokeStyle = st.c; ctx.fillStyle = st.c; ctx.lineWidth = st.w * k; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+      ctx.beginPath();
+      st.pts.forEach(([x, y], i) => (i ? ctx.lineTo(x * k, y * ky) : ctx.moveTo(x * k, y * ky)));
+      if (st.pts.length === 1) { ctx.arc(st.pts[0][0] * k, st.pts[0][1] * ky, st.w * k / 2, 0, Math.PI * 2); ctx.fill(); } else ctx.stroke();
+      ctx.restore();
+    }
+    function log(l) {
+      const box = $('draw-log');
+      const line = el('div', 'dl-' + (l.kind || 'sys'), l.text);
+      box.appendChild(line);
+      while (box.children.length > 80) box.firstChild.remove();
+      box.scrollTop = box.scrollHeight;
+    }
+    function render() {
+      if (!state) return;
+      const host = amHost();
+      $('draw').classList.toggle('is-host', host);
+      const guessers = state.members.filter(m => m.id !== state.host);
+      const right = guessers.filter(m => state.correct.includes(m.id)).length;
+      let info;
+      if (!state.host) info = '還沒有主持人，按「🎤 當主持人」來出題！';
+      else if (!state.playing) info = host ? '你是主持人：輸入答案、按「出題」，然後開始畫！' : `主持人 ${state.hostName} 正在想題目…`;
+      else info = host ? `答案「${answer}」· 已猜對 ${right} / ${guessers.length}` : `${state.hostName} 出題中 · 答案有 ${state.len} 個字 · 已猜對 ${right} / ${guessers.length}`;
+      $('draw-info').textContent = info;
+      const claim = $('draw-claim');
+      claim.hidden = host;
+      claim.textContent = state.host ? '🎤 搶主持棒' : '🎤 當主持人';
+      const v = state.vote;
+      $('draw-vote').hidden = !v;
+      if (v) {
+        $('draw-vote-text').textContent = `📣 ${v.byName} 想搶主持棒（${v.yes.length} / ${v.need} 人同意）`;
+        $('draw-vote-yes').hidden = v.yes.includes(me && me.id);
+      }
+      const who = $('draw-members');
+      who.innerHTML = '';
+      state.members.forEach(m => {
+        const tag = m.id === state.host ? '🎤 ' : state.correct.includes(m.id) ? '✅ ' : '';
+        who.appendChild(el('span', 'chip' + (me && m.id === me.id ? ' me' : ''), tag + m.name));
+      });
+      $('draw-guess').placeholder = host ? '主持人不能猜喔' : state.playing ? `猜猜看（${state.len} 個字）` : '聊天…';
+      $('draw-guess').disabled = host;
+    }
+    function onState(st) { state = st; if (!amHost()) answer = ''; render(); }
+
+    // 主持人畫畫：座標換成 0~1000，每 60 毫秒送一段
+    function pos(e) {
+      const b = cv.getBoundingClientRect();
+      return [Math.round((e.clientX - b.left) / b.width * 1000), Math.round((e.clientY - b.top) / b.height * 1000)];
+    }
+    function flush() {
+      sendTimer = 0;
+      if (!cur || cur.pts.length < 1) return;
+      const st = { c: cur.c, w: cur.w, pts: cur.pts };
+      socket.emit('drawStroke', st);
+      const last = cur.pts[cur.pts.length - 1];
+      cur.pts = [last];
+    }
+    cv.addEventListener('pointerdown', (e) => {
+      if (!amHost()) return;
+      e.preventDefault();
+      cv.setPointerCapture(e.pointerId);
+      cur = { c: color, w: size, pts: [pos(e)] };
+      paint(cur);
+    });
+    cv.addEventListener('pointermove', (e) => {
+      if (!cur) return;
+      const p = pos(e), last = cur.pts[cur.pts.length - 1];
+      if (Math.hypot(p[0] - last[0], p[1] - last[1]) < 4) return;
+      paint({ c: cur.c, w: cur.w, pts: [last, p] });
+      cur.pts.push(p);
+      if (cur.pts.length > 150) flush();
+      else if (!sendTimer) sendTimer = setTimeout(flush, 60);
+    });
+    const end = () => { if (!cur) return; clearTimeout(sendTimer); flush(); cur = null; };
+    cv.addEventListener('pointerup', end);
+    cv.addEventListener('pointercancel', end);
+
+    // 工具列
+    const pal = $('draw-colors');
+    COLORS.concat(['#ffffff']).forEach(c => {
+      const b = el('button', 'sw' + (c === color ? ' on' : ''));
+      b.type = 'button'; b.style.background = c; b.title = c === '#ffffff' ? '橡皮擦' : '';
+      if (c === '#ffffff') b.textContent = '🧽';
+      b.onclick = () => { color = c; [...pal.children].forEach(x => x.classList.toggle('on', x === b)); };
+      pal.appendChild(b);
+    });
+    const sz = $('draw-sizes');
+    SIZES.forEach(w => {
+      const b = el('button', 'sz' + (w === size ? ' on' : ''));
+      b.type = 'button';
+      const d = el('i'); d.style.width = d.style.height = Math.max(4, w * 0.8) + 'px'; b.appendChild(d);
+      b.onclick = () => { size = w; [...sz.children].forEach(x => x.classList.toggle('on', x === b)); };
+      sz.appendChild(b);
+    });
+    $('draw-clear').onclick = () => { if (amHost()) { clear(); socket.emit('drawClear'); } };
+    $('draw-reveal').onclick = () => socket.emit('drawReveal');
+    $('draw-start-form').onsubmit = (e) => {
+      e.preventDefault();
+      const a = $('draw-answer').value.trim();
+      socket.emit('drawStart', a, (res) => {
+        if (!res || !res.ok) { if (res && res.error) toast(res.error); return; }
+        answer = a; $('draw-answer').value = ''; render();
+      });
+    };
+    $('draw-guess-form').onsubmit = (e) => {
+      e.preventDefault();
+      const t = $('draw-guess').value.trim();
+      if (!t) return;
+      $('draw-guess').value = '';
+      socket.emit('drawGuess', t, (res) => {
+        if (res && res.error) toast(res.error);
+        if (res && res.correct) toast(res.item ? '🎉 猜對了！拿到一件新裝備' : '🎉 猜對了！（裝備已經全部收集完了）');
+      });
+    };
+    $('draw-claim').onclick = () => socket.emit('drawClaim', (res) => { if (res && res.error) toast(res.error); });
+    $('draw-vote-yes').onclick = () => socket.emit('drawVote');
+    $('draw-x').onclick = () => close();
+
+    function open() {
+      // 先把目前位置告訴伺服器，它才知道你在戰情室裡
+      const m = scene && scene.me;
+      if (m) socket.emit('move', { x: Math.round(m.x), y: Math.round(m.y), dir: m.dir, moving: false });
+      socket.emit('drawJoin', (res) => {
+        if (!res || !res.ok) { if (res && res.error) toast(res.error); return; }
+        $('draw-log').innerHTML = '';
+        clear();
+        res.strokes.forEach(paint);
+        answer = res.answer || '';
+        $('draw').hidden = false;
+        chatInput.blur();
+        onState(res.state);
+      });
+    }
+    function close() {
+      if ($('draw').hidden) return;
+      end();
+      $('draw').hidden = true;
+      socket.emit('drawLeave');
+      state = null;
+    }
+    clear();
+    return { open, close, onState, log, paint, clear };
+  })();
+  $('draw-btn').addEventListener('click', () => DRAW.open());
 
   // ---------------- 數值、技能欄 ----------------
   let myStats = null;
@@ -732,6 +1008,31 @@
       ctx.beginPath(); ctx.moveTo(18, 9); ctx.lineTo(27, 12); ctx.quadraticCurveTo(27, 26, 18, 31); ctx.closePath();
       ctx.fillStyle = '#86a8dd'; ctx.fill();
     }),
+    // 隱藏蛋糕：兩層草莓鮮奶油蛋糕＋蠟燭（畫成兩倍大，顯示時縮小）
+    cake: () => fxCanvas(96, 96, 41, (ctx, r) => {
+      ctx.scale(2, 2);
+      CR.blob(ctx, 24, 42, 21, 4, r, 0.05); CR.fill(ctx, '#d6dae1', r, null); CR.stroke(ctx, r, 2.2);
+      CR.rect(ctx, 7, 26, 34, 15, r, 0.8); CR.fill(ctx, '#fbf3e4', r, [7, 26, 34, 15]); CR.stroke(ctx, r, 2.4);
+      CR.rect(ctx, 13, 15, 22, 12, r, 0.8); CR.fill(ctx, '#f7c6d4', r, [13, 15, 22, 12]); CR.stroke(ctx, r, 2.4);
+      for (let x = 9; x < 41; x += 5) { CR.blob(ctx, x + 1, 27, 3, 2.4, r, 0.1, 10); CR.fill(ctx, '#ffffff', r, null); }
+      [[11, 33], [20, 35], [29, 33], [37, 35]].forEach(([x, y]) => { CR.blob(ctx, x, y, 2.6, 2.4, r, 0.1, 10); CR.fill(ctx, '#e8384f', r, null); CR.stroke(ctx, r, 1.2); });
+      [[18, '#4f7cc2'], [24, '#ffd23f'], [30, '#6baf7b']].forEach(([x, c]) => {
+        CR.rect(ctx, x - 1.4, 7, 2.8, 8, r, 0.3); CR.fill(ctx, c, r, null); CR.stroke(ctx, r, 1.2);
+        CR.blob(ctx, x, 4, 1.8, 3, r, 0.1, 10); CR.fill(ctx, '#ff7a2f', r, null);
+        CR.blob(ctx, x, 4.6, 0.8, 1.4, r, 0.1, 8); CR.fill(ctx, '#ffd23f', r, null);
+      });
+    }),
+    // 慶祝帽：條紋三角帽＋頂上的毛球
+    partyhat: () => fxCanvas(64, 76, 42, (ctx, r) => {
+      ctx.scale(2, 2);
+      const path = () => { ctx.beginPath(); ctx.moveTo(16, 4); ctx.lineTo(29, 34); ctx.quadraticCurveTo(16, 38, 3, 34); ctx.closePath(); };
+      path(); CR.fill(ctx, '#ff6b81', r, null);
+      ctx.save(); path(); ctx.clip();
+      [[10, '#ffd23f'], [20, '#7fb2e5'], [30, '#ffd23f']].forEach(([y, c]) => CR.line(ctx, 0, y + 6, 32, y - 4, r, 3.4, c, 0.3));
+      ctx.restore();
+      path(); CR.stroke(ctx, r, 2.2);
+      CR.blob(ctx, 16, 4, 4, 4, r, 0.15, 12); CR.fill(ctx, '#ffffff', r, null); CR.stroke(ctx, r, 1.6);
+    }),
   };
 
   // NPC 和小怪：用一般人物的畫法，再加上手上的道具（畫布比人物寬一點）
@@ -938,6 +1239,13 @@
           const up = at(x, y + 1) === 'M';
           CR.blob(ctx, px + 24, py + 26, 13, 10, r, 0.06); CR.fill(ctx, '#2f3b55', r, null); CR.stroke(ctx, r, 2.2);
           CR.rect(ctx, px + 12, up ? py + 6 : py + 34, 24, 8, r, 0.8); CR.fill(ctx, '#4f7cc2', r, null); CR.stroke(ctx, r, 2.2);
+        } else if (ch === 'R') {
+          // 冰箱（看起來就是一台普通的冰箱）
+          CR.rect(ctx, px + 6, py - 14, T - 12, T + 10, r, 0.8); CR.fill(ctx, '#e8edf3', r, [px + 6, py - 14, T - 12, T + 10]); CR.stroke(ctx, r, 2.4);
+          CR.line(ctx, px + 7, py + 6, px + T - 7, py + 6, r, 2.2);
+          CR.line(ctx, px + T - 13, py - 8, px + T - 13, py + 1, r, 2.6, '#9aa3b5');
+          CR.line(ctx, px + T - 13, py + 12, px + T - 13, py + 24, r, 2.6, '#9aa3b5');
+          CR.blob(ctx, px + 16, py - 4, 4, 4, r, 0.15, 10); CR.fill(ctx, '#ff7a2f', r, null); CR.stroke(ctx, r, 1.4);
         } else if (ch === 'N') {
           // 轉職導師腳下的星星地毯
           CR.blob(ctx, px + 24, py + 30, 26, 15, r, 0.06); CR.fill(ctx, '#6a4fb8', r, [px - 2, py + 15, T + 4, 30]); CR.stroke(ctx, r, 2.4);
@@ -1129,7 +1437,7 @@
 
     makeAvatar(p) {
       const key = this.avatarKey(p);
-      const body = this.add.image(0, 0, key).setScale(0.5).setOrigin(0.5, 0.95);
+      const body = this.add.image(0, 0, key).setScale(0.5).setOrigin(0.5, AV_ORIGIN_Y);
       const tag = this.add.text(0, -84, this.tagText(p), {
         fontSize: '14px', fontStyle: 'bold', color: '#f2f4f8', fontFamily: FONT,
         backgroundColor: 'rgba(19,26,40,0.85)', padding: { x: 7, y: 2 },
@@ -1141,8 +1449,11 @@
       cont.tag = tag;
       cont.name_ = p.name;
       cont.pid = p.id;
-      cont.look = { hair: p.hair, hairColor: p.hairColor, skin: p.skin, outfit: p.outfit, glasses: p.glasses };
+      cont.look = { hair: p.hair, hairColor: p.hairColor, skin: p.skin, outfit: p.outfit, glasses: p.glasses, equip: p.equip || {} };
       cont.texKey = key;
+      cont.cakeUntil = 0; cont.hatUntil = 0;
+      this.applyGlow(cont);
+      if (p.cakeMs > 0) this.onCake(p.id, p.cakeMs, cont);
       this.drawHpBar(cont, p);
       cont.dir = p.dir || 1;
       cont.moving = !!p.moving;
@@ -1153,14 +1464,58 @@
 
     // 外觀＋職業服裝的貼圖，第一次用到才畫
     avatarKey(p) {
-      const key = `av-${p.hair}-${p.hairColor}-${p.skin}-${p.outfit}-${p.glasses}-${p.cls || 'staff'}`;
+      const eq = p.equip || {};
+      const gear = Object.keys(GR.SLOTS).map(s => eq[s] || '').join('.');
+      const key = `av-${p.hair}-${p.hairColor}-${p.skin}-${p.outfit}-${p.glasses}-${p.cls || 'staff'}-${gear}`;
       if (!this.textures.exists(key)) {
         const c = document.createElement('canvas');
-        c.width = AV.WIDTH * 2; c.height = AV.HEIGHT * 2;
-        const ctx = c.getContext('2d'); ctx.scale(2, 2); AV.drawAvatar(ctx, p);
+        c.width = FRAME.w * 2; c.height = FRAME.h * 2;
+        const ctx = c.getContext('2d'); ctx.scale(2, 2); ctx.translate(FRAME.ox, FRAME.oy); AV.drawAvatar(ctx, p);
         this.textures.addCanvas(key, c);
       }
       return key;
+    }
+
+    // 換裝備：重畫貼圖、換光芒
+    onGear(g) {
+      const who = me && g.id === me.id ? this.me : this.remotes.get(g.id);
+      if (!who) return;
+      who.look.equip = g.equip || {};
+      who.texKey = this.avatarKey(Object.assign({}, who.look, { cls: who.stats ? who.stats.cls : 'staff' }));
+      who.body_.setTexture(who.texKey);
+      this.applyGlow(who);
+      this.burst(who.x, who.y - 40, 8, 0xffffff);
+    }
+
+    // SR：一閃一閃的金光；SSR：顏色慢慢流轉的彩虹光，加上一道玻璃般的反光
+    applyGlow(c) {
+      const img = c.body_;
+      if (c.glowTween) { c.glowTween.stop(); c.glowTween = null; }
+      c.glowFx = null;
+      if (!img.preFX) return; // Canvas 模式沒有特效
+      img.preFX.clear();
+      const rar = topRarity(c.look.equip);
+      if (!rar) return;
+      img.preFX.setPadding(8);
+      const glow = img.preFX.addGlow(rar === 'SSR' ? 0xffc8f0 : 0xffd23f, 1, 0, false, 0.1, 10);
+      c.glowTween = this.tweens.add({ targets: glow, outerStrength: rar === 'SSR' ? 3 : 2.4, duration: rar === 'SSR' ? 1400 : 900,
+        yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      if (rar === 'SSR') { c.glowFx = glow; img.preFX.addShine(0.35, 0.25, 4); }
+    }
+
+    // 拿蛋糕：手上捧著蛋糕，ms 是 0 就是放下
+    onCake(id, ms, who0) {
+      const who = who0 || (me && id === me.id ? this.me : this.remotes.get(id));
+      if (!who) return;
+      who.cakeUntil = ms > 0 ? performance.now() + ms : 0;
+      if (ms > 0 && !who.cake) {
+        who.cake = this.add.image(0, -6, 'fx-cake').setScale(0.36).setOrigin(0.5, 0.75);
+        who.add(who.cake);
+        this.burst(who.x, who.y - 40, 12, 0xff6b81);
+      } else if (!(ms > 0) && who.cake) { who.cake.destroy(); who.cake = null; }
+      // 蛋糕放下了，因為它戴上的帽子也一起拿掉
+      if (!(ms > 0)) [this.me, ...this.remotes.values()].forEach(c => { if (c && c.hatBy === id) c.hatUntil = 0; });
+      if (who === this.me) $('cake-btn').hidden = !(ms > 0);
     }
 
     tagText(p) { const c = ST.CLASSES[p.cls] || ST.CLASSES.staff; return `Lv.${p.level || 1} ${c.icon} ${p.name}`; }
@@ -1541,7 +1896,7 @@
         ring(60, 0x4f7cc2);
       } else if (fx.skill === 'skate') {
         // 本人先藏起來，替身繞著颱風溜一圈，沿路留下冰晶
-        const ghost = this.add.image(who.x, who.y, who.texKey).setScale(0.5).setOrigin(0.5, 0.95).setDepth(3000);
+        const ghost = this.add.image(who.x, who.y, who.texKey).setScale(0.5).setOrigin(0.5, AV_ORIGIN_Y).setDepth(3000);
         who.body_.setAlpha(0);
         const cx = foe.x, cy = foe.y, R = foe.r;
         const start = Math.atan2(who.y - cy, who.x - cx);
@@ -1653,6 +2008,7 @@
       }
       if (MAP.tiles[ty] && MAP.tiles[ty][tx] === 'G' && MAP.nearStove(this.me.x, this.me.y, 1.8 * T)) return { type: 'cook' };
       if (Math.hypot(x - MAP.mentor.x, y - (MAP.mentor.y - 20)) < 50 && MAP.nearMentor(this.me.x, this.me.y)) return { type: 'mentor' };
+      if (Math.hypot(x - MAP.fridge.x, y - (MAP.fridge.y - 10)) < 40 && MAP.nearFridge(this.me.x, this.me.y)) return { type: 'fridge' };
       return null;
     }
 
@@ -1691,6 +2047,8 @@
         this.castSkill(act.skill || 'strike', act.target);
       } else if (act.type === 'mentor') {
         openMentor();
+      } else if (act.type === 'fridge') {
+        openFridge();
       } else if (act.type === 'cook') {
         socket.emit('cook', (res) => {
           if (!res || !res.ok) { if (res && res.error) toast(res.error); return; }
@@ -2017,10 +2375,32 @@
       });
       this.updateSparks(dt);
 
+      // 拿著蛋糕的人：時間到自動放下；靠近的人（包含自己）戴上慶祝帽，直到那個蛋糕放下
+      const holders = all0.filter(c => c.cakeUntil);
+      holders.forEach(h => { if (now > h.cakeUntil) this.onCake(h.pid, 0, h); });
+      all0.forEach(c => {
+        holders.forEach(h => {
+          if (h.cakeUntil && Math.hypot(h.x - c.x, h.y - c.y) < 160 && h.cakeUntil > c.hatUntil) { c.hatUntil = h.cakeUntil; c.hatBy = h.pid; }
+        });
+        const hat = now < c.hatUntil;
+        if (hat && !c.hat) { c.hat = this.add.image(4, -60, 'fx-partyhat').setScale(0.5).setOrigin(0.5, 0.9).setAngle(12); c.add(c.hat); }
+        else if (!hat && c.hat) { c.hat.destroy(); c.hat = null; }
+        const up = c.hat ? -22 : 0;
+        if (c.tag.y !== -84 + up) { c.tag.y = -84 + up; c.bar.y = up; }
+        if (c.glowFx) c.glowFx.color = Phaser.Display.Color.HSVToRGB((time / 4000) % 1, 0.35, 1).color;
+      });
+      if (this.me.cakeUntil) {
+        const left = Math.max(0, Math.ceil((this.me.cakeUntil - now) / 1000));
+        const txt = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
+        if (txt !== this.cakeTxt) { this.cakeTxt = txt; $('cake-left').textContent = txt; }
+      }
+
       // 走路彈跳 + 依 y 排深度
       const all = all0;
       all.forEach(c => {
         c.body_.y = c.moving ? -Math.abs(Math.sin(time / 90)) * 5 : 0;
+        if (c.hat) c.hat.y = -60 + c.body_.y;
+        if (c.cake) c.cake.y = -6 + c.body_.y;
         c.setDepth(c.y);
       });
 
@@ -2032,6 +2412,7 @@
         this.roomId = rid;
         $('room-name').textContent = room ? room.name : '🌧️ 戶外（風雨很大！）';
         $('video-prompt').hidden = rid !== 'video';
+        if (rid !== 'video') DRAW.close();
         if (room && !first) toast(`進入 ${room.name}`);
         const tips = {
           front: `野外有颱風${ST.MONSTER.name}和小怪！空白鍵攻擊、K 放技能，看到紅圈快閃開；回到圍欄裡就安全了`,

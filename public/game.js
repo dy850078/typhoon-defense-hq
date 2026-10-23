@@ -5,6 +5,9 @@
   const ST = HQ_STATS;
   const GR = HQ_GEAR;
   const DC = HQ_DECOR;
+  // iOS 不理 viewport 的 user-scalable，手指捏合會放大，這裡擋掉；連點兩下靠 CSS 的 touch-action
+  ['gesturestart', 'gesturechange'].forEach(t => document.addEventListener(t, e => e.preventDefault(), { passive: false }));
+  document.addEventListener('touchmove', e => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
   // 近距離的普攻：打到時角色往前撲一下
   const MELEE = ['strike', 'power', 'syringe', 'punch', 'kick'];
   // 會飛過去的攻擊：特效打到才跳數字（毫秒）
@@ -1913,10 +1916,10 @@
     makeAvatar(p) {
       const key = this.avatarKey(p);
       const body = this.add.image(0, 0, key).setScale(0.5).setOrigin(0.5, AV_ORIGIN_Y);
-      const tag = this.add.text(0, -84, this.tagText(p), {
+      const tag = this.add.text(0, 6, this.tagText(p), {
         fontSize: '14px', fontStyle: 'bold', color: '#f2f4f8', fontFamily: FONT,
         backgroundColor: 'rgba(19,26,40,0.85)', padding: { x: 7, y: 2 },
-      }).setOrigin(0.5);
+      }).setOrigin(0.5, 0);
       const bar = this.add.graphics();
       const cont = this.add.container(p.x, p.y, [body, tag, bar]);
       cont.body_ = body;
@@ -2011,13 +2014,13 @@
       return best;
     }
 
-    // 名牌上方的小血條
+    // 頭頂的小血條（名牌在腳下）
     drawHpBar(c, st) {
       c.stats = st;
       const w = 40, ratio = st.maxHp ? Math.max(0, st.hp) / st.maxHp : 1;
       c.bar.clear();
-      c.bar.fillStyle(0x131a28, 0.85); c.bar.fillRoundedRect(-w / 2 - 2, -101, w + 4, 8, 4);
-      c.bar.fillStyle(ratio > 0.35 ? 0x6baf7b : 0xff6a13, 1); c.bar.fillRoundedRect(-w / 2, -99, Math.max(2, w * ratio), 4, 2);
+      c.bar.fillStyle(0x131a28, 0.85); c.bar.fillRoundedRect(-w / 2 - 2, -83, w + 4, 8, 4);
+      c.bar.fillStyle(ratio > 0.35 ? 0x6baf7b : 0xff6a13, 1); c.bar.fillRoundedRect(-w / 2, -81, Math.max(2, w * ratio), 4, 2);
       c.body_.setAlpha(st.dead ? 0.45 : 1);
       c.body_.setAngle(st.dead ? 80 : 0);
     }
@@ -2151,7 +2154,7 @@
       const who = me && id === me.id ? this.me : this.remotes.get(id);
       if (!who) return;
       if (who.bubble) who.bubble.destroy();
-      const b = this.add.text(0, -112, text.length > 40 ? text.slice(0, 40) + '…' : text, {
+      const b = this.add.text(0, -94, text.length > 40 ? text.slice(0, 40) + '…' : text, {
         fontSize: '15px', color: '#3a3a3c', fontFamily: FONT, backgroundColor: '#ffffff',
         padding: { x: 10, y: 6 }, wordWrap: { width: 200, useAdvancedWrap: true }, align: 'center',
       }).setOrigin(0.5, 1);
@@ -3275,7 +3278,7 @@
         if (hat && !c.hat) { c.hat = this.add.image(4, -60, 'fx-partyhat').setScale(0.5).setOrigin(0.5, 0.9).setAngle(12); c.add(c.hat); }
         else if (!hat && c.hat) { c.hat.destroy(); c.hat = null; }
         const up = (c.hat ? -22 : 0) + (c.look && c.look.equip && c.look.equip.head ? -12 : 0);
-        if (c.tag.y !== -84 + up) { c.tag.y = -84 + up; c.bar.y = up; }
+        if (c.bar.y !== up) c.bar.y = up;
         if (c.glowFx) c.glowFx.color = Phaser.Display.Color.HSVToRGB((time / 4000) % 1, 0.35, 1).color;
       });
       if (this.me.cakeUntil) {

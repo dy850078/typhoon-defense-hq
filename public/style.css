@@ -1,4 +1,6 @@
 /* 配色跟報名頁的邀請函一致：灰銀、午夜藍、橘 */
+/* 手機、平板連點不會放大畫面（畫畫板、拉桿另外設 none） */
+html, body, * { touch-action: manipulation; }
 :root {
   --ground: #FAFAF7;
   --paper: #FFFFFF;

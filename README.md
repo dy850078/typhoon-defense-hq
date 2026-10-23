@@ -5,6 +5,8 @@
 - 🐱 創建自己的動森風格小動物（6 種動物、毛色、雨衣顏色）
 - 🚶 在總部地圖裡走來走去（方向鍵 / WASD，手機可以點地板走路）
 - 💬 文字聊天，說的話會冒出對話泡泡
+- 📦 到「物資倉庫」敲箱子（空白鍵或點箱子），敲三下會掉出泡麵、礦泉水或蔬菜
+- 🌀 走出圍欄到「颱風前線」，大家一起打颱風怪物；它會不時吹強風把人吹開，被打倒後 5 分鐘重新生成
 - 📹 走進「視訊會議室」按一下，就能和大家一起進 Jitsi 視訊
 - 🌧️ 窗外下著大雨，偶爾還會打雷
 
@@ -65,6 +67,8 @@ npm start
 | `MAX_PLAYERS` | `40` | 最多同時上線人數 |
 | `JITSI_ROOM` | 每次啟動隨機產生 | 視訊房間名稱，想固定的話自己設一個不好猜的名字 |
 | `JITSI_DOMAIN` | `meet.jit.si` | 如果有自架 Jitsi 可以換掉 |
+| `MONSTER_HP` | `600` | 颱風怪物的血量 |
+| `RESPAWN_MINUTES` | `5` | 颱風被打倒後幾分鐘重新生成 |
 
 例如：`JITSI_ROOM=OurTyphoonParty2026 npm start`（Windows PowerShell：`$env:JITSI_ROOM="OurTyphoonParty2026"; npm start`）
 

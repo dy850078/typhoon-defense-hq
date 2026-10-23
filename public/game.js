@@ -4,6 +4,7 @@
   const AV = HQ_AVATAR;
   const T = MAP.TILE;
   const SPEED = 220;
+  const FONT = '"Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif';
   const $ = (id) => document.getElementById(id);
 
   // ---------------- 角色創建 ----------------
@@ -82,6 +83,12 @@
   socket.on('playerJoined', (p) => scene && scene.addRemote(p));
   socket.on('playerMoved', (m) => scene && scene.moveRemote(m));
   socket.on('playerLeft', (id) => scene && scene.removeRemote(id));
+  socket.on('monster', (m) => scene && scene.setMonster(m));
+  socket.on('monsterMove', (m) => scene && scene.moveMonster(m));
+  socket.on('monsterHit', (m) => scene && scene.onMonsterHit(m));
+  socket.on('gust', (g) => scene && scene.onGust(g));
+  socket.on('crateHit', (c) => scene && scene.onCrateHit(c));
+  socket.on('itemGot', (g) => scene && scene.onItemGot(g));
   socket.on('chat', (msg) => {
     addMessage(msg);
     if (!msg.system && scene) scene.showBubble(msg.id, msg.text);
@@ -116,6 +123,8 @@
     else if (e.key === 'Escape') chatInput.blur();
   });
   const typing = () => document.activeElement === chatInput;
+  $('chat-toggle').addEventListener('click', () => $('chat').classList.toggle('collapsed'));
+  if (window.innerWidth < 600) $('chat').classList.add('collapsed');
 
   // ---------------- 視訊 ----------------
   $('video-btn').addEventListener('click', () => {
@@ -124,6 +133,71 @@
       `#userInfo.displayName=${name}&config.prejoinConfig.enabled=false`;
     window.open(url, '_blank', 'noopener');
   });
+
+  // ---------------- 背包 ----------------
+  function renderInventory(inv) {
+    const box = $('inventory');
+    box.innerHTML = '';
+    Object.entries(MAP.ITEMS).forEach(([k, it]) => {
+      const el = document.createElement('span');
+      el.className = 'inv-item';
+      el.title = it.name;
+      el.textContent = `${it.icon} ${(inv && inv[k]) || 0}`;
+      box.appendChild(el);
+    });
+  }
+  function toast(text) {
+    const el = document.createElement('div');
+    el.className = 'toast';
+    el.textContent = text;
+    $('toasts').appendChild(el);
+    setTimeout(() => el.remove(), 2200);
+  }
+  $('action-btn').addEventListener('click', () => scene && scene.doAction());
+
+  // ---------------- 畫颱風怪物 ----------------
+  function drawTyphoon() {
+    const S = 220, c = document.createElement('canvas');
+    c.width = S; c.height = S;
+    const ctx = c.getContext('2d');
+    ctx.translate(S / 2, S / 2);
+    const g = ctx.createRadialGradient(0, 0, 10, 0, 0, 100);
+    g.addColorStop(0, 'rgba(242,244,248,1)');
+    g.addColorStop(0.55, 'rgba(154,163,181,0.95)');
+    g.addColorStop(0.85, 'rgba(42,50,68,0.85)');
+    g.addColorStop(1, 'rgba(19,26,40,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(0, 0, 100, 0, Math.PI * 2); ctx.fill();
+    // 螺旋雲帶
+    for (let arm = 0; arm < 4; arm++) {
+      ctx.save(); ctx.rotate(arm * Math.PI / 2);
+      ctx.strokeStyle = arm % 2 ? 'rgba(255,255,255,0.75)' : 'rgba(19,26,40,0.55)';
+      ctx.lineWidth = 12; ctx.lineCap = 'round';
+      ctx.beginPath();
+      for (let t = 0; t <= 1; t += 0.05) {
+        const r = 20 + t * 80, a = t * 2.6;
+        const x = Math.cos(a) * r, y = Math.sin(a) * r;
+        if (t === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.stroke(); ctx.restore();
+    }
+    // 颱風眼
+    ctx.fillStyle = '#131a28'; ctx.beginPath(); ctx.arc(0, 0, 22, 0, Math.PI * 2); ctx.fill();
+    return c;
+  }
+  function drawTyphoonFace() {
+    const c = document.createElement('canvas');
+    c.width = 120; c.height = 60;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#fff';
+    [[38, 30], [82, 30]].forEach(([x, y]) => { ctx.beginPath(); ctx.ellipse(x, y, 14, 12, 0, 0, Math.PI * 2); ctx.fill(); });
+    ctx.fillStyle = '#ff6a13';
+    [[40, 32], [80, 32]].forEach(([x, y]) => { ctx.beginPath(); ctx.arc(x, y, 7, 0, Math.PI * 2); ctx.fill(); });
+    // 生氣的眉毛
+    ctx.strokeStyle = '#131a28'; ctx.lineWidth = 6; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(22, 10); ctx.lineTo(50, 20); ctx.moveTo(98, 10); ctx.lineTo(70, 20); ctx.stroke();
+    return c;
+  }
 
   // ---------------- 畫地圖 ----------------
   function rand(x, y, s = 0) { // 固定亂數，讓草地花紋每次都一樣
@@ -135,14 +209,15 @@
     const c = document.createElement('canvas');
     c.width = MAP.W * T; c.height = MAP.H * T;
     const ctx = c.getContext('2d');
-    const floorOf = (ch) => (ch === 'V' ? 'carpet' : ',T~B'.includes(ch) ? 'grass' : 'wood');
+    const floorOf = (ch, y) => (y > 30 && ':T~'.includes(ch) ? 'mud'
+      : ch === 'V' ? 'carpet' : ',T~BF'.includes(ch) ? 'grass' : 'wood');
 
     for (let y = 0; y < MAP.H; y++) {
       for (let x = 0; x < MAP.W; x++) {
         const ch = MAP.tiles[y][x];
         const px = x * T, py = y * T;
         // 地板
-        let base = floorOf(ch);
+        let base = floorOf(ch, y);
         if (ch === 'M' || ch === 'S' || ch === 'K' || ch === 'P' || ch === '=') {
           base = (y >= 4 && y <= 13 && x >= 21) ? 'carpet' : 'wood';
         }
@@ -154,6 +229,12 @@
             ctx.fillRect(gx, gy, 3, 6); ctx.fillRect(gx + 4, gy + 2, 3, 4);
           }
           if (rand(x, y, 9) > 0.93) { ctx.fillStyle = '#fff4a8'; ctx.beginPath(); ctx.arc(px + 24, py + 24, 4, 0, 7); ctx.fill(); }
+        } else if (base === 'mud') {
+          ctx.fillStyle = (x + y) % 2 ? '#8b96a3' : '#85909d'; ctx.fillRect(px, py, T, T);
+          ctx.fillStyle = '#76818e';
+          for (let i = 0; i < 2; i++) {
+            ctx.beginPath(); ctx.arc(px + rand(x, y, i) * T, py + rand(y, x, i + 3) * T, 3 + rand(x, y, i + 5) * 4, 0, 7); ctx.fill();
+          }
         } else if (base === 'carpet') {
           ctx.fillStyle = (x + y) % 2 ? '#cfe3f5' : '#c3dbf0'; ctx.fillRect(px, py, T, T);
         } else {
@@ -167,6 +248,10 @@
           ctx.fillStyle = '#c9b294'; ctx.fillRect(px, py, T, T);
           ctx.fillStyle = '#e2d0b4'; ctx.fillRect(px, py, T, T * 0.35);
           ctx.strokeStyle = '#a89275'; ctx.lineWidth = 2; ctx.strokeRect(px + 1, py + 1, T - 2, T - 2);
+        } else if (ch === 'F') {
+          ctx.fillStyle = '#c9ced6'; ctx.fillRect(px, py + 14, T, 6); ctx.fillRect(px, py + 30, T, 6);
+          ctx.fillStyle = '#ff6a13'; ctx.fillRect(px + 4, py + 6, 8, 36); ctx.fillRect(px + 28, py + 6, 8, 36);
+          ctx.fillStyle = '#3a3a3c'; ctx.fillRect(px + 4, py + 18, 8, 6); ctx.fillRect(px + 28, py + 18, 8, 6);
         } else if (ch === '=') {
           ctx.fillStyle = '#c96b5a'; ctx.fillRect(px + 4, py + 10, T - 8, T - 20);
         } else if (ch === '~') {
@@ -202,9 +287,12 @@
       }
     }
     // 給物資箱貼上標籤
-    ctx.font = 'bold 13px sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#fff';
-    [['泡麵', 6, 16], ['礦泉水', 6, 20], ['手電筒', 16, 16], ['電池', 15, 21]].forEach(([t, x, y]) => {
-      ctx.fillText(t, x * T + T, y * T + T + 5);
+    ctx.font = 'bold 15px sans-serif'; ctx.textAlign = 'center';
+    MAP.CRATES.forEach(c => {
+      const cx = ((c.x1 + c.x2 + 1) / 2) * T, cy = ((c.y1 + c.y2 + 1) / 2) * T;
+      const w = ctx.measureText(c.label).width + 16;
+      ctx.fillStyle = 'rgba(58,58,60,0.85)'; ctx.fillRect(cx - w / 2, cy - 12, w, 24);
+      ctx.fillStyle = '#fff'; ctx.fillText(c.label, cx, cy + 5);
     });
     return c;
   }
@@ -218,22 +306,58 @@
       this.add.image(0, 0, 'map').setOrigin(0).setDepth(-10);
       MAP.ROOMS.forEach(r => {
         this.add.text(((r.x1 + r.x2 + 1) / 2) * T, (r.y1 + 1.6) * T, r.name, {
-          fontSize: '20px', fontStyle: 'bold', color: '#6b5640', fontFamily: 'sans-serif',
-          backgroundColor: 'rgba(255,250,240,0.8)', padding: { x: 10, y: 4 },
+          fontSize: '20px', fontStyle: '900', color: '#3a3a3c', fontFamily: FONT,
+          backgroundColor: 'rgba(250,250,247,0.9)', padding: { x: 12, y: 5 },
         }).setOrigin(0.5).setDepth(-5);
       });
       this.cameras.main.setBounds(0, 0, MAP.W * T, MAP.H * T);
-      this.cameras.main.setBackgroundColor('#2d3a4a');
+      this.cameras.main.setBackgroundColor('#131a28');
       this.applyZoom();
       this.scale.on('resize', () => this.applyZoom());
 
       const kb = this.input.keyboard;
       this.keys = kb.addKeys('W,A,S,D,UP,DOWN,LEFT,RIGHT', false);
+      // 空白鍵 / J：敲箱子或打颱風（按住會因為鍵盤連發而連打）
+      const onAct = (e) => { if (!typing()) { e.preventDefault(); this.doAction(); } };
+      kb.on('keydown-SPACE', onAct);
+      kb.on('keydown-J', onAct);
       this.input.on('pointerdown', (p) => {
         if (!this.me) return;
-        this.target = { x: p.worldX, y: p.worldY };
         chatInput.blur();
+        // 點到颱風或箱子、而且夠近，就直接打；否則走過去
+        const act = this.actionAt(p.worldX, p.worldY);
+        if (act) { this.doAction(act); return; }
+        this.target = { x: p.worldX, y: p.worldY };
       });
+
+      // 颱風怪物
+      this.textures.addCanvas('typhoon', drawTyphoon());
+      this.textures.addCanvas('typhoon-face', drawTyphoonFace());
+      const crate = document.createElement('canvas');
+      crate.width = T; crate.height = T;
+      const cc = crate.getContext('2d');
+      cc.fillStyle = '#c28b52'; cc.fillRect(4, 4, T - 8, T - 8);
+      cc.strokeStyle = '#8f5f30'; cc.lineWidth = 3; cc.strokeRect(4, 4, T - 8, T - 8);
+      cc.beginPath(); cc.moveTo(4, 4); cc.lineTo(T - 4, T - 4); cc.moveTo(T - 4, 4); cc.lineTo(4, T - 4); cc.stroke();
+      this.textures.addCanvas('crate', crate);
+
+      const Z = MAP.MONSTER_ZONE;
+      this.mSwirl = this.add.image(0, 0, 'typhoon');
+      this.mFace = this.add.image(0, 4, 'typhoon-face').setScale(0.8);
+      this.mBar = this.add.graphics();
+      this.mName = this.add.text(0, -132, '颱風怪', {
+        fontSize: '16px', fontStyle: 'bold', color: '#ffffff', fontFamily: FONT,
+        backgroundColor: '#131a28', padding: { x: 8, y: 3 },
+      }).setOrigin(0.5);
+      this.monster = this.add.container((Z.x1 + Z.x2) / 2, (Z.y1 + Z.y2) / 2,
+        [this.mSwirl, this.mFace, this.mBar, this.mName]);
+      this.monster.tx = this.monster.x; this.monster.ty = this.monster.y;
+      this.mState = { alive: true, hp: 1, maxHp: 1 };
+      this.mDead = this.add.text((Z.x1 + Z.x2) / 2, (Z.y1 + Z.y2) / 2, '', {
+        fontSize: '22px', fontStyle: 'bold', color: '#3a3a3c', fontFamily: FONT, align: 'center',
+        backgroundColor: 'rgba(250,250,247,0.92)', padding: { x: 18, y: 12 },
+      }).setOrigin(0.5).setDepth(900).setVisible(false);
+      this.lastAttackKey = false;
 
       // 雨
       this.rain = this.add.graphics().setScrollFactor(0).setDepth(1000);
@@ -278,8 +402,8 @@
       }
       const body = this.add.image(0, 0, key).setScale(0.5).setOrigin(0.5, 0.95);
       const tag = this.add.text(0, -84, p.name, {
-        fontSize: '14px', fontStyle: 'bold', color: '#fff', fontFamily: 'sans-serif',
-        backgroundColor: 'rgba(74,59,44,0.75)', padding: { x: 6, y: 2 },
+        fontSize: '14px', fontStyle: 'bold', color: '#f2f4f8', fontFamily: FONT,
+        backgroundColor: 'rgba(19,26,40,0.85)', padding: { x: 7, y: 2 },
       }).setOrigin(0.5);
       const cont = this.add.container(p.x, p.y, [body, tag]);
       cont.body_ = body;
@@ -298,6 +422,8 @@
       this.cameras.main.startFollow(this.me, true, 0.12, 0.12);
       res.players.forEach(p => { if (p.id !== res.you.id) this.addRemote(p); });
       this.updateOnline();
+      this.setMonster(res.monster);
+      renderInventory(res.you.inv);
     }
 
     addRemote(p) {
@@ -326,12 +452,136 @@
       if (!who) return;
       if (who.bubble) who.bubble.destroy();
       const b = this.add.text(0, -112, text.length > 40 ? text.slice(0, 40) + '…' : text, {
-        fontSize: '15px', color: '#4a3b2c', fontFamily: 'sans-serif', backgroundColor: '#ffffff',
+        fontSize: '15px', color: '#3a3a3c', fontFamily: FONT, backgroundColor: '#ffffff',
         padding: { x: 10, y: 6 }, wordWrap: { width: 200, useAdvancedWrap: true }, align: 'center',
       }).setOrigin(0.5, 1);
       who.add(b);
       who.bubble = b;
       this.time.delayedCall(5000, () => { if (who.bubble === b) { b.destroy(); who.bubble = null; } });
+    }
+
+    // ---------- 颱風 ----------
+    setMonster(m) {
+      if (!m) return;
+      this.mState = m;
+      this.monster.setVisible(m.alive);
+      if (m.alive) {
+        this.monster.x = this.monster.tx = m.x; this.monster.y = this.monster.ty = m.y;
+        this.mDead.setVisible(false);
+      } else {
+        this.respawnAt = performance.now() + m.respawnIn;
+        this.mDead.setVisible(true);
+      }
+      this.drawMonsterBar();
+    }
+
+    moveMonster(m) { this.monster.tx = m.x; this.monster.ty = m.y; }
+
+    drawMonsterBar() {
+      const g = this.mBar, w = 160, ratio = this.mState.maxHp ? this.mState.hp / this.mState.maxHp : 0;
+      g.clear();
+      g.fillStyle(0x131a28, 0.9); g.fillRoundedRect(-w / 2 - 3, -116, w + 6, 16, 8);
+      g.fillStyle(0xff6a13, 1); g.fillRoundedRect(-w / 2, -113, Math.max(6, w * ratio), 10, 5);
+    }
+
+    onMonsterHit(m) {
+      this.mState.hp = m.hp;
+      this.drawMonsterBar();
+      const who = me && m.id === me.id ? this.me : this.remotes.get(m.id);
+      if (who) this.lunge(who, this.monster.x);
+      this.tweens.add({ targets: this.mSwirl, scale: { from: 0.9, to: 1 }, duration: 160 });
+      this.floatText(this.monster.x + (Math.random() - 0.5) * 80, this.monster.y - 60,
+        (m.crit ? '暴擊！' : '') + '-' + m.dmg, m.crit ? '#ff6a13' : '#ffffff', m.crit ? 30 : 22);
+    }
+
+    onGust(gst) {
+      if (!this.me) return;
+      const dx = this.me.x - gst.x, dy = this.me.y - gst.y, d = Math.hypot(dx, dy);
+      if (d > gst.r) return;
+      // 被強風往外吹
+      this.push = { x: (dx || 1) / (d || 1) * 520, y: (dy || 0) / (d || 1) * 520, t: 0.3 };
+      this.cameras.main.shake(250, 0.006);
+      this.floatText(this.me.x, this.me.y - 100, '💨 被風吹走了！', '#ffffff', 18);
+    }
+
+    // ---------- 物資箱 ----------
+    onCrateHit(c) {
+      const img = this.add.image((c.tx + 0.5) * T, (c.ty + 0.5) * T, 'crate').setDepth((c.ty + 1) * T - 1);
+      this.tweens.add({ targets: img, angle: { from: -10, to: 10 }, duration: 60, yoyo: true, repeat: 1,
+        onComplete: () => img.destroy() });
+      const who = me && c.id === me.id ? this.me : this.remotes.get(c.id);
+      if (who) this.lunge(who, (c.tx + 0.5) * T);
+      this.floatText((c.tx + 0.5) * T, c.ty * T, '咚！', '#3a3a3c', 18);
+    }
+
+    onItemGot(g) {
+      const who = me && g.id === me.id ? this.me : this.remotes.get(g.id);
+      const it = MAP.ITEMS[g.item];
+      if (who && it) this.floatText(who.x, who.y - 110, it.icon, '#ffffff', 34);
+    }
+
+    // 世界座標 (x, y) 上可以互動的東西，夠近才算
+    actionAt(x, y) {
+      if (this.mState.alive && this.monster.visible && Math.hypot(x - this.monster.x, y - this.monster.y) < 110 &&
+        Math.hypot(this.me.x - this.monster.x, this.me.y - this.monster.y) < 130) return { type: 'attack' };
+      const tx = Math.floor(x / T), ty = Math.floor(y / T);
+      if (MAP.crateAt(tx, ty) >= 0 && Math.hypot(this.me.x - (tx + 0.5) * T, this.me.y - (ty + 0.5) * T) < 1.7 * T) {
+        return { type: 'crate', tx, ty };
+      }
+      return null;
+    }
+
+    // 自己身邊可以互動的東西（給按鈕和空白鍵用）
+    nearbyAction() {
+      if (!this.me) return null;
+      if (this.mState.alive && Math.hypot(this.me.x - this.monster.x, this.me.y - this.monster.y) < 130) {
+        return { type: 'attack' };
+      }
+      const cx = Math.floor(this.me.x / T), cy = Math.floor(this.me.y / T);
+      let best = null, bd = Infinity;
+      for (let ty = cy - 2; ty <= cy + 2; ty++) {
+        for (let tx = cx - 2; tx <= cx + 2; tx++) {
+          if (MAP.crateAt(tx, ty) < 0) continue;
+          const d = Math.hypot(this.me.x - (tx + 0.5) * T, this.me.y - (ty + 0.5) * T);
+          if (d < 1.7 * T && d < bd) { bd = d; best = { type: 'crate', tx, ty }; }
+        }
+      }
+      return best;
+    }
+
+    doAction(act) {
+      const now = performance.now();
+      if (now - (this.lastActTime || 0) < 360) return;
+      act = act || this.nearbyAction();
+      if (!act) return;
+      this.lastActTime = now;
+      this.target = null;
+      // 先把目前位置告訴伺服器，它才會判斷你夠近
+      socket.emit('move', { x: Math.round(this.me.x), y: Math.round(this.me.y), dir: this.me.dir, moving: false });
+      if (act.type === 'attack') {
+        socket.emit('attack', () => {});
+      } else {
+        socket.emit('hitCrate', { tx: act.tx, ty: act.ty }, (res) => {
+          if (!res || !res.item) return;
+          renderInventory(res.inv);
+          const it = MAP.ITEMS[res.item];
+          toast(`獲得 ${it.icon} ${it.name}！`);
+        });
+      }
+    }
+
+    lunge(who, towardX) {
+      const dir = towardX < who.x ? -1 : 1;
+      who.dir = dir; who.body_.setFlipX(dir === -1);
+      this.tweens.add({ targets: who.body_, x: dir * 10, angle: dir * 12, duration: 70, yoyo: true });
+    }
+
+    floatText(x, y, text, color, size) {
+      const t = this.add.text(x, y, text, {
+        fontSize: size + 'px', fontStyle: 'bold', color, fontFamily: FONT,
+        stroke: '#131a28', strokeThickness: 4,
+      }).setOrigin(0.5).setDepth(2000);
+      this.tweens.add({ targets: t, y: y - 40, alpha: 0, duration: 900, onComplete: () => t.destroy() });
     }
 
     canStand(x, y) {
@@ -375,6 +625,15 @@
         if (!moving) this.target = null;
         if (dx !== 0) { this.me.dir = dx < 0 ? -1 : 1; this.me.body_.setFlipX(this.me.dir === -1); }
       }
+      // 被強風吹走
+      if (this.push) {
+        const px = this.me.x + this.push.x * dt, py = this.me.y + this.push.y * dt;
+        if (this.canStand(px, this.me.y)) this.me.x = px;
+        if (this.canStand(this.me.x, py)) this.me.y = py;
+        this.push.t -= dt;
+        moving = true;
+        if (this.push.t <= 0) this.push = null;
+      }
       this.me.moving = moving;
 
       // 傳給伺服器（約每秒 15 次）
@@ -391,6 +650,28 @@
         r.y += (r.ty - r.y) * Math.min(1, dt * 12);
       });
 
+      // 颱風：平滑移動、旋轉
+      if (this.monster.visible) {
+        this.monster.x += (this.monster.tx - this.monster.x) * Math.min(1, dt * 6);
+        this.monster.y += (this.monster.ty - this.monster.y) * Math.min(1, dt * 6);
+        this.mSwirl.rotation -= dt * 1.6;
+        this.mFace.y = 4 + Math.sin(time / 300) * 3;
+        this.monster.setDepth(this.monster.y + 40);
+      }
+      if (!this.mState.alive && this.respawnAt) {
+        const left = Math.max(0, Math.ceil((this.respawnAt - performance.now()) / 1000));
+        this.mDead.setText(`🎉 颱風被擊退了！\n${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')} 後重新生成`);
+      }
+
+      // 互動按鈕
+      const near = this.nearbyAction();
+      const label = near ? (near.type === 'attack' ? '💥 攻擊颱風' : '🔨 敲箱子') : '';
+      if (label !== this.actionLabel) {
+        this.actionLabel = label;
+        $('action-btn').hidden = !label;
+        $('action-btn').textContent = label;
+      }
+
       // 走路彈跳 + 依 y 排深度
       const all = [this.me, ...this.remotes.values()];
       all.forEach(c => {
@@ -405,6 +686,8 @@
         this.roomId = rid;
         $('room-name').textContent = room ? room.name : '🌧️ 戶外（風雨很大！）';
         $('video-prompt').hidden = rid !== 'video';
+        if (rid === 'front' && !this.toldFront) { this.toldFront = true; toast('靠近颱風按空白鍵（或點它）攻擊！'); }
+        if (rid === 'storage' && !this.toldStorage) { this.toldStorage = true; toast('走到箱子旁按空白鍵（或點箱子）敲三下！'); }
       }
     }
 
@@ -424,7 +707,7 @@
   new Phaser.Game({
     type: Phaser.AUTO,
     parent: 'game',
-    backgroundColor: '#2d3a4a',
+    backgroundColor: '#131a28',
     scale: { mode: Phaser.Scale.RESIZE, width: window.innerWidth, height: window.innerHeight },
     scene: HQScene,
   });

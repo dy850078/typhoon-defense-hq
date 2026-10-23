@@ -4,6 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
   <title>颱風天防衛總部</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&family=Space+Mono:wght@400;700&display=swap">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -12,7 +14,8 @@
   <!-- 角色創建 -->
   <div id="join" class="overlay">
     <form id="join-form" class="card">
-      <h1>🌀 颱風天防衛總部</h1>
+      <p class="eyebrow">TYPHOON DAY · DEFENSE HQ</p>
+      <h1>颱風天防衛總部</h1>
       <p class="sub">外面風雨交加，大家快進總部集合！</p>
       <div class="create">
         <canvas id="preview" width="128" height="160"></canvas>
@@ -33,18 +36,22 @@
 
   <!-- 遊戲中介面 -->
   <div id="hud" hidden>
-    <div id="banner">⚠️ 颱風警報發布中 · <span id="room-name">戶外</span> · <span id="online">0</span> 人在線</div>
+    <div id="banner"><span class="hot">● 颱風警報</span><span id="room-name">戶外</span><span class="mono"><span id="online">0</span> ONLINE</span></div>
+    <div id="inventory"></div>
+    <div id="toasts"></div>
+    <button id="action-btn" class="primary" hidden></button>
     <div id="video-prompt" hidden>
       <span>📹 你在視訊會議室</span>
       <button id="video-btn" class="primary">加入視訊</button>
     </div>
     <div id="chat">
+      <button id="chat-toggle" type="button">CHAT <span>▾</span></button>
       <div id="messages"></div>
       <form id="chat-form">
         <input id="chat-input" maxlength="200" placeholder="按 Enter 聊天…" autocomplete="off">
       </form>
     </div>
-    <div id="help">方向鍵 / WASD 移動 · 點地板也能走 · Enter 聊天</div>
+    <div id="help">方向鍵 / WASD 移動 · 點地板也能走 · 空白鍵 敲箱子／攻擊 · Enter 聊天</div>
   </div>
 
   <script src="/vendor/phaser.min.js"></script>

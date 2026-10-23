@@ -45,6 +45,7 @@
   // 物資倉庫：箱子
   rect(6, 16, 7, 17, 'K'); rect(6, 20, 8, 22, 'K');
   rect(16, 16, 18, 17, 'K'); rect(15, 21, 18, 22, 'K');
+  rect(10, 16, 12, 17, 'K');
   // 休息區：沙發
   rect(23, 17, 26, 17, 'S'); rect(30, 17, 33, 17, 'S');
   rect(23, 21, 25, 21, 'S');
@@ -72,12 +73,15 @@
     noodle: { name: '泡麵', icon: '🍜' },
     water: { name: '礦泉水', icon: '💧' },
     veggie: { name: '蔬菜', icon: '🥬' },
+    bubbletea: { name: '台灣珍奶', icon: '🧋' },
+    chicken: { name: '台灣雞排', icon: '🍗' },
   };
   const CRATES = [
     { label: '泡麵', item: 'noodle', x1: 6, y1: 16, x2: 7, y2: 17 },
     { label: '礦泉水', item: 'water', x1: 6, y1: 20, x2: 8, y2: 22 },
     { label: '蔬菜', item: 'veggie', x1: 16, y1: 16, x2: 18, y2: 17 },
     { label: '綜合', item: null, x1: 15, y1: 21, x2: 18, y2: 22 },
+    { label: '台灣小吃', item: ['bubbletea', 'chicken'], icon: '🧋🍗', x1: 10, y1: 16, x2: 12, y2: 17 },
   ];
 
   const ROOMS = [

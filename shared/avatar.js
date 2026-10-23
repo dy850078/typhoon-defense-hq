@@ -10,6 +10,7 @@
     archer: { body: '#d9384a', sleeve: '#f4efe4' }, // 小紅帽斗篷
     tank: { body: '#2f3b55', sleeve: null }, // 背心＋露出粗手臂＋頭帶
     skater: { body: '#a9d4f0', sleeve: '#a9d4f0' }, // 清宮旗裝＋大拉翅＋冰刀
+    summoner: { body: '#f6c6d6', sleeve: '#f6c6d6' }, // 粉紅太空衣＋外星觸角髮箍
     suit: { body: '#2f3b55', sleeve: '#2f3b55' }, // NPC 西裝
   };
   const SKINS = ['#fde6d4', '#f6cfae', '#e2a983', '#b77a55'];
@@ -251,6 +252,13 @@
       ctx.beginPath(); ctx.moveTo(32, 48); ctx.quadraticCurveTo(40, 50, 44, 56); C.stroke(ctx, r, 1.6);
       [[22, 60], [40, 64], [28, 68]].forEach(([x, y]) => { dot(x, y, 2, '#f4a3c0'); dot(x, y, 0.8, '#ffffff'); });
       C.line(ctx, 17, hem - 2, 47, hem - 2, r, 2.2, '#4f7cc2', 0.4);
+    } else if (cos === 'summoner') {
+      // 太空衣：白色胸前面板、小 UFO 徽章、腰帶
+      C.rect(ctx, 25, 49, 14, 11, r, 0.6); C.fill(ctx, '#fbfbf8', r, null); C.stroke(ctx, r, 1.6);
+      C.blob(ctx, 32, 55, 5, 2, r, 0.08, 12); C.fill(ctx, '#7be08f', r, null); C.stroke(ctx, r, 1.2);
+      C.blob(ctx, 32, 53.2, 2.4, 1.8, r, 0.1, 10); C.fill(ctx, '#bfe6ff', r, null); C.stroke(ctx, r, 1);
+      C.line(ctx, 17, 62, 47, 62, r, 2.6, '#e8384f', 0.3);
+      [[20, 50], [44, 52]].forEach(([x, y]) => dot(x, y, 1.3, '#ffffff'));
     } else if (cos === 'suit') {
       // 白襯衫 V 領＋領帶
       ctx.beginPath(); ctx.moveTo(26, 46); ctx.lineTo(38, 46); ctx.lineTo(32, 56); ctx.closePath();
@@ -278,6 +286,14 @@
       ctx.beginPath(); ctx.arc(32, 28, 20.5, Math.PI * 1.08, Math.PI * 1.92); C.stroke(ctx, r, 5, C.INK);
       ctx.beginPath(); ctx.arc(32, 28, 20.5, Math.PI * 1.08, Math.PI * 1.92); C.stroke(ctx, r, 3, '#7a5cc8');
       C.blob(ctx, 32, 9, 3, 3, r, 0.1, 10); C.fill(ctx, '#ffd23f', r, null); C.stroke(ctx, r, 1.2);
+    } else if (cos === 'summoner') {
+      // 外星觸角髮箍
+      ctx.beginPath(); ctx.arc(32, 26, 19, Math.PI * 1.12, Math.PI * 1.88); C.stroke(ctx, r, 3.2, C.INK);
+      [[23, -1], [41, 1]].forEach(([x, k]) => {
+        C.line(ctx, x, 10, x + k * 5, -1, r, 2, C.INK, 0.3);
+        C.blob(ctx, x + k * 5, -2, 4, 4, r, 0.1, 12); C.fill(ctx, '#7be08f', r, null); C.stroke(ctx, r, 1.8);
+        C.blob(ctx, x + k * 5 - 1, -3, 1.2, 1.2, r, 0.1, 8); ctx.fillStyle = '#ffffff'; ctx.fill();
+      });
     } else if (cos === 'skater') {
       // 大拉翅：頭上一片黑色扁扁的大板子，插著粉紅花
       C.rect(ctx, 8, 2, 48, 9, r, 0.8); C.fill(ctx, '#2b2a33', r, null); C.stroke(ctx, r, W);

@@ -63,7 +63,7 @@ input:focus { border-color: var(--accent); }
 #video-prompt { bottom: 56px; left: 50%; transform: translateX(-50%); background: var(--ground);
   border-top: 4px solid var(--accent); border-radius: 4px 4px 16px 16px; padding: 8px 10px 8px 16px;
   display: flex; gap: 12px; align-items: center; font-weight: 700; box-shadow: 0 6px 20px rgba(0,0,0,.25); }
-#inventory { top: 12px; right: 12px; display: flex; gap: 6px; }
+#inventory { top: 12px; right: 12px; display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; max-width: calc(50vw - 230px); }
 .inv-item { background: var(--ground); border: 2px solid var(--ink); border-radius: 999px; padding: 3px 10px;
   font: 700 14px var(--mono); color: var(--ink); }
 button.inv-item { cursor: pointer; }
@@ -262,6 +262,11 @@ button.inv-item:hover { border-color: var(--accent); }
   50% { box-shadow: 0 0 0 3px #c4f5e2, 0 0 16px rgba(143,240,200,.6); }
   75% { box-shadow: 0 0 0 3px #cfe3ff, 0 0 16px rgba(142,197,255,.6); }
 }
+
+/* 家具 */
+.furn-item { cursor: default; }
+.furn-pic { width: 72px; height: 96px; }
+.furn-item .primary.small { margin-top: 4px; padding: 5px 12px; font-size: 13px; }
 
 /* 你畫我猜 */
 #draw { z-index: 19; }

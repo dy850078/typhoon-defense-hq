@@ -186,9 +186,17 @@ const TICK = 100;
 setInterval(() => {
   const now = Date.now();
   mobs.forEach(m => tickMob(m, now));
-  io.volatile.emit('mobsMove', mobs.filter(m => m.alive).map(m => [m.id, Math.round(m.x), Math.round(m.y)]));
   summons.slice().forEach(sm => tickSummon(sm, now));
-  if (summons.length) io.volatile.emit('summonsMove', summons.map(sm => [sm.id, Math.round(sm.x), Math.round(sm.y)]));
+  tickMonster(now);
+  // 所有會動的東西合成一則送出：volatile 在同一個 tick 連送好幾則時，後面的常常被丟掉（颱風位置就一直沒更新）
+  io.volatile.emit('world', {
+    mobs: mobs.filter(m => m.alive).map(m => [m.id, Math.round(m.x), Math.round(m.y)]),
+    summons: summons.map(sm => [sm.id, Math.round(sm.x), Math.round(sm.y)]),
+    boss: monster.alive ? [Math.round(monster.x), Math.round(monster.y)] : null,
+  });
+}, TICK);
+
+function tickMonster(now) {
   if (!monster.alive) {
     if (now >= monster.respawnAt) spawnMonster();
     return;
@@ -206,8 +214,7 @@ setInterval(() => {
     monster.nextAttack = now + 3500 + Math.random() * 2500;
     monsterAttack(now);
   }
-  io.volatile.emit('monsterMove', { x: Math.round(monster.x), y: Math.round(monster.y) });
-}, TICK);
+}
 
 function pushChat(msg) {
   history.push(msg);
@@ -543,7 +550,8 @@ io.on('connection', (socket) => {
     p.y = clamp(y, 0, MAP.H * MAP.TILE);
     p.dir = m.dir === -1 ? -1 : 1;
     p.moving = !!m.moving;
-    socket.volatile.broadcast.emit('playerMoved', { id: p.id, x: p.x, y: p.y, dir: p.dir, moving: p.moving });
+    // 停下來的那一則一定要送到，不然別人看到的位置會停在半路
+    (p.moving ? socket.volatile.broadcast : socket.broadcast).emit('playerMoved', { id: p.id, x: p.x, y: p.y, dir: p.dir, moving: p.moving });
   });
 
   // 敲物資箱：大家一起敲，敲滿 CRATE_HITS 下掉出東西，箱子空掉一段時間後補貨
@@ -593,7 +601,7 @@ io.on('connection', (socket) => {
     const foeName = isBoss ? `颱風${STATS.MONSTER.name}` : foe ? STATS.MOBS[foe.kind].name : '';
     if (!skill.support) {
       if (!foe || !foe.alive) return ack({ ok: false, error: isBoss ? `颱風${STATS.MONSTER.name}還沒出現` : '它已經被打倒了' });
-      if (dist(p.x, p.y, foe.x, foe.y) > skill.range) return ack({ ok: false, error: `離${foeName}太遠了` });
+      if (STATS.foeGap(p, foe, isBoss) > skill.range) return ack({ ok: false, error: `離${foeName}太遠了` });
     }
     if (p.mp < skill.mp) return ack({ ok: false, error: '魔力不夠' });
     let kind = null;

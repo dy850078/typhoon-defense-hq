@@ -34,12 +34,23 @@
     devil: { slot: 'cape', name: '惡魔翅膀', rarity: 'SR', icon: '😈' },
     pigBalloon: { slot: 'cape', name: '佩佩豬氣球', rarity: 'SR', icon: '🎈' },
     angel: { slot: 'cape', name: '天使翅膀', rarity: 'SSR', icon: '😇' },
+    // 第二批：服裝 4、頭飾 3、披風 3
+    raincoat: { slot: 'outfit', name: '黃色小雨衣', rarity: 'R', icon: '🧥' },
+    chef: { slot: 'outfit', name: '泡麵廚師服', rarity: 'R', icon: '👨‍🍳' },
+    tiger: { slot: 'outfit', name: '老虎布偶裝', rarity: 'SR', icon: '🐯' },
+    typhoonSuit: { slot: 'outfit', name: '薔琵布偶裝', rarity: 'SSR', icon: '🌀' },
+    hardhat: { slot: 'head', name: '防颱安全帽', rarity: 'R', icon: '⛑️' },
+    bunny: { slot: 'head', name: '兔兔耳朵', rarity: 'SR', icon: '🐰' },
+    unicorn: { slot: 'head', name: '獨角獸角', rarity: 'SSR', icon: '🦄' },
+    rainbowCape: { slot: 'cape', name: '彩虹披風', rarity: 'R', icon: '🌈' },
+    butterfly: { slot: 'cape', name: '蝴蝶翅膀', rarity: 'SR', icon: '🦋' },
+    phoenix: { slot: 'cape', name: '鳳凰火焰翅膀', rarity: 'SSR', icon: '🔥' },
   };
 
-  // 依稀有度抽一件，盡量抽還沒有的
-  function roll(owned) {
+  // 依稀有度抽一件，盡量抽還沒有的；rare 為 true 時只抽 SR、SSR（打倒颱風的獎勵）
+  function roll(owned, rare) {
     const have = new Set(owned || []);
-    const pool = Object.keys(GEAR).filter(id => !have.has(id));
+    const pool = Object.keys(GEAR).filter(id => !have.has(id) && (!rare || GEAR[id].rarity !== 'R'));
     if (!pool.length) return null;
     const total = pool.reduce((s, id) => s + RARITY[GEAR[id].rarity].weight, 0);
     let x = Math.random() * total;
@@ -271,6 +282,117 @@
       [[52, -15], [58, -16]].forEach(([x, y]) => dot(ctx, x, y, 1.5, C.INK));
       dot(ctx, 52, -7, 2.4, 'rgba(232,56,79,0.35)');
       ctx.beginPath(); ctx.moveTo(56, 1); ctx.lineTo(60, 1); ctx.lineTo(58, -2); ctx.closePath(); C.fill(ctx, '#f48fb1', r, null);
+    } },
+    raincoat: {
+      back(ctx, C, r) { hood(ctx, C, r, '#ffd23f'); },
+      front(ctx, C, r, p) {
+        suit(ctx, C, r, p, { body: '#ffd23f', sleeve: '#ffd23f', legs: '#4f7cc2', shoes: '#e8384f', hem: 69 });
+        C.line(ctx, 32, 47, 32, 68, r, 1.6, C.INK, 0.3);
+        [52, 58, 64].forEach(y => dot(ctx, 35, y, 1.5, '#ffffff'));
+        C.rect(ctx, 20, 60, 8, 5, r, 0.4); C.stroke(ctx, r, 1.4);
+      },
+    },
+    chef: {
+      front(ctx, C, r, p) {
+        suit(ctx, C, r, p, { body: '#fbfbf8', sleeve: '#fbfbf8', legs: '#2f3b55', shoes: '#2b2a33' });
+        [[28, 52], [36, 52], [28, 58], [36, 58]].forEach(([x, y]) => dot(ctx, x, y, 1.4, '#9aa3b5'));
+        ctx.beginPath(); ctx.moveTo(22, 46); ctx.lineTo(32, 51); ctx.lineTo(42, 46); C.stroke(ctx, r, 2, '#e8384f');
+      },
+      over(ctx, C, r) {
+        // 高高的廚師帽
+        C.rect(ctx, 20, 2, 24, 9, r, 0.6); C.fill(ctx, '#ffffff', r, null); C.stroke(ctx, r, W);
+        [[22, -4, 8], [32, -8, 10], [42, -4, 8]].forEach(([x, y, rr]) => { C.blob(ctx, x, y, rr, rr * 0.85, r, 0.08); C.fill(ctx, '#ffffff', r, null); C.stroke(ctx, r, 2); });
+        C.rect(ctx, 20, 2, 24, 9, r, 0.6); C.fill(ctx, '#ffffff', r, null); C.stroke(ctx, r, W);
+      },
+    },
+    tiger: {
+      back(ctx, C, r) {
+        [[14, 8], [50, 8]].forEach(([x, y]) => {
+          C.blob(ctx, x, y, 7, 7, r, 0.06); C.fill(ctx, '#ff9a3c', r, null); C.stroke(ctx, r, W);
+          C.blob(ctx, x, y, 3.5, 3.5, r, 0.1, 12); C.fill(ctx, '#fbfbf8', r, null);
+        });
+        hood(ctx, C, r, '#ff9a3c');
+        [[20, 10, 26, 16], [44, 10, 38, 16], [32, 5, 32, 12]].forEach(([a, b, c, d]) => C.line(ctx, a, b, c, d, r, 2.6, C.INK, 0.3));
+        // 尾巴
+        ctx.beginPath(); ctx.moveTo(44, 66); ctx.quadraticCurveTo(62, 66, 60, 50); C.stroke(ctx, r, 6, C.INK); C.stroke(ctx, r, 3.6, '#ff9a3c');
+      },
+      front(ctx, C, r, p) {
+        suit(ctx, C, r, p, { body: '#ff9a3c', hands: '#fbfbf8', legs: '#ff9a3c', shoes: '#fbfbf8' });
+        C.blob(ctx, 32, 58, 9, 8, r, 0.06); C.fill(ctx, '#fbfbf8', r, null); C.stroke(ctx, r, 1.8);
+        [[17, 50, 22, 52], [47, 50, 42, 52], [16, 58, 21, 59], [48, 58, 43, 59]].forEach(([a, b, c, d]) => C.line(ctx, a, b, c, d, r, 2, C.INK, 0.3));
+      },
+    },
+    typhoonSuit: {
+      back(ctx, C, r) {
+        // 軟綿綿的雲朵帽兜，頂上一個小漩渦
+        [[12, 20, 10], [52, 20, 10], [20, 8, 11], [44, 8, 11], [32, 3, 12]].forEach(([x, y, rr]) => {
+          C.blob(ctx, x, y, rr, rr * 0.9, r, 0.08); C.fill(ctx, '#f2f4f8', r, null); C.stroke(ctx, r, W);
+        });
+        hood(ctx, C, r, '#f2f4f8');
+        ctx.beginPath(); ctx.arc(32, -8, 4.5, 0.3, 5.4); C.stroke(ctx, r, 2.4, '#ff7a2f');
+      },
+      front(ctx, C, r, p) {
+        suit(ctx, C, r, p, { body: '#f2f4f8', hands: '#f2f4f8', legs: '#f2f4f8', shoes: '#d6dae1', hem: 70 });
+        ctx.beginPath(); ctx.arc(32, 58, 7, 0.2, 5.6); C.stroke(ctx, r, 2.4, '#4f7cc2');
+        ctx.beginPath(); ctx.arc(32, 58, 3, 0.6, 5.2); C.stroke(ctx, r, 2, '#4f7cc2');
+        [[20, 54], [44, 54]].forEach(([x, y]) => dot(ctx, x, y, 2.6, 'rgba(244,120,140,0.5)'));
+      },
+    },
+    hardhat: { head(ctx, C, r) {
+      C.blob(ctx, 32, 8, 19, 11, r, 0.04); C.fill(ctx, '#ffd23f', r, [13, -3, 38, 22]); C.stroke(ctx, r, W);
+      C.rect(ctx, 10, 11, 44, 4, r, 0.4); C.fill(ctx, '#ffd23f', r, null); C.stroke(ctx, r, 2);
+      C.line(ctx, 32, -2, 32, 10, r, 3, '#f2b800', 0.2);
+      ctx.fillStyle = '#e8384f'; ctx.font = '900 7px sans-serif'; ctx.fillText('防颱', 24, 8);
+    } },
+    bunny: { head(ctx, C, r) {
+      [[23, -0.18], [41, 0.18]].forEach(([x, t]) => {
+        ctx.save(); ctx.translate(x, 6); ctx.rotate(t);
+        C.blob(ctx, 0, -12, 6, 15, r, 0.05); C.fill(ctx, '#fbfbf8', r, null); C.stroke(ctx, r, W);
+        C.blob(ctx, 0, -11, 2.8, 10, r, 0.08, 12); ctx.fillStyle = '#f7a8c4'; ctx.fill();
+        ctx.restore();
+      });
+    } },
+    unicorn: { head(ctx, C, r) {
+      // 彩虹條紋的角，旁邊兩朵小花
+      ctx.beginPath(); ctx.moveTo(26, 6); ctx.lineTo(32, -22); ctx.lineTo(38, 6); ctx.closePath();
+      C.fill(ctx, '#fff4c9', r, null);
+      ctx.save(); ctx.clip(); ['#ff8fab', '#ffd23f', '#7be0a6', '#8fd3ff', '#b39cff'].forEach((c, i) => C.line(ctx, 20, 2 - i * 6, 44, -6 - i * 6, r, 2.4, c, 0.2)); ctx.restore();
+      ctx.beginPath(); ctx.moveTo(26, 6); ctx.lineTo(32, -22); ctx.lineTo(38, 6); ctx.closePath(); C.stroke(ctx, r, W);
+      [[19, 9, '#ff8fab'], [45, 9, '#b39cff']].forEach(([x, y, c]) => {
+        for (let i = 0; i < 5; i++) { const a = i * Math.PI * 2 / 5; C.blob(ctx, x + Math.cos(a) * 3, y + Math.sin(a) * 3, 2.6, 2.6, r, 0.1, 8); C.fill(ctx, c, r, null); }
+        dot(ctx, x, y, 1.8, '#ffd23f');
+      });
+    } },
+    rainbowCape: {
+      cape(ctx, C, r) {
+        const path = () => { ctx.beginPath(); ctx.moveTo(14, 44); ctx.lineTo(50, 44); ctx.quadraticCurveTo(62, 62, 64, 78); ctx.quadraticCurveTo(32, 82, 0, 78); ctx.quadraticCurveTo(2, 62, 14, 44); ctx.closePath(); };
+        path(); C.fill(ctx, '#ff8fab', r, null);
+        ctx.save(); path(); ctx.clip();
+        ['#ff8fab', '#ffb27a', '#ffd23f', '#7be0a6', '#8fd3ff', '#b39cff'].forEach((c, i) => { ctx.fillStyle = c; ctx.fillRect(-2, 44 + i * 6.4, 68, 6.6); });
+        ctx.restore();
+        path(); C.stroke(ctx, r, W);
+      },
+    },
+    butterfly: { cape(ctx, C, r) {
+      [-1, 1].forEach(k => {
+        C.blob(ctx, 32 + k * 27, 28, 17, 16, r, 0.06); C.fill(ctx, '#8fd3ff', r, null); C.stroke(ctx, r, W);
+        C.blob(ctx, 32 + k * 24, 54, 11, 10, r, 0.06); C.fill(ctx, '#b39cff', r, null); C.stroke(ctx, r, W);
+        dot(ctx, 32 + k * 33, 24, 4.5, '#ffffff'); dot(ctx, 32 + k * 33, 24, 2.2, '#4f7cc2');
+        dot(ctx, 32 + k * 28, 57, 2.6, '#ffd23f');
+      });
+    } },
+    phoenix: { cape(ctx, C, r) {
+      [-1, 1].forEach(k => {
+        // 一層層的火焰羽毛，外紅內黃
+        [[46, '#e8384f'], [38, '#ff7a2f'], [28, '#ffd23f']].forEach(([len, c]) => {
+          ctx.beginPath(); ctx.moveTo(32 + k * 6, 54);
+          ctx.quadraticCurveTo(32 + k * len * 0.6, 14, 32 + k * len, 10);
+          ctx.quadraticCurveTo(32 + k * (len - 6), 24, 32 + k * len * 0.95, 30);
+          ctx.quadraticCurveTo(32 + k * (len - 8), 38, 32 + k * len * 0.85, 46);
+          ctx.quadraticCurveTo(32 + k * len * 0.5, 50, 32 + k * 10, 62);
+          ctx.closePath(); C.fill(ctx, c, r, null); C.stroke(ctx, r, len === 46 ? W : 1.4);
+        });
+      });
     } },
   };
 

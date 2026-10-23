@@ -317,8 +317,12 @@ function damageFoe(p, foe, isBoss, dmg, crit, skillId, hitBy) {
   monster.respawnAt = now + RESPAWN_MS;
   const top = [...monster.damage.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3);
   io.emit('monster', monsterState());
-  // 有打到颱風的人都多拿一筆經驗，還會掉一件家具
-  players.forEach(q => { if (monster.damage.has(q.name)) { gainExp(q, 400); giveDecor(q); } });
+  // 有打到颱風的人都多拿一筆經驗，還會掉一件家具；輸出第一名一定拿到稀有裝備，其他人有機會
+  players.forEach(q => {
+    if (!monster.damage.has(q.name)) return;
+    gainExp(q, 400); giveDecor(q);
+    if ((top[0] && top[0][0] === q.name) || Math.random() < BOSS_GEAR_RATE) giveGear(q, true);
+  });
   const mins = Math.round(RESPAWN_MS / 60000);
   pushChat({ system: true, text: `🎉 ${p.name} 打出最後一擊，颱風${STATS.MONSTER.name}被擊退了！${mins} 分鐘後會再生成。`, t: now });
   if (top.length) pushChat({ system: true, text: '🏅 輸出排行：' + top.map(([n, d], i) => `${i + 1}. ${n} ${d}`).join('、'), t: now });
@@ -382,6 +386,7 @@ function tickSummon(sm, now) {
 // ---------------- 室內設計：家具 ----------------
 // 打怪掉落的家具可以擺在總部室內，擺好的家具存在 data/decor.json，伺服器重開也還在
 const MOB_DROP_RATE = 0.5;
+const BOSS_GEAR_RATE = 0.35; // 打倒颱風時，輸出第一名以外的人拿到稀有裝備的機率
 const DATA_DIR = path.join(__dirname, 'data');
 const DECOR_FILE = path.join(DATA_DIR, 'decor.json');
 const decor = new Map(); // 'tx,ty' -> { k, by }
@@ -422,8 +427,8 @@ function publicPlayer(p) {
 
 // ---------------- 裝備 ----------------
 // 抽一件還沒有的裝備送給玩家，全部都有了就回傳 null
-function giveGear(p) {
-  const id = GEAR.roll(p.owned);
+function giveGear(p, rare) {
+  const id = GEAR.roll(p.owned, rare);
   if (!id) return null;
   p.owned.push(id);
   const g = GEAR.GEAR[id];
@@ -651,12 +656,14 @@ io.on('connection', (socket) => {
       support += 20;
     }
     // 範圍技能：身邊範圍內的颱風和小怪全部打到
-    const hits = skill.aoe
-      ? [...(monster.alive && STATS.foeGap(p, monster, true) <= skill.aoe ? [[monster, true]] : []),
-         ...mobs.filter(m => m.alive && STATS.foeGap(p, m, false) <= skill.aoe).map(m => [m, false])]
+    // aoe：以自己為中心；aoeAt：以目標為中心（目標一定打得到）
+    const center = skill.aoe ? p : skill.aoeAt && foe ? foe : null, reach = skill.aoe || skill.aoeAt;
+    const hits = center
+      ? [...(monster.alive && (monster === foe || STATS.foeGap(center, monster, true) <= reach) ? [[monster, true]] : []),
+         ...mobs.filter(m => m.alive && (m === foe || STATS.foeGap(center, m, false) <= reach)).map(m => [m, false])]
       : foe ? [[foe, isBoss]] : [];
-    if (skill.aoe) fx.hits = hits.map(([f, b]) => b ? 'boss' : f.id);
-    if (foe && skill.weaken) foe.weakUntil = now + skill.weaken;
+    if (center) fx.hits = hits.map(([f, b]) => b ? 'boss' : f.id);
+    if (skill.weaken) hits.forEach(([f]) => { f.weakUntil = now + skill.weaken; });
     if (skill.freeze) hits.forEach(([f]) => { f.frozenUntil = now + skill.freeze; });
     if (support) gainExp(p, support);
     sendStats(p);

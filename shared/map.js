@@ -8,8 +8,8 @@
   // ,  草地      .  室內地板   #  牆壁       =  門
   // ~  水窪      T  樹         B  沙包       K  物資箱
   // M  會議桌    P  螢幕牆     S  沙發       V  視訊室地板
-  // F  圍欄      :  前線泥地   G  爐台
-  const BLOCKING = new Set(['#', 'T', 'B', 'K', 'M', 'P', 'S', 'F', 'G']);
+  // F  圍欄      :  前線泥地   G  爐台       N  轉職導師
+  const BLOCKING = new Set(['#', 'T', 'B', 'K', 'M', 'P', 'S', 'F', 'G', 'N']);
 
   const g = [];
   for (let y = 0; y < H; y++) g.push(new Array(W).fill(','));
@@ -34,6 +34,9 @@
   // 指揮中心：會議桌 + 螢幕牆
   rect(9, 8, 15, 9, 'M');
   rect(8, 4, 16, 4, 'P');
+  // 轉職導師站在螢幕牆右邊
+  const MENTOR_TILE = { x: 17, y: 6 };
+  set(MENTOR_TILE.x, MENTOR_TILE.y, 'N');
   // 視訊會議室：長桌
   rect(25, 8, 30, 9, 'M');
   // 物資倉庫：箱子
@@ -85,6 +88,7 @@
 
   const map = {
     W, H, TILE, BLOCKING, ROOMS, ITEMS, CRATES, MONSTER_ZONE,
+    mentor: { x: (MENTOR_TILE.x + 0.5) * TILE, y: (MENTOR_TILE.y + 0.5) * TILE },
     tiles: g,
     spawn: { x: 28 * TILE, y: 27 * TILE },
     isBlocked(px, py) {
@@ -108,6 +112,9 @@
         }
       }
       return false;
+    },
+    nearMentor(px, py) {
+      return Math.hypot(px - this.mentor.x, py - this.mentor.y) < 2 * TILE;
     },
     roomAt(px, py) {
       const tx = Math.floor(px / TILE);

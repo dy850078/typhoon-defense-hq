@@ -52,16 +52,12 @@
     ctx.fillStyle = '#ffffff';
     [52, 58].forEach(y => { ctx.beginPath(); ctx.arc(32, y, 1.8, 0, Math.PI * 2); ctx.fill(); });
 
-    // 大耳朵
-    [[13.5, -1], [50.5, 1]].forEach(([x]) => {
+    // 大耳朵（鮑伯頭會把耳朵蓋住）
+    if (hair !== 'bob') [[13.5, -1], [50.5, 1]].forEach(([x]) => {
       C.blob(ctx, x, 29, 6.5, 7.5, r, 0.08); C.fill(ctx, skin, r, null); C.stroke(ctx, r, W);
       C.blob(ctx, x, 29.5, 3.2, 4, r, 0.12); C.fill(ctx, '#f4a3a0', r, null);
     });
 
-    // 頭髮後半（鮑伯頭蓋過耳朵後面）
-    if (hair === 'bob') {
-      C.blob(ctx, 32, 28, 21.5, 19.5, r, 0.06); C.fill(ctx, hairColor, r, [11, 7, 42, 38]); C.stroke(ctx, r, W);
-    }
     if (hair === 'bun') {
       C.blob(ctx, 32, 5.5, 7, 6, r, 0.1); C.fill(ctx, hairColor, r, [25, 0, 14, 12]); C.stroke(ctx, r, W);
     }
@@ -77,10 +73,25 @@
       ctx.closePath();
       C.fill(ctx, hairColor, r, [15, 9, 34, 16]); C.stroke(ctx, r, W);
     } else if (hair === 'bob') {
+      // 俐落的齊下巴鮑伯（像蔡英文、超人特攻隊的衣夫人）：頭頂蓬蓬圓圓、側分瀏海往一邊撥、髮尾往內收
       ctx.beginPath();
-      ctx.moveTo(14.5, 26); ctx.quadraticCurveTo(15, 9, 32, 9); ctx.quadraticCurveTo(49, 9, 49.5, 26);
-      ctx.quadraticCurveTo(40, 20, 33, 15); ctx.quadraticCurveTo(24, 21, 14.5, 26); ctx.closePath();
-      C.fill(ctx, hairColor, r, [14, 9, 36, 17]); C.stroke(ctx, r, W);
+      ctx.moveTo(23, 12);
+      ctx.quadraticCurveTo(34, 22, 47.5, 23); // 斜斜撥到右邊的瀏海
+      ctx.quadraticCurveTo(46.5, 33, 47, 39.5); // 右邊臉頰旁的內側
+      ctx.quadraticCurveTo(47.5, 43, 43.5, 43.5); // 髮尾往內勾
+      ctx.quadraticCurveTo(52.5, 44, 52.5, 32); // 右邊外側往上
+      ctx.quadraticCurveTo(53, 6.5, 32, 6.5); // 頭頂
+      ctx.quadraticCurveTo(11, 6.5, 11.5, 32); // 左邊外側往下
+      ctx.quadraticCurveTo(11.5, 44, 20.5, 43.5); // 左邊髮尾往內勾
+      ctx.quadraticCurveTo(16.5, 43, 17, 39.5);
+      ctx.quadraticCurveTo(16.5, 21, 23, 12); // 左邊內側回到分線
+      ctx.closePath();
+      C.fill(ctx, hairColor, r, [11, 6, 42, 38]); C.stroke(ctx, r, W);
+      // 髮旋分線和亮亮的光澤
+      C.line(ctx, 23, 12, 25.5, 8, r, 1.6);
+      ctx.save(); ctx.globalAlpha = 0.45;
+      ctx.beginPath(); ctx.moveTo(36, 10); ctx.quadraticCurveTo(46, 12, 49, 22);
+      C.stroke(ctx, r, 2, '#ffffff'); ctx.restore();
     } else if (hair === 'curly') {
       [[18, 17], [24, 12], [31, 10], [38, 11], [45, 16], [21, 21], [43, 21]].forEach(([x, y]) => {
         C.blob(ctx, x, y, 5.5, 5, r, 0.15, 12); C.fill(ctx, hairColor, r, null); C.stroke(ctx, r, 2);

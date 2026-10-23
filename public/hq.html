@@ -46,14 +46,20 @@
       <div class="boss-bar"><i id="boss-fill"></i></div>
     </div>
     <div id="stats">
+      <div id="cls-text" class="stat-cls"></div>
       <div class="stat-row"><span class="stat-k">HP</span><div class="stat-bar"><i id="hp-fill" class="hp"></i></div><span id="hp-text" class="stat-v"></span></div>
       <div class="stat-row"><span class="stat-k">MP</span><div class="stat-bar"><i id="mp-fill" class="mp"></i></div><span id="mp-text" class="stat-v"></span></div>
-      <div class="stat-row"><span class="stat-k">ATK</span><span id="atk-text" class="stat-v"></span></div>
+      <div class="stat-row"><span class="stat-k">ATK</span><span id="atk-text" class="stat-v"></span>
+        <span class="stat-k def-k">DEF</span><span id="def-text" class="stat-v"></span></div>
     </div>
     <div id="inventory"></div>
     <div id="toasts"></div>
     <button id="action-btn" class="primary" hidden></button>
-    <button id="skill-btn" hidden>⚡ 強力一擊 <small>15 MP · K</small></button>
+    <div id="skillbar">
+      <button id="fw-btn" class="hud-btn" type="button" title="放慶祝煙火">🎆</button>
+      <button id="skills-open" class="hud-btn" type="button">📖<span> 技能</span></button>
+      <button id="skill-btn" type="button"></button>
+    </div>
     <div id="video-prompt" hidden>
       <span>📹 你在視訊會議室</span>
       <button id="video-btn" class="primary">加入視訊</button>
@@ -65,7 +71,16 @@
         <input id="chat-input" maxlength="200" placeholder="按 Enter 聊天…" autocomplete="off">
       </form>
     </div>
-    <div id="help">方向鍵 / WASD 移動 · 點地板也能走 · 空白鍵 互動／攻擊 · K 強力一擊 · Enter 聊天</div>
+    <div id="help">方向鍵 / WASD 移動 · 點地板也能走 · 空白鍵 互動／攻擊 · K 職業技能 · Enter 聊天</div>
+  </div>
+
+  <!-- 彈出視窗：背包、技能、轉職、煙火共用 -->
+  <div id="modal" class="overlay" hidden>
+    <div class="card modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <button id="modal-x" type="button" aria-label="關閉">✕</button>
+      <h2 id="modal-title"></h2>
+      <div id="modal-body"></div>
+    </div>
   </div>
 
   <script src="/vendor/phaser.min.js"></script>

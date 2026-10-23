@@ -12,11 +12,19 @@ const JITSI_DOMAIN = process.env.JITSI_DOMAIN || 'meet.jit.si';
 const JITSI_ROOM = process.env.JITSI_ROOM || 'TyphoonDefenseHQ-' + Math.random().toString(36).slice(2, 8);
 const HISTORY_SIZE = 50;
 const CRATE_HITS = 3; // 敲幾下會掉出東西
-const MONSTER_HP = Number(process.env.MONSTER_HP) || 600;
+// 颱風血量 = 基本血量 + 每位在線玩家再加一些，人多也不會一下就被打死
+const MONSTER_HP = Number(process.env.MONSTER_HP) || 8000;
+const MONSTER_HP_PER_PLAYER = Number(process.env.MONSTER_HP_PER_PLAYER) || 2000;
 const RESPAWN_MS = (Number(process.env.RESPAWN_MINUTES) || 5) * 60 * 1000;
 const CRATE_RESTOCK_MS = (Number(process.env.CRATE_RESTOCK_SECONDS) || 60) * 1000;
 const COOK_MS = 2500;
-const GUST_DAMAGE = [8, 14];
+// 颱風的三種攻擊：先在地上預警，delay 毫秒後打下來
+const ATTACKS = {
+  gust: { r: 240, delay: 1200, dmg: [16, 24] }, // 強風：以颱風為中心吹一圈，會把人吹開
+  rain: { r: 80, delay: 1500, dmg: [22, 30], max: 4, reach: 650 }, // 暴雨彈：砸向幾個玩家腳下
+  bolt: { r: 70, delay: 900, dmg: [30, 40], reach: 520 }, // 落雷：劈一個人，最痛
+};
+const FIREWORK_MS = 6000; // 每個人放煙火的間隔
 const T = MAP.TILE;
 
 const app = express();
@@ -39,20 +47,35 @@ const dist = (ax, ay, bx, by) => Math.hypot(ax - bx, ay - by);
 // ---------------- 颱風怪物 ----------------
 const Z = MAP.MONSTER_ZONE;
 const monster = { alive: true, hp: MONSTER_HP, maxHp: MONSTER_HP, x: (Z.x1 + Z.x2) / 2, y: (Z.y1 + Z.y2) / 2,
-  tx: 0, ty: 0, respawnAt: 0, nextGust: 0, damage: new Map() };
+  tx: 0, ty: 0, respawnAt: 0, nextAttack: Date.now() + 6000, frozenUntil: 0, weakUntil: 0, damage: new Map() };
+
+const rand = ([lo, hi]) => lo + Math.floor(Math.random() * (hi - lo + 1));
+const targetHp = () => MONSTER_HP + MONSTER_HP_PER_PLAYER * players.size;
 
 function monsterState() {
+  const now = Date.now();
   return { alive: monster.alive, hp: monster.hp, maxHp: monster.maxHp, x: Math.round(monster.x), y: Math.round(monster.y),
-    respawnIn: monster.alive ? 0 : Math.max(0, monster.respawnAt - Date.now()) };
+    respawnIn: monster.alive ? 0 : Math.max(0, monster.respawnAt - now),
+    frozen: Math.max(0, monster.frozenUntil - now), weak: Math.max(0, monster.weakUntil - now) };
 }
 
 function spawnMonster() {
-  Object.assign(monster, { alive: true, hp: MONSTER_HP, x: (Z.x1 + Z.x2) / 2, y: (Z.y1 + Z.y2) / 2,
-    nextGust: Date.now() + 6000 });
+  const hp = targetHp();
+  Object.assign(monster, { alive: true, hp, maxHp: hp, x: (Z.x1 + Z.x2) / 2, y: (Z.y1 + Z.y2) / 2,
+    nextAttack: Date.now() + 6000, frozenUntil: 0, weakUntil: 0 });
   monster.damage.clear();
   pickMonsterTarget();
   io.emit('monster', monsterState());
   pushChat({ system: true, text: `🌀 颱風${STATS.MONSTER.name}又生成了！大家快到颱風前線集合！`, t: Date.now() });
+}
+
+// 有新玩家進來時，颱風的血量上限跟著變高（不會變低）
+function growMonster() {
+  const hp = targetHp();
+  if (!monster.alive || hp <= monster.maxHp) return;
+  monster.hp += hp - monster.maxHp;
+  monster.maxHp = hp;
+  io.emit('monster', monsterState());
 }
 
 function pickMonsterTarget() {
@@ -61,6 +84,33 @@ function pickMonsterTarget() {
 }
 pickMonsterTarget();
 
+const alivePlayers = () => [...players.values()].filter(p => !p.dead);
+
+// 颱風出招：先送預警（地上的圈圈），時間到再判定誰被打到；被冰凍的話這招就取消
+function monsterAttack(now) {
+  const near = (reach) => alivePlayers().filter(p => dist(p.x, p.y, monster.x, monster.y) <= reach);
+  const roll = Math.random();
+  let type = roll < 0.35 ? 'gust' : roll < 0.7 ? 'rain' : 'bolt';
+  const a = ATTACKS[type];
+  let spots;
+  if (type === 'gust') spots = [{ x: Math.round(monster.x), y: Math.round(monster.y) }];
+  else {
+    const pool = near(a.reach).sort(() => Math.random() - 0.5).slice(0, type === 'rain' ? a.max : 1);
+    if (!pool.length) { type = 'gust'; spots = [{ x: Math.round(monster.x), y: Math.round(monster.y) }]; }
+    else spots = pool.map(p => ({ x: Math.round(p.x), y: Math.round(p.y) }));
+  }
+  const atk = ATTACKS[type];
+  io.emit('mAttack', { type, r: atk.r, delay: atk.delay, spots });
+  setTimeout(() => {
+    if (!monster.alive || Date.now() < monster.frozenUntil) return;
+    io.emit('mAttackHit', { type, r: atk.r, spots });
+    const weak = Date.now() < monster.weakUntil ? STATS.WEAKEN.dmgDealt : 1;
+    alivePlayers().forEach(p => {
+      if (spots.some(s => dist(p.x, p.y, s.x, s.y) <= atk.r)) hurt(p, Math.round(rand(atk.dmg) * weak));
+    });
+  }, atk.delay);
+}
+
 const TICK = 100;
 setInterval(() => {
   const now = Date.now();
@@ -68,6 +118,7 @@ setInterval(() => {
     if (now >= monster.respawnAt) spawnMonster();
     return;
   }
+  if (now < monster.frozenUntil) return; // 冰凍中：不動也不出招
   // 慢慢在前線飄來飄去
   const d = dist(monster.x, monster.y, monster.tx, monster.ty);
   if (d < 10) pickMonsterTarget();
@@ -76,16 +127,9 @@ setInterval(() => {
     monster.x += (monster.tx - monster.x) / d * step;
     monster.y += (monster.ty - monster.y) / d * step;
   }
-  // 每隔幾秒吹一陣強風，把附近的人吹開
-  if (now >= monster.nextGust) {
-    monster.nextGust = now + 6000 + Math.random() * 4000;
-    const gust = { x: Math.round(monster.x), y: Math.round(monster.y), r: 230 };
-    io.emit('gust', gust);
-    players.forEach(p => {
-      if (dist(p.x, p.y, gust.x, gust.y) <= gust.r) {
-        hurt(p, GUST_DAMAGE[0] + Math.floor(Math.random() * (GUST_DAMAGE[1] - GUST_DAMAGE[0] + 1)));
-      }
-    });
+  if (now >= monster.nextAttack) {
+    monster.nextAttack = now + 3500 + Math.random() * 2500;
+    monsterAttack(now);
   }
   io.volatile.emit('monsterMove', { x: Math.round(monster.x), y: Math.round(monster.y) });
 }, TICK);
@@ -97,14 +141,22 @@ function pushChat(msg) {
 }
 
 // ---------------- 角色數值 ----------------
+// 防禦力 = 職業的防禦 + 還沒過期的增益
+function defOf(p) {
+  const now = Date.now();
+  return p.def + Object.values(p.buffs).reduce((s, b) => s + (b.until > now ? b.v : 0), 0);
+}
 function publicStats(p) {
-  return { id: p.id, hp: p.hp, maxHp: p.maxHp, mp: p.mp, maxMp: p.maxMp, atk: p.atk, dead: p.dead };
+  const now = Date.now();
+  const buff = Math.max(0, ...Object.values(p.buffs).map(b => b.until - now));
+  return { id: p.id, cls: p.cls, hp: p.hp, maxHp: p.maxHp, mp: p.mp, maxMp: p.maxMp, atk: p.atk,
+    def: defOf(p), buffMs: buff, dead: p.dead };
 }
 function sendStats(p) { io.emit('stats', publicStats(p)); }
 
-function hurt(p, dmg) {
+function hurt(p, raw) {
   if (p.dead) return;
-  p.hp = Math.max(0, p.hp - dmg);
+  p.hp = Math.max(0, p.hp - STATS.reduce(raw, defOf(p)));
   if (p.hp > 0) return sendStats(p);
   p.dead = true;
   sendStats(p);
@@ -136,6 +188,12 @@ function emptyCrates() {
   return [...crates.entries()].filter(([, c]) => c.emptyUntil > now).map(([k]) => k);
 }
 
+// 傳給別人的玩家資料（不含冷卻、增益這些內部狀態）
+function publicPlayer(p) {
+  const { cooldowns, buffs, cooking, ...rest } = p;
+  return Object.assign(rest, publicStats(p));
+}
+
 io.on('connection', (socket) => {
   let lastChat = 0;
 
@@ -158,14 +216,17 @@ io.on('connection', (socket) => {
       y: MAP.spawn.y + (Math.random() - 0.5) * 40,
       dir: 1, moving: false,
       inv: { noodle: 0, water: 0, veggie: 0 },
-      cls: 'staff', dead: false, cooldowns: {},
+      // 重新連線時沿用上次的職業
+      cls: STATS.CLASSES[data.cls] ? data.cls : 'staff', dead: false, cooldowns: {}, buffs: {},
     };
     Object.assign(p, STATS.statsFor(p.cls));
     p.hp = p.maxHp; p.mp = p.maxMp;
     players.set(socket.id, p);
 
-    ack({ ok: true, you: p, players: [...players.values()], history, monster: monsterState(), emptyCrates: emptyCrates() });
-    socket.broadcast.emit('playerJoined', p);
+    growMonster();
+    ack({ ok: true, you: publicPlayer(p), players: [...players.values()].map(publicPlayer), history,
+      monster: monsterState(), emptyCrates: emptyCrates() });
+    socket.broadcast.emit('playerJoined', publicPlayer(p));
     pushChat({ system: true, text: `${name} 進入了防衛總部 🌀`, t: Date.now() });
   });
 
@@ -210,23 +271,53 @@ io.on('connection', (socket) => {
     ack({ ok: true, item, inv: p.inv });
   });
 
-  // 打颱風：skill 對應 shared/stats.js 的 SKILLS
+  // 放技能：skillId 對應 shared/stats.js 的 SKILLS；普通攻擊也走這裡
   socket.on('attack', (skillId, ack) => {
     const p = players.get(socket.id);
     if (typeof ack !== 'function') return;
     if (!p || p.dead) return ack({ ok: false });
-    const cls = STATS.CLASSES[p.cls];
     const skill = STATS.SKILLS[skillId];
-    if (!skill || !cls.skills.includes(skillId)) return ack({ ok: false });
+    if (!skill || !STATS.CLASSES[p.cls].skills.includes(skillId)) return ack({ ok: false });
     const now = Date.now();
-    if (!monster.alive || now - lastAction < 300 || now < (p.cooldowns[skillId] || 0)) return ack({ ok: false });
-    if (dist(p.x, p.y, monster.x, monster.y) > 130) return ack({ ok: false });
+    if (now - lastAction < 300 || now < (p.cooldowns[skillId] || 0)) return ack({ ok: false });
+    if (!skill.support) {
+      if (!monster.alive) return ack({ ok: false, error: `颱風${STATS.MONSTER.name}還沒出現` });
+      if (dist(p.x, p.y, monster.x, monster.y) > skill.range) return ack({ ok: false, error: '離颱風太遠了' });
+    }
     if (p.mp < skill.mp) return ack({ ok: false, error: '魔力不夠' });
     lastAction = now;
     p.cooldowns[skillId] = now + skill.cooldown;
-    if (skill.mp) { p.mp -= skill.mp; sendStats(p); }
+    if (skill.mp) p.mp -= skill.mp;
+
+    // 各種效果
+    const fx = { id: p.id, skill: skillId, x: Math.round(p.x), y: Math.round(p.y), targets: [] };
+    const around = (r) => alivePlayers().filter(q => dist(q.x, q.y, p.x, p.y) <= r);
+    if (skill.heal) {
+      around(skill.heal.r).forEach(q => {
+        q.hp = Math.min(q.maxHp, q.hp + skill.heal.hp);
+        q.mp = Math.min(q.maxMp, q.mp + skill.heal.mp);
+        fx.targets.push(q.id);
+        if (q !== p) sendStats(q);
+      });
+    }
+    if (skill.teamDef) {
+      around(skill.teamDef.r).forEach(q => {
+        q.buffs.team = { v: skill.teamDef.v, until: now + skill.teamDef.ms };
+        fx.targets.push(q.id);
+        if (q !== p) sendStats(q);
+      });
+    }
+    if (skill.selfDef) p.buffs.self = { v: skill.selfDef.v, until: now + skill.selfDef.ms };
+    if (skill.weaken) monster.weakUntil = now + skill.weaken;
+    if (skill.freeze) monster.frozenUntil = now + skill.freeze;
+    sendStats(p);
+    io.emit('skillFx', fx);
+    if (skill.weaken || skill.freeze) io.emit('monster', monsterState());
+
+    if (!skill.power) return ack({ ok: true });
     const crit = Math.random() < 0.12;
-    const dmg = Math.round(p.atk * skill.power * (0.6 + Math.random() * 0.6) * (crit ? 2.5 : 1));
+    const weak = now < monster.weakUntil ? STATS.WEAKEN.dmgTaken : 1;
+    const dmg = Math.round(p.atk * skill.power * (0.6 + Math.random() * 0.6) * (crit ? 2.5 : 1) * weak);
     monster.hp = Math.max(0, monster.hp - dmg);
     monster.damage.set(p.name, (monster.damage.get(p.name) || 0) + dmg);
     io.emit('monsterHit', { id: p.id, dmg, crit, hp: monster.hp, skill: skillId });
@@ -239,6 +330,40 @@ io.on('connection', (socket) => {
     const mins = Math.round(RESPAWN_MS / 60000);
     pushChat({ system: true, text: `🎉 ${p.name} 打出最後一擊，颱風${STATS.MONSTER.name}被擊退了！${mins} 分鐘後會再生成。`, t: now });
     if (top.length) pushChat({ system: true, text: '🏅 輸出排行：' + top.map(([n, d], i) => `${i + 1}. ${n} ${d}`).join('、'), t: now });
+  });
+
+  // 跟指揮中心的導師說話轉職：血量魔力照比例換算，技能冷卻重置
+  socket.on('changeClass', (cls, ack) => {
+    const p = players.get(socket.id);
+    if (typeof ack !== 'function') return;
+    if (!p || p.dead || !STATS.CLASSES[cls]) return ack({ ok: false });
+    if (!MAP.nearMentor(p.x, p.y)) return ack({ ok: false, error: '要站在導師旁邊才能轉職' });
+    if (cls === p.cls) return ack({ ok: false, error: '你已經是這個職業了' });
+    const hpRatio = p.hp / p.maxHp, mpRatio = p.mp / p.maxMp;
+    p.cls = cls;
+    Object.assign(p, STATS.statsFor(cls));
+    p.hp = Math.max(1, Math.round(p.maxHp * hpRatio));
+    p.mp = Math.round(p.maxMp * mpRatio);
+    p.cooldowns = {};
+    sendStats(p);
+    ack({ ok: true });
+    pushChat({ system: true, text: `✨ ${p.name} 轉職成為 ${STATS.CLASSES[cls].icon} ${STATS.CLASSES[cls].name}！`, t: Date.now() });
+  });
+
+  // 慶祝煙火：在自己頭上炸出輸入的文字，大家都看得到
+  let lastFirework = 0;
+  socket.on('firework', (text, ack) => {
+    const p = players.get(socket.id);
+    if (typeof ack !== 'function') return;
+    if (!p) return ack({ ok: false });
+    const t = clean(text, 8);
+    if (!t) return ack({ ok: false, error: '請輸入煙火的文字' });
+    const now = Date.now();
+    if (now - lastFirework < FIREWORK_MS) return ack({ ok: false, error: '煙火還在裝填，等幾秒再放' });
+    lastFirework = now;
+    io.emit('firework', { id: p.id, text: t, x: Math.round(p.x), y: Math.round(p.y) });
+    pushChat({ system: true, text: `🎆 ${p.name} 放了煙火：「${t}」`, t: now });
+    ack({ ok: true });
   });
 
   // 煮泡麵：在爐台旁邊、有泡麵才能煮；有蔬菜會自動加進去，補更多血

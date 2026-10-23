@@ -599,6 +599,8 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outlin
     if (miss.length) { $('form-err').textContent = '還差：' + miss.join('、'); return; }
     $('form-err').textContent = '';
     try { localStorage.setItem('hq-name', d.name.slice(0, 12)); } catch (e) {}
+    // 從邀請函報名進來的人一律從新手「防颱職員」開始
+    try { localStorage.setItem('hq-cls', 'staff'); } catch (e) {}
     // 邀請函也存一份，進總部後別人點「個人資料」就看得到你的 VIP Pass
     try { localStorage.setItem('hq-vip', JSON.stringify({ name: d.name, song: d.song, drink: d.drink, theme: d.theme, photo: d.photo })); } catch (e) {}
     showInvite(d, true);

@@ -9,8 +9,8 @@
   // ~  水窪      T  樹         B  沙包       K  物資箱
   // M  會議桌    P  螢幕牆     S  沙發       V  視訊室地板
   // F  圍欄      :  前線泥地   G  爐台       N  轉職導師
-  // W  戰情室電視牆（擋路）     C  會議椅（不擋路）
-  const BLOCKING = new Set(['#', 'T', 'B', 'K', 'M', 'P', 'S', 'F', 'G', 'N', 'W']);
+  // W  戰情室電視牆（擋路）     C  會議椅（不擋路）   R  冰箱
+  const BLOCKING = new Set(['#', 'T', 'B', 'K', 'M', 'P', 'S', 'F', 'G', 'N', 'W', 'R']);
 
   const g = [];
   for (let y = 0; y < H; y++) g.push(new Array(W).fill(','));
@@ -50,6 +50,8 @@
   rect(23, 21, 25, 21, 'S');
   // 煮泡麵區：休息區右下角的爐台
   rect(31, 22, 33, 22, 'G');
+  const FRIDGE_TILE = { x: 34, y: 20 };
+  set(FRIDGE_TILE.x, FRIDGE_TILE.y, 'R');
 
   // 戶外：沙包、樹、水窪
   rect(24, 26, 25, 26, 'B'); rect(30, 26, 31, 26, 'B');
@@ -115,6 +117,10 @@
         }
       }
       return false;
+    },
+    fridge: { x: (FRIDGE_TILE.x + 0.5) * TILE, y: (FRIDGE_TILE.y + 0.5) * TILE },
+    nearFridge(px, py) {
+      return Math.hypot(px - this.fridge.x, py - this.fridge.y) < 2 * TILE;
     },
     nearMentor(px, py) {
       return Math.hypot(px - this.mentor.x, py - this.mentor.y) < 2 * TILE;

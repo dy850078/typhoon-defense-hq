@@ -35,12 +35,21 @@
     const cos = COSTUMES[p.cls] ? p.cls : 'staff';
     const body = (cos === 'suit' && p.suit) || COSTUMES[cos].body || outfit;
     const sleeve = cos === 'staff' ? outfit : COSTUMES[cos].sleeve;
+    // 裝備（gear.js）：有穿服裝就不畫職業服，有戴頭飾就不畫職業帽
+    const G = root.HQ_GEAR, EQ = p.equip || {};
+    const has = (slot) => !!(G && EQ[slot] && G.GEAR[EQ[slot]] && G.GEAR[EQ[slot]].slot === slot);
+    const gear = (slot, layer) => { if (has(slot)) G.drawLayer(ctx, EQ[slot], layer, { skin }); };
+    const dressed = has('outfit'), hatted = has('head');
 
     ctx.save();
     // 影子
     ctx.fillStyle = 'rgba(19,26,40,0.18)';
     ctx.beginPath(); ctx.ellipse(32, 77, 17, 3.5, 0, 0, Math.PI * 2); ctx.fill();
 
+    gear('cape', 'cape');
+    gear('outfit', 'back');
+    if (dressed) gear('outfit', 'front');
+    else {
     // 腿 + 雨鞋
     [[23, 30], [34, 41]].forEach(([x1, x2]) => {
       C.rect(ctx, x1, 62, x2 - x1, 11, r, 0.8); C.fill(ctx, '#8a5a3a', r, [x1, 62, 10, 11]); C.stroke(ctx, r, W);
@@ -70,6 +79,8 @@
     ctx.quadraticCurveTo(15 + r(), 58, 19, 47); ctx.closePath();
     C.fill(ctx, body, r, [14, 41, 36, hem - 38], 1.4); C.stroke(ctx, r, W);
     drawCostume(ctx, C, r, cos, hem, p);
+    }
+    gear('cape', 'clasp');
 
     // 大耳朵（鮑伯頭、長髮會把耳朵蓋住）
     if (hair !== 'bob' && hair !== 'long') [[13.5, -1], [50.5, 1]].forEach(([x]) => {
@@ -92,7 +103,7 @@
     C.blob(ctx, 32, 28, 17.5, 18, r, 0.05); C.fill(ctx, skin, r, [14, 10, 36, 36], 0.5); C.stroke(ctx, r, W);
 
     // 頭髮前半
-    if (hair === 'short' || hair === 'bun') {
+    if (hair === 'short' || hair === 'bun' || (hair === 'hat' && hatted)) {
       ctx.beginPath();
       ctx.moveTo(15, 25); ctx.quadraticCurveTo(15, 9, 32, 9.5); ctx.quadraticCurveTo(49, 9, 49, 25);
       ctx.lineTo(45, 20); ctx.lineTo(41, 23); ctx.lineTo(37, 18.5); ctx.lineTo(32, 22); ctx.lineTo(27, 18); ctx.lineTo(22, 22.5); ctx.lineTo(19, 19);
@@ -135,7 +146,7 @@
       [[18, 17], [24, 12], [31, 10], [38, 11], [45, 16], [21, 21], [43, 21]].forEach(([x, y]) => {
         C.blob(ctx, x, y, 5.5, 5, r, 0.15, 12); C.fill(ctx, hairColor, r, null); C.stroke(ctx, r, 2);
       });
-    } else if (hair === 'hat') {
+    } else if (hair === 'hat' && !hatted) {
       // 像插畫裡那頂綠色尖帽，這裡用雨衣同色
       C.blob(ctx, 32, 15, 22, 5, r, 0.08); C.fill(ctx, outfit, r, [10, 10, 44, 10]); C.stroke(ctx, r, W);
       ctx.beginPath();
@@ -151,7 +162,7 @@
       ctx.closePath(); ctx.fill(); C.stroke(ctx, r, 1.2); ctx.restore();
     }
 
-    drawHeadwear(ctx, C, r, cos, W);
+    if (!hatted && !(dressed && (cos === 'archer' || cos === 'prophet'))) drawHeadwear(ctx, C, r, cos, W);
 
     // 臉頰
     ctx.fillStyle = 'rgba(244,120,120,0.45)';
@@ -198,6 +209,9 @@
         C.blob(ctx, x, 30, 5, 6, r, 0.1); C.fill(ctx, skin, r, null); C.stroke(ctx, r, 2);
       });
     }
+
+    gear('head', 'head');
+    gear('outfit', 'over');
 
     ctx.restore();
   }

@@ -1771,6 +1771,19 @@
     return c;
   }
   const FX = {
+    // 全身 SSR：腳下的金色光暈、繞著飄的小星星
+    aura: () => fxCanvas(104, 40, 61, (ctx, r) => {
+      const g = ctx.createRadialGradient(52, 20, 4, 52, 20, 50);
+      g.addColorStop(0, 'rgba(255,224,120,0.75)'); g.addColorStop(0.6, 'rgba(255,200,80,0.35)'); g.addColorStop(1, 'rgba(255,200,80,0)');
+      ctx.save(); ctx.scale(1, 0.38); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(52, 20 / 0.38, 50, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+      CR.blob(ctx, 52, 20, 40, 13, r, 0.06); CR.stroke(ctx, r, 2.2, '#e0a92a');
+    }),
+    star: () => fxCanvas(26, 26, 62, (ctx, r) => {
+      const pts = [];
+      for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, d = i % 2 ? 4.6 : 11; pts.push([13 + Math.cos(a) * d, 13 + Math.sin(a) * d]); }
+      ctx.beginPath(); pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.closePath();
+      CR.fill(ctx, '#ffd23f', r, null); CR.stroke(ctx, r, 2);
+    }),
     // 爐火
     flame: () => fxCanvas(36, 44, 21, (ctx, r) => {
       ctx.beginPath(); ctx.moveTo(18, 2); ctx.quadraticCurveTo(34, 20, 31, 32); ctx.quadraticCurveTo(28, 42, 18, 42);
@@ -2471,12 +2484,19 @@
       who.look.equip = g.equip || {};
       who.texKey = this.avatarKey(Object.assign({}, who.look, { cls: who.stats ? who.stats.cls : 'staff' }));
       who.body_.setTexture(who.texKey);
+      const was = who.prada;
       this.applyGlow(who);
+      if (who.prada && !was) {
+        this.floatText(who.x, who.y - 110, '✨ 穿著Prada的惡魔', '#ffd23f', 22);
+        this.burst(who.x, who.y - 40, 16, 0xffd23f);
+        if (who === this.me) toast('✨ 全身都是 SSR，你就是穿著Prada的惡魔！');
+      }
       this.burst(who.x, who.y - 40, 8, 0xffffff);
     }
 
     // SR：一閃一閃的金光；SSR：顏色慢慢流轉的彩虹光，加上一道玻璃般的反光
     applyGlow(c) {
+      this.applyPrada(c);
       const img = c.body_;
       if (c.glowTween) { c.glowTween.stop(); c.glowTween = null; }
       c.glowFx = null;
@@ -2490,6 +2510,40 @@
       c.glowTween = this.tweens.add({ targets: glow, outerStrength: rar === 'SSR' ? 1.5 : 1.3, duration: rar === 'SSR' ? 1800 : 1300,
         yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
       if (rar === 'SSR') { c.glowFx = glow; img.preFX.addShine(0.18, 0.18, 6); }
+    }
+
+    // 全身 SSR（三格都穿 SSR）：腳下金色光暈、幾顆星星繞著飄、名字變金色
+    // 星星只有 4 顆、只用一個 tween 算位置，平板也跑得動
+    applyPrada(c) {
+      const eq = c.look.equip || {};
+      const on = Object.keys(GR.SLOTS).every(s => GR.GEAR[eq[s]] && GR.GEAR[eq[s]].rarity === 'SSR');
+      if (on === !!c.prada) return;
+      c.prada = on;
+      const base = c.tag.text.replace(/^✨ /, '');
+      c.tag.setText(on ? '✨ ' + base : base).setColor(on ? '#ffd23f' : '#f2f4f8');
+      if (!on) {
+        if (c.pradaTween) c.pradaTween.stop();
+        (c.pradaFx || []).forEach(o => o.destroy());
+        c.pradaTween = null; c.pradaFx = null;
+        return;
+      }
+      const aura = this.add.image(0, -2, 'fx-aura').setScale(1.1);
+      const stars = [0, 1, 2, 3].map(() => this.add.image(0, 0, 'fx-star'));
+      c.addAt(aura, 0);
+      stars.forEach(st => c.add(st));
+      c.pradaFx = [aura, ...stars];
+      const t = { a: 0 };
+      c.pradaTween = this.tweens.add({ targets: t, a: Math.PI * 2, duration: 4200, repeat: -1, onUpdate: () => {
+        aura.setAlpha(0.75 + Math.sin(t.a * 2) * 0.25);
+        stars.forEach((st, i) => {
+          const a = t.a + i * Math.PI / 2, front = Math.sin(a) > 0;
+          // 轉到後面就躲到角色身後
+          if (st.front !== front) { st.front = front; if (front) c.bringToTop(st); else c.moveTo(st, 1); }
+          st.setPosition(Math.cos(a) * 34, -28 + Math.sin(a) * 10 + Math.sin(t.a * 3 + i) * 5);
+          st.setScale((front ? 0.7 : 0.55) + Math.max(0, Math.sin(t.a * 5 + i * 2)) * 0.25);
+        });
+      } });
+      c.once('destroy', () => { if (c.pradaTween) c.pradaTween.stop(); });
     }
 
     // 拿蛋糕：手上捧著蛋糕，ms 是 0 就是放下
@@ -2511,7 +2565,7 @@
       if (who === this.me) $('cake-btn').hidden = !(ms > 0);
     }
 
-    tagText(p) { const c = ST.CLASSES[p.cls] || ST.CLASSES.staff; return `Lv.${p.level || 1} ${c.icon} ${p.name}`; }
+    tagText(p, prada) { const c = ST.CLASSES[p.cls] || ST.CLASSES.staff; return `${prada ? '✨ ' : ''}Lv.${p.level || 1} ${c.icon} ${p.name}`; }
 
     // 世界座標上點到的是哪個人（自己也算）
     playerAt(x, y) {
@@ -2546,7 +2600,7 @@
         who.body_.setTexture(who.texKey);
         if (prev.cls) this.burst(who.x, who.y - 40, 10, 0xffd23f);
       }
-      if (st.cls !== prev.cls || st.level !== prev.level) who.tag.setText(this.tagText({ cls: st.cls, name: who.name_, level: st.level }));
+      if (st.cls !== prev.cls || st.level !== prev.level) who.tag.setText(this.tagText({ cls: st.cls, name: who.name_, level: st.level }, who.prada));
       this.drawHpBar(who, st);
       // 防禦增益：頭上掛一個小盾牌
       if (st.buffMs > 0) {

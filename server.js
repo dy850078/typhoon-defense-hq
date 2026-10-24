@@ -521,7 +521,7 @@ function tickMob(m, now) {
     m.nextHit = now + 2200 + Math.random() * 800;
     io.emit('mobAttack', { mid: m.id, id: prey.id, say: def.say[Math.floor(Math.random() * def.say.length)] });
     setTimeout(() => {
-      if (!m.alive || Date.now() < m.frozenUntil) return;
+      if (!m.alive || Date.now() < m.frozenUntil || Date.now() < (m.stunUntil || 0)) return;
       if (dist(prey.x, prey.y, m.x, m.y) > def.range * 1.3) return; // 跑掉就沒打到
       if (behindWall(m.x, m.y, prey.x, prey.y)) return; // 中間多了一道城牆
       const weak = Date.now() < m.weakUntil ? STATS.WEAKEN.dmgDealt : 1;
@@ -733,7 +733,7 @@ function tickWalls(now) {
 // ---------------- 冰火合擊：雷暴圈 ----------------
 // 火牆和冰牆碰在一起兩處以上（交叉、或線尾貼著另一條線），就當作圍成一圈（判定刻意放寬）
 // 圈裡會一直落雷、有兩個小龍捲風亂轉，撐到其中一面牆消失
-const STORM = { max: 2, touch: 50, rMin: 90, rMax: 300, boltMs: 700, boltR: 80, bolt: 1.2,
+const STORM = { max: 2, touch: 50, rMin: 90, rMax: 300, boltMs: 700, boltR: 80, bolt: 1.2, shock: 600,
   twisterR: 70, twisterHitMs: 500, twister: 0.4, twisterSpeed: 14, pull: 6 };
 const storms = [];
 let stormSeq = 0;
@@ -814,11 +814,14 @@ function tickStorms(now) {
     if (now >= s.nextBolt) {
       s.nextBolt = now + STORM.boltMs;
       // 圈裡隨機一點落雷；有怪在圈裡的話一半機率直接劈怪
-      const inside = foes.filter(([f]) => dist(f.x, f.y, s.x, s.y) < s.r);
+      const inside = foes.filter(([f, b]) => dist(f.x, f.y, s.x, s.y) < s.r + (b ? WALL_R.boss : 0));
       let x, y;
       if (inside.length && Math.random() < 0.5) { const [f] = inside[Math.floor(Math.random() * inside.length)]; x = f.x; y = f.y; }
       else { const a = Math.random() * Math.PI * 2, d = Math.sqrt(Math.random()) * s.r; x = s.x + Math.cos(a) * d; y = s.y + Math.sin(a) * d; }
-      io.emit('stormBolt', { id: s.id, x: Math.round(x), y: Math.round(y) });
+      // 每道雷都讓圈裡所有怪電暈一下：不能動、不能出招
+      inside.forEach(([f]) => { f.stunUntil = Math.max(f.stunUntil || 0, now + STORM.shock); });
+      io.emit('stormBolt', { id: s.id, x: Math.round(x), y: Math.round(y), ms: STORM.shock,
+        foes: inside.filter(([, b]) => !b).map(([f]) => f.id), boss: inside.some(([, b]) => b) });
       foes.forEach(([f, b]) => { if (dist(f.x, f.y, x, y) < STORM.boltR + (b ? WALL_R.boss : 0)) hit(f, b, STORM.bolt, 'stormBolt'); });
     }
   }

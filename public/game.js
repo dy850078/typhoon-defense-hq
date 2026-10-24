@@ -3249,6 +3249,7 @@
     applyMonsterTint() {
       const now = performance.now();
       if (now < this.frozenUntil) this.mBody.setTint(0x9fd8ff);
+      else if (now < (this.shockUntil || 0)) this.mBody.setTint(0xfff07a);
       else if (now < this.weakUntil) this.mBody.setTint(0xd9c4ff);
       else if (this.monster.phase === 2) this.mBody.setTint(0xffb3c6); // 第二階段：整隻變成暴怒的粉紅色
       else this.mBody.clearTint();
@@ -4150,7 +4151,25 @@
     }
     onStormBolt(b) {
       const st = this.storms.get(b.id);
-      if (!st || fxOff()) return;
+      if (!st) return;
+      // 圈裡的怪全部電暈：身體變黃、抖個不停
+      const until = performance.now() + (b.ms || 600);
+      (b.foes || []).forEach(id => { const m = this.mobs.get(id); if (m) { m.shockUntil = until; this.refreshFoeTint(id); } });
+      if (b.boss) { this.shockUntil = until; this.applyMonsterTint(); }
+      if (fxOff()) return;
+      if (!st.lite) {
+        // 整圈閃一下黃光，被電到的怪身上冒電花
+        const fl = this.add.graphics({ x: st.x, y: st.y }).setDepth(-2.8);
+        fl.fillStyle(0xffe14d, 0.3); fl.fillEllipse(0, 0, st.r * 2, st.r * 1.4);
+        this.tweens.add({ targets: fl, alpha: 0, duration: 320, onComplete: () => fl.destroy() });
+        const sparkAt = (x, y, k) => [-1, 1].forEach(dx => {
+          const sp = this.add.image(x + dx * 26 * k + (Math.random() - 0.5) * 10, y - (50 + Math.random() * 40) * k, 'bolt')
+            .setDepth(y + 150).setScale(0.6 * k).setAngle(dx * 20);
+          this.tweens.add({ targets: sp, alpha: { from: 1, to: 0.15 }, duration: 100, yoyo: true, repeat: 2, onComplete: () => sp.destroy() });
+        });
+        (b.foes || []).forEach(id => { const m = this.mobs.get(id); if (m && m.visible) sparkAt(m.x, m.y, m.k || 1); });
+        if (b.boss && this.monster.visible) sparkAt(this.monster.x, this.monster.y, 2.2);
+      }
       if (st.lite) {
         // 省電版：小閃電在圈裡閃兩下
         const s = this.add.image(b.x, b.y, 'bolt').setOrigin(0.5, 1).setDepth(b.y + 200).setScale(1.3);
@@ -4202,6 +4221,7 @@
       if (!m) { this.applyMonsterTint(); return; }
       const now = performance.now();
       if (now < m.frozenUntil) m.body_.setTint(0x9fd8ff);
+      else if (now < (m.shockUntil || 0)) m.body_.setTint(0xfff07a);
       else if (now < m.weakUntil) m.body_.setTint(0xd9c4ff);
       else if (m.state.kind === 'fu' && m.state.phase === 2) m.body_.setTint(0xb8a4e8); // 黑化：整個人偏紫
       else m.body_.clearTint();
@@ -4775,11 +4795,14 @@
         if (!m.visible) return;
         m.x += (m.tx - m.x) * Math.min(1, dt * 8);
         m.y += (m.ty - m.y) * Math.min(1, dt * 8);
-        const frozen = performance.now() < m.frozenUntil;
+        const frozen = performance.now() < m.frozenUntil, shock = performance.now() < (m.shockUntil || 0);
         m.ice.setVisible(frozen);
-        if (m.wasFrozen && !frozen) this.refreshFoeTint(m.state.id);
-        m.wasFrozen = frozen;
-        m.body_.y = frozen ? 0 : -Math.abs(Math.sin(time / 160 + m.tx)) * 4;
+        if ((m.wasFrozen && !frozen) || (m.wasShock && !shock)) this.refreshFoeTint(m.state.id);
+        m.wasFrozen = frozen; m.wasShock = shock;
+        m.body_.y = frozen || shock ? 0 : -Math.abs(Math.sin(time / 160 + m.tx)) * 4;
+        // 電暈：原地左右抖
+        if (shock) m.body_.x = (Math.random() - 0.5) * 6; else if (m.wasShockX) m.body_.x = 0;
+        m.wasShockX = shock;
         m.setDepth(m.y);
       });
 
@@ -4803,17 +4826,20 @@
         this.monster.y += (this.monster.ty - this.monster.y) * Math.min(1, dt * 6);
         const frozen = performance.now() < this.frozenUntil;
         const weak = performance.now() < this.weakUntil;
-        if (!frozen) this.mSwirl.rotation -= dt * 2.4;
+        const shock = performance.now() < (this.shockUntil || 0);
+        if (this.wasShock && !shock && !this.mHitUntil) this.applyMonsterTint();
+        this.wasShock = shock;
+        if (!frozen && !shock) this.mSwirl.rotation -= dt * 2.4;
         this.mIce.setVisible(frozen);
-        const status = [frozen && '冰凍中', weak && '被削弱'].filter(Boolean).join(' ');
+        const status = [frozen && '冰凍中', shock && '電暈中', weak && '被削弱'].filter(Boolean).join(' ');
         if (status !== this.mStatusText) {
           this.mStatusText = status;
           this.mStatus.setText(status).setVisible(!!status);
-          this.mStatus.setColor(frozen ? '#2f5fa8' : '#5b3fa0');
+          this.mStatus.setColor(frozen ? '#2f5fa8' : shock ? '#b8860b' : '#5b3fa0');
           if (!this.mHitUntil) this.applyMonsterTint();
         }
         // 楓之谷式的彈跳：跳起來、落地時壓扁（冰凍時停住）
-        const ph = frozen ? 0.5 : (time % 900) / 900;
+        const ph = frozen || shock ? 0.5 : (time % 900) / 900;
         const hop = Math.sin(ph * Math.PI);
         const squash = ph < 0.12 || ph > 0.88 ? 0.1 : 0;
         this.mBody.y = -hop * 16;

@@ -37,6 +37,7 @@ th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line
 th { color: var(--muted); font-weight: 700; }
 .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #34C759; margin-right: 4px; }
 .empty { color: var(--muted); padding: 16px 0; }
+td.wish { white-space: normal; min-width: 220px; max-width: 360px; }
 </style>
 </head>
 <body>
@@ -89,6 +90,22 @@ th { color: var(--muted); font-weight: 700; }
       </div>
       <p class="msg" id="gift-msg"></p>
     </form>
+
+    <section class="card">
+      <div class="row" style="justify-content: space-between; align-items: center">
+        <h2 style="margin: 0">許願池（<span id="w-count">0</span>）</h2>
+        <label style="flex-direction: row; align-items: center; gap: 8px; font-weight: 500">只看
+          <select id="w-filter"><option value="">全部</option><option value="new">新願望</option><option value="thinking">考慮中</option><option value="done">做好了</option><option value="no">先不做</option></select></label>
+      </div>
+      <p class="note" style="margin: 4px 0 12px">大家在總部休息區的許願池登記想要的功能。改成「做好了」會在聊天室通知大家，紙條上也會蓋章。</p>
+      <p class="msg" id="wish-msg"></p>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>讚</th><th>願望</th><th>許願人</th><th>時間</th><th>狀態</th><th></th></tr></thead>
+          <tbody id="w-rows"></tbody>
+        </table>
+      </div>
+    </section>
 
     <section class="card">
       <div class="row" style="justify-content: space-between; align-items: center">
@@ -200,6 +217,7 @@ th { color: var(--muted); font-weight: 700; }
       render(r.accounts);
       giftUsers(r.accounts);
       showNotice(r.notice);
+      renderWishes(r.wishes || []);
     });
   }
   $('login').addEventListener('submit', function (e) {
@@ -282,6 +300,46 @@ th { color: var(--muted); font-weight: 700; }
         : whoText + '本來就有這件了', !!r.sent);
     });
   });
+  // 許願池：讚多的排前面；改狀態、刪掉
+  var WISH_STATUS = { 'new': '新願望', thinking: '考慮中', done: '做好了', no: '先不做' }, wishList = [];
+  function renderWishes(list) {
+    wishList = list;
+    var tb = $('w-rows'), f = $('w-filter').value; tb.textContent = '';
+    $('w-count').textContent = list.length;
+    var rows = list.filter(function (w) { return !f || w.status === f; })
+      .sort(function (a, b) { return (b.likes - a.likes) || (b.at - a.at); });
+    if (!rows.length) { var r0 = tb.insertRow(); var c0 = td(list.length ? '這個狀態沒有願望' : '還沒有人許願'); c0.colSpan = 6; c0.className = 'empty'; r0.appendChild(c0); return; }
+    rows.forEach(function (w) {
+      var tr = document.createElement('tr');
+      tr.appendChild(td(String(w.likes)));
+      var t = td(w.text); t.className = 'wish'; tr.appendChild(t);
+      tr.appendChild(td(w.name + (w.name !== w.by ? '（' + w.by + '）' : '')));
+      tr.appendChild(td(ago(w.at)));
+      var sc = document.createElement('td'), sel = document.createElement('select');
+      Object.keys(WISH_STATUS).forEach(function (k) { var o = document.createElement('option'); o.value = k; o.textContent = WISH_STATUS[k]; sel.appendChild(o); });
+      sel.value = w.status;
+      sel.style.minHeight = '34px'; sel.style.padding = '4px 8px'; sel.style.fontSize = '14px';
+      sel.onchange = function () {
+        api('/api/admin/wish', { id: w.id, status: sel.value }).then(function (r) {
+          say('wish-msg', r.ok ? '已改成「' + WISH_STATUS[sel.value] + '」' : (r.error || '失敗了'), r.ok);
+          if (r.ok) renderWishes(r.wishes);
+        });
+      };
+      sc.appendChild(sel); tr.appendChild(sc);
+      var act = document.createElement('td');
+      var del = document.createElement('button'); del.type = 'button'; del.className = 'small danger'; del.textContent = '刪除';
+      del.onclick = function () {
+        if (!confirm('確定要刪除這個願望？\n「' + w.text + '」')) return;
+        api('/api/admin/wish', { id: w.id, 'delete': true }).then(function (r) {
+          say('wish-msg', r.ok ? '已刪除' : (r.error || '刪除失敗'), r.ok);
+          if (r.ok) renderWishes(r.wishes);
+        });
+      };
+      act.appendChild(del); tr.appendChild(act);
+      tb.appendChild(tr);
+    });
+  }
+  $('w-filter').addEventListener('change', function () { renderWishes(wishList); });
   if (token) load();
 })();
 </script>

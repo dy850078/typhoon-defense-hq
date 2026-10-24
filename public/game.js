@@ -394,6 +394,8 @@
     if (text != null) e.textContent = text;
     return e;
   };
+  // 手繪 icon（public/icons.js）；還沒有手繪版的用 emoji 加墨線外框
+  const icon = (key, emoji, cls) => window.HQ_ICONS ? HQ_ICONS.el(key, emoji, cls) : el('span', cls, emoji);
   let modalKind = null;
   function openModal(kind, title, body) {
     modalKind = kind;
@@ -425,18 +427,22 @@
     box.innerHTML = '';
     // 物資都收在背包裡，按鈕上的小數字是總共有幾個
     const total = Object.keys(MAP.ITEMS).reduce((n, k) => n + (myInv[k] || 0), 0);
-    const bag = el('button', 'inv-item bag-btn', '🎒 背包');
+    const bag = el('button', 'inv-item bag-btn');
+    bag.append(icon('btn-bag', '🎒'), ' 背包');
     if (total) bag.appendChild(el('span', 'bag-n', String(total > 99 ? '99+' : total)));
     bag.title = Object.entries(MAP.ITEMS).map(([k, it]) => `${it.icon} ${it.name} × ${myInv[k] || 0}`).join('\n');
     bag.onclick = openBag;
     box.appendChild(bag);
-    const gear = el('button', 'inv-item bag-btn', '👗 裝備');
+    const gear = el('button', 'inv-item bag-btn');
+    gear.append(icon('btn-gear', '👗'), ' 裝備');
     gear.onclick = openGear;
     box.appendChild(gear);
-    const furn = el('button', 'inv-item bag-btn', '🪑 家具');
+    const furn = el('button', 'inv-item bag-btn');
+    furn.append(icon('btn-furn', '🪑'), ' 家具');
     furn.onclick = openFurn;
     box.appendChild(furn);
-    const song = el('button', 'inv-item bag-btn', '🎵 點歌');
+    const song = el('button', 'inv-item bag-btn');
+    song.append(icon('btn-song', '🎵'), ' 點歌');
     song.onclick = () => MUSIC.open();
     box.appendChild(song);
     if (modalKind === 'bag') openBag();
@@ -1239,7 +1245,7 @@
     $('exp-text').textContent = `${st.exp}/${st.expNext}`;
     try { localStorage.setItem('hq-level', st.level); localStorage.setItem('hq-exp', st.exp); } catch (e) {}
     const c = ST.CLASSES[myCls()];
-    $('cls-text').textContent = `${c.icon} ${c.name}`;
+    $('cls-text').replaceChildren(icon('cls-' + myCls(), c.icon), ' ' + c.name);
     if (clsChanged) renderSkillbar();
     if (modalKind === 'skills') openSkills();
   }
@@ -1249,13 +1255,15 @@
       const sk = ST.SKILLS[id], b = $(btn);
       b.innerHTML = '';
       b.appendChild(el('i', 'cd'));
-      b.appendChild(el('span', 'sk-icon', sk.icon));
+      b.appendChild(icon('sk-' + id, sk.icon, 'sk-icon'));
       b.appendChild(el('kbd', null, key));
       b.setAttribute('aria-label', sk.name);
       b.tip = () => [sk.name, `${key === '空白' ? '空白鍵' : key} · ${sk.mp ? sk.mp + ' MP · ' : ''}冷卻 ${sk.cooldown / 1000} 秒` +
         (sk.support ? '' : ` · 射程 ${sk.range}`), sk.desc];
     });
   }
+  $('skills-open').replaceChildren(icon('btn-book', '📖'));
+  $('fw-btn').replaceChildren(icon('btn-fw', '🎆'));
   $('skills-open').tip = () => ['技能說明', '', '看你的職業和全部技能'];
   $('fw-btn').tip = () => ['慶祝煙火', '', `Lv.${ST.LEVEL.fireworkLv} 以上可以在天空放一行字的煙火`];
   $('cake-btn').tip = () => ['放下蛋糕', '', '把手上的蛋糕放下來'];
@@ -1294,7 +1302,7 @@
     const c = ST.CLASSES[myCls()];
     const box = el('div', 'modal-list');
     const head = el('div', 'modal-row cls-head');
-    head.appendChild(el('div', 'modal-icon', c.icon));
+    head.appendChild(el('div', 'modal-icon')).appendChild(icon('cls-' + myCls(), c.icon));
     const info = el('div', 'modal-info');
     info.appendChild(el('b', null, `${c.name}（${c.role}）`));
     info.appendChild(el('p', null, c.desc));
@@ -1304,7 +1312,7 @@
     c.skills.forEach((id, i) => {
       const sk = ST.SKILLS[id];
       const row = el('div', 'modal-row');
-      row.appendChild(el('div', 'modal-icon', sk.icon));
+      row.appendChild(el('div', 'modal-icon')).appendChild(icon('sk-' + id, sk.icon));
       const inf = el('div', 'modal-info');
       inf.appendChild(el('b', null, sk.name));
       inf.appendChild(el('span', 'mono tag', `${['空白鍵', 'K', 'L'][i]} · ${sk.mp} MP · 冷卻 ${sk.cooldown / 1000} 秒` +
@@ -1335,7 +1343,7 @@
     Object.entries(ST.CLASSES).forEach(([id, c]) => {
       const st = ST.statsFor(id), sk = ST.SKILLS[c.skills[1]];
       const row = el('div', 'modal-row' + (id === myCls() ? ' on' : ''));
-      row.appendChild(el('div', 'modal-icon', c.icon));
+      row.appendChild(el('div', 'modal-icon')).appendChild(icon('cls-' + id, c.icon));
       const inf = el('div', 'modal-info');
       inf.appendChild(el('b', null, `${c.name}（${c.role}）`));
       inf.appendChild(el('p', null, c.desc));

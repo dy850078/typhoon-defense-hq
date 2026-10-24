@@ -121,6 +121,13 @@ button.inv-item:hover { border-color: var(--accent); }
 #sk-tip b { display: block; font-size: 14px; color: #ffd23f; }
 #sk-tip small { display: block; font: 700 11px var(--mono); color: var(--navy-dim); margin-top: 2px; }
 #sk-tip p { margin: 4px 0 0; font-size: 13px; line-height: 1.45; }
+/* 手繪 icon 和加了墨線外框的 emoji */
+.hq-icon { width: 1.35em; height: 1.35em; vertical-align: -0.32em; object-fit: contain; }
+.em-ol { display: inline-block; filter: drop-shadow(1.2px 0 0 #2b2a33) drop-shadow(-1.2px 0 0 #2b2a33) drop-shadow(0 1.2px 0 #2b2a33) drop-shadow(0 -1.2px 0 #2b2a33); }
+.sk-btn .hq-icon { width: 76%; height: 76%; vertical-align: 0; position: relative; }
+.sk-btn.plain .hq-icon { width: 82%; height: 82%; }
+.modal-icon .hq-icon { width: 42px; height: 42px; vertical-align: 0; }
+.stat-cls .hq-icon { width: 20px; height: 20px; vertical-align: -5px; }
 .bag-n { display: inline-block; margin-left: 4px; min-width: 18px; padding: 0 5px; border-radius: 999px; background: var(--accent);
   color: #fff; font: 700 11px/18px var(--mono); text-align: center; }
 .hud-btn { font: 700 14px var(--display); background: var(--ground); color: var(--ink); border: 2px solid var(--ink);

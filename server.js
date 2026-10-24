@@ -521,7 +521,7 @@ function tickMob(m, now) {
     m.nextHit = now + 2200 + Math.random() * 800;
     io.emit('mobAttack', { mid: m.id, id: prey.id, say: def.say[Math.floor(Math.random() * def.say.length)] });
     setTimeout(() => {
-      if (!m.alive || Date.now() < m.frozenUntil) return;
+      if (!m.alive || Date.now() < m.frozenUntil || Date.now() < (m.stunUntil || 0)) return;
       if (dist(prey.x, prey.y, m.x, m.y) > def.range * 1.3) return; // 跑掉就沒打到
       if (behindWall(m.x, m.y, prey.x, prey.y)) return; // 中間多了一道城牆
       const weak = Date.now() < m.weakUntil ? STATS.WEAKEN.dmgDealt : 1;
@@ -541,11 +541,13 @@ setInterval(() => {
   tickMonster(now);
   DG.tick(now);
   tickWalls(now);
+  tickStorms(now);
   // 所有會動的東西合成一則送出：volatile 在同一個 tick 連送好幾則時，後面的常常被丟掉（颱風位置就一直沒更新）
   io.volatile.emit('world', {
     mobs: mobs.concat(DG.foes()).filter(m => m.alive).map(m => [m.id, Math.round(m.x), Math.round(m.y)]),
     summons: summons.map(sm => [sm.id, Math.round(sm.x), Math.round(sm.y)]),
     boss: monster.alive ? [Math.round(monster.x), Math.round(monster.y)] : null,
+    storms: storms.map(s => [s.id, ...s.twisters.flatMap(t => [Math.round(t.x), Math.round(t.y)])]),
   });
 }, TICK);
 
@@ -682,7 +684,7 @@ function wallLine(p, pts, maxLen) {
   const B = DG.boxAt(p.x, p.y) || { x1: Z.x1 - 2 * T, y1: Z.y1 - 2 * T, x2: Z.x2 + 2 * T, y2: Z.y2 + 2 * T };
   const out = [];
   let len = 0;
-  for (const q of pts.slice(0, 80)) {
+  for (const q of pts.slice(0, 120)) {
     if (!Array.isArray(q)) return null;
     let x = Number(q[0]), y = Number(q[1]);
     if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
@@ -702,6 +704,7 @@ function addWall(p, def, pts, now) {
   const w = { id: 'w' + (++wallSeq), kind: def.kind, owner: p.id, pts, until: now + def.ms, def, frozen: new Set(), nextBurn: now + 1000 };
   walls.push(w);
   io.emit('wall', { id: w.id, kind: w.kind, pts, ms: def.ms, by: p.id });
+  walls.forEach(o => { if (o.kind !== w.kind) tryStorm(p, w, o, now); });
 }
 function tickWalls(now) {
   for (let i = walls.length - 1; i >= 0; i--) {
@@ -723,6 +726,103 @@ function tickWalls(now) {
       if (owner) foes.forEach(([f, b]) => {
         if (f.alive) damageFoe(owner, f, b, Math.max(1, Math.round(atkOf(owner) * w.def.burn * (0.8 + Math.random() * 0.4))), false, 'fireWall');
       });
+    }
+  }
+}
+
+// ---------------- 冰火合擊：雷暴圈 ----------------
+// 火牆和冰牆碰在一起兩處以上（交叉、或線尾貼著另一條線），就當作圍成一圈（判定刻意放寬）
+// 圈裡會一直落雷、有兩個小龍捲風亂轉，撐到其中一面牆消失
+const STORM = { max: 2, touch: 50, rMin: 90, rMax: 300, boltMs: 700, boltR: 80, bolt: 1.2, shock: 600,
+  twisterR: 70, twisterHitMs: 500, twister: 0.4, twisterSpeed: 14, pull: 6 };
+const storms = [];
+let stormSeq = 0;
+// 點落在折線的第幾段（取最近的那段）
+const nearSeg = (w, x, y) => {
+  let best = 0, bd = Infinity;
+  w.pts.slice(1).forEach((b, i) => { const d = segDist(x, y, w.pts[i][0], w.pts[i][1], b[0], b[1]); if (d < bd) { bd = d; best = i; } });
+  return best;
+};
+function segCross(ax, ay, bx, by, cx, cy, dx, dy) {
+  const d = (bx - ax) * (dy - cy) - (by - ay) * (dx - cx);
+  if (!d) return null;
+  const t = ((cx - ax) * (dy - cy) - (cy - ay) * (dx - cx)) / d, u = ((cx - ax) * (by - ay) - (cy - ay) * (bx - ax)) / d;
+  return t >= 0 && t <= 1 && u >= 0 && u <= 1 ? [ax + (bx - ax) * t, ay + (by - ay) * t] : null;
+}
+// 找兩面牆圍出來的圈：回傳 { x, y, r } 或 null
+function stormCircle(a, b) {
+  const touches = [];
+  const add = (x, y) => { if (!touches.some(([tx, ty]) => dist(tx, ty, x, y) < 40)) touches.push([x, y]); };
+  a.pts.slice(1).forEach((q, i) => b.pts.slice(1).forEach((r, j) => {
+    const c = segCross(a.pts[i][0], a.pts[i][1], q[0], q[1], b.pts[j][0], b.pts[j][1], r[0], r[1]);
+    if (c) add(c[0], c[1]);
+  }));
+  [[a, b], [b, a]].forEach(([w, o]) => [w.pts[0], w.pts[w.pts.length - 1]].forEach(([x, y]) => {
+    if (wallDist(o, x, y) < STORM.touch) add(x, y);
+  }));
+  if (touches.length < 2) return null;
+  // 每面牆只取碰到的那幾處之間的那一段，和碰到的點一起算圓心、半徑
+  const pts = touches.slice();
+  [a, b].forEach(w => {
+    const idx = touches.map(([x, y]) => nearSeg(w, x, y));
+    pts.push(...w.pts.slice(Math.min(...idx) + 1, Math.max(...idx) + 1));
+  });
+  const x = pts.reduce((s, q) => s + q[0], 0) / pts.length, y = pts.reduce((s, q) => s + q[1], 0) / pts.length;
+  const r = pts.reduce((s, q) => s + dist(x, y, q[0], q[1]), 0) / pts.length;
+  if (r < 50) return null; // 兩條線擠在一起交叉，圍不出東西
+  return { x: Math.round(x), y: Math.round(y), r: Math.round(clamp(r, STORM.rMin, STORM.rMax)) };
+}
+function tryStorm(p, w, o, now) {
+  if (storms.length >= STORM.max) return;
+  const c = stormCircle(w, o);
+  if (!c) return;
+  const twisters = [0, 1].map(i => {
+    const a = Math.PI * i + Math.random();
+    return { x: c.x + Math.cos(a) * c.r * 0.4, y: c.y + Math.sin(a) * c.r * 0.4, dir: Math.random() * Math.PI * 2 };
+  });
+  const s = { id: 'st' + (++stormSeq), ...c, owner: p.id, until: Math.min(w.until, o.until), walls: [w.id, o.id],
+    nextBolt: now + 300, nextTwist: now + STORM.twisterHitMs, twisters };
+  storms.push(s);
+  io.emit('storm', stormState(s));
+  pushChat({ system: true, text: `${p.name} 讓冰與火交會，召喚出雷暴圈！`, t: now });
+}
+const stormState = (s) => ({ id: s.id, x: s.x, y: s.y, r: s.r, ms: s.until - Date.now(), tw: s.twisters.map(t => [Math.round(t.x), Math.round(t.y)]) });
+function tickStorms(now) {
+  for (let i = storms.length - 1; i >= 0; i--) {
+    const s = storms[i];
+    if (now >= s.until || !s.walls.every(id => walls.some(w => w.id === id))) { storms.splice(i, 1); io.emit('stormGone', { id: s.id }); continue; }
+    const owner = players.get(s.owner);
+    const foes = [...(monster.alive ? [[monster, true]] : []), ...mobs.concat(DG.foes()).filter(m => m.alive).map(m => [m, false])]
+      .filter(([f]) => dist(f.x, f.y, s.x, s.y) < s.r + 40);
+    const hit = (f, b, mul, skill) => { if (owner && f.alive) damageFoe(owner, f, b, Math.max(1, Math.round(atkOf(owner) * mul * (0.8 + Math.random() * 0.4))), false, skill); };
+    // 龍捲風：在圈裡亂轉，快碰到圈邊就轉回中間
+    s.twisters.forEach(t => {
+      t.dir += (Math.random() - 0.5) * 0.8;
+      if (dist(t.x, t.y, s.x, s.y) > s.r * 0.75) t.dir = Math.atan2(s.y - t.y, s.x - t.x) + (Math.random() - 0.5);
+      t.x += Math.cos(t.dir) * STORM.twisterSpeed; t.y += Math.sin(t.dir) * STORM.twisterSpeed;
+      // 碰到的小怪被往圈中間捲（颱風和副本魔王太重捲不動）
+      foes.forEach(([f, b]) => {
+        if (b || f.kind === 'fu' || dist(f.x, f.y, t.x, t.y) > STORM.twisterR) return;
+        const d = dist(f.x, f.y, s.x, s.y);
+        if (d > STORM.pull) { f.x += (s.x - f.x) / d * STORM.pull; f.y += (s.y - f.y) / d * STORM.pull; }
+      });
+    });
+    if (now >= s.nextTwist) {
+      s.nextTwist = now + STORM.twisterHitMs;
+      foes.forEach(([f, b]) => { if (s.twisters.some(t => dist(f.x, f.y, t.x, t.y) < STORM.twisterR + (b ? WALL_R.boss : 0))) hit(f, b, STORM.twister, 'stormTwister'); });
+    }
+    if (now >= s.nextBolt) {
+      s.nextBolt = now + STORM.boltMs;
+      // 圈裡隨機一點落雷；有怪在圈裡的話一半機率直接劈怪
+      const inside = foes.filter(([f, b]) => dist(f.x, f.y, s.x, s.y) < s.r + (b ? WALL_R.boss : 0));
+      let x, y;
+      if (inside.length && Math.random() < 0.5) { const [f] = inside[Math.floor(Math.random() * inside.length)]; x = f.x; y = f.y; }
+      else { const a = Math.random() * Math.PI * 2, d = Math.sqrt(Math.random()) * s.r; x = s.x + Math.cos(a) * d; y = s.y + Math.sin(a) * d; }
+      // 每道雷都讓圈裡所有怪電暈一下：不能動、不能出招
+      inside.forEach(([f]) => { f.stunUntil = Math.max(f.stunUntil || 0, now + STORM.shock); });
+      io.emit('stormBolt', { id: s.id, x: Math.round(x), y: Math.round(y), ms: STORM.shock,
+        foes: inside.filter(([, b]) => !b).map(([f]) => f.id), boss: inside.some(([, b]) => b) });
+      foes.forEach(([f, b]) => { if (dist(f.x, f.y, x, y) < STORM.boltR + (b ? WALL_R.boss : 0)) hit(f, b, STORM.bolt, 'stormBolt'); });
     }
   }
 }
@@ -1141,7 +1241,7 @@ io.on('connection', (socket) => {
     ack({ ok: true, you: Object.assign(publicPlayer(p), { owned: p.owned, furn: p.furn }), players: [...players.values()].map(publicPlayer), history,
       monster: monsterState(), mobs: mobs.map(mobState).concat(DG.allFoes().map(mobState)), emptyCrates: emptyCrates(), dungeon: DG.state(),
       summons: summons.map(summonState), decor: decorList(),
-      walls: walls.map(w => ({ id: w.id, kind: w.kind, pts: w.pts, ms: w.until - Date.now() })), music: musicState() });
+      walls: walls.map(w => ({ id: w.id, kind: w.kind, pts: w.pts, ms: w.until - Date.now() })), storms: storms.map(stormState), music: musicState() });
     socket.broadcast.emit('playerJoined', publicPlayer(p));
     pushChat({ system: true, text: `${p.name} 進入了防衛總部 🌀`, t: Date.now() });
   });

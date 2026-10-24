@@ -328,6 +328,7 @@
     scene.moveMobs(w.mobs);
     if (w.summons.length) scene.moveSummons(w.summons);
     if (w.boss) scene.moveMonster({ x: w.boss[0], y: w.boss[1] });
+    if (w.storms) scene.moveStorms(w.storms);
   });
   socket.on('monsterHit', (m) => scene && scene.onMonsterHit(m));
   socket.on('mAttack', (a) => scene && scene.onMonsterAttack(a));
@@ -370,6 +371,9 @@
   socket.on('decor', (d) => scene && scene.setDecor(d));
   socket.on('wall', (w) => scene && scene.onWall(w));
   socket.on('wallGone', (w) => scene && scene.onWallGone(w.id));
+  socket.on('storm', (st) => scene && scene.onStorm(st));
+  socket.on('stormGone', (st) => scene && scene.onStormGone(st.id));
+  socket.on('stormBolt', (b) => scene && scene.onStormBolt(b));
   socket.on('decorGot', (g) => {
     myFurn = g.furn;
     store('hq-furn', myFurn);
@@ -1968,6 +1972,17 @@
         ctx.restore();
       });
     }),
+    // 雷暴圈裡的小龍捲風：上寬下窄的漏斗，一圈一圈的風線
+    twister: () => fxCanvas(64, 96, 61, (ctx, r) => {
+      for (let i = 0; i < 6; i++) {
+        const y = 14 + i * 13, w = 28 - i * 4;
+        CR.blob(ctx, 32 + (i % 2 ? 3 : -3), y, w, 7, r, 0.1, 14);
+        CR.fill(ctx, i % 2 ? '#d7dde8' : '#eef1f6', r, null); CR.stroke(ctx, r, 2, '#4a5470');
+      }
+      ctx.beginPath(); ctx.moveTo(30, 84); ctx.quadraticCurveTo(34, 90, 28, 94);
+      CR.stroke(ctx, r, 2.4, '#4a5470');
+      [[20, 30, 40, 26], [24, 56, 38, 52]].forEach(([x1, y1, x2, y2]) => CR.line(ctx, x1, y1, x2, y2, r, 1.6, '#8a93a8', 0.6));
+    }),
     // 音符（歌姬的普攻、靈魂之歌）
     note: () => fxCanvas(34, 40, 41, (ctx, r) => {
       CR.blob(ctx, 11, 31, 8, 6, r, 0.08, 12); CR.fill(ctx, '#8a5cd6', r, null); CR.stroke(ctx, r, 2.2);
@@ -2493,7 +2508,7 @@
 
   // ---------------- Phaser 場景 ----------------
   class HQScene extends Phaser.Scene {
-    constructor() { super('hq'); this.remotes = new Map(); this.drops = []; this.told = {}; this.walls = new Map(); this.drawing = null; }
+    constructor() { super('hq'); this.remotes = new Map(); this.drops = []; this.told = {}; this.walls = new Map(); this.storms = new Map(); this.drawing = null; }
 
     create() {
       this.textures.addCanvas('map', drawMap());
@@ -2999,6 +3014,8 @@
       MUSIC.set(res.music);
       this.walls.forEach((w, id) => this.onWallGone(id, true));
       (res.walls || []).forEach(w => this.onWall(w));
+      this.storms.forEach((st, id) => this.onStormGone(id, true));
+      (res.storms || []).forEach(st => this.onStorm(st));
       renderStats(res.you);
       this.emptyCrates.forEach(i => i.destroy());
       this.emptyCrates.clear();
@@ -3247,6 +3264,7 @@
     applyMonsterTint() {
       const now = performance.now();
       if (now < this.frozenUntil) this.mBody.setTint(0x9fd8ff);
+      else if (now < (this.shockUntil || 0)) this.mBody.setTint(0xfff07a);
       else if (now < this.weakUntil) this.mBody.setTint(0xd9c4ff);
       else if (this.monster.phase === 2) this.mBody.setTint(0xffb3c6); // 第二階段：整隻變成暴怒的粉紅色
       else this.mBody.clearTint();
@@ -4109,6 +4127,87 @@
       all.forEach(o => this.tweens.killTweensOf(o));
       this.tweens.add({ targets: all, alpha: 0, duration: 350, onComplete: () => all.forEach(o => o.destroy()) });
     }
+    // 冰火合擊的雷暴圈：地上一個圈，圈裡落雷、兩個龍捲風亂轉
+    // 畫面跑不動（每秒不到 35 張）時只留淡淡的圈和小閃電
+    stormLite() { return this.game.loop.actualFps < 35; }
+    onStorm(st) {
+      if (this.storms.has(st.id)) return;
+      const lite = this.stormLite();
+      const g = this.add.graphics({ x: st.x, y: st.y }).setDepth(-3);
+      g.fillStyle(0x5b5f8a, lite ? 0.12 : 0.2); g.fillEllipse(0, 0, st.r * 2, st.r * 1.4);
+      g.lineStyle(6, 0xffd23f, lite ? 0.3 : 0.5); g.strokeEllipse(0, 0, st.r * 2, st.r * 1.4);
+      g.lineStyle(2, 0x2b2a33, lite ? 0.3 : 0.6); g.strokeEllipse(0, 0, st.r * 2 + 6, st.r * 1.4 + 5);
+      const tw = lite ? [] : (st.tw || []).map(([x, y], i) => {
+        const img = this.add.image(x, y, 'fx-twister').setOrigin(0.5, 1).setDepth(y).setScale(1.25);
+        this.tweens.add({ targets: img, scaleX: { from: 1.05, to: 1.4 }, duration: 180 + i * 40, yoyo: true, repeat: -1 });
+        this.tweens.add({ targets: img, angle: { from: -6, to: 6 }, duration: 300, yoyo: true, repeat: -1 });
+        return { img, tx: x, ty: y };
+      });
+      const storm = { g, tw, x: st.x, y: st.y, r: st.r, lite };
+      this.storms.set(st.id, storm);
+      g.setScale(0.2);
+      this.tweens.add({ targets: g, scale: 1, duration: 400, ease: 'Back.out' });
+      storm.blink = this.time.delayedCall(Math.max(0, (st.ms || 10000) - 2000), () => {
+        this.tweens.add({ targets: [g, ...tw.map(t => t.img)], alpha: 0.35, duration: 220, yoyo: true, repeat: 4 });
+      });
+    }
+    moveStorms(list) {
+      list.forEach(([id, ...xy]) => {
+        const st = this.storms.get(id);
+        if (st) st.tw.forEach((t, i) => { t.tx = xy[i * 2]; t.ty = xy[i * 2 + 1]; });
+      });
+    }
+    // 每幀把龍捲風往 server 給的位置滑過去
+    updateStorms(dt) {
+      const k = Math.min(1, dt * 10);
+      this.storms.forEach(st => st.tw.forEach(t => {
+        t.img.x += (t.tx - t.img.x) * k; t.img.y += (t.ty - t.img.y) * k; t.img.setDepth(t.img.y);
+      }));
+    }
+    onStormBolt(b) {
+      const st = this.storms.get(b.id);
+      if (!st) return;
+      // 圈裡的怪全部電暈：身體變黃、抖個不停
+      const until = performance.now() + (b.ms || 600);
+      (b.foes || []).forEach(id => { const m = this.mobs.get(id); if (m) { m.shockUntil = until; this.refreshFoeTint(id); } });
+      if (b.boss) { this.shockUntil = until; this.applyMonsterTint(); }
+      if (fxOff()) return;
+      if (!st.lite) {
+        // 整圈閃一下黃光，被電到的怪身上冒電花
+        const fl = this.add.graphics({ x: st.x, y: st.y }).setDepth(-2.8);
+        fl.fillStyle(0xffe14d, 0.3); fl.fillEllipse(0, 0, st.r * 2, st.r * 1.4);
+        this.tweens.add({ targets: fl, alpha: 0, duration: 320, onComplete: () => fl.destroy() });
+        const sparkAt = (x, y, k) => [-1, 1].forEach(dx => {
+          const sp = this.add.image(x + dx * 26 * k + (Math.random() - 0.5) * 10, y - (50 + Math.random() * 40) * k, 'bolt')
+            .setDepth(y + 150).setScale(0.6 * k).setAngle(dx * 20);
+          this.tweens.add({ targets: sp, alpha: { from: 1, to: 0.15 }, duration: 100, yoyo: true, repeat: 2, onComplete: () => sp.destroy() });
+        });
+        (b.foes || []).forEach(id => { const m = this.mobs.get(id); if (m && m.visible) sparkAt(m.x, m.y, m.k || 1); });
+        if (b.boss && this.monster.visible) sparkAt(this.monster.x, this.monster.y, 2.2);
+      }
+      if (st.lite) {
+        // 省電版：小閃電在圈裡閃兩下
+        const s = this.add.image(b.x, b.y, 'bolt').setOrigin(0.5, 1).setDepth(b.y + 200).setScale(1.3);
+        this.tweens.add({ targets: s, alpha: { from: 1, to: 0.1 }, duration: 90, yoyo: true, repeat: 1, onComplete: () => s.destroy() });
+        return;
+      }
+      const bolt = this.add.image(b.x, b.y, 'bolt-big').setOrigin(0.5, 1).setScale(1.5, 4.5).setDepth(b.y + 200);
+      this.tweens.add({ targets: bolt, alpha: { from: 1, to: 0 }, duration: 360, delay: 100, onComplete: () => bolt.destroy() });
+      const scorch = this.add.graphics({ x: b.x, y: b.y }).setDepth(-2.5);
+      scorch.fillStyle(0x2b2a33, 0.35); scorch.fillEllipse(0, 0, 90, 56);
+      this.tweens.add({ targets: scorch, alpha: 0, delay: 300, duration: 700, onComplete: () => scorch.destroy() });
+      this.burst(b.x, b.y - 20, 8, 0xffd23f, 60);
+    }
+    onStormGone(id, now) {
+      const st = this.storms.get(id);
+      if (!st) return;
+      this.storms.delete(id);
+      st.blink.remove();
+      const all = [st.g, ...st.tw.map(t => t.img)];
+      if (now || fxOff()) { all.forEach(o => o.destroy()); return; }
+      all.forEach(o => this.tweens.killTweensOf(o));
+      this.tweens.add({ targets: all, alpha: 0, duration: 350, onComplete: () => all.forEach(o => o.destroy()) });
+    }
 
     // 射程內最近的敵人（颱風或小怪）
     nearestFoe(range) {
@@ -4137,6 +4236,7 @@
       if (!m) { this.applyMonsterTint(); return; }
       const now = performance.now();
       if (now < m.frozenUntil) m.body_.setTint(0x9fd8ff);
+      else if (now < (m.shockUntil || 0)) m.body_.setTint(0xfff07a);
       else if (now < m.weakUntil) m.body_.setTint(0xd9c4ff);
       else if (m.state.kind === 'fu' && m.state.phase === 2) m.body_.setTint(0xb8a4e8); // 黑化：整個人偏紫
       else m.body_.clearTint();
@@ -4649,6 +4749,7 @@
       const dt = Math.min(0.1, (now - (this.prevNow || now)) / 1000);
       this.prevNow = now;
       this.updateRain(dt);
+      this.updateStorms(dt);
       if (!this.me) return;
 
       // 自己的移動
@@ -4709,11 +4810,14 @@
         if (!m.visible) return;
         m.x += (m.tx - m.x) * Math.min(1, dt * 8);
         m.y += (m.ty - m.y) * Math.min(1, dt * 8);
-        const frozen = performance.now() < m.frozenUntil;
+        const frozen = performance.now() < m.frozenUntil, shock = performance.now() < (m.shockUntil || 0);
         m.ice.setVisible(frozen);
-        if (m.wasFrozen && !frozen) this.refreshFoeTint(m.state.id);
-        m.wasFrozen = frozen;
-        m.body_.y = frozen ? 0 : -Math.abs(Math.sin(time / 160 + m.tx)) * 4;
+        if ((m.wasFrozen && !frozen) || (m.wasShock && !shock)) this.refreshFoeTint(m.state.id);
+        m.wasFrozen = frozen; m.wasShock = shock;
+        m.body_.y = frozen || shock ? 0 : -Math.abs(Math.sin(time / 160 + m.tx)) * 4;
+        // 電暈：原地左右抖
+        if (shock) m.body_.x = (Math.random() - 0.5) * 6; else if (m.wasShockX) m.body_.x = 0;
+        m.wasShockX = shock;
         m.setDepth(m.y);
       });
 
@@ -4737,17 +4841,20 @@
         this.monster.y += (this.monster.ty - this.monster.y) * Math.min(1, dt * 6);
         const frozen = performance.now() < this.frozenUntil;
         const weak = performance.now() < this.weakUntil;
-        if (!frozen) this.mSwirl.rotation -= dt * 2.4;
+        const shock = performance.now() < (this.shockUntil || 0);
+        if (this.wasShock && !shock && !this.mHitUntil) this.applyMonsterTint();
+        this.wasShock = shock;
+        if (!frozen && !shock) this.mSwirl.rotation -= dt * 2.4;
         this.mIce.setVisible(frozen);
-        const status = [frozen && '冰凍中', weak && '被削弱'].filter(Boolean).join(' ');
+        const status = [frozen && '冰凍中', shock && '電暈中', weak && '被削弱'].filter(Boolean).join(' ');
         if (status !== this.mStatusText) {
           this.mStatusText = status;
           this.mStatus.setText(status).setVisible(!!status);
-          this.mStatus.setColor(frozen ? '#2f5fa8' : '#5b3fa0');
+          this.mStatus.setColor(frozen ? '#2f5fa8' : shock ? '#b8860b' : '#5b3fa0');
           if (!this.mHitUntil) this.applyMonsterTint();
         }
         // 楓之谷式的彈跳：跳起來、落地時壓扁（冰凍時停住）
-        const ph = frozen ? 0.5 : (time % 900) / 900;
+        const ph = frozen || shock ? 0.5 : (time % 900) / 900;
         const hop = Math.sin(ph * Math.PI);
         const squash = ph < 0.12 || ph > 0.88 ? 0.1 : 0;
         this.mBody.y = -hop * 16;

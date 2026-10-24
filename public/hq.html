@@ -129,11 +129,12 @@
             <div id="draw-colors" class="draw-colors"></div>
             <div id="draw-shapes" class="draw-sizes draw-shapes"></div>
             <div id="draw-sizes" class="draw-sizes"></div>
+            <button id="draw-undo" class="hud-btn tiny" type="button" title="上一步（Ctrl+Z）">↩️ 上一步</button>
             <button id="draw-clear" class="hud-btn tiny" type="button">🗑️ 清空</button>
           </div>
           <form id="draw-start-form" class="draw-start host-only">
             <input id="draw-answer" maxlength="12" placeholder="輸入答案（別人看不到）" autocomplete="off">
-            <button class="primary small" type="submit">出題</button>
+            <button id="draw-start-btn" class="primary small" type="submit">出題</button>
             <button id="draw-reveal" class="hud-btn tiny" type="button">公布答案</button>
           </form>
         </div>

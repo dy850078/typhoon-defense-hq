@@ -336,7 +336,7 @@ button.inv-item:hover { border-color: var(--accent); }
 .draw-board { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
 #draw-canvas { width: 100%; aspect-ratio: 4 / 3; background: #fff; border: 3px solid var(--ink); border-radius: 14px; touch-action: none; display: block; }
 #draw-panel.is-host #draw-canvas { cursor: not-allowed; }
-#draw-panel.can-paint #draw-canvas { cursor: crosshair; }
+#draw-panel.can-paint #draw-canvas { cursor: var(--paint-cursor, crosshair); }
 .game-panel:not(.is-host) .host-only { display: none; }
 .draw-tools, .draw-start { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .draw-start input { flex: 1; margin: 0; min-width: 140px; }

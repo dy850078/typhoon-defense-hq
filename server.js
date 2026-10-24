@@ -1483,7 +1483,16 @@ io.on('connection', (socket) => {
     if (!isHost()) return ack({ ok: false, error: '只有主持人可以出題' });
     const a = clean(answer, 12);
     if (!norm(a)) return ack({ ok: false, error: '請先輸入答案' });
-    if (draw.answer) draw.end('換題了，');
+    // 出題中再送一次就是改題目：不公布舊答案、畫布保留，猜對的人要重猜
+    if (draw.answer) {
+      if (norm(a) !== norm(draw.answer)) {
+        const had = draw.correct.size;
+        draw.answer = a; draw.correct.clear(); draw.lastHostAct = Date.now();
+        draw.log(`✏️ 主持人改了題目！答案有 ${[...norm(a)].length} 個字${had ? '，剛剛猜對的要重猜喔' : ''}`);
+        draw.state();
+      }
+      return ack({ ok: true, edited: true });
+    }
     draw.answer = a; draw.strokes = []; draw.correct.clear(); draw.hostRewarded = false;
     draw.round++; draw.lastHostAct = Date.now();
     io.to('draw').emit('drawClear');
@@ -1500,9 +1509,18 @@ io.on('connection', (socket) => {
     const s2 = { c: /^#[0-9a-f]{6}$/i.test(st.c) ? st.c : '#2b2a33', w: clamp(Number(st.w) || 6, 1, 60), pts };
     // 形狀（圓形、矩形、三角形）只帶起點和終點
     if (['circle', 'rect', 'tri'].includes(st.k)) { if (pts.length !== 2) return; s2.k = st.k; }
+    // id：同一筆分好幾段送，上一步時整筆一起收回
+    if (Number.isSafeInteger(st.id)) s2.id = st.id;
     draw.strokes.push(s2);
     draw.lastHostAct = Date.now();
     socket.to('draw').emit('drawStroke', s2);
+  });
+  socket.on('drawUndo', () => {
+    if (!isHost() || !draw.strokes.length) return;
+    const id = draw.strokes[draw.strokes.length - 1].id;
+    do draw.strokes.pop(); while (id !== undefined && draw.strokes.length && draw.strokes[draw.strokes.length - 1].id === id);
+    draw.lastHostAct = Date.now();
+    io.to('draw').emit('drawUndo', id === undefined ? null : id);
   });
   socket.on('drawClear', () => {
     if (!isHost()) return;
@@ -1517,7 +1535,11 @@ io.on('connection', (socket) => {
     if (!guessOk()) return ack({ ok: false });
     const t = clean(text, 20);
     if (!t) return ack({ ok: false });
-    if (draw.host === p.id) return ack({ ok: false, error: '主持人不能猜啦' });
+    if (draw.host === p.id) {
+      // 主持人可以聊天，但不能把答案講出來
+      if (draw.answer && norm(t).includes(norm(draw.answer))) return ack({ ok: false, error: '不能說出答案喔' });
+      draw.log(`🎤 ${p.name}：${t}`, 'chat'); return ack({ ok: true });
+    }
     if (!draw.answer) { draw.log(`${p.name}：${t}`, 'chat'); return ack({ ok: true }); }
     if (draw.correct.has(p.id)) return ack({ ok: false, error: '你已經猜對了，等下一題' });
     if (norm(t) !== norm(draw.answer)) { draw.log(`${p.name}：${t}`, 'guess'); return ack({ ok: true, correct: false }); }
@@ -1552,7 +1574,10 @@ io.on('connection', (socket) => {
     if (!guessOk()) return ack({ ok: false });
     const t = clean(text, 40);
     if (!t) return ack({ ok: false });
-    if (song.host === p.id) return ack({ ok: false, error: '主持人不能猜啦' });
+    if (song.host === p.id) {
+      if (song.title && (songHit(norm(t), song.singer) || songHit(norm(t), song.title))) return ack({ ok: false, error: '不能說出答案喔' });
+      song.log(`🎤 ${p.name}：${t}`, 'chat'); return ack({ ok: true });
+    }
     if (!song.title) { song.log(`${p.name}：${t}`, 'chat'); return ack({ ok: true }); }
     const hadS = song.gotSinger.has(p.id), hadT = song.gotTitle.has(p.id);
     if (hadS && hadT) return ack({ ok: false, error: '你已經全部答對了，等下一首' });

@@ -450,21 +450,14 @@
   // 右手在 (51, 63)
   Object.assign(DRAW, {
     lilyDart: { hand(ctx, C, r) {
-      // 金針花標：細長的綠色花莖當鏢身，前端是一朵橘色金針花
-      ctx.save(); ctx.translate(53, 62); ctx.rotate(-0.55);
-      C.line(ctx, -4, 0, 0, -30, r, 3.4, C.INK, 0.2); C.line(ctx, -4, 0, 0, -30, r, 2, '#6baf7b', 0.2);
-      [[-5, -14, -0.9], [3, -20, 0.8]].forEach(([x, y, a]) => {
-        ctx.save(); ctx.translate(x, y); ctx.rotate(a);
-        C.blob(ctx, 0, 0, 2.2, 5, r, 0.1, 10); C.fill(ctx, '#7fbf6a', r, null); C.stroke(ctx, r, 1.2); ctx.restore();
-      });
-      ctx.translate(0, -36);
+      // 金針花標：只有一朵金針花（花瓣＋花蕊），像飛鏢一樣捏在手上，放低一點不擋到臉
+      ctx.save(); ctx.translate(57, 66); ctx.rotate(0.3);
       for (let i = 0; i < 6; i++) {
-        ctx.save(); ctx.rotate(i * Math.PI / 3 + 0.2);
-        C.blob(ctx, 0, -6.5, 3.4, 7, r, 0.1, 12); C.fill(ctx, i % 2 ? '#ff8a3d' : '#ffa53a', r, null); C.stroke(ctx, r, 1.4);
-        C.line(ctx, 0, -2, 0, -10, r, 0.9, 'rgba(184,67,0,0.6)', 0.2);
+        ctx.save(); ctx.rotate(i * Math.PI / 3);
+        C.blob(ctx, 0, -5, 2.6, 5.4, r, 0.1, 12); C.fill(ctx, i % 2 ? '#ff8a3d' : '#ffa53a', r, null); C.stroke(ctx, r, 1.2);
         ctx.restore();
       }
-      dot(ctx, 0, 0, 3, '#ffd23f'); C.blob(ctx, 0, 0, 3, 3, r, 0.1, 10); C.stroke(ctx, r, 1.2);
+      dot(ctx, 0, 0, 2.4, '#ffd23f'); C.blob(ctx, 0, 0, 2.4, 2.4, r, 0.1, 10); C.stroke(ctx, r, 1);
       ctx.restore();
     } },
     qixingStaff: { hand(ctx, C, r) {

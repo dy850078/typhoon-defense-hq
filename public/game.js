@@ -3330,8 +3330,8 @@
         this.tweens.add({ targets: who.body_, x: -dir * 5, duration: 90, yoyo: true });
         this.time.delayedCall(60, () => fly('fx-arrow', 200, 0xff6b81, { scale: 0.8 }));
       } else if (fx.skill === 'lilyDart') {
-        // 金針花標：一朵金針花轉著圈飛過去
-        const sx = who.x + (mx < who.x ? -16 : 16), sy = who.y - 50;
+        // 金針花標：手上捏著的那朵金針花像飛鏢一樣，轉著圈射出去
+        const sx = who.x + (mx < who.x ? -25 : 25), sy = who.y - 10;
         const f = this.add.image(sx, sy, 'fx-lily').setDepth(2050).setScale(0.7);
         this.tweens.add({ targets: f, x: mx, y: my, angle: 900, duration: 270, ease: 'Linear',
           onComplete: () => { f.destroy(); this.burst(mx, my, 7, 0xff8a3d, 45); } });

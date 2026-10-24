@@ -5,11 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <style>body{margin:0}[hidden]{display:none!important}img{max-width:100%}</style>
 <title>颱風假開趴</title>
-<meta name="description" content="10.23（五）20:00 線上颱風假派對，報名領你的邀請函！">
+<meta name="description" content="__PARTY_MD__（__PARTY_DOW_ZH__）__PARTY_TIME__ 線上颱風假派對，報名領你的邀請函！">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="颱風假開趴">
-<meta property="og:title" content="颱風假開趴｜10.23 FRI 20:00">
-<meta property="og:description" content="10.23（五）20:00 線上颱風假派對，報名領你的邀請函！">
+<meta property="og:title" content="颱風假開趴｜__PARTY_MD__ __PARTY_DOW_EN__ __PARTY_TIME__">
+<meta property="og:description" content="__PARTY_MD__（__PARTY_DOW_ZH__）__PARTY_TIME__ 線上颱風假派對，報名領你的邀請函！">
 <meta property="og:url" content="__ORIGIN__/">
 <meta property="og:image" content="__ORIGIN__/og.png">
 <meta property="og:image:width" content="1200">
@@ -129,7 +129,7 @@ body {
 .field { display: flex; flex-direction: column; gap: 8px; }
 .field label, .label-txt { font-weight: 700; font-size: 15px; }
 .req { color: var(--accent-ink); font: 700 12px var(--mono); margin-left: 6px; letter-spacing: 0.06em; }
-.field input[type=text] {
+.field input[type=text], .field input[type=password] {
   font: 500 18px var(--display);
   color: var(--ink);
   background: var(--paper);
@@ -139,7 +139,15 @@ body {
   min-height: 48px;
   width: 100%;
 }
-.field input[type=text]:focus { outline: none; border-color: var(--accent); }
+.field input[type=text]:focus, .field input[type=password]:focus { outline: none; border-color: var(--accent); }
+/* 登入 */
+.login-form { grid-template-columns: minmax(0, 460px); }
+.acct { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding-bottom: 22px; border-bottom: 2px dashed var(--line); }
+.first { margin-top: 32px; display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; padding: 20px 22px; border: 2px solid var(--ink); border-radius: 20px; }
+.first b { font-size: 18px; }
+.first span { color: var(--muted); flex: 1 1 16em; }
+.linkish { font: inherit; color: var(--accent-ink); background: none; border: 0; padding: 0; text-decoration: underline; cursor: pointer; }
+.who { margin: 8px 0 0; color: var(--muted); }
 .chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .chip {
   font: 500 14px var(--display); color: var(--ink);
@@ -279,13 +287,14 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outlin
   .join { grid-template-columns: 1fr; }
   .rules { text-align: left; }
   .vip-facts { grid-template-columns: 1fr; }
+  .acct { grid-template-columns: 1fr; }
 }
 </style>
 
 <main class="sheet">
   <header class="meta">
     <div class="left">TYPHOON DAY<br>ONLINE PARTY</div>
-    <div class="right"><time datetime="2026-10-23T20:00+08:00">2026.10.23</time><br>FRI. 20:00</div>
+    <div class="right"><time datetime="__PARTY_ISO__">__PARTY_DATE_DOT__</time><br>__PARTY_DOW_EN__. __PARTY_TIME__</div>
   </header>
 
   <section class="hero" aria-label="颱風假開趴">
@@ -314,11 +323,42 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outlin
     </div>
   </section>
 
+  <!-- Log in -->
+  <section id="login" hidden aria-labelledby="login-title">
+    <p class="eyebrow">WELCOME BACK / 登入</p>
+    <h2 class="h2" id="login-title">已經有 VIP Pass？直接登入</h2>
+    <p class="lede">登入就能拿回你的邀請函，總部裡的角色、等級、裝備和家具也都跟著帳號走，換手機或換電腦都一樣。</p>
+    <div style="height: 20px"></div>
+    <form class="form login-form" id="login-form" novalidate>
+      <div class="fields">
+        <div class="field">
+          <label for="l-user">帳號</label>
+          <input type="text" id="l-user" maxlength="20" autocomplete="username" autocapitalize="off" spellcheck="false">
+        </div>
+        <div class="field">
+          <label for="l-pass">密碼</label>
+          <input type="password" id="l-pass" autocomplete="current-password">
+        </div>
+        <p class="err" id="login-err" role="alert"></p>
+        <div class="submit-row">
+          <button type="submit" class="btn primary" id="l-submit">登入</button>
+        </div>
+      </div>
+    </form>
+    <div class="first">
+      <b>第一次來？</b>
+      <span id="first-txt">回答四個小問題，就會生成你專屬的邀請函，同時建立帳號。</span>
+      <button type="button" class="btn" id="to-reg">報名領邀請函</button>
+    </div>
+  </section>
+
   <!-- Sign-up -->
-  <section id="register" aria-labelledby="reg-title">
+  <section id="register" hidden aria-labelledby="reg-title">
     <p class="eyebrow">STEP 01 / 報名入場</p>
     <h2 class="h2" id="reg-title">先報到，才拿得到邀請函</h2>
-    <p class="lede">填好下面四項，就會生成你專屬的邀請函，派對入口也只有報到後才會出現。資料只留在你自己的手機或電腦上，不會上傳到任何地方。</p>
+    <p class="lede" id="reg-lede">設定帳號密碼、填好下面四項，就會生成你專屬的邀請函，派對入口也只有報到後才會出現。邀請函和總部裡的角色會存在派對的伺服器上，下次用帳號登入就能拿回來。</p>
+    <p class="who" id="to-login-row">已經有帳號了？<button type="button" class="linkish" id="to-login">直接登入</button></p>
+    <div style="height: 20px"></div>
     <form class="form" id="reg-form" novalidate>
       <div class="photo-field">
         <span class="label-txt">大頭照<span class="req">必填</span></span>
@@ -329,6 +369,16 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outlin
         <p class="note-sm">正方形的照片最好看</p>
       </div>
       <div class="fields">
+        <div class="acct" id="acct-fields">
+          <div class="field">
+            <label for="f-user">帳號<span class="req">必填</span></label>
+            <input type="text" id="f-user" maxlength="20" autocomplete="username" autocapitalize="off" spellcheck="false" placeholder="登入用，2～20 個字">
+          </div>
+          <div class="field">
+            <label for="f-pass">密碼<span class="req">必填</span></label>
+            <input type="password" id="f-pass" autocomplete="new-password" placeholder="至少 4 個字">
+          </div>
+        </div>
         <div class="field">
           <label for="f-name">姓名或暱稱<span class="req">必填</span></label>
           <input type="text" id="f-name" maxlength="16" autocomplete="nickname" placeholder="大家都怎麼叫你？">
@@ -368,6 +418,7 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outlin
   <section id="invite" hidden aria-labelledby="inv-title">
     <p class="eyebrow">STEP 02 / 你的邀請函</p>
     <h2 class="h2" id="inv-title">報到成功，派對見！</h2>
+    <p class="who" id="who" hidden>已登入：<b id="who-name"></b>・<button type="button" class="linkish" id="logout-btn">登出</button></p>
     <div style="height: 20px"></div>
     <article class="vip" id="card" aria-label="VIP 邀請函">
       <div class="vip-main">
@@ -390,7 +441,7 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outlin
           <div class="vip-who">
             <span class="vip-tier"><span class="vip-hq">防颱總部</span><span id="c-tier"></span></span>
             <span class="vip-name" id="c-name"></span>
-            <span class="vip-sub">特約職員・10.23 颱風假開趴</span>
+            <span class="vip-sub">特約職員・__PARTY_MD__ 颱風假開趴</span>
           </div>
         </div>
         <div class="vip-facts">
@@ -407,7 +458,7 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outlin
       <div class="vip-stub">
         <span class="vip-k">GUEST NO.</span>
         <span class="vip-no" id="c-no">000</span>
-        <span class="vip-k">2026.10.23 / 20:00</span>
+        <span class="vip-k">__PARTY_DATE_DOT__ / __PARTY_TIME__</span>
         <div class="vip-bar" id="c-bar" aria-hidden="true"></div>
         <span class="vip-k">ADMIT ONE · ALL ACCESS</span>
       </div>
@@ -442,20 +493,21 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outlin
     <h2 class="h2" id="join-title" style="margin-bottom: 18px">點下去就能進來</h2>
     <div class="join">
       <a class="door" href="hq.html">
-        <span class="pill alt">免帳號</span>
+        <span class="pill alt">角色自動存檔</span>
         <span class="door-title">進入颱風天防衛總部</span>
-        <span class="door-sub">用你的角色在總部走來走去、聊天、敲物資箱、出門打颱風，走進「戰情室」就能一起視訊。手機電腦都能玩，不用註冊。</span>
+        <span class="door-sub">用你的角色在總部走來走去、聊天、敲物資箱、出門打颱風，走進「戰情室」就能一起視訊。手機電腦都能玩，等級和裝備會存到你的帳號。</span>
       </a>
     </div>
   </section>
 
   <footer class="details">
-    <div class="time"><span class="k">TIME</span><span>20:00 開始</span></div>
+    <div class="time"><span class="k">TIME</span><span>__PARTY_MD__（__PARTY_DOW_ZH__）__PARTY_TIME__ 開始</span></div>
     <p class="rules">穿著舒適，不要露點<br>自備零食與酒水</p>
   </footer>
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/mp4-muxer@5.2.2/build/mp4-muxer.js"></script>
+<script src="account.js"></script>
 <script>
 (function () {
   var IN_CLAUDE = /claude/i.test(location.hostname) || location.protocol === 'about:';
@@ -581,17 +633,78 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outlin
       bar.appendChild(el);
     });
     $('inv-title').textContent = mine ? '報到成功，派對見！' : d.name + ' 的邀請函';
-    $('redo-btn').textContent = mine ? '重新填寫' : '我也要報名';
+    $('redo-btn').textContent = mine ? '修改邀請函' : '我也要報名';
+    $('who').hidden = !(mine && ACC.user());
+    $('who-name').textContent = ACC.user();
     $('join').hidden = !mine;
-    $('register').hidden = true;
-    $('invite').hidden = false;
-    $('invite').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    show('invite');
   }
-  function showForm() {
-    $('invite').hidden = true;
-    $('join').hidden = true;
-    $('register').hidden = false;
+  var ACC = window.HQ_ACCOUNT;
+  function show(id) {
+    ['login', 'register', 'invite'].forEach(function (k) { $(k).hidden = k !== id; });
+    if (id !== 'invite') $('join').hidden = true;
+    if (booted) $(id).scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
+  var booted = false;
+  function setPhoto(big, small) {
+    photoBig = big; photoSmall = small;
+    var drop = $('photo-drop'), old = drop.querySelector('img');
+    if (old) old.remove();
+    $('photo-hint').hidden = !!small;
+    drop.classList.toggle('has', !!small);
+    if (!small) return;
+    var img = document.createElement('img');
+    img.src = big || 'data:image/jpeg;base64,' + small; img.alt = '你的大頭照預覽';
+    drop.insertBefore(img, drop.firstChild);
+  }
+  // 報名表有三種用法：new 新報名、claim 這台裝置上已經有邀請函要建帳號、edit 已登入修改邀請函
+  var formMode = 'new';
+  function showForm(mode, v) {
+    formMode = mode;
+    $('reg-form').reset();
+    $('form-err').textContent = '';
+    setPhoto(null, v && v.photo || null);
+    if (v) {
+      $('f-name').value = v.name || ''; $('f-song').value = v.song || ''; $('f-drink').value = v.drink || '';
+      $('t-silver').checked = v.theme === 's'; $('t-navy').checked = v.theme !== 's';
+    }
+    $('acct-fields').hidden = mode === 'edit';
+    $('to-login-row').hidden = mode === 'edit';
+    $('reg-lede').hidden = mode === 'edit';
+    $('reg-title').textContent = mode === 'edit' ? '修改你的邀請函' : mode === 'claim' ? '幫你的邀請函建立帳號' : '先報到，才拿得到邀請函';
+    $('f-submit').textContent = mode === 'edit' ? '更新我的邀請函' : mode === 'claim' ? '建立帳號並保存' : '生成我的邀請函';
+    show('register');
+  }
+  function localVip() { var v = ACC.read().vip; return v && v.name ? v : null; }
+  function showLogin() {
+    // 以前沒有帳號時報名過的人：邀請函還在這台裝置上，建個帳號就能永久保存
+    var v = localVip();
+    $('first-txt').textContent = v
+      ? '這台裝置上有「' + v.name + '」的邀請函，設定帳號密碼就能永久保存，角色也會跟著帳號走。'
+      : '回答四個小問題，就會生成你專屬的邀請函，同時建立帳號。';
+    $('to-reg').textContent = v ? '幫它建立帳號' : '報名領邀請函';
+    $('login-err').textContent = '';
+    show('login');
+  }
+  function showMine() {
+    var v = localVip();
+    if (v) showInvite(v, true); else showForm('edit');
+  }
+  $('to-reg').addEventListener('click', function () { var v = localVip(); showForm(v ? 'claim' : 'new', v); });
+  $('to-login').addEventListener('click', showLogin);
+  $('logout-btn').addEventListener('click', function () { ACC.logout(); $('l-pass').value = ''; showLogin(); });
+  $('login-form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var u = $('l-user').value.trim(), pw = $('l-pass').value;
+    if (!u || !pw) { $('login-err').textContent = '請輸入帳號和密碼'; return; }
+    $('l-submit').disabled = true; $('login-err').textContent = '';
+    ACC.login(u, pw).then(function (r) {
+      $('l-submit').disabled = false;
+      if (!r.ok) { $('login-err').textContent = r.error || '登入失敗'; return; }
+      $('l-pass').value = '';
+      showMine();
+    });
+  });
 
   $('reg-form').addEventListener('submit', function (e) {
     e.preventDefault();
@@ -607,23 +720,32 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outlin
     if (!d.name) miss.push('暱稱');
     if (!d.song) miss.push('擅長的歌曲');
     if (!d.drink) miss.push('今晚要喝的酒');
+    var user = $('f-user').value.trim(), pw = $('f-pass').value;
+    if (formMode !== 'edit') {
+      if (!pw) miss.unshift('密碼');
+      if (!user) miss.unshift('帳號');
+    }
     if (miss.length) { $('form-err').textContent = '還差：' + miss.join('、'); return; }
     $('form-err').textContent = '';
-    try { localStorage.setItem('hq-name', d.name.slice(0, 12)); } catch (e) {}
-    // 從邀請函報名進來的人一律從新手「防颱職員」開始
-    try { localStorage.setItem('hq-cls', 'staff'); } catch (e) {}
     // 邀請函也存一份，進總部後別人點「個人資料」就看得到你的 VIP Pass
-    try { localStorage.setItem('hq-vip', JSON.stringify({ name: d.name, song: d.song, drink: d.drink, theme: d.theme, photo: d.photo })); } catch (e) {}
-    showInvite(d, true);
+    var vip = { name: d.name, song: d.song, drink: d.drink, theme: d.theme, photo: d.photo };
+    var save = Object.assign(ACC.read(), { name: d.name.slice(0, 12), vip: vip });
+    // 從邀請函報名進來的新人一律從新手「防颱職員」開始（已經在總部練過等級的就保留原本的職業）
+    if (formMode === 'new' && !(Number(save.level) > 1)) save.cls = 'staff';
+    var btn = $('f-submit'), label = btn.textContent;
+    btn.disabled = true; btn.textContent = '存檔中…';
+    var req = formMode === 'edit' ? ACC.save({ name: save.name, vip: vip }) : ACC.register(user, pw, save);
+    req.then(function (r) {
+      btn.disabled = false; btn.textContent = label;
+      if (r.status === 401) { ACC.logout(); showLogin(); $('login-err').textContent = '登入過期了，請重新登入'; return; }
+      if (!r.ok) { $('form-err').textContent = r.error || '存檔失敗，再試一次'; return; }
+      if (formMode === 'edit') ACC.write(r.save);
+      showInvite(d, true);
+    });
   });
   $('redo-btn').addEventListener('click', function () {
-    if ($('redo-btn').textContent === '我也要報名') {
-      photoBig = null; photoSmall = null; $('reg-form').reset();
-      var img = $('photo-drop').querySelector('img'); if (img) img.remove();
-      $('photo-hint').hidden = false; $('photo-drop').classList.remove('has');
-    }
-    showForm();
-    $('register').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if ($('redo-btn').textContent === '我也要報名') { if (ACC.user()) showMine(); else showLogin(); return; }
+    showForm('edit', current);
   });
 
   /* ---------- download as image ---------- */
@@ -678,7 +800,7 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outlin
     x.textAlign = 'center';
 
     x.fillStyle = T.fg; fitFont(x, d.name, '900', 176, 64, 900, FAM); x.fillText(d.name, 540, 1170);
-    x.fillStyle = T.dim; x.font = '500 34px ' + FAM; x.fillText('特約職員・10.23 FRI 20:00 颱風假開趴', 540, 1240);
+    x.fillStyle = T.dim; x.font = '500 34px ' + FAM; x.fillText('特約職員・__PARTY_MD__ __PARTY_DOW_EN__ __PARTY_TIME__ 颱風假開趴', 540, 1240);
 
     x.fillStyle = T.line; x.fillRect(100, 1300, 880, 2); x.fillRect(539, 1330, 2, 120);
     x.fillStyle = T.dim; x.font = '700 22px ' + MONO;
@@ -907,7 +1029,14 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outlin
   function route() {
     var h = (location.hash || '').slice(1);
     var d = decode(h);
-    if (d) showInvite(d, false);
+    if (d) { showInvite(d, false); return; }
+    // 沒登入就是登入頁；有登入就先跟伺服器同步，再顯示自己的邀請函
+    if (!ACC.token()) { showLogin(); booted = true; return; }
+    if (localVip()) showMine();
+    ACC.sync().then(function (r) {
+      if (r) showMine(); else showLogin();
+      booted = true;
+    });
   }
   window.addEventListener('hashchange', route);
   route();

@@ -8,6 +8,7 @@ const AVATAR = require('./shared/avatar');
 const STATS = require('./shared/stats');
 const GEAR = require('./shared/gear');
 const DECOR = require('./shared/decor');
+const ACCOUNTS = require('./accounts');
 
 const PORT = Number(process.env.PORT) || 3000;
 const MAX_PLAYERS = Number(process.env.MAX_PLAYERS) || 40;
@@ -36,8 +37,34 @@ const FIREWORK_MS = 6000; // 每個人放煙火的間隔
 const CAKE_CODE = String(process.env.CAKE_CODE || 'CAKE');
 const CAKE_MS = 3 * 60 * 1000;
 const T = MAP.TILE;
+const DATA_DIR = path.join(__dirname, 'data');
+
+// ---------------- 派對設定（管理員介面可以改） ----------------
+// 存在 data/settings.json；管理員密碼可以用 ADMIN_PASSWORD 指定，沒指定就第一次啟動時隨機產生
+const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
+const settings = { date: '2026-10-23', time: '20:00', adminPassword: '' };
+try { Object.assign(settings, JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8'))); } catch (e) { /* 還沒有設定檔 */ }
+if (process.env.ADMIN_PASSWORD) settings.adminPassword = String(process.env.ADMIN_PASSWORD);
+function saveSettings() {
+  try {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+    fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2));
+  } catch (e) { console.error('設定存檔失敗', e.message); }
+}
+if (!settings.adminPassword) { settings.adminPassword = require('crypto').randomBytes(4).toString('hex'); saveSettings(); }
+// 各種顯示格式：2026.10.23、10.23、FRI、五、20:00
+function partyInfo() {
+  const [y, m, d] = settings.date.split('-').map(Number);
+  const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+  const pad = (n) => String(n).padStart(2, '0');
+  return { date: settings.date, time: settings.time, dateDot: `${y}.${pad(m)}.${pad(d)}`, md: `${pad(m)}.${pad(d)}`,
+    dowEn: ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'][dow], dowZh: '日一二三四五六'[dow], iso: `${settings.date}T${settings.time}+08:00` };
+}
+
+const accounts = ACCOUNTS.create(DATA_DIR);
 
 const app = express();
+app.use(express.json({ limit: '100kb' }));
 // 報名頁：分享連結的預覽圖要用完整網址，quick tunnel 的網址每次都不一樣，所以照請求的網址填進去
 const INDEX_FILE = path.join(__dirname, 'public', 'index.html');
 app.get(['/', '/index.html'], (req, res) => {
@@ -45,13 +72,97 @@ app.get(['/', '/index.html'], (req, res) => {
   const origin = `${proto}://${req.get('host')}`.replace(/[<>"']/g, '');
   fs.readFile(INDEX_FILE, 'utf8', (err, html) => {
     if (err) return res.status(500).end();
-    res.type('html').send(html.split('__ORIGIN__').join(origin));
+    // 派對時間的佔位字串換成管理員設定的時間
+    const P = partyInfo();
+    const fill = { __ORIGIN__: origin, __PARTY_DATE_DOT__: P.dateDot, __PARTY_MD__: P.md, __PARTY_DOW_EN__: P.dowEn,
+      __PARTY_DOW_ZH__: P.dowZh, __PARTY_TIME__: P.time, __PARTY_ISO__: P.iso };
+    res.type('html').send(Object.entries(fill).reduce((h, [k, v]) => h.split(k).join(v), html));
   });
 });
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/shared', express.static(path.join(__dirname, 'shared')));
 app.use('/vendor', express.static(path.join(__dirname, 'node_modules/phaser/dist')));
-app.get('/config', (req, res) => res.json({ jitsiDomain: JITSI_DOMAIN, jitsiRoom: JITSI_ROOM }));
+app.get('/config', (req, res) => res.json({ jitsiDomain: JITSI_DOMAIN, jitsiRoom: JITSI_ROOM, party: partyInfo() }));
+
+// ---------------- 帳號 API ----------------
+// 登入失敗太多次就暫停一下，避免有人一直猜密碼
+const failures = new Map(); // ip -> { n, until }
+const ipOf = (req) => String(req.headers['cf-connecting-ip'] || req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
+function tooMany(req) { const f = failures.get(ipOf(req)); return f && f.n >= 8 && f.until > Date.now(); }
+function failed(req) {
+  const ip = ipOf(req), f = failures.get(ip);
+  failures.set(ip, f && f.until > Date.now() ? { n: f.n + 1, until: f.until } : { n: 1, until: Date.now() + 10 * 60 * 1000 });
+}
+const bearer = (req) => String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+const meOf = (u) => ({ ok: true, username: u.username, save: u.save });
+app.post('/api/register', (req, res) => {
+  const b = req.body || {};
+  const r = accounts.register(b.username, b.password, sanitizeSave(b.save || {}));
+  if (r.error) return res.status(400).json({ ok: false, error: r.error });
+  res.json(Object.assign(meOf(r.user), { token: r.token }));
+});
+app.post('/api/login', (req, res) => {
+  if (tooMany(req)) return res.status(429).json({ ok: false, error: '試太多次了，10 分鐘後再試' });
+  const b = req.body || {};
+  const r = accounts.login(b.username, b.password);
+  if (r.error) { failed(req); return res.status(400).json({ ok: false, error: r.error }); }
+  res.json(Object.assign(meOf(r.user), { token: r.token }));
+});
+app.get('/api/me', (req, res) => {
+  const u = accounts.byToken(bearer(req));
+  if (!u) return res.status(401).json({ ok: false });
+  res.json(meOf(u));
+});
+// 報名頁改了邀請函，或是在沒登入的時候玩過，把資料存回帳號
+app.post('/api/save', (req, res) => {
+  const u = accounts.byToken(bearer(req));
+  if (!u) return res.status(401).json({ ok: false });
+  if ([...players.values()].some(p => p.account === u)) {
+    // 人在總部裡的時候，角色以總部為準，只更新邀請函
+    const v = sanitizeSave({ vip: req.body && req.body.vip }).vip;
+    if (v) accounts.update(u, { vip: v });
+  } else accounts.update(u, sanitizeSave(Object.assign({}, u.save, req.body || {})));
+  res.json(meOf(u));
+});
+app.post('/api/logout', (req, res) => { accounts.logout(bearer(req)); res.json({ ok: true }); });
+
+// ---------------- 管理員 API ----------------
+const adminTokens = new Set();
+const isAdmin = (req) => adminTokens.has(String(req.headers['x-admin-token'] || ''));
+app.post('/api/admin/login', (req, res) => {
+  if (tooMany(req)) return res.status(429).json({ ok: false, error: '試太多次了，10 分鐘後再試' });
+  if (String((req.body || {}).password || '') !== settings.adminPassword) { failed(req); return res.status(400).json({ ok: false, error: '密碼不對' }); }
+  const t = require('crypto').randomBytes(24).toString('hex');
+  adminTokens.add(t);
+  res.json({ ok: true, token: t });
+});
+app.get('/api/admin/state', (req, res) => {
+  if (!isAdmin(req)) return res.status(401).json({ ok: false });
+  const online = new Set([...players.values()].map(p => p.account && p.account.username));
+  res.json({ ok: true, party: partyInfo(), accounts: accounts.list().map(a => Object.assign(a, { online: online.has(a.username) })) });
+});
+app.post('/api/admin/settings', (req, res) => {
+  if (!isAdmin(req)) return res.status(401).json({ ok: false });
+  const b = req.body || {};
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(b.date || '') || isNaN(Date.parse(b.date))) return res.status(400).json({ ok: false, error: '日期格式不對' });
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(b.time || '')) return res.status(400).json({ ok: false, error: '時間格式不對' });
+  settings.date = b.date; settings.time = b.time;
+  saveSettings();
+  io.emit('party', partyInfo());
+  res.json({ ok: true, party: partyInfo() });
+});
+app.post('/api/admin/password', (req, res) => {
+  if (!isAdmin(req)) return res.status(401).json({ ok: false });
+  const r = accounts.setPassword((req.body || {}).username, (req.body || {}).password);
+  if (r.error) return res.status(400).json({ ok: false, error: r.error });
+  res.json({ ok: true });
+});
+app.post('/api/admin/delete', (req, res) => {
+  if (!isAdmin(req)) return res.status(401).json({ ok: false });
+  const name = String((req.body || {}).username || '');
+  [...players.values()].filter(p => p.account && p.account.username.toLowerCase() === name.toLowerCase()).forEach(p => { p.account = null; });
+  res.json({ ok: accounts.remove(name) });
+});
 
 // ---------------- 視訊房間 ----------------
 // Jitsi 的會議開久了可能會斷，所以讓大家自己開新房間、輸入房號加入，不用重開伺服器
@@ -530,7 +641,6 @@ function tickSummon(sm, now) {
 // 打怪掉落的家具可以擺在總部室內，擺好的家具存在 data/decor.json，伺服器重開也還在
 const MOB_DROP_RATE = 0.5;
 const BOSS_GEAR_RATE = 0.35; // 打倒颱風時，輸出第一名以外的人拿到稀有裝備的機率
-const DATA_DIR = path.join(__dirname, 'data');
 const DECOR_FILE = path.join(DATA_DIR, 'decor.json');
 const decor = new Map(); // 'tx,ty' -> { k, by }
 try {
@@ -586,8 +696,50 @@ function canDecorate(tx, ty) {
 }
 
 // 傳給別人的玩家資料（不含冷卻、增益這些內部狀態）
+// 角色存檔：外觀、職業、等級、裝備、家具、邀請函。總部加入時和帳號存檔都用這個檢查
+function sanitizeSave(data) {
+  data = data && typeof data === 'object' ? data : {};
+  const name = clean(data.name, 12);
+  // 報名頁的邀請函資料（只在別人點「個人資料」時才傳出去）
+  let vip = null;
+  if (data.vip && typeof data.vip === 'object') {
+    const photo = typeof data.vip.photo === 'string' && data.vip.photo.length <= 20000 &&
+      /^[A-Za-z0-9+/=]+$/.test(data.vip.photo) ? data.vip.photo : '';
+    vip = { name: clean(data.vip.name, 16) || name, song: clean(data.vip.song, 40), drink: clean(data.vip.drink, 24),
+      theme: data.vip.theme === 's' ? 's' : 'n', photo };
+    if (!vip.name || (!vip.song && !vip.drink && !vip.photo)) vip = null;
+  }
+  const owned = [...new Set((Array.isArray(data.owned) ? data.owned : []).filter(id => GEAR.GEAR[id]))];
+  const equip = {};
+  if (data.equip && typeof data.equip === 'object') Object.keys(GEAR.SLOTS).forEach(slot => {
+    const id = data.equip[slot];
+    if (owned.includes(id) && GEAR.GEAR[id].slot === slot) equip[slot] = id;
+  });
+  return {
+    name,
+    hair: AVATAR.HAIRS[data.hair] ? data.hair : 'short',
+    skin: AVATAR.SKINS.includes(data.skin) ? data.skin : AVATAR.SKINS[0],
+    hairColor: AVATAR.HAIR_COLORS.includes(data.hairColor) ? data.hairColor : AVATAR.HAIR_COLORS[0],
+    outfit: AVATAR.OUTFITS.includes(data.outfit) ? data.outfit : AVATAR.OUTFITS[0],
+    glasses: String(data.glasses) === '0' ? '0' : '1',
+    cls: STATS.CLASSES[data.cls] ? data.cls : 'staff',
+    level: clamp(Math.floor(Number(data.level)) || 1, 1, STATS.LEVEL.max),
+    exp: Math.max(0, Math.floor(Number(data.exp)) || 0),
+    owned, equip, vip,
+    // 還沒擺出去的家具
+    furn: Object.fromEntries(Object.keys(DECOR.DECOR).map(k => [k, clamp(Math.floor(Number(data.furn && data.furn[k])) || 0, 0, 50)])),
+  };
+}
+// 把總部裡的角色狀態存回帳號
+function snapshot(p) {
+  if (!p.account) return;
+  accounts.update(p.account, { name: p.name, hair: p.hair, skin: p.skin, hairColor: p.hairColor, outfit: p.outfit, glasses: p.glasses,
+    cls: p.cls, level: p.level, exp: p.exp, owned: p.owned, equip: p.equip, furn: p.furn, vip: p.vip });
+}
+setInterval(() => players.forEach(snapshot), 20000);
+
 function publicPlayer(p) {
-  const { cooldowns, buffs, atkBuff, regenMs, cooking, vip, owned, cakeUntil, furn, ...rest } = p;
+  const { cooldowns, buffs, atkBuff, regenMs, cooking, vip, owned, cakeUntil, furn, account, ...rest } = p;
   return Object.assign(rest, publicStats(p), { hasVip: !!vip, cakeMs: Math.max(0, cakeUntil - Date.now()) });
 }
 
@@ -717,44 +869,24 @@ io.on('connection', (socket) => {
     if (players.has(socket.id)) return ack({ ok: false, error: '已經加入了' });
     if (players.size >= MAX_PLAYERS) return ack({ ok: false, error: '總部已經擠滿人了，等等再試！' });
 
-    const name = clean(data && data.name, 12);
-    if (!name) return ack({ ok: false, error: '請輸入名字' });
-    const hair = AVATAR.HAIRS[data.hair] ? data.hair : 'short';
-    const skin = AVATAR.SKINS.includes(data.skin) ? data.skin : AVATAR.SKINS[0];
-    const hairColor = AVATAR.HAIR_COLORS.includes(data.hairColor) ? data.hairColor : AVATAR.HAIR_COLORS[0];
-    const outfit = AVATAR.OUTFITS.includes(data.outfit) ? data.outfit : AVATAR.OUTFITS[0];
-    const glasses = String(data.glasses) === '0' ? '0' : '1';
-    // 報名頁的邀請函資料（只在別人點「個人資料」時才傳出去）
-    let vip = null;
-    if (data.vip && typeof data.vip === 'object') {
-      const photo = typeof data.vip.photo === 'string' && data.vip.photo.length <= 20000 &&
-        /^[A-Za-z0-9+/=]+$/.test(data.vip.photo) ? data.vip.photo : '';
-      vip = { name: clean(data.vip.name, 16) || name, song: clean(data.vip.song, 40), drink: clean(data.vip.drink, 24),
-        theme: data.vip.theme === 's' ? 's' : 'n', photo };
-      if (!vip.song && !vip.drink && !vip.photo) vip = null;
-    }
+    if (!data || typeof data !== 'object') return ack({ ok: false, error: '資料不對' });
+    const d = sanitizeSave(data);
+    if (!d.name) return ack({ ok: false, error: '請輸入名字' });
+    // 有登入的話，同一個帳號只能在一個地方玩，舊的那個踢掉
+    const account = data.token ? accounts.byToken(data.token) : null;
+    if (account) [...players.values()].filter(o => o.account === account).forEach(o => {
+      const s2 = io.sockets.sockets.get(o.id);
+      if (s2) { s2.emit('kicked', '你的帳號在別的地方登入了'); s2.disconnect(true); }
+    });
 
-    const p = {
-      id: socket.id, name, hair, skin, hairColor, outfit, glasses,
+    const p = Object.assign({
+      id: socket.id,
       x: MAP.spawn.x + (Math.random() - 0.5) * 60,
       y: MAP.spawn.y + (Math.random() - 0.5) * 40,
       dir: 1, moving: false,
       inv: Object.fromEntries(Object.keys(MAP.ITEMS).map(k => [k, 0])),
-      // 重新連線時沿用上次的職業
-      cls: STATS.CLASSES[data.cls] ? data.cls : 'staff', dead: false, cooldowns: {}, buffs: {},
-      // 等級存在玩家自己的瀏覽器，伺服器重開也不會不見
-      level: clamp(Math.floor(Number(data.level)) || 1, 1, STATS.LEVEL.max),
-      exp: Math.max(0, Math.floor(Number(data.exp)) || 0), onlineMs: 0, vip,
-      // 裝備也存在玩家自己的瀏覽器
-      owned: [...new Set((Array.isArray(data.owned) ? data.owned : []).filter(id => GEAR.GEAR[id]))],
-      equip: {}, cakeUntil: 0,
-      // 還沒擺出去的家具
-      furn: Object.fromEntries(Object.keys(DECOR.DECOR).map(k => [k, clamp(Math.floor(Number(data.furn && data.furn[k])) || 0, 0, 50)])),
-    };
-    if (data.equip && typeof data.equip === 'object') Object.keys(GEAR.SLOTS).forEach(slot => {
-      const id = data.equip[slot];
-      if (p.owned.includes(id) && GEAR.GEAR[id].slot === slot) p.equip[slot] = id;
-    });
+      dead: false, cooldowns: {}, buffs: {}, onlineMs: 0, cakeUntil: 0,
+    }, d, { account });
     Object.assign(p, STATS.statsFor(p.cls, p.level));
     p.hp = p.maxHp; p.mp = p.maxMp;
     players.set(socket.id, p);
@@ -765,7 +897,7 @@ io.on('connection', (socket) => {
       summons: summons.map(summonState), decor: decorList(),
       walls: walls.map(w => ({ id: w.id, kind: w.kind, pts: w.pts, ms: w.until - Date.now() })) });
     socket.broadcast.emit('playerJoined', publicPlayer(p));
-    pushChat({ system: true, text: `${name} 進入了防衛總部 🌀`, t: Date.now() });
+    pushChat({ system: true, text: `${p.name} 進入了防衛總部 🌀`, t: Date.now() });
   });
 
   socket.on('move', (m) => {
@@ -1285,6 +1417,7 @@ io.on('connection', (socket) => {
     if (process.env.DEBUG) console.log('disconnect', socket.id, reason);
     const p = players.get(socket.id);
     if (!p) return;
+    snapshot(p);
     GAMES.forEach(g => g.remove(socket.id));
     summons.filter(sm => sm.owner === socket.id).forEach(sm => removeSummon(sm));
     const hadVideo = !!p.video;
@@ -1297,5 +1430,13 @@ io.on('connection', (socket) => {
 
 server.listen(PORT, () => {
   console.log(`🌀 颱風天防衛總部已啟動：http://localhost:${PORT}`);
+  console.log(`🔑 管理員介面：http://localhost:${PORT}/admin.html  密碼：${process.env.ADMIN_PASSWORD ? '（用 ADMIN_PASSWORD 設定的）' : settings.adminPassword}`);
   console.log(`📹 視訊房間：https://${JITSI_DOMAIN}/${JITSI_ROOM}`);
 });
+
+// 關掉伺服器（Ctrl+C）前先把大家的角色存好
+['SIGINT', 'SIGTERM'].forEach(sig => process.on(sig, () => {
+  players.forEach(snapshot);
+  accounts.flush();
+  process.exit(0);
+}));

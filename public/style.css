@@ -115,6 +115,9 @@ button.inv-item:hover { border-color: var(--accent); }
 #update { z-index: 40; }
 .update-card { max-width: 380px; text-align: center; }
 .update-btns { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 16px; }
+/* 有怪物血條的時候，預告條移到血條下面（手機版的血條在下方，不用移） */
+@media (min-width: 601px) { body.boss-on #notice-bar { top: 108px; } }
+@media (min-width: 601px) and (max-height: 520px) { body.boss-on #notice-bar { top: 92px; } }
 @media (max-width: 600px) { #notice-bar { top: 46px; font-size: 12px; white-space: normal; text-align: center; border-radius: 14px; } }
 .stat-cls { font-weight: 900; font-size: 14px; color: #ffd23f; }
 .stat-v.lv { margin-left: auto; color: #ffd23f; }

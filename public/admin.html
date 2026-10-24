@@ -76,6 +76,17 @@ th { color: var(--muted); font-weight: 700; }
       <div class="preview" id="a-state">目前沒有預告</div>
     </form>
 
+    <form class="card" id="gift">
+      <h2>送禮物</h2>
+      <p class="note" style="margin: 0 0 12px">把一件裝備放進對方的衣櫃（不會自動穿上）。人在總部裡馬上收到，不在的話下次進總部就有。只能送給有帳號的人。</p>
+      <div class="row">
+        <label>送給<select id="g-user"><option value="*">全部的人</option></select></label>
+        <label style="flex: 1 1 240px">裝備<select id="g-item"></select></label>
+        <button type="submit" class="primary">送出</button>
+      </div>
+      <p class="msg" id="gift-msg"></p>
+    </form>
+
     <section class="card">
       <div class="row" style="justify-content: space-between; align-items: center">
         <h2 style="margin: 0">帳號（<span id="count">0</span>）</h2>
@@ -92,6 +103,7 @@ th { color: var(--muted); font-weight: 700; }
   </div>
 </main>
 <script src="/shared/stats.js"></script>
+<script src="/shared/gear.js"></script>
 <script>
 (function () {
   var $ = function (id) { return document.getElementById(id); };
@@ -183,6 +195,7 @@ th { color: var(--muted); font-weight: 700; }
       $('login').hidden = true; $('panel').hidden = false;
       if (!$('p-date').value) { $('p-date').value = r.party.date; $('p-time').value = r.party.time; preview(); }
       render(r.accounts);
+      giftUsers(r.accounts);
       showNotice(r.notice);
     });
   }
@@ -227,6 +240,44 @@ th { color: var(--muted); font-weight: 700; }
   });
   $('a-cancel').addEventListener('click', function () {
     api('/api/admin/announce', { cancel: true }).then(function (r) { if (r.ok) showNotice(null); });
+  });
+  // 送禮物：裝備依部位分組，稀有度高的排前面
+  (function () {
+    var G = window.HQ_GEAR, sel = $('g-item');
+    if (!G) return;
+    var order = { SSR: 0, SR: 1, R: 2 };
+    Object.keys(G.SLOTS).forEach(function (slot) {
+      var grp = document.createElement('optgroup'); grp.label = G.SLOTS[slot];
+      Object.keys(G.GEAR).filter(function (id) { return G.GEAR[id].slot === slot; })
+        .sort(function (a, b) { return order[G.GEAR[a].rarity] - order[G.GEAR[b].rarity]; })
+        .forEach(function (id) {
+          var g = G.GEAR[id], o = document.createElement('option');
+          o.value = id; o.textContent = g.icon + ' ' + g.name + '【' + g.rarity + '】';
+          grp.appendChild(o);
+        });
+      sel.appendChild(grp);
+    });
+  })();
+  function giftUsers(list) {
+    var sel = $('g-user'), cur = sel.value;
+    while (sel.options.length > 1) sel.remove(1);
+    list.slice().sort(function (a, b) { return a.username.localeCompare(b.username); }).forEach(function (a) {
+      var o = document.createElement('option'); o.value = a.username;
+      o.textContent = a.username + (a.name && a.name !== a.username ? '（' + a.name + '）' : '') + (a.online ? ' ●' : '');
+      sel.appendChild(o);
+    });
+    sel.value = [].some.call(sel.options, function (o) { return o.value === cur; }) ? cur : '*';
+  }
+  $('gift').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var who = $('g-user').value, item = $('g-item').value, g = window.HQ_GEAR.GEAR[item];
+    var whoText = who === '*' ? '全部的人' : '「' + who + '」';
+    if (!confirm('要把 ' + g.icon + ' ' + g.name + ' 送給' + whoText + '嗎？')) return;
+    api('/api/admin/gift', { username: who, item: item }).then(function (r) {
+      if (!r.ok) return say('gift-msg', r.error || '送出失敗');
+      say('gift-msg', r.sent ? '已送出 ' + g.icon + ' ' + g.name + ' 給 ' + r.sent + ' 個人' + (r.had ? '（' + r.had + ' 個人本來就有）' : '')
+        : whoText + '本來就有這件了', !!r.sent);
+    });
   });
   if (token) load();
 })();

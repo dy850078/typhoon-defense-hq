@@ -225,6 +225,29 @@ app.post('/api/admin/level', (req, res) => {
   });
   res.json({ ok: true, level });
 });
+// 送禮物：把一件裝備放進某個帳號（或所有帳號）的衣櫃，人在總部裡的話馬上收到
+app.post('/api/admin/gift', (req, res) => {
+  if (!isAdmin(req)) return res.status(401).json({ ok: false });
+  const b = req.body || {}, g = GEAR.GEAR[b.item];
+  if (!g) return res.status(400).json({ ok: false, error: '沒有這件裝備' });
+  const all = b.username === '*';
+  const users = all ? accounts.list().map(a => accounts.get(a.username)) : [accounts.get(b.username)].filter(Boolean);
+  if (!users.length) return res.status(400).json({ ok: false, error: all ? '還沒有人建立帳號' : '找不到這個帳號' });
+  let sent = 0, had = 0;
+  users.forEach(u => {
+    const online = [...players.values()].filter(p => p.account === u);
+    const owned = sanitizeSave(u.save).owned;
+    if (owned.includes(b.item) || online.some(p => p.owned.includes(b.item))) { had++; return; }
+    accounts.update(u, { owned: owned.concat(b.item) });
+    online.forEach(p => {
+      p.owned.push(b.item);
+      io.to(p.id).emit('gearGot', { item: b.item, owned: p.owned, from: 'admin' });
+    });
+    sent++;
+  });
+  if (sent) pushChat({ system: true, text: `🎁 管理員送出了【${g.rarity}】${g.icon} ${g.name}${all ? '給大家' : `給 ${users[0].save.name || users[0].username}`}！`, t: Date.now() });
+  res.json({ ok: true, sent, had });
+});
 app.post('/api/admin/delete', (req, res) => {
   if (!isAdmin(req)) return res.status(401).json({ ok: false });
   const name = String((req.body || {}).username || '');

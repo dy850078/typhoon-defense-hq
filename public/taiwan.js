@@ -65,63 +65,128 @@
       const ox = (W - mw * s) / 2, oy = (H - mh * s) / 2 - H * 0.04;
       const P = ([lon, lat]) => [ox + (lon - LON0) * KX * s, oy + (LAT1 - lat) * s];
 
-      // 先把不會動的部分（海、島、山）畫好
+      // 先把不會動的部分畫好：神廟的石牆、刻著台灣的大石板
       const base = document.createElement('canvas');
       base.width = cv.width; base.height = cv.height;
       const b = base.getContext('2d');
       b.scale(dpr, dpr);
       const r = CR.rng(23);
-      b.fillStyle = '#bfe0f2'; b.fillRect(0, 0, W, H);
-      CR.dots(b, 0, 0, W, H, Math.round(W * H / 2500), 'rgba(255,255,255,0.55)', r, 2.4);
-      // 海浪
-      for (let i = 0; i < 26; i++) {
-        const x = r() * W, y = r() * H, w = 14 + r() * 16;
-        b.beginPath(); b.arc(x, y, w, Math.PI * 1.1, Math.PI * 1.9); CR.stroke(b, r, 2, 'rgba(79,124,194,0.45)');
+      const isl = ISLAND.map(P);
+      // 石牆：一塊一塊交錯砌起來的大石磚
+      b.fillStyle = '#3f3a36'; b.fillRect(0, 0, W, H);
+      const bw0 = Math.max(90, W / 9), bh0 = bw0 * 0.5;
+      for (let row = 0, y = -bh0 * 0.3; y < H; row++, y += bh0) {
+        for (let x = -(row % 2) * bw0 / 2; x < W; x += bw0) {
+          CR.rect(b, x + 3, y + 3, bw0 - 6, bh0 - 6, r, 2);
+          const v = Math.floor(r() * 3);
+          CR.fill(b, ['#4c4641', '#524b45', '#47413c'][v], r, [x, y, bw0, bh0], 0.8);
+          CR.stroke(b, r, 2, 'rgba(24,20,18,0.7)');
+          if (r() < 0.25) CR.line(b, x + bw0 * 0.2, y + bh0 * 0.3, x + bw0 * 0.45, y + bh0 * 0.6, r, 1.2, 'rgba(24,20,18,0.5)', 2);
+        }
       }
-      // 島的影子＋本體
-      b.save(); b.translate(5, 7); CR.smooth(b, ISLAND.map(P)); b.fillStyle = 'rgba(19,26,40,0.22)'; b.fill(); b.restore();
-      CR.smooth(b, ISLAND.map(P)); CR.fill(b, '#bfe0a4', r, [ox, oy, mw * s, mh * s], 1.2); CR.stroke(b, r, 3.2);
-      // 縣市分界：虛線，裁在島裡面
-      b.save(); CR.smooth(b, ISLAND.map(P)); b.clip();
-      b.setLineDash([7, 5]);
-      BORDERS.forEach(line => {
-        b.beginPath(); line.map(P).forEach(([x, y], i) => (i ? b.lineTo(x, y) : b.moveTo(x, y)));
-        CR.stroke(b, r, 1.8, 'rgba(60,96,64,0.6)');
+      // 兩邊火盆的光
+      const glow = (gx, gy, rad) => {
+        const g = b.createRadialGradient(gx, gy, 0, gx, gy, rad);
+        g.addColorStop(0, 'rgba(255,190,90,0.35)'); g.addColorStop(1, 'rgba(255,190,90,0)');
+        b.fillStyle = g; b.fillRect(gx - rad, gy - rad, rad * 2, rad * 2);
+      };
+      const fx = Math.min(W * 0.12, 110), fy = H * 0.5, fr = Math.min(W, H) * 0.35;
+      glow(fx, fy, fr); glow(W - fx, fy, fr);
+      [fx, W - fx].forEach(x => {
+        b.beginPath(); b.moveTo(x - 18, fy + 10); b.lineTo(x + 18, fy + 10); b.lineTo(x + 11, fy + 30); b.lineTo(x - 11, fy + 30); b.closePath();
+        CR.fill(b, '#6b5a45', r, null); CR.stroke(b, r, 2.2);
+        CR.blob(b, x, fy - 4, 11, 17, r, 0.18, 14); CR.fill(b, '#ff8a3d', r, null); CR.stroke(b, r, 1.8);
+        CR.blob(b, x, fy + 1, 5.5, 9, r, 0.15, 12); b.fillStyle = '#ffd23f'; b.fill();
       });
-      CR.smooth(b, TAIPEI.map(P)); CR.stroke(b, r, 1.8, 'rgba(60,96,64,0.6)');
-      b.setLineDash([]);
+      // 四周暗一點，視線集中在石板上
+      const vg = b.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.3, W / 2, H / 2, Math.max(W, H) * 0.75);
+      vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,0.55)');
+      b.fillStyle = vg; b.fillRect(0, 0, W, H);
+
+      // 大石板（台灣刻在上面）
+      const xs0 = isl.map(p => p[0]), ys0 = isl.map(p => p[1]);
+      const pad = Math.max(26, s * 0.25);
+      const tx0 = Math.min(...xs0) - pad, ty0 = Math.min(...ys0) - pad;
+      const tw0 = Math.max(...xs0) + pad - tx0, th0 = Math.max(...ys0) + pad - ty0;
+      b.save(); b.translate(8, 10); CR.rect(b, tx0, ty0, tw0, th0, r, 2); b.fillStyle = 'rgba(0,0,0,0.45)'; b.fill(); b.restore();
+      CR.rect(b, tx0, ty0, tw0, th0, r, 2); CR.fill(b, '#8a7f70', r, [tx0, ty0, tw0, th0], 1.2); CR.stroke(b, r, 3.4);
+      // 邊框：刻一圈，四個角有回紋
+      const inset = Math.max(10, pad * 0.35);
+      CR.rect(b, tx0 + inset, ty0 + inset, tw0 - inset * 2, th0 - inset * 2, r, 1.2); CR.stroke(b, r, 2, 'rgba(40,34,28,0.65)');
+      b.save(); b.translate(1.5, 1.5);
+      CR.rect(b, tx0 + inset, ty0 + inset, tw0 - inset * 2, th0 - inset * 2, r, 1.2); CR.stroke(b, r, 1.2, 'rgba(255,240,210,0.3)');
       b.restore();
-      // 中央山脈：一排小山
+      const cs = inset * 1.1;
+      [[tx0 + inset, ty0 + inset], [tx0 + tw0 - inset - cs, ty0 + inset], [tx0 + inset, ty0 + th0 - inset - cs], [tx0 + tw0 - inset - cs, ty0 + th0 - inset - cs]]
+        .forEach(([x, y]) => {
+          b.beginPath(); b.moveTo(x + cs * 0.2, y + cs * 0.8); b.lineTo(x + cs * 0.2, y + cs * 0.2); b.lineTo(x + cs * 0.8, y + cs * 0.2);
+          b.lineTo(x + cs * 0.8, y + cs * 0.6); b.lineTo(x + cs * 0.45, y + cs * 0.6); b.lineTo(x + cs * 0.45, y + cs * 0.45);
+          CR.stroke(b, r, 1.8, 'rgba(40,34,28,0.7)');
+        });
+      // 石板上的裂痕和斑點
+      CR.dots(b, tx0, ty0, tw0, th0, Math.round(tw0 * th0 / 900), 'rgba(40,34,28,0.18)', r, 2.2);
+      for (let i = 0; i < 5; i++) {
+        const x = tx0 + r() * tw0, y = ty0 + r() * th0;
+        CR.line(b, x, y, x + (r() - 0.5) * 40, y + 14 + r() * 20, r, 1.2, 'rgba(40,34,28,0.4)', 3);
+      }
+
+      // 台灣：凸起來的浮雕（右下陰影＋左上亮邊）
+      b.save(); b.translate(4, 5); CR.smooth(b, isl); b.fillStyle = 'rgba(30,24,20,0.5)'; b.fill(); b.restore();
+      b.save(); b.translate(-1.5, -1.5); CR.smooth(b, isl); b.fillStyle = 'rgba(255,244,220,0.45)'; b.fill(); b.restore();
+      CR.smooth(b, isl); CR.fill(b, '#b3a78f', r, [ox, oy, mw * s, mh * s], 1.2); CR.stroke(b, r, 3);
+      // 縣市分界：刻進去的溝（深色線＋下面一條亮線）
+      b.save(); CR.smooth(b, isl); b.clip();
+      const groove = (path) => {
+        path(); CR.stroke(b, r, 2.2, 'rgba(46,38,30,0.7)');
+        b.save(); b.translate(1.2, 1.4); path(); CR.stroke(b, r, 1.1, 'rgba(255,244,220,0.45)'); b.restore();
+      };
+      BORDERS.forEach(line => groove(() => { b.beginPath(); line.map(P).forEach(([x, y], i) => (i ? b.lineTo(x, y) : b.moveTo(x, y))); }));
+      groove(() => CR.smooth(b, TAIPEI.map(P)));
+      b.restore();
+      // 中央山脈：刻幾個小山形
       [[121.55, 24.75], [121.35, 24.45], [121.20, 24.15], [121.05, 23.85], [120.98, 23.55], [120.92, 23.25], [120.85, 22.95], [120.80, 22.65]]
         .forEach(([lon, lat], i) => {
-          const [x, y] = P([lon - 0.12, lat]), hgt = s * (0.11 + (i % 2) * 0.03);
-          b.beginPath(); b.moveTo(x - hgt * 0.8, y + hgt * 0.4); b.lineTo(x, y - hgt * 0.6); b.lineTo(x + hgt * 0.8, y + hgt * 0.4); b.closePath();
-          CR.fill(b, '#8fbf7a', r, null); CR.stroke(b, r, 2);
-          b.beginPath(); b.moveTo(x - hgt * 0.25, y - hgt * 0.25); b.lineTo(x, y - hgt * 0.6); b.lineTo(x + hgt * 0.25, y - hgt * 0.25); b.fillStyle = '#ffffff'; b.fill();
+          const [x, y] = P([lon - 0.12, lat]), hgt = s * (0.09 + (i % 2) * 0.025);
+          const m = () => { b.beginPath(); b.moveTo(x - hgt * 0.8, y + hgt * 0.4); b.lineTo(x, y - hgt * 0.5); b.lineTo(x + hgt * 0.8, y + hgt * 0.4); };
+          m(); CR.stroke(b, r, 2.2, 'rgba(46,38,30,0.75)');
+          b.save(); b.translate(1.2, 1.4); m(); CR.stroke(b, r, 1, 'rgba(255,244,220,0.45)'); b.restore();
         });
-      // 副本那一塊原本的位置：浮起來以後留下一個淡淡的凹洞
-      CR.smooth(b, region.pts.map(P)); b.fillStyle = 'rgba(47,59,85,0.28)'; b.fill(); CR.stroke(b, r, 2, 'rgba(43,42,51,0.5)');
-      // 角落的小颱風
-      const [tx, ty] = [W - Math.min(90, W * 0.14), Math.min(110, H * 0.14)];
-      b.save(); b.translate(tx, ty);
-      for (let k = 0; k < 3; k++) { b.beginPath(); b.arc(0, 0, 14 + k * 9, k, k + 4.2); CR.stroke(b, r, 3, '#4f7cc2'); }
-      b.restore();
+      // 副本那一塊原本的位置：石板升起來以後留下深深的凹槽，邊緣透出一點金光
+      CR.smooth(b, region.pts.map(P)); b.fillStyle = 'rgba(22,17,13,0.75)'; b.fill();
+      b.save(); b.shadowColor = '#ffd23f'; b.shadowBlur = 12;
+      CR.smooth(b, region.pts.map(P)); CR.stroke(b, r, 1.6, 'rgba(255,210,63,0.55)'); b.restore();
 
-      // 會浮起來的那一塊，另外畫一張
+      // 會升起來的那一塊石板，另外畫一張（有厚度、刻著颱風的符文）
       const pts = region.pts.map(P);
       const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
-      const bx = Math.min(...xs) - 20, by = Math.min(...ys) - 20, bw = Math.max(...xs) - bx + 20, bh = Math.max(...ys) - by + 20;
+      const TH = Math.max(7, s * 0.07); // 石板厚度
+      const bx = Math.min(...xs) - 20, by = Math.min(...ys) - 20, bw = Math.max(...xs) - bx + 20, bh = Math.max(...ys) - by + 20 + TH;
       const piece = document.createElement('canvas');
       piece.width = bw * dpr; piece.height = bh * dpr;
       const pc = piece.getContext('2d');
       pc.scale(dpr, dpr); pc.translate(-bx, -by);
-      CR.smooth(pc, pts); CR.fill(pc, region.color, r, [bx, by, bw, bh], 1.4); CR.stroke(pc, r, 3.2);
-      CR.dots(pc, bx, by, bw, bh, 0, '#fff', r);
-      // 太魯閣的小峽谷線條
+      pc.save(); pc.translate(0, TH); CR.smooth(pc, pts); CR.fill(pc, '#7a6a4e', r, null); CR.stroke(pc, r, 3); pc.restore();
+      for (let k = 1; k < TH; k += 2) { pc.save(); pc.translate(0, k); CR.smooth(pc, pts); pc.fillStyle = '#8c7a58'; pc.fill(); pc.restore(); }
+      CR.smooth(pc, pts); CR.fill(pc, '#e3d3a8', r, [bx, by, bw, bh], 1.4); CR.stroke(pc, r, 3.2);
+      // 金色描邊
+      pc.save(); pc.translate(0, 0); CR.smooth(pc, pts); pc.clip();
+      CR.smooth(pc, pts); CR.stroke(pc, r, 7, 'rgba(255,200,60,0.55)');
+      // 太魯閣峽谷的刻痕＋颱風符文
       const [lx, ly] = P(region.label);
-      pc.save(); CR.smooth(pc, pts); pc.clip();
-      for (let k = 0; k < 3; k++) CR.line(pc, lx - 18 + k * 8, ly - 30, lx - 6 + k * 10, ly + 26, r, 1.6, 'rgba(184,67,0,0.45)', 3);
+      for (let k = 0; k < 3; k++) CR.line(pc, lx - 18 + k * 8, ly - 4, lx - 6 + k * 10, ly + 40, r, 1.6, 'rgba(120,84,20,0.55)', 3);
+      const rr = Math.max(9, s * 0.09);
+      pc.save(); pc.translate(lx + 2, ly - rr * 1.6);
+      for (let k = 0; k < 3; k++) { pc.beginPath(); pc.arc(0, 0, rr * (0.35 + k * 0.32), k * 1.3, k * 1.3 + 4.2); CR.stroke(pc, r, 2, '#b07d10'); }
       pc.restore();
+      pc.restore();
+
+      // 金光先畫好一張（每一格都開 shadowBlur 在大螢幕上很慢）
+      const HP = 50;
+      const halo = document.createElement('canvas');
+      halo.width = (bw + HP * 2) * dpr; halo.height = (bh + HP * 2) * dpr;
+      const hc = halo.getContext('2d');
+      hc.scale(dpr, dpr); hc.shadowColor = '#ffd23f'; hc.shadowBlur = 34;
+      hc.drawImage(piece, HP, HP, bw, bh);
 
       const t0 = performance.now(), TOTAL = 3400;
       const ease = (t) => 1 - Math.pow(1 - Math.min(1, Math.max(0, t)), 3);
@@ -142,9 +207,8 @@
         if (lift > 0) {
           ctx.save();
           ctx.globalAlpha = a * fade * lift * (0.55 + 0.35 * Math.sin(t / 180));
-          ctx.shadowColor = '#ffd23f'; ctx.shadowBlur = 34;
           ctx.translate(cx, cy - up); ctx.scale(grow, grow); ctx.translate(-cx, -cy);
-          ctx.drawImage(piece, bx, by, bw, bh);
+          ctx.drawImage(halo, bx - HP, by - HP, bw + HP * 2, bh + HP * 2);
           ctx.restore();
           // 浮起來的影子
           ctx.save(); ctx.globalAlpha = 0.25 * lift * fade;
@@ -166,11 +230,14 @@
           ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
           const tw = ctx.measureText(opts.title).width;
           const rr = CR.rng(7);
-          CR.rect(ctx, W / 2 - tw / 2 - 22, yT - fs * 0.8, tw + 44, fs * 1.6, rr, 2);
-          CR.fill(ctx, '#fffdf6', rr, null); CR.stroke(ctx, rr, 3);
-          ctx.fillStyle = '#2b2a33'; ctx.fillText(opts.title, W / 2, yT + 1);
+          // 石匾：深色石頭＋金框金字
+          CR.rect(ctx, W / 2 - tw / 2 - 26, yT - fs * 0.85, tw + 52, fs * 1.7, rr, 2);
+          CR.fill(ctx, '#5a5149', rr, null); CR.stroke(ctx, rr, 3.4);
+          CR.rect(ctx, W / 2 - tw / 2 - 18, yT - fs * 0.68, tw + 36, fs * 1.36, rr, 1.2); CR.stroke(ctx, rr, 2.2, '#e0b84a');
+          ctx.lineWidth = 4; ctx.strokeStyle = '#2b241e'; ctx.strokeText(opts.title, W / 2, yT + 1);
+          ctx.fillStyle = '#ffe08a'; ctx.fillText(opts.title, W / 2, yT + 1);
           ctx.font = `700 ${Math.round(fs * 0.42)}px "Space Mono", monospace`;
-          ctx.fillStyle = '#2f3b55';
+          ctx.fillStyle = '#e8dcc4';
           ctx.fillText(opts.sub || 'DUNGEON', W / 2, yT - fs * 1.25);
           // 名稱旁邊的小標記：指向浮起來的那一塊
           ctx.font = `900 ${Math.round(fs * 0.6)}px sans-serif`;

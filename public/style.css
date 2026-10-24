@@ -18,6 +18,11 @@ html, body { overscroll-behavior: none; }
   --navy-fg: #F2F4F8;
   --navy-dim: #9AA3B5;
   --silver: #D6DAE1;
+  /* 米白紙條：場景名牌、提示條共用的手繪框 */
+  --note: #FBF6E9;
+  --note-ink: #2B2A33;
+  --note-radius: 14px 9px 16px 10px / 10px 15px 9px 14px;
+  --note-shadow: 2px 3px 0 rgba(43,42,51,.28);
   --display: 'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', sans-serif;
   --mono: 'Space Mono', ui-monospace, Menlo, monospace;
 }
@@ -62,11 +67,11 @@ input:focus { border-color: var(--accent); }
 
 /* 遊戲中介面 */
 #hud > * { position: fixed; z-index: 5; }
-#banner { top: 12px; left: 50%; transform: translateX(-50%); background: var(--navy); color: var(--navy-fg);
-  border-radius: 999px; padding: 7px 18px; font-weight: 700; white-space: nowrap; font-size: 14px;
-  display: flex; gap: 14px; align-items: center; box-shadow: 0 4px 16px rgba(0,0,0,.25); }
+#banner { top: 12px; left: 50%; transform: translateX(-50%); background: var(--note); color: var(--note-ink);
+  border: 2.5px solid var(--note-ink); border-radius: var(--note-radius); padding: 7px 18px; font-weight: 700; white-space: nowrap; font-size: 14px;
+  display: flex; gap: 14px; align-items: center; box-shadow: var(--note-shadow); }
 #banner .hot { color: var(--accent); font: 700 13px var(--mono); letter-spacing: 0.06em; }
-#banner .mono { font: 700 12px var(--mono); color: var(--navy-dim); letter-spacing: 0.08em; }
+#banner .mono { font: 700 12px var(--mono); color: var(--muted); letter-spacing: 0.08em; }
 #video-prompt, #dg-panel { bottom: 56px; left: 50%; transform: translateX(-50%); background: var(--ground);
   border-top: 4px solid var(--accent); border-radius: 4px 4px 16px 16px; padding: 8px 10px 8px 16px;
   display: flex; gap: 12px; align-items: center; font-weight: 700; box-shadow: 0 6px 20px rgba(0,0,0,.25); }
@@ -111,8 +116,8 @@ button.inv-item:hover { border-color: var(--accent); }
   background: linear-gradient(#ff8a5c, #e8391b 60%, #b8250e); }
 #toasts { top: 104px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 6px;
   align-items: center; pointer-events: none; }
-.toast { background: var(--navy); color: var(--navy-fg); border-left: 4px solid var(--accent); border-radius: 10px;
-  padding: 8px 16px; font-weight: 700; animation: toast 2.2s ease forwards; white-space: nowrap; }
+.toast { background: var(--note); color: var(--note-ink); border: 2.5px solid var(--note-ink); border-radius: var(--note-radius);
+  box-shadow: var(--note-shadow); padding: 7px 16px; font-weight: 700; animation: toast 2.2s ease forwards; white-space: nowrap; }
 @keyframes toast { 0% { opacity: 0; transform: translateY(-6px); } 10%, 80% { opacity: 1; transform: none; } 100% { opacity: 0; } }
 /* 場景互動（敲箱子、點歌…）：技能列上面的小膠囊 */
 #action-btn { right: 16px; bottom: 128px; font-size: 15px; padding: 8px 18px; box-shadow: 0 4px 14px rgba(255,106,19,.4); }
@@ -219,7 +224,8 @@ button.inv-item:hover { border-color: var(--accent); }
 #messages .sys { color: var(--muted); }
 #messages b { color: var(--accent-ink); }
 #chat-input { margin: 0; padding: 8px 12px; font-size: 15px; }
-#help { right: 12px; bottom: 12px; background: rgba(19,26,40,.8); color: var(--navy-dim); border-radius: 999px;
+#help { right: 12px; bottom: 12px; background: var(--note); color: var(--note-ink); border: 2px solid var(--note-ink);
+  border-radius: var(--note-radius); box-shadow: var(--note-shadow);
   padding: 6px 14px; font-size: 12px; }
 
 

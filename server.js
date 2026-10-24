@@ -1122,8 +1122,8 @@ io.on('connection', (socket) => {
     const rk = typeof data.rk === 'string' ? data.rk.slice(0, 40) : '';
     if (rk) [...players.values()].filter(o => o.rk === rk && awayTimers.has(o.id)).forEach(o => removePlayer(o.id));
     const x = Number(data.x), y = Number(data.y);
-    // 副本裡的位置不能直接接回去（副本要從入口出發）
-    const back = Number.isFinite(x) && Number.isFinite(y) && !MAP.isBlocked(x, y) && !MAP.inDungeon(x);
+    // 副本裡的位置不能直接接回去（副本要從候位區出發）
+    const back = Number.isFinite(x) && Number.isFinite(y) && !MAP.isBlocked(x, y) && MAP.zoneOf(x) !== 'dungeon';
 
     if (account) keepProgress(d, account);
     const p = Object.assign({
@@ -1438,6 +1438,16 @@ io.on('connection', (socket) => {
   });
 
   // ---------------- 副本 ----------------
+  socket.on('dgGo', (ack) => {
+    const p = players.get(socket.id);
+    if (!p || typeof ack !== 'function') return;
+    ack(DG.go(p));
+  });
+  socket.on('dgHome', (ack) => {
+    const p = players.get(socket.id);
+    if (!p || typeof ack !== 'function') return;
+    ack(DG.home(p));
+  });
   socket.on('dgStart', (ack) => {
     const p = players.get(socket.id);
     if (!p || typeof ack !== 'function') return;

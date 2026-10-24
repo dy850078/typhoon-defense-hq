@@ -134,6 +134,10 @@ button.inv-item:hover { border-color: var(--accent); }
   border-radius: 999px; padding: 8px 14px; cursor: pointer; box-shadow: 0 4px 14px rgba(0,0,0,.25); }
 .hud-btn:hover, .bag-btn:hover { border-color: var(--accent); }
 .bag-btn { cursor: pointer; font-family: var(--display); }
+/* 重新連線中的小提示 */
+#net-badge { position: fixed; top: 56px; left: 50%; transform: translateX(-50%); z-index: 31; background: var(--navy); color: #ffd23f;
+  border: 2px solid #131a28; border-radius: 999px; padding: 4px 12px; font-weight: 900; font-size: 13px; white-space: nowrap; box-shadow: 0 4px 16px rgba(0,0,0,.3); }
+@media (max-width: 600px) { #net-badge { top: 146px; left: auto; right: 12px; transform: none; font-size: 12px; } }
 /* 更新公告 */
 #notice-bar { position: fixed; top: 52px; left: 50%; transform: translateX(-50%); z-index: 30; background: #ffd23f; color: #131a28;
   border: 2px solid #131a28; border-radius: 999px; padding: 6px 16px; font-weight: 900; font-size: 14px; white-space: nowrap;

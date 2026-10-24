@@ -110,13 +110,15 @@ app.post('/api/login', (req, res) => {
   if (b.local && typeof b.local === 'object') mergeGuest(r.user, sanitizeSave(b.local));
   res.json(Object.assign(meOf(r.user), { token: r.token }));
 });
-// 合併規則：等級取高的那邊（職業跟著走）、裝備和家具取聯集／最大值、外觀和邀請函以帳號為準
+// 合併規則：等級取高的那邊（職業跟著走）、裝備和家具取聯集／最大值、背包物資取最大值、外觀和邀請函以帳號為準
 function mergeGuest(u, g) {
   const a = sanitizeSave(u.save);
   const owned = [...new Set([...a.owned, ...g.owned])];
   const furn = Object.fromEntries(Object.keys(a.furn).map(k => [k, Math.max(a.furn[k], g.furn[k])]));
+  const inv = Object.fromEntries(Object.keys(a.inv).map(k => [k, Math.max(a.inv[k], g.inv[k])]));
   const gHigher = g.level > a.level || (g.level === a.level && g.exp > a.exp);
-  const changed = gHigher || owned.length > a.owned.length || Object.keys(furn).some(k => furn[k] !== a.furn[k]) || (!a.vip && g.vip);
+  const changed = gHigher || owned.length > a.owned.length || Object.keys(furn).some(k => furn[k] !== a.furn[k]) ||
+    Object.keys(inv).some(k => inv[k] !== a.inv[k]) || (!a.vip && g.vip);
   if (!changed) return;
   // 人在總部裡的話先存檔、請他重新進來，才不會被下一次自動存檔蓋回去
   [...players.values()].filter(p => p.account === u).forEach(p => {
@@ -124,7 +126,7 @@ function mergeGuest(u, g) {
     const s = io.sockets.sockets.get(p.id);
     if (s) { s.emit('kicked', '你的帳號剛合併了另一台裝置的進度，請重新進入總部'); s.disconnect(true); }
   });
-  const patch = { owned, furn, equip: Object.keys(a.equip).length ? a.equip : g.equip };
+  const patch = { owned, furn, inv, equip: Object.keys(a.equip).length ? a.equip : g.equip };
   if (gHigher) Object.assign(patch, { level: g.level, exp: g.exp, cls: g.cls });
   if (!a.vip && g.vip) Object.assign(patch, { vip: g.vip, photoHd: a.photoHd || g.photoHd });
   accounts.update(u, patch);
@@ -870,6 +872,7 @@ function canDecorate(tx, ty) {
 
 // 傳給別人的玩家資料（不含冷卻、增益這些內部狀態）
 // 角色存檔：外觀、職業、等級、裝備、家具、邀請函。總部加入時和帳號存檔都用這個檢查
+const INV_MAX = 99; // 每種物資最多存幾個
 function sanitizeSave(data) {
   data = data && typeof data === 'object' ? data : {};
   const name = clean(data.name, 12);
@@ -903,6 +906,8 @@ function sanitizeSave(data) {
     photoHd: typeof data.photoHd === 'string' && data.photoHd.length <= 200000 && /^[A-Za-z0-9+/=]+$/.test(data.photoHd) ? data.photoHd : '',
     // 還沒擺出去的家具
     furn: Object.fromEntries(Object.keys(DECOR.DECOR).map(k => [k, clamp(Math.floor(Number(data.furn && data.furn[k])) || 0, 0, 50)])),
+    // 背包裡的物資（泡麵、水…）
+    inv: Object.fromEntries(Object.keys(MAP.ITEMS).map(k => [k, clamp(Math.floor(Number(data.inv && data.inv[k])) || 0, 0, INV_MAX)])),
   };
 }
 // 有登入的話，進度以帳號和瀏覽器比較高的那邊為準，舊分頁或別台裝置帶來的舊資料不會把等級拉低
@@ -913,12 +918,14 @@ function keepProgress(d, account) {
   if (account.save.levelSet) accounts.update(account, { levelSet: undefined });
   d.owned = [...new Set([...a.owned, ...d.owned])];
   Object.keys(d.furn).forEach(k => { d.furn[k] = Math.max(d.furn[k], a.furn[k]); });
+  // 背包以帳號為準（開兩個分頁也不會變兩倍）；帳號還沒存過背包的話用瀏覽器帶來的
+  if (account.save.inv) d.inv = a.inv;
 }
 // 把總部裡的角色狀態存回帳號
 function snapshot(p) {
   if (!p.account) return;
   accounts.update(p.account, { name: p.name, hair: p.hair, skin: p.skin, hairColor: p.hairColor, outfit: p.outfit, glasses: p.glasses,
-    cls: p.cls, level: p.level, exp: p.exp, owned: p.owned, equip: p.equip, furn: p.furn, vip: p.vip });
+    cls: p.cls, level: p.level, exp: p.exp, owned: p.owned, equip: p.equip, furn: p.furn, inv: p.inv, vip: p.vip });
 }
 setInterval(() => players.forEach(snapshot), 20000);
 
@@ -1081,7 +1088,6 @@ io.on('connection', (socket) => {
       x: back ? x : MAP.spawn.x + (Math.random() - 0.5) * 60,
       y: back ? y : MAP.spawn.y + (Math.random() - 0.5) * 40,
       dir: 1, moving: false, rk,
-      inv: Object.fromEntries(Object.keys(MAP.ITEMS).map(k => [k, 0])),
       dead: false, cooldowns: {}, buffs: {}, onlineMs: 0, cakeUntil: 0,
     }, d, { account, photoHd: (account && account.save.photoHd) || '' });
     Object.assign(p, STATS.statsFor(p.cls, p.level));

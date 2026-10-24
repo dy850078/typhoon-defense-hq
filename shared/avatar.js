@@ -1,7 +1,7 @@
 // 角色外觀：前後端共用的選項清單 + 瀏覽器端的 Canvas 繪圖
 // 畫風：蠟筆質感、粗抖的深色外框、大耳朵、圓眼鏡、紅鼻子紅臉頰
 (function (root) {
-  const HAIRS = { short: '短髮', bob: '鮑伯頭', long: '長髮', bun: '包包頭', curly: '捲髮', hat: '尖帽' };
+  const HAIRS = { short: '短髮', bob: '鮑伯頭', long: '長髮', bun: '包包頭', curly: '捲髮', buzz: '平頭', bald: '光頭', hat: '尖帽' };
   // 每個職業的衣服：body 是衣服顏色（防颱職員用自己選的雨衣色）
   const COSTUMES = {
     staff: {},
@@ -50,6 +50,13 @@
     ctx.beginPath(); ctx.ellipse(32, 77, 17, 3.5, 0, 0, Math.PI * 2); ctx.fill();
 
     gear('cape', 'cape');
+    if (hair === 'long') {
+      // 長髮的後半：畫在身體後面，從肩膀兩側露出來，不會蓋住衣服
+      ctx.beginPath();
+      ctx.moveTo(11.5, 28); ctx.quadraticCurveTo(11, 6.5, 32, 6.5); ctx.quadraticCurveTo(53, 6.5, 52.5, 28);
+      ctx.lineTo(54, 55); ctx.quadraticCurveTo(32, 58, 10, 55); ctx.closePath();
+      C.fill(ctx, hairColor, r, [10, 6, 44, 52]); C.stroke(ctx, r, W);
+    }
     gear('outfit', 'back');
     if (dressed) gear('outfit', 'front');
     else {
@@ -94,13 +101,6 @@
     if (hair === 'bun') {
       C.blob(ctx, 32, 5.5, 7, 6, r, 0.1); C.fill(ctx, hairColor, r, [25, 0, 14, 12]); C.stroke(ctx, r, W);
     }
-    if (hair === 'long') {
-      // 長髮的後半：直直垂到肩膀下面
-      ctx.beginPath();
-      ctx.moveTo(11.5, 28); ctx.quadraticCurveTo(11, 6.5, 32, 6.5); ctx.quadraticCurveTo(53, 6.5, 52.5, 28);
-      ctx.lineTo(54, 55); ctx.quadraticCurveTo(32, 58, 10, 55); ctx.closePath();
-      C.fill(ctx, hairColor, r, [10, 6, 44, 52]); C.stroke(ctx, r, W);
-    }
 
     // 大頭
     C.blob(ctx, 32, 28, 17.5, 18, r, 0.05); C.fill(ctx, skin, r, [14, 10, 36, 36], 0.5); C.stroke(ctx, r, W);
@@ -117,11 +117,12 @@
       ctx.beginPath();
       ctx.moveTo(23, 12);
       ctx.quadraticCurveTo(34, 22, 47.5, 23);
-      ctx.lineTo(47, 52); ctx.lineTo(53, 52);
-      ctx.quadraticCurveTo(53, 6.5, 32, 6.5); ctx.quadraticCurveTo(11, 6.5, 11, 52);
-      ctx.lineTo(17, 52); ctx.quadraticCurveTo(16.5, 21, 23, 12);
+      // 兩側垂下來的頭髮只到肩膀，不蓋到衣服前面
+      ctx.lineTo(47.5, 42); ctx.quadraticCurveTo(50.5, 45, 53, 42);
+      ctx.quadraticCurveTo(53, 6.5, 32, 6.5); ctx.quadraticCurveTo(11, 6.5, 11, 42);
+      ctx.quadraticCurveTo(13.5, 45, 16.5, 42); ctx.quadraticCurveTo(16.5, 21, 23, 12);
       ctx.closePath();
-      C.fill(ctx, hairColor, r, [11, 6, 42, 46]); C.stroke(ctx, r, W);
+      C.fill(ctx, hairColor, r, [11, 6, 42, 38]); C.stroke(ctx, r, W);
       ctx.save(); ctx.globalAlpha = 0.45;
       ctx.beginPath(); ctx.moveTo(36, 10); ctx.quadraticCurveTo(46, 12, 49, 22);
       C.stroke(ctx, r, 2, '#ffffff'); ctx.restore();
@@ -145,6 +146,20 @@
       ctx.save(); ctx.globalAlpha = 0.45;
       ctx.beginPath(); ctx.moveTo(36, 10); ctx.quadraticCurveTo(46, 12, 49, 22);
       C.stroke(ctx, r, 2, '#ffffff'); ctx.restore();
+    } else if (hair === 'buzz') {
+      // 平頭：貼著頭皮的一層短髮，髮際線剪得平平的，點點像刺刺的髮根
+      ctx.beginPath();
+      ctx.moveTo(15, 24); ctx.quadraticCurveTo(15, 10, 32, 10.5); ctx.quadraticCurveTo(49, 10, 49, 24);
+      ctx.quadraticCurveTo(47.5, 18.5, 45, 17.5); ctx.lineTo(19, 17.5); ctx.quadraticCurveTo(16.5, 18.5, 15, 24);
+      ctx.closePath();
+      C.fill(ctx, hairColor, r, [15, 10, 34, 14]); C.stroke(ctx, r, 2);
+      C.dots(ctx, 19, 12, 26, 5, 22, 'rgba(255,255,255,0.35)', r, 0.9);
+    } else if (hair === 'bald') {
+      // 光頭：亮亮的頭頂反光
+      ctx.save(); ctx.globalAlpha = 0.7;
+      ctx.beginPath(); ctx.ellipse(38, 15.5, 5, 2.4, -0.35, 0, Math.PI * 2); ctx.fillStyle = '#ffffff'; ctx.fill();
+      ctx.beginPath(); ctx.arc(30.5, 13.5, 1.3, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
     } else if (hair === 'curly') {
       [[18, 17], [24, 12], [31, 10], [38, 11], [45, 16], [21, 21], [43, 21]].forEach(([x, y]) => {
         C.blob(ctx, x, y, 5.5, 5, r, 0.15, 12); C.fill(ctx, hairColor, r, null); C.stroke(ctx, r, 2);

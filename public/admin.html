@@ -17,7 +17,7 @@ h2 { font-size: 20px; margin: 0 0 12px; }
 .card { background: var(--paper); border: 2px solid var(--ink); border-radius: 18px; padding: 20px; margin-top: 20px; }
 .row { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
 label { display: flex; flex-direction: column; gap: 6px; font-weight: 700; font-size: 14px; }
-input { font: 500 17px inherit; font-family: inherit; padding: 10px 12px; border: 2px solid var(--line); border-radius: 10px; background: var(--paper); min-height: 46px; }
+input, select { font: 500 17px inherit; font-family: inherit; padding: 10px 12px; border: 2px solid var(--line); border-radius: 10px; background: var(--paper); min-height: 46px; }
 input:focus { outline: none; border-color: var(--accent); }
 button { font: 700 15px inherit; font-family: inherit; border-radius: 999px; padding: 10px 20px; min-height: 46px; border: 2px solid var(--ink); background: transparent; cursor: pointer; }
 button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
@@ -62,6 +62,18 @@ th { color: var(--muted); font-weight: 700; }
       <div class="preview" id="p-preview"></div>
       <p class="note">報名頁、邀請函、IG 限時動態、總部裡的 VIP Pass 都會換成新的時間。已經存下來的限時動態影片不會變。</p>
       <p class="msg" id="party-msg"></p>
+    </form>
+
+    <form class="card" id="announce">
+      <h2>預告更新</h2>
+      <p class="note" style="margin: 0 0 12px">要重啟伺服器（例如 git pull 新版本）之前先預告，大家畫面上方會出現倒數；時間到會先幫大家存好角色，這裡顯示「可以重啟了」再重啟。重啟後大家會自動收到「重新整理」的提醒。</p>
+      <div class="row">
+        <label style="flex: 1 1 260px">公告內容<input id="a-text" maxlength="60" placeholder="總部要更新了，先找個安全的地方"></label>
+        <label>多久後<select id="a-min"><option value="1">1 分鐘</option><option value="3" selected>3 分鐘</option><option value="5">5 分鐘</option></select></label>
+        <button type="submit" class="primary">發布</button>
+        <button type="button" id="a-cancel">取消預告</button>
+      </div>
+      <div class="preview" id="a-state">目前沒有預告</div>
     </form>
 
     <section class="card">
@@ -160,6 +172,7 @@ th { color: var(--muted); font-weight: 700; }
       $('login').hidden = true; $('panel').hidden = false;
       if (!$('p-date').value) { $('p-date').value = r.party.date; $('p-time').value = r.party.time; preview(); }
       render(r.accounts);
+      showNotice(r.notice);
     });
   }
   $('login').addEventListener('submit', function (e) {
@@ -180,6 +193,30 @@ th { color: var(--muted); font-weight: 700; }
     });
   });
   $('reload').addEventListener('click', load);
+  var noticeLeft = null, noticeReady = false, noticeText = '', reloading = false;
+  function showNotice(n) {
+    noticeLeft = n ? Date.now() + n.ms : null; noticeReady = !!(n && n.ready); noticeText = n ? n.text : '';
+    tickNotice();
+  }
+  function tickNotice() {
+    if (!noticeLeft) { $('a-state').textContent = '目前沒有預告'; return; }
+    var left = Math.max(0, noticeLeft - Date.now());
+    if (noticeReady || left <= 0) {
+      if (noticeReady) { $('a-state').textContent = '✅ 時間到了，可以重啟了（角色都存好了）'; return; }
+      $('a-state').textContent = '幫大家存檔中…';
+      if (!reloading) { reloading = true; setTimeout(function () { reloading = false; load(); }, 1500); }
+      return;
+    }
+    $('a-state').textContent = '「' + noticeText + '」・' + Math.floor(left / 60000) + ':' + String(Math.floor(left / 1000) % 60).padStart(2, '0') + ' 後';
+  }
+  setInterval(tickNotice, 1000);
+  $('announce').addEventListener('submit', function (e) {
+    e.preventDefault();
+    api('/api/admin/announce', { text: $('a-text').value, minutes: $('a-min').value }).then(function (r) { if (r.ok) showNotice(r.notice); });
+  });
+  $('a-cancel').addEventListener('click', function () {
+    api('/api/admin/announce', { cancel: true }).then(function (r) { if (r.ok) showNotice(null); });
+  });
   if (token) load();
 })();
 </script>

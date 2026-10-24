@@ -32,6 +32,34 @@
   const T = MAP.TILE;
   const SPEED = 220;
   const FONT = '"Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif';
+  // 場景裡的文字框統一用米白紙條：Phaser 的 Text 只會畫方方正正的底色，
+  // 所以底色設成 PAPER 的文字改成先畫字、再在字的後面補一張蠟筆描邊的紙條
+  const PAPER = '#fbf6e9', INK = '#2b2a33';
+  (function paperText() {
+    const Txt = Phaser.GameObjects.Text.prototype, orig = Txt.updateText;
+    Txt.updateText = function () {
+      const style = this.style;
+      if (style.backgroundColor !== PAPER) return orig.call(this);
+      style.backgroundColor = null;
+      orig.call(this);
+      style.backgroundColor = PAPER;
+      const cv = this.canvas, ctx = this.context, res = style.resolution || 1;
+      const w = cv.width / res, h = cv.height / res;
+      if (w < 6 || h < 6) return this;
+      let seed = 7; for (const ch of String(this._text)) seed = (seed * 31 + ch.charCodeAt(0)) >>> 0;
+      const C = window.HQ_CRAYON, r = C.rng(seed);
+      ctx.save();
+      ctx.globalCompositeOperation = 'destination-over';
+      ctx.scale(res, res);
+      // destination-over：先畫的在上面 → 描邊、紙、影子
+      C.rect(ctx, 2, 1.5, w - 5, h - 4.5, r, 1.1); C.stroke(ctx, r, 2, INK);
+      C.rect(ctx, 2, 1.5, w - 5, h - 4.5, r, 0); ctx.fillStyle = PAPER; ctx.fill();
+      C.rect(ctx, 4, 3.5, w - 5, h - 4.5, r, 0.6); ctx.fillStyle = 'rgba(43,42,51,0.28)'; ctx.fill();
+      ctx.restore();
+      if (this.renderer && this.renderer.gl) this.frame.source.glTexture = this.renderer.canvasToTexture(cv, this.frame.source.glTexture, true);
+      return this;
+    };
+  })();
   const $ = (id) => document.getElementById(id);
 
   // ---------------- 角色創建 ----------------
@@ -2549,8 +2577,8 @@
       const mx = MAP.mentor.x, my = MAP.mentor.y + 18;
       this.add.image(mx, my, 'mentor').setScale(0.55).setOrigin(0.5, 0.95).setDepth(my);
       this.add.text(mx, my - 92, '📂 轉職資料沈理員', {
-        fontSize: '14px', fontStyle: 'bold', color: '#ffd23f', fontFamily: FONT,
-        backgroundColor: 'rgba(19,26,40,0.85)', padding: { x: 7, y: 2 },
+        fontSize: '14px', fontStyle: 'bold', color: INK, fontFamily: FONT,
+        backgroundColor: PAPER, padding: { x: 10, y: 4 },
       }).setOrigin(0.5).setDepth(my);
       const talk = this.add.text(mx + 26, my - 66, '💬', { fontSize: '22px' }).setOrigin(0.5).setDepth(my + 1);
       this.tweens.add({ targets: talk, y: my - 74, duration: 700, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
@@ -2558,8 +2586,8 @@
       const gx = MAP.guard.x, gy = MAP.guard.y + 18;
       this.add.image(gx, gy, 'guard').setScale(0.55).setOrigin(0.5, 0.95).setDepth(gy);
       this.add.text(gx, gy - 96, '🏯 古城守門員', {
-        fontSize: '14px', fontStyle: 'bold', color: '#ffd23f', fontFamily: FONT,
-        backgroundColor: 'rgba(19,26,40,0.85)', padding: { x: 7, y: 2 },
+        fontSize: '14px', fontStyle: 'bold', color: INK, fontFamily: FONT,
+        backgroundColor: PAPER, padding: { x: 10, y: 4 },
       }).setOrigin(0.5).setDepth(gy);
       const gTalk = this.add.text(gx + 26, gy - 70, '💬', { fontSize: '22px' }).setOrigin(0.5).setDepth(gy + 1);
       this.tweens.add({ targets: gTalk, y: gy - 78, duration: 760, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
@@ -2589,14 +2617,14 @@
       this.mBar = this.add.graphics();
       // 楓之谷風格：名牌掛在怪物腳下
       this.mName = this.add.text(0, 22, `Lv.${ST.MONSTER.level} ${ST.MONSTER.name}`, {
-        fontSize: '14px', fontStyle: 'bold', color: '#ffd23f', fontFamily: FONT,
-        backgroundColor: 'rgba(19,26,40,0.85)', padding: { x: 8, y: 2 },
+        fontSize: '14px', fontStyle: 'bold', color: '#b84300', fontFamily: FONT,
+        backgroundColor: PAPER, padding: { x: 11, y: 4 },
       }).setOrigin(0.5, 0);
       // 被冰凍、被削弱時腳下的冰晶和狀態文字
       this.mIce = this.add.image(0, 4, 'fx-ice').setOrigin(0.5, 1).setScale(2.4, 1.6).setVisible(false);
       this.mStatus = this.add.text(0, 46, '', {
-        fontSize: '13px', fontStyle: 'bold', color: '#ffffff', fontFamily: FONT,
-        backgroundColor: 'rgba(79,124,194,0.9)', padding: { x: 6, y: 2 },
+        fontSize: '13px', fontStyle: 'bold', color: '#2f5fa8', fontFamily: FONT,
+        backgroundColor: PAPER, padding: { x: 11, y: 5 },
       }).setOrigin(0.5, 0).setVisible(false);
       this.monster = this.add.container((Z.x1 + Z.x2) / 2, (Z.y1 + Z.y2) / 2,
         [this.mSwirl, this.mBody, this.mFace, this.mIce, this.mBar, this.mName, this.mStatus]);
@@ -2608,7 +2636,7 @@
       this.mState = { alive: true, hp: 1, maxHp: 1 };
       this.mDead = this.add.text((Z.x1 + Z.x2) / 2, (Z.y1 + Z.y2) / 2, '', {
         fontSize: '22px', fontStyle: 'bold', color: '#3a3a3c', fontFamily: FONT, align: 'center',
-        backgroundColor: 'rgba(250,250,247,0.92)', padding: { x: 18, y: 12 },
+        backgroundColor: PAPER, padding: { x: 23, y: 16 },
       }).setOrigin(0.5).setDepth(900).setVisible(false);
       // 颱風身邊三不五時劈出小閃電
       this.time.addEvent({ delay: 900, loop: true, callback: () => {
@@ -2657,8 +2685,8 @@
       const key = this.avatarKey(p);
       const body = this.add.image(0, 0, key).setScale(0.5).setOrigin(0.5, AV_ORIGIN_Y);
       const tag = this.add.text(0, 6, this.tagText(p), {
-        fontSize: '14px', fontStyle: 'bold', color: '#f2f4f8', fontFamily: FONT,
-        backgroundColor: 'rgba(19,26,40,0.85)', padding: { x: 7, y: 2 },
+        fontSize: '14px', fontStyle: 'bold', color: INK, fontFamily: FONT,
+        backgroundColor: PAPER, padding: { x: 10, y: 4 },
       }).setOrigin(0.5, 0);
       const bar = this.add.graphics();
       const cont = this.add.container(p.x, p.y, [body, tag, bar]);
@@ -2737,7 +2765,7 @@
       if (on === !!c.prada) return;
       c.prada = on;
       const base = c.tag.text.replace(/^✨ /, '');
-      c.tag.setText(on ? '✨ ' + base : base).setColor(on ? '#ffd23f' : '#f2f4f8');
+      c.tag.setText(on ? '✨ ' + base : base).setColor(on ? '#b07d10' : INK);
       if (!on) {
         if (c.pradaTween) c.pradaTween.stop();
         (c.pradaFx || []).forEach(o => o.destroy());
@@ -2963,8 +2991,8 @@
       if (!r) return;
       r.setAlpha(away ? 0.45 : 1);
       if (away && !r.awayTag) {
-        r.awayTag = this.add.text(0, -86, '📶 斷線中', { fontSize: '13px', fontStyle: 'bold', color: '#ffffff', fontFamily: FONT,
-          backgroundColor: '#131a28', padding: { x: 6, y: 2 } }).setOrigin(0.5, 1);
+        r.awayTag = this.add.text(0, -86, '📶 斷線中', { fontSize: '13px', fontStyle: 'bold', color: INK, fontFamily: FONT,
+          backgroundColor: PAPER, padding: { x: 11, y: 5 } }).setOrigin(0.5, 1);
         r.add(r.awayTag);
       } else if (!away && r.awayTag) { r.awayTag.destroy(); r.awayTag = null; }
     }
@@ -4096,8 +4124,8 @@
         const sc = def.scale || 0.62, k = sc / 0.62;
         const body = this.add.image(0, 0, 'mob-' + st.kind).setScale(sc).setOrigin(0.5, 0.95);
         const tag = this.add.text(0, 10, `Lv.${def.level} ${def.name}`, {
-          fontSize: '13px', fontStyle: 'bold', color: '#ffd23f', fontFamily: FONT,
-          backgroundColor: 'rgba(19,26,40,0.85)', padding: { x: 6, y: 2 },
+          fontSize: '13px', fontStyle: 'bold', color: '#b84300', fontFamily: FONT,
+          backgroundColor: PAPER, padding: { x: 9, y: 4 },
         }).setOrigin(0.5, 0);
         const bar = this.add.graphics();
         const ice = this.add.image(0, 4, 'fx-ice').setOrigin(0.5, 1).setScale(1.2 * k, 0.9 * k).setVisible(false);
@@ -4181,8 +4209,8 @@
       const def = ST.SUMMONS[st.kind];
       const body = this.add.image(0, 0, 'cr-' + st.kind).setScale(0.62).setOrigin(0.5, 76 / 80);
       const tag = this.add.text(0, 8, `${st.ownerName}的${def.name}`, {
-        fontSize: '12px', fontStyle: 'bold', color: '#7be08f', fontFamily: FONT,
-        backgroundColor: 'rgba(19,26,40,0.8)', padding: { x: 5, y: 1 },
+        fontSize: '12px', fontStyle: 'bold', color: '#2f7a45', fontFamily: FONT,
+        backgroundColor: PAPER, padding: { x: 8, y: 3 },
       }).setOrigin(0.5, 0);
       const bar = this.add.graphics();
       const c = this.add.container(st.x, st.y, [body, bar, tag]);
@@ -4298,8 +4326,8 @@
       // 副本入口的漩渦（一直轉）＋招牌
       const pt = MAP.portal;
       this.portal = this.add.image(pt.x, pt.y + 6, 'typhoon').setScale(0.34, 0.14).setTint(0xffb020).setDepth(pt.y - 20);
-      this.add.text(pt.x, pt.y - 58, '🏯 古城門・花蓮副本', { fontSize: '15px', fontStyle: '900', color: '#ffd23f', fontFamily: FONT,
-        backgroundColor: 'rgba(19,26,40,0.85)', padding: { x: 8, y: 3 } }).setOrigin(0.5).setDepth(pt.y + 60);
+      this.add.text(pt.x, pt.y - 58, '🏯 古城門・花蓮副本', { fontSize: '15px', fontStyle: '900', color: '#8a5a10', fontFamily: FONT,
+        backgroundColor: PAPER, padding: { x: 11, y: 5 } }).setOrigin(0.5).setDepth(pt.y + 60);
       // 七星潭的石頭：每顆一個顏色，踩對會亮起來
       this.stoneImgs = D.stones.map((st, i) => {
         const g = this.add.graphics({ x: st.x, y: st.y }).setDepth(-7);
@@ -4483,7 +4511,7 @@
     fuMob() { for (const m of this.mobs.values()) if (m.state.kind === 'fu' && m.state.alive) return m; return null; }
     updateFuLook(m, was) {
       const def = ST.MOBS.fu, p2 = m.state.phase === 2, M = p2 ? def.phase2 : def;
-      m.tag.setText(`Lv.${M.level} ${M.name}`).setColor(p2 ? '#d9c4ff' : '#ffd23f');
+      m.tag.setText(`Lv.${M.level} ${M.name}`).setColor(p2 ? '#5b3fa0' : '#b84300');
       if (!m.aura) {
         m.aura = this.add.graphics();
         m.aura.fillStyle(0x5b3f8f, 0.35); m.aura.fillEllipse(0, 0, 150, 46);
@@ -4688,7 +4716,7 @@
         if (status !== this.mStatusText) {
           this.mStatusText = status;
           this.mStatus.setText(status).setVisible(!!status);
-          this.mStatus.setBackgroundColor(frozen ? 'rgba(79,124,194,0.9)' : 'rgba(106,79,184,0.9)');
+          this.mStatus.setColor(frozen ? '#2f5fa8' : '#5b3fa0');
           if (!this.mHitUntil) this.applyMonsterTint();
         }
         // 楓之谷式的彈跳：跳起來、落地時壓扁（冰凍時停住）

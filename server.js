@@ -207,6 +207,24 @@ app.post('/api/admin/announce', (req, res) => {
   res.json({ ok: true, notice: noticeState() });
 });
 
+// 調整等級：經驗值歸零，人在總部裡的話馬上生效
+app.post('/api/admin/level', (req, res) => {
+  if (!isAdmin(req)) return res.status(401).json({ ok: false });
+  const b = req.body || {}, u = accounts.get(b.username);
+  if (!u) return res.status(400).json({ ok: false, error: '找不到這個帳號' });
+  const level = Math.floor(Number(b.level));
+  if (!(level >= 1 && level <= STATS.LEVEL.max)) return res.status(400).json({ ok: false, error: `等級要是 1～${STATS.LEVEL.max}` });
+  accounts.update(u, { level, exp: 0, levelSet: Date.now() });
+  [...players.values()].filter(p => p.account === u).forEach(p => {
+    p.level = level; p.exp = 0;
+    Object.assign(p, STATS.statsFor(p.cls, p.level));
+    p.hp = Math.min(p.hp, p.maxHp); p.mp = Math.min(p.mp, p.maxMp);
+    if (!p.dead) { p.hp = p.maxHp; p.mp = p.maxMp; }
+    sendStats(p);
+    io.emit('levelUp', { id: p.id, level: p.level });
+  });
+  res.json({ ok: true, level });
+});
 app.post('/api/admin/delete', (req, res) => {
   if (!isAdmin(req)) return res.status(401).json({ ok: false });
   const name = String((req.body || {}).username || '');
@@ -227,7 +245,7 @@ function videoList() {
 // ---------------- 點唱機：全場一條 YouTube 點歌隊伍，所有人同步聽同一首 ----------------
 // 目前全場只有一台；想改回每個房間一台，讓這裡回傳房間 id 就好
 const musicArea = () => 'all';
-const MUSIC_MAX_QUEUE = 20, MUSIC_PER_PERSON = 3;
+const MUSIC_MAX_QUEUE = 20;
 const music = {}; // area -> { now: { vid, title, by, byName, startedAt }, queue: [...], skips: Set }
 const musicOf = (area) => music[area] || (music[area] = { now: null, queue: [], skips: new Set() });
 // 支援 youtu.be/ID、watch?v=ID、shorts/ID、embed/ID、music.youtube.com，或直接貼 11 碼 ID
@@ -860,6 +878,15 @@ function sanitizeSave(data) {
     furn: Object.fromEntries(Object.keys(DECOR.DECOR).map(k => [k, clamp(Math.floor(Number(data.furn && data.furn[k])) || 0, 0, 50)])),
   };
 }
+// 有登入的話，進度以帳號和瀏覽器比較高的那邊為準，舊分頁或別台裝置帶來的舊資料不會把等級拉低
+// 管理員剛調過等級（levelSet）就直接用帳號的
+function keepProgress(d, account) {
+  const a = sanitizeSave(account.save);
+  if (account.save.levelSet || a.level > d.level || (a.level === d.level && a.exp > d.exp)) Object.assign(d, { level: a.level, exp: a.exp, cls: a.cls });
+  if (account.save.levelSet) accounts.update(account, { levelSet: undefined });
+  d.owned = [...new Set([...a.owned, ...d.owned])];
+  Object.keys(d.furn).forEach(k => { d.furn[k] = Math.max(d.furn[k], a.furn[k]); });
+}
 // 把總部裡的角色狀態存回帳號
 function snapshot(p) {
   if (!p.account) return;
@@ -1010,6 +1037,7 @@ io.on('connection', (socket) => {
       if (s2) { s2.emit('kicked', '你的帳號在別的地方登入了'); s2.disconnect(true); }
     });
 
+    if (account) keepProgress(d, account);
     const p = Object.assign({
       id: socket.id,
       x: MAP.spawn.x + (Math.random() - 0.5) * 60,
@@ -1557,7 +1585,6 @@ io.on('connection', (socket) => {
     if (!vid) return ack({ ok: false, error: '貼 YouTube 的影片連結，例如 https://youtu.be/…' });
     const area = musicArea(p), m = musicOf(area);
     if (m.queue.length >= MUSIC_MAX_QUEUE) return ack({ ok: false, error: '這一區已經排了太多首，等等再點' });
-    if (m.queue.filter(q => q.by === p.id).length >= MUSIC_PER_PERSON) return ack({ ok: false, error: `每個人最多排 ${MUSIC_PER_PERSON} 首，等前面的播完再點` });
     const info = await youtubeInfo(vid);
     if (info.error) return ack({ ok: false, error: info.error });
     if (info.title === 'YouTube 影片' && req && req.title) info.title = clean(req.title, 80);

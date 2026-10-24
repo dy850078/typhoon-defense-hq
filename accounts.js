@@ -6,6 +6,21 @@ const crypto = require('crypto');
 
 const TOKEN_DAYS = 90; // 登入一次可以維持多久
 
+const BACKUPS = 5; // 保留最近幾份備份
+
+// 每次啟動先把帳號檔複製一份到 data/backups，存檔出問題時還能找回來
+function backup(dataDir, file) {
+  if (!fs.existsSync(file)) return;
+  try {
+    const dir = path.join(dataDir, 'backups');
+    fs.mkdirSync(dir, { recursive: true });
+    const stamp = new Date().toISOString().replace(/[-:]/g, '').replace('T', '-').slice(0, 15);
+    fs.copyFileSync(file, path.join(dir, `accounts-${stamp}.json`));
+    fs.readdirSync(dir).filter(f => /^accounts-.*\.json$/.test(f)).sort().reverse().slice(BACKUPS)
+      .forEach(f => fs.unlinkSync(path.join(dir, f)));
+  } catch (e) { console.error('帳號備份失敗', e.message); }
+}
+
 function create(dataDir) {
   const file = path.join(dataDir, 'accounts.json');
   let db = { users: {}, tokens: {} };
@@ -13,6 +28,7 @@ function create(dataDir) {
     const saved = JSON.parse(fs.readFileSync(file, 'utf8'));
     db = { users: saved.users || {}, tokens: saved.tokens || {} };
   } catch (e) { /* 第一次啟動還沒有檔案 */ }
+  backup(dataDir, file);
 
   // 寫檔：先寫到暫存檔再改名，寫到一半當機也不會把整個檔案弄壞
   let timer = null;
@@ -80,6 +96,7 @@ function create(dataDir) {
       user.seen = Date.now();
       save();
     },
+    get(username) { return db.users[key(username)] || null; },
     list() {
       return Object.values(db.users).map(u => ({ username: u.username, name: (u.save && u.save.name) || '', cls: (u.save && u.save.cls) || 'staff',
         level: (u.save && u.save.level) || 1, vip: !!(u.save && u.save.vip), created: u.created, seen: u.seen }));

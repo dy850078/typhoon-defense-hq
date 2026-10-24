@@ -1129,10 +1129,25 @@
       const last = cur.pts[cur.pts.length - 1];
       cur.pts = [last];
     }
+    // 沒出題就想畫：畫布中間跳紙條提醒（一般 toast 會被遊戲室視窗蓋住）
+    let tipTimer = 0;
+    function boardTip(text) {
+      let t = $('draw-tip');
+      if (!t) { t = el('div', 'draw-tip'); t.id = 'draw-tip'; t.onclick = () => (t.hidden = true); cv.parentNode.appendChild(t); }
+      t.textContent = text; t.hidden = false;
+      t.classList.remove('pop'); void t.offsetWidth; t.classList.add('pop');
+      clearTimeout(tipTimer); tipTimer = setTimeout(() => (t.hidden = true), 2600);
+    }
+    function nudgeAnswer() {
+      const a = $('draw-answer');
+      a.classList.remove('nudge'); void a.offsetWidth; a.classList.add('nudge');
+      if (!matchMedia('(pointer: coarse)').matches) a.focus();
+    }
     cv.addEventListener('pointerdown', (e) => {
+      if (state && !state.host) { e.preventDefault(); boardTip('還沒有主持人喔！\n先按「當主持人」才能出題畫畫'); return; }
       if (!amHost()) return;
       e.preventDefault();
-      if (!state.playing) { toast('先輸入答案、按「出題」才能開始畫喔'); return; }
+      if (!state.playing) { boardTip('還沒出題喔！\n先在下面輸入答案、按「出題」再開始畫'); nudgeAnswer(); return; }
       cv.setPointerCapture(e.pointerId);
       if (tool !== 'pen') {
         // 拖曳時先記下畫布，每次移動都還原再畫一次預覽

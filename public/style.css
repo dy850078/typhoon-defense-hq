@@ -399,6 +399,14 @@ button.inv-item:hover { border-color: var(--accent); }
 .game-tabs button.on { background: var(--accent); color: #fff; border-color: var(--accent); }
 /* 記分板：浮在畫板右上角的小窗，名單不擋滑鼠（主持人照樣可以畫到底下） */
 .stage-wrap { position: relative; }
+.draw-tip { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%) rotate(-1.5deg); z-index: 3; max-width: 80%;
+  background: var(--note); color: var(--note-ink); border: 2.5px solid var(--note-ink); border-radius: var(--note-radius);
+  box-shadow: var(--note-shadow); padding: 10px 18px; font-weight: 700; font-size: 15px; line-height: 1.5; text-align: center; white-space: pre-line; cursor: pointer; }
+.draw-tip[hidden] { display: none; }
+.draw-tip.pop { animation: draw-tip .25s ease-out; }
+@keyframes draw-tip { 0% { opacity: 0; transform: translate(-50%, -40%) rotate(-1.5deg) scale(.9); } 100% { opacity: 1; } }
+#draw-answer.nudge { animation: draw-nudge .9s ease; }
+@keyframes draw-nudge { 0%, 100% { box-shadow: none; } 20%, 60% { box-shadow: 0 0 0 4px #ffd23f; } 40%, 80% { box-shadow: 0 0 0 1px #ffd23f; } }
 .game-scores { position: absolute; top: 8px; right: 8px; width: 190px; max-width: 45%; z-index: 2; background: rgba(251,251,248,.88);
   border: 2px solid var(--ink); border-radius: 12px; padding: 4px 8px 6px; box-shadow: 0 4px 12px rgba(0,0,0,.18); backdrop-filter: blur(3px); }
 .game-scores .gs-head { display: flex; justify-content: space-between; align-items: center; gap: 4px; }

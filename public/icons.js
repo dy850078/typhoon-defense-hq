@@ -70,7 +70,7 @@
       x.restore();
       C.dots(x, 34, 6, 10, 10, 3, '#ff8fab', r, 1.4);
     },
-    // 插畫家：調色盤
+    // 插畫結界師：調色盤
     'cls-painter'(x, r) {
       C.blob(x, 23, 25, 18, 15, r, 0.06); C.fill(x, '#f3d9a8', r, [5, 10, 36, 30]); C.stroke(x, r, 2.4);
       C.blob(x, 30, 32, 4, 3.5, r, 0.1); x.fillStyle = '#eef1f5'; x.fill(); C.stroke(x, r, 1.8);

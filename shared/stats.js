@@ -21,8 +21,8 @@
       desc: '跟外星朋友很熟的人。在颱風前線召喚奇異生物，牠們會自己去打怪。' },
     singer: { name: '靈魂歌姬', icon: '🎤', role: '刺客', base: { maxHp: 85, maxMp: 70, atk: 15 }, skills: ['note', 'noteBlade', 'anthem'],
       desc: '一開口就讓颱風安靜下來的歌姬。唱出來的音符會變成刀，爆擊特別高；也能唱歌幫全隊加攻擊。' },
-    painter: { name: '插畫家', icon: '🎨', role: '控場', base: { maxHp: 95, maxMp: 90, atk: 10 }, skills: ['paint', 'fireWall', 'iceWall'],
-      desc: '畫什麼就變出什麼的插畫家。在颱風前線畫一條線，就變成擋住怪物的火牆或冰牆。' },
+    painter: { name: '插畫結界師', icon: '🎨', role: '控場', base: { maxHp: 95, maxMp: 90, atk: 10 }, skills: ['paint', 'fireWall', 'iceWall'],
+      desc: '畫什麼就具現化成什麼的插畫結界師。在颱風前線畫一條線，就變成擋住怪物的火牆或冰牆。' },
   };
 
   // power：傷害倍率；mp：消耗魔力；cooldown：毫秒；range：離颱風多近才能放

@@ -2194,7 +2194,7 @@
       this.input.on('pointermove', (p) => { if (this.drawing && this.drawing.pts.length && p.isDown) this.extendWall(p.worldX, p.worldY); });
       this.input.on('pointerdown', (p) => {
         if (!this.me) return;
-        // 插畫家畫城牆中：按下去就開始畫，不會走路
+        // 插畫結界師畫城牆中：按下去就開始畫，不會走路
         if (this.drawing && !p.rightButtonDown()) { chatInput.blur(); this.target = null; this.drawing.pts = [[p.worldX, p.worldY]]; this.drawing.len = 0; this.drawPreview(); return; }
         chatInput.blur();
         hideMenu();
@@ -3561,7 +3561,7 @@
       this.castSkill(id, target);
     }
 
-    // ---------- 插畫家的城牆 ----------
+    // ---------- 插畫結界師的城牆 ----------
     // 按技能進入畫線模式，在地上拖曳畫一條線，放開就變成城牆；再按一次技能取消
     startWall(id) {
       const sk = ST.SKILLS[id];

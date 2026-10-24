@@ -200,9 +200,9 @@ function videoList() {
   const count = (code) => [...players.values()].filter(p => p.video === code).length;
   return videoRooms.map(r => ({ code: r.code, name: r.name, by: r.by, ago: Date.now() - r.at, count: count(r.code) }));
 }
-// ---------------- 點唱機：每一區一條 YouTube 點歌隊伍，同一區的人同步聽同一首 ----------------
-// 煮泡麵區在休息區裡面，算同一區；不在任何房間就是「戶外」
-const musicArea = (p) => { const r = MAP.roomAt(p.x, p.y); return !r ? 'out' : r.id === 'kitchen' ? 'lounge' : r.id; };
+// ---------------- 點唱機：全場一條 YouTube 點歌隊伍，所有人同步聽同一首 ----------------
+// 目前全場只有一台；想改回每個房間一台，讓這裡回傳房間 id 就好
+const musicArea = () => 'all';
 const MUSIC_MAX_QUEUE = 20, MUSIC_PER_PERSON = 3;
 const music = {}; // area -> { now: { vid, title, by, byName, startedAt }, queue: [...], skips: Set }
 const musicOf = (area) => music[area] || (music[area] = { now: null, queue: [], skips: new Set() });
@@ -225,6 +225,41 @@ async function youtubeInfo(vid) {
     return { title: clean(j.title, 80) || 'YouTube 影片' };
   } catch (e) { return { title: 'YouTube 影片' }; } // 連不到 YouTube 也先讓它排進去
 }
+// 打歌名搜尋：抓 YouTube 搜尋頁裡的 ytInitialData（不用 API key；YouTube 改版的話這裡可能要跟著改）
+const searchCache = new Map(); // q -> { at, list }
+function findVideos(node, out) {
+  if (!node || typeof node !== 'object' || out.length >= 10) return;
+  if (Array.isArray(node)) { node.forEach(n => findVideos(n, out)); return; }
+  const v = node.videoRenderer;
+  if (v && v.videoId && !out.some(o => o.vid === v.videoId)) {
+    const text = (t) => (t && (t.simpleText || (t.runs || []).map(r => r.text).join(''))) || '';
+    // 直播沒有長度，跳過
+    if (v.lengthText) out.push({ vid: v.videoId, title: clean(text(v.title), 80), channel: clean(text(v.ownerText || v.longBylineText), 40), len: text(v.lengthText) });
+    return;
+  }
+  Object.values(node).forEach(n => findVideos(n, out));
+}
+function parseSearch(html) {
+  const m = html.match(/ytInitialData\s*=\s*(\{.+?\});\s*<\/script>/s);
+  if (!m) return null;
+  try { const out = []; findVideos(JSON.parse(m[1]), out); return out.slice(0, 8); } catch (e) { return null; }
+}
+async function youtubeSearch(q) {
+  const hit = searchCache.get(q);
+  if (hit && Date.now() - hit.at < 10 * 60 * 1000) return hit.list;
+  const r = await fetch(`https://www.youtube.com/results?hl=zh-TW&gl=TW&search_query=${encodeURIComponent(q)}`, {
+    headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
+      'Accept-Language': 'zh-TW,zh;q=0.9,en;q=0.8', Cookie: 'CONSENT=YES+' },
+    signal: AbortSignal.timeout(6000),
+  });
+  if (!r.ok) throw new Error('search ' + r.status);
+  const list = parseSearch(await r.text());
+  if (!list) throw new Error('parse');
+  searchCache.set(q, { at: Date.now(), list });
+  if (searchCache.size > 200) searchCache.delete(searchCache.keys().next().value);
+  return list;
+}
+
 function musicState() {
   const out = {};
   Object.entries(music).forEach(([area, m]) => {
@@ -1473,10 +1508,26 @@ io.on('connection', (socket) => {
     ack({ ok: true, code });
   });
 
-  socket.on('musicAdd', async (text, ack) => {
+  socket.on('musicSearch', async (q, ack) => {
+    if (typeof ack !== 'function') return;
+    const p = players.get(socket.id);
+    q = clean(q, 60);
+    if (!p || !q) return ack({ ok: false });
+    // 一個人兩秒內只能搜一次，避免狂按
+    if (Date.now() - (p.searchAt || 0) < 2000) return ack({ ok: false, error: '慢一點，等一下再搜' });
+    p.searchAt = Date.now();
+    try { ack({ ok: true, list: await youtubeSearch(q) }); }
+    catch (e) {
+      console.error('YouTube 搜尋失敗', e.message);
+      ack({ ok: false, error: '搜尋暫時壞了，可以先貼 YouTube 連結點歌' });
+    }
+  });
+  socket.on('musicAdd', async (req, ack) => {
     if (typeof ack !== 'function') return;
     const p = players.get(socket.id);
     if (!p) return ack({ ok: false });
+    // 可以傳連結字串，或搜尋結果 { vid, title }
+    const text = req && typeof req === 'object' ? req.vid : req;
     const vid = youtubeId(text);
     if (!vid) return ack({ ok: false, error: '貼 YouTube 的影片連結，例如 https://youtu.be/…' });
     const area = musicArea(p), m = musicOf(area);
@@ -1484,6 +1535,7 @@ io.on('connection', (socket) => {
     if (m.queue.filter(q => q.by === p.id).length >= MUSIC_PER_PERSON) return ack({ ok: false, error: `每個人最多排 ${MUSIC_PER_PERSON} 首，等前面的播完再點` });
     const info = await youtubeInfo(vid);
     if (info.error) return ack({ ok: false, error: info.error });
+    if (info.title === 'YouTube 影片' && req && req.title) info.title = clean(req.title, 80);
     if (!players.has(socket.id)) return;
     m.queue.push({ vid, title: info.title, by: p.id, byName: p.name });
     if (!m.now) musicNext(area); else emitMusic();

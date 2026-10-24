@@ -389,12 +389,10 @@
     box.appendChild(song);
     if (modalKind === 'bag') openBag();
   }
-  // ---------------- 點唱機：每一區一條 YouTube 點歌隊伍，同一區的人同步聽 ----------------
+  // ---------------- 點唱機：全場一條 YouTube 點歌隊伍，所有人同步聽 ----------------
   const MUSIC = (() => {
-    const AREA_NAME = Object.fromEntries(MAP.ROOMS.map(r => [r.id, r.name]));
-    AREA_NAME.out = '🌧️ 戶外';
-    AREA_NAME.lounge = '🛋️ 休息區（含煮泡麵區）';
-    let state = {}, gotAt = 0, area = null, player = null, apiP = null, playing = null, startTimer = null;
+    let draft = '', results = null;
+    let state = {}, gotAt = 0, area = 'all', player = null, apiP = null, playing = null, startTimer = null;
     let vol = Number(saved('hq-vol') == null ? 60 : saved('hq-vol')), muted = saved('hq-mute') === '1';
     const cur = () => (state[area] && state[area].now) || null;
     // 現在這首應該播到第幾秒
@@ -442,7 +440,7 @@
         return;
       }
       $('music-title').textContent = n.title;
-      $('music-by').textContent = `${n.byName} 點的・${AREA_NAME[area] || ''}`;
+      $('music-by').textContent = `${n.byName} 點的`;
       if (n.vid === playing) return;
       playing = n.vid;
       api().then(() => {
@@ -476,7 +474,7 @@
     function open() {
       const box = el('div', 'modal-list music-modal');
       const m = state[area] || { now: null, queue: [] };
-      box.appendChild(el('p', 'modal-hint', `${AREA_NAME[area] || ''}的點唱機：這一區的人會一起聽，走到別的房間就換成那裡的歌。`));
+      box.appendChild(el('p', 'modal-hint', '總部的點唱機：全場的人一起聽同一首，進度大家都一樣。'));
       const n = m.now;
       const nowRow = el('div', 'modal-row');
       nowRow.appendChild(el('div', 'modal-icon', n ? '🎶' : '🔈'));
@@ -511,35 +509,63 @@
         box.appendChild(ol);
       }
       const form = el('form', 'music-form');
-      const input = el('input'); input.placeholder = '貼上 YouTube 連結'; input.maxLength = 200; input.autocomplete = 'off';
-      const btn = el('button', 'primary small', '點歌'); btn.type = 'submit';
+      const input = el('input'); input.placeholder = '打歌名搜尋，或貼 YouTube 連結'; input.maxLength = 200; input.autocomplete = 'off';
+      input.value = draft;
+      input.oninput = () => { draft = input.value; };
+      const btn = el('button', 'primary small', '搜尋'); btn.type = 'submit';
       const err = el('p', 'error');
       form.append(input, btn);
-      form.onsubmit = (e) => {
-        e.preventDefault();
-        if (!input.value.trim()) return;
-        btn.disabled = true; err.textContent = '';
-        socket.emit('musicAdd', input.value, (r) => {
-          btn.disabled = false;
+      const add = (req, b) => {
+        if (b) b.disabled = true;
+        err.textContent = '';
+        socket.emit('musicAdd', req, (r) => {
+          if (b) b.disabled = false;
           if (!r || !r.ok) { err.textContent = (r && r.error) || '點歌失敗'; return; }
-          input.value = '';
+          draft = ''; results = null;
+          toast(`🎵 已點「${r.title}」`);
           // 點歌那一下就是使用者的點擊，順便讓手機可以出聲
           api().catch(() => {});
+          open();
+        });
+      };
+      form.onsubmit = (e) => {
+        e.preventDefault();
+        const q = input.value.trim();
+        if (!q) return;
+        // 貼的是連結就直接點，不是就當歌名搜尋
+        if (/youtu\.?be|^[A-Za-z0-9_-]{11}$/.test(q)) { add(q, btn); return; }
+        btn.disabled = true; err.textContent = '';
+        socket.emit('musicSearch', q, (r) => {
+          btn.disabled = false;
+          if (!r || !r.ok) { err.textContent = (r && r.error) || '搜尋失敗'; return; }
+          results = { q, list: r.list };
+          open();
         });
       };
       box.append(form, err);
+      if (results) {
+        if (!results.list.length) box.appendChild(el('p', 'modal-hint', `找不到「${results.q}」，換個關鍵字試試`));
+        const ul = el('ul', 'music-results');
+        results.list.forEach((v) => {
+          const li = el('li');
+          const img = el('img'); img.src = `https://i.ytimg.com/vi/${v.vid}/mqdefault.jpg`; img.alt = ''; img.loading = 'lazy';
+          const txt = el('div', 'music-r-info');
+          txt.appendChild(el('b', null, v.title));
+          txt.appendChild(el('small', null, [v.channel, v.len].filter(Boolean).join('・')));
+          const b = el('button', 'primary small', '點這首');
+          b.onclick = () => add({ vid: v.vid, title: v.title }, b);
+          li.append(img, txt, b);
+          ul.appendChild(li);
+        });
+        box.appendChild(ul);
+      }
       box.appendChild(el('p', 'modal-hint', `每人最多排 3 首。點歌的人可以直接切歌，其他人要超過一半同意才會切。`));
+      const focused = document.activeElement && document.activeElement.closest && document.activeElement.closest('.music-form');
       openModal('music', '🎵 點歌', box);
-      setTimeout(() => input.focus(), 50);
+      if (focused || !results) setTimeout(() => input.focus(), 50);
     }
     return {
       set(s) { state = s || {}; gotAt = performance.now(); sync(); if (modalKind === 'music' && !$('modal').hidden) open(); },
-      setArea(rid) {
-        const a = rid === 'kitchen' ? 'lounge' : rid || 'out';
-        if (a === area) return;
-        area = a; sync();
-        if (modalKind === 'music' && !$('modal').hidden) open();
-      },
       area: () => area,
       open,
     };
@@ -3775,7 +3801,6 @@
         this.roomId = rid;
         $('room-name').textContent = room ? room.name : '🌧️ 戶外（風雨很大！）';
         $('video-prompt').hidden = rid !== 'video';
-        MUSIC.setArea(rid);
         if (rid !== 'video') ROOM.close();
         if (room && !first) toast(`進入 ${room.name}`);
         const tips = {

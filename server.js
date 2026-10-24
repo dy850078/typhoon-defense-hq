@@ -64,7 +64,7 @@ function partyInfo() {
 const accounts = ACCOUNTS.create(DATA_DIR);
 
 const app = express();
-app.use(express.json({ limit: '100kb' }));
+app.use(express.json({ limit: '400kb' }));
 // 報名頁：分享連結的預覽圖要用完整網址，quick tunnel 的網址每次都不一樣，所以照請求的網址填進去
 const INDEX_FILE = path.join(__dirname, 'public', 'index.html');
 app.get(['/', '/index.html'], (req, res) => {
@@ -117,10 +117,15 @@ app.get('/api/me', (req, res) => {
 app.post('/api/save', (req, res) => {
   const u = accounts.byToken(bearer(req));
   if (!u) return res.status(401).json({ ok: false });
-  if ([...players.values()].some(p => p.account === u)) {
+  const online = [...players.values()].filter(p => p.account === u);
+  if (online.length) {
     // 人在總部裡的時候，角色以總部為準，只更新邀請函
-    const v = sanitizeSave({ vip: req.body && req.body.vip }).vip;
-    if (v) accounts.update(u, { vip: v });
+    const b = req.body || {}, s = sanitizeSave({ vip: b.vip, photoHd: b.photoHd });
+    const patch = {};
+    if (s.vip) patch.vip = s.vip;
+    if (typeof b.photoHd === 'string') patch.photoHd = s.photoHd;
+    accounts.update(u, patch);
+    online.forEach(p => { if (patch.vip) p.vip = patch.vip; if ('photoHd' in patch) p.photoHd = patch.photoHd; });
   } else accounts.update(u, sanitizeSave(Object.assign({}, u.save, req.body || {})));
   res.json(meOf(u));
 });
@@ -726,6 +731,8 @@ function sanitizeSave(data) {
     level: clamp(Math.floor(Number(data.level)) || 1, 1, STATS.LEVEL.max),
     exp: Math.max(0, Math.floor(Number(data.exp)) || 0),
     owned, equip, vip,
+    // 清楚版的大頭照（480px），只存在帳號裡；邀請函連結和總部同步用的是上面 vip.photo 的小圖
+    photoHd: typeof data.photoHd === 'string' && data.photoHd.length <= 200000 && /^[A-Za-z0-9+/=]+$/.test(data.photoHd) ? data.photoHd : '',
     // 還沒擺出去的家具
     furn: Object.fromEntries(Object.keys(DECOR.DECOR).map(k => [k, clamp(Math.floor(Number(data.furn && data.furn[k])) || 0, 0, 50)])),
   };
@@ -739,7 +746,7 @@ function snapshot(p) {
 setInterval(() => players.forEach(snapshot), 20000);
 
 function publicPlayer(p) {
-  const { cooldowns, buffs, atkBuff, regenMs, cooking, vip, owned, cakeUntil, furn, account, ...rest } = p;
+  const { cooldowns, buffs, atkBuff, regenMs, cooking, vip, owned, cakeUntil, furn, account, photoHd, ...rest } = p;
   return Object.assign(rest, publicStats(p), { hasVip: !!vip, cakeMs: Math.max(0, cakeUntil - Date.now()) });
 }
 
@@ -886,7 +893,7 @@ io.on('connection', (socket) => {
       dir: 1, moving: false,
       inv: Object.fromEntries(Object.keys(MAP.ITEMS).map(k => [k, 0])),
       dead: false, cooldowns: {}, buffs: {}, onlineMs: 0, cakeUntil: 0,
-    }, d, { account });
+    }, d, { account, photoHd: (account && account.save.photoHd) || '' });
     Object.assign(p, STATS.statsFor(p.cls, p.level));
     p.hp = p.maxHp; p.mp = p.maxMp;
     players.set(socket.id, p);
@@ -1069,7 +1076,7 @@ io.on('connection', (socket) => {
     if (typeof ack !== 'function') return;
     const q = players.get(id);
     if (!q) return ack({ ok: false, error: '這個人已經離開了' });
-    ack({ ok: true, name: q.name, cls: q.cls, level: q.level, vip: q.vip });
+    ack({ ok: true, name: q.name, cls: q.cls, level: q.level, vip: q.vip && Object.assign({}, q.vip, { hd: q.photoHd || '' }) });
   });
 
   // 跟指揮中心的導師說話轉職：血量魔力照比例換算，技能冷卻重置

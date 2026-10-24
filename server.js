@@ -353,7 +353,10 @@ function addVideoRoom(code, name, by) {
 }
 
 const server = http.createServer(app);
-const io = new Server(server);
+// 連線狀態恢復：網路閃斷後 2 分鐘內連回來，會拿回同一個連線（id、房間都一樣），中間錯過的訊息也會補送
+const AWAY_KEEP_MS = 2 * 60 * 1000;
+const io = new Server(server, { connectionStateRecovery: { maxDisconnectionDuration: AWAY_KEEP_MS, skipMiddlewares: true } });
+const awayTimers = new Map(); // 斷線中、角色還留著的人：id -> [timer, ...]（下面「斷線保留」）
 
 const players = new Map(); // socket.id -> player
 const history = [];
@@ -405,7 +408,7 @@ function pickMonsterTarget() {
 }
 pickMonsterTarget();
 
-const alivePlayers = () => [...players.values()].filter(p => !p.dead);
+const alivePlayers = () => [...players.values()].filter(p => !p.dead && !awayTimers.has(p.id)); // 斷線中的人不會被打
 // 只有站在颱風前線（圍欄外）的人會被怪物打到，回到圍欄內就安全了
 const inField = (p) => { const r = MAP.roomAt(p.x, p.y); return !!r && r.id === 'front'; };
 const fieldPlayers = () => alivePlayers().filter(inField);
@@ -608,6 +611,7 @@ function hurt(p, raw, by) {
 // 魔力慢慢回復、定時自動回一點血；在線時間滿 10 分鐘升一等
 setInterval(() => {
   players.forEach(p => {
+    if (awayTimers.has(p.id)) return; // 斷線中不算在線時間
     p.onlineMs += 1000;
     if (p.onlineMs >= STATS.LEVEL.onlineMs) { p.onlineMs = 0; levelUp(p, true); }
     if (p.dead) return;
@@ -919,7 +923,7 @@ function snapshot(p) {
 setInterval(() => players.forEach(snapshot), 20000);
 
 function publicPlayer(p) {
-  const { cooldowns, buffs, atkBuff, regenMs, cooking, vip, owned, cakeUntil, furn, account, photoHd, ...rest } = p;
+  const { cooldowns, buffs, atkBuff, regenMs, cooking, vip, owned, cakeUntil, furn, account, photoHd, rk, ...rest } = p;
   return Object.assign(rest, publicStats(p), { hasVip: !!vip, cakeMs: Math.max(0, cakeUntil - Date.now()) });
 }
 
@@ -1044,6 +1048,11 @@ const GAMES = [draw, song];
 io.on('connection', (socket) => {
   let lastChat = 0;
   socket.emit('hello', { boot: BOOT_ID, notice: noticeState() });
+  // 閃斷後接回原本的連線：角色還在就繼續；剛好已經被收掉的話請瀏覽器重新加入
+  if (socket.recovered) {
+    if (players.has(socket.id)) comeBack(players.get(socket.id));
+    else socket.emit('needJoin');
+  }
 
   socket.on('join', (data, ack) => {
     if (typeof ack !== 'function') return;
@@ -1058,14 +1067,20 @@ io.on('connection', (socket) => {
     if (account) [...players.values()].filter(o => o.account === account).forEach(o => {
       const s2 = io.sockets.sockets.get(o.id);
       if (s2) { s2.emit('kicked', '你的帳號在別的地方登入了'); s2.disconnect(true); }
+      else removePlayer(o.id); // 斷線中留著的舊角色
     });
+    // 同一個分頁斷線太久、沒辦法接回原本的連線：把留著的舊角色收掉，從原本的位置繼續
+    const rk = typeof data.rk === 'string' ? data.rk.slice(0, 40) : '';
+    if (rk) [...players.values()].filter(o => o.rk === rk && awayTimers.has(o.id)).forEach(o => removePlayer(o.id));
+    const x = Number(data.x), y = Number(data.y);
+    const back = Number.isFinite(x) && Number.isFinite(y) && !MAP.isBlocked(x, y);
 
     if (account) keepProgress(d, account);
     const p = Object.assign({
       id: socket.id,
-      x: MAP.spawn.x + (Math.random() - 0.5) * 60,
-      y: MAP.spawn.y + (Math.random() - 0.5) * 40,
-      dir: 1, moving: false,
+      x: back ? x : MAP.spawn.x + (Math.random() - 0.5) * 60,
+      y: back ? y : MAP.spawn.y + (Math.random() - 0.5) * 40,
+      dir: 1, moving: false, rk,
       inv: Object.fromEntries(Object.keys(MAP.ITEMS).map(k => [k, 0])),
       dead: false, cooldowns: {}, buffs: {}, onlineMs: 0, cakeUntil: 0,
     }, d, { account, photoHd: (account && account.save.photoHd) || '' });
@@ -1624,7 +1639,7 @@ io.on('connection', (socket) => {
     if (!p) return ack({ ok: false });
     const area = musicArea(p), m = musicOf(area);
     if (!m.now) return ack({ ok: false, error: '現在沒有在放歌' });
-    const here = [...players.values()].filter(o => musicArea(o) === area).length;
+    const here = [...players.values()].filter(o => musicArea(o) === area && !awayTimers.has(o.id)).length;
     if (m.now.by !== p.id) {
       m.skips.add(p.id);
       const need = Math.floor(here / 2) + 1;
@@ -1668,15 +1683,56 @@ io.on('connection', (socket) => {
     const p = players.get(socket.id);
     if (!p) return;
     snapshot(p);
-    GAMES.forEach(g => g.remove(socket.id));
-    summons.filter(sm => sm.owner === socket.id).forEach(sm => removeSummon(sm));
-    const hadVideo = !!p.video;
-    players.delete(socket.id);
-    if (hadVideo) io.emit('videoRooms', videoList());
-    io.emit('playerLeft', socket.id);
-    pushChat({ system: true, text: `${p.name} 離開了總部`, t: Date.now() });
+    // 自己關掉頁面或被踢掉就直接離開；其他（網路閃斷、逾時）先留著角色等他回來
+    if (reason === 'client namespace disconnect' || reason === 'server namespace disconnect') removePlayer(socket.id);
+    else goAway(p);
   });
 });
+
+// ---------------- 斷線保留 ----------------
+// 斷線的人角色先留在原地：5 秒內回來別人什麼都看不到；超過 5 秒顯示「斷線中」；
+// 主持人等 30 秒，沒回來就公布答案換人；2 分鐘還沒回來才真的離開
+const AWAY_SHOW_MS = 5000, HOST_WAIT_MS = 30000;
+function goAway(p) {
+  p.moving = false;
+  io.emit('playerMoved', { id: p.id, x: p.x, y: p.y, dir: p.dir, moving: false });
+  awayTimers.set(p.id, [
+    setTimeout(() => {
+      p.away = true;
+      io.emit('playerAway', { id: p.id, away: true });
+      GAMES.forEach(g => { if (g.host === p.id && g.playing()) g.log(`⏸️ 主持人 ${p.name} 斷線中，等他 ${HOST_WAIT_MS / 1000} 秒`); });
+    }, AWAY_SHOW_MS),
+    setTimeout(() => GAMES.forEach(g => {
+      if (g.host !== p.id) return;
+      g.end(`主持人 ${p.name} 斷線了，`);
+      g.log(`🎤 主持棒放出來了，誰要來當主持人？`);
+      g.reset(null);
+    }), HOST_WAIT_MS),
+    setTimeout(() => removePlayer(p.id), AWAY_KEEP_MS),
+  ]);
+}
+function comeBack(p) {
+  (awayTimers.get(p.id) || []).forEach(clearTimeout);
+  awayTimers.delete(p.id);
+  if (!p.away) return;
+  p.away = false;
+  io.emit('playerAway', { id: p.id, away: false });
+  GAMES.forEach(g => { if (g.host === p.id && g.playing()) g.log(`▶️ 主持人 ${p.name} 回來了，繼續！`); });
+}
+function removePlayer(id) {
+  const p = players.get(id);
+  if (!p) return;
+  (awayTimers.get(id) || []).forEach(clearTimeout);
+  awayTimers.delete(id);
+  snapshot(p);
+  GAMES.forEach(g => g.remove(id));
+  summons.filter(sm => sm.owner === id).forEach(sm => removeSummon(sm));
+  const hadVideo = !!p.video;
+  players.delete(id);
+  if (hadVideo) io.emit('videoRooms', videoList());
+  io.emit('playerLeft', id);
+  pushChat({ system: true, text: `${p.name} 離開了總部`, t: Date.now() });
+}
 
 server.listen(PORT, () => {
   console.log(`🌀 颱風天防衛總部已啟動：http://localhost:${PORT}`);

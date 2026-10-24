@@ -78,6 +78,14 @@
 
   // ---------------- 連線 ----------------
   const socket = io();
+  // 這個分頁的代號（重新整理也一樣）：斷線太久重新加入時，伺服器用它找到留著的舊角色
+  const RK = (() => {
+    try {
+      let k = sessionStorage.getItem('hq-rk');
+      if (!k) { k = Math.random().toString(36).slice(2, 12); sessionStorage.setItem('hq-rk', k); }
+      return k;
+    } catch (e) { return ''; }
+  })();
   let config = { jitsiDomain: 'meet.jit.si', jitsiRoom: 'TyphoonDefenseHQ', party: { md: '10.23', dateDot: '2026.10.23', time: '20:00' } };
   fetch('/config').then(r => r.json()).then(c => { config = c; }).catch(() => {});
   // 管理員改了派對時間
@@ -119,7 +127,9 @@
   function doJoin() {
     const vip = savedJson('hq-vip', null);
     const data = Object.assign({}, profile, { level: Number(saved('hq-level')) || 1, exp: Number(saved('hq-exp')) || 0, vip,
-      owned: myOwned, equip: myEquip, furn: myFurn, token: ACC.token() });
+      owned: myOwned, equip: myEquip, furn: myFurn, token: ACC.token(), rk: RK });
+    // 斷線太久（或伺服器重開）重新加入：從剛剛站的地方繼續，不會被送回出生點
+    if (scene && scene.me) Object.assign(data, { x: Math.round(scene.me.x), y: Math.round(scene.me.y) });
     joinedToken = data.token;
     socket.emit('join', data, (res) => {
       if (!res.ok) { $('join-error').textContent = res.error; return; }
@@ -146,7 +156,25 @@
     synced.then(doJoin);
   });
 
-  socket.on('connect', () => { if (joined) doJoin(); });
+  // 重新連上：網路只是閃斷的話會接回原本的連線（socket.recovered），角色和畫面都不用動，補送一次位置就好
+  socket.on('connect', () => {
+    netState(false);
+    if (!joined) return;
+    if (!socket.recovered) return doJoin();
+    if (scene && scene.me) socket.emit('move', { x: Math.round(scene.me.x), y: Math.round(scene.me.y), dir: scene.me.dir, moving: false });
+  });
+  // 連回來時伺服器已經把角色收掉了（斷線太久），重新加入
+  socket.on('needJoin', () => { if (joined) doJoin(); });
+  // 斷線一秒以上才顯示「重新連線中」，閃一下就好的不用打擾
+  let netTimer = null;
+  function netState(down) {
+    clearTimeout(netTimer);
+    if (down) netTimer = setTimeout(() => { $('net-badge').hidden = false; }, 1000);
+    else $('net-badge').hidden = true;
+  }
+  // 關掉或離開頁面就直接離開總部，角色不用留著等
+  window.addEventListener('pagehide', () => { if (joined) socket.disconnect(); });
+  window.addEventListener('pageshow', (e) => { if (e.persisted && !socket.connected) socket.connect(); });
 
   // ---------------- 更新提醒 ----------------
   // 伺服器每次啟動版本號都不同；重新連上時版本變了，代表伺服器更新過，請玩家重新整理
@@ -223,10 +251,11 @@
     location.reload();
   });
   try { $('join-error').textContent = sessionStorage.getItem('hq-kicked') || ''; sessionStorage.removeItem('hq-kicked'); } catch (e) { /* 無痕模式 */ }
-  socket.on('disconnect', () => { if (joined) addMessage({ system: true, text: '連線中斷，重新連線中…' }); });
+  socket.on('disconnect', (reason) => { if (joined && reason !== 'io client disconnect') netState(true); });
   socket.on('playerJoined', (p) => scene && scene.addRemote(p));
   socket.on('playerMoved', (m) => scene && scene.moveRemote(m));
   socket.on('playerLeft', (id) => scene && scene.removeRemote(id));
+  socket.on('playerAway', (a) => scene && scene.setAway(a.id, a.away));
   socket.on('monster', (m) => scene && scene.setMonster(m));
   socket.on('world', (w) => {
     if (!scene) return;
@@ -2574,7 +2603,20 @@
     addRemote(p) {
       if (!this.me || p.id === me.id || this.remotes.has(p.id)) return;
       this.remotes.set(p.id, this.makeAvatar(p));
+      if (p.away) this.setAway(p.id, true);
       this.updateOnline();
+    }
+
+    // 斷線中的人：變半透明，頭上掛「斷線中」
+    setAway(id, away) {
+      const r = this.remotes.get(id);
+      if (!r) return;
+      r.setAlpha(away ? 0.45 : 1);
+      if (away && !r.awayTag) {
+        r.awayTag = this.add.text(0, -86, '📶 斷線中', { fontSize: '13px', fontStyle: 'bold', color: '#ffffff', fontFamily: FONT,
+          backgroundColor: '#131a28', padding: { x: 6, y: 2 } }).setOrigin(0.5, 1);
+        r.add(r.awayTag);
+      } else if (!away && r.awayTag) { r.awayTag.destroy(); r.awayTag = null; }
     }
 
     moveRemote(m) {
@@ -3880,7 +3922,7 @@
 
       // 傳給伺服器（約每秒 15 次）
       const changed = moving !== this.lastMoving || moving;
-      if (changed && time - this.lastSent > 66) {
+      if (changed && time - this.lastSent > 66 && socket.connected) {
         socket.emit('move', { x: Math.round(this.me.x), y: Math.round(this.me.y), dir: this.me.dir, moving });
         this.lastSent = time;
         this.lastMoving = moving;

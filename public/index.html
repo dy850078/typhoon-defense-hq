@@ -515,6 +515,7 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outlin
 
   var photoBig = null;   // data URL ~640px, this device only
   var photoSmall = null; // base64 jpeg ~96px, travels in the link
+  var photoHd = null;    // base64 jpeg ~480px, saved to the account so it stays sharp after logging in again
   var current = null;
 
   /* ---------- 讀取之前分享出去的專屬連結（舊連結仍可開啟） ---------- */
@@ -566,6 +567,7 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outlin
     loadImage(url).then(function (im) {
       photoBig = squareCrop(im, 640, 0.85);
       photoSmall = squareCrop(im, 96, 0.6).split(',')[1];
+      photoHd = squareCrop(im, 480, 0.82).split(',')[1];
       URL.revokeObjectURL(url);
       var drop = $('photo-drop');
       var hint = $('photo-hint');
@@ -647,7 +649,7 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outlin
   }
   var booted = false;
   function setPhoto(big, small) {
-    photoBig = big; photoSmall = small;
+    photoBig = big; photoSmall = small; photoHd = null;
     var drop = $('photo-drop'), old = drop.querySelector('img');
     if (old) old.remove();
     $('photo-hint').hidden = !!small;
@@ -663,7 +665,7 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outlin
     formMode = mode;
     $('reg-form').reset();
     $('form-err').textContent = '';
-    setPhoto(null, v && v.photo || null);
+    setPhoto(v ? hdUrl() : null, v && v.photo || null);
     if (v) {
       $('f-name').value = v.name || ''; $('f-song').value = v.song || ''; $('f-drink').value = v.drink || '';
       $('t-silver').checked = v.theme === 's'; $('t-navy').checked = v.theme !== 's';
@@ -675,6 +677,8 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outlin
     $('f-submit').textContent = mode === 'edit' ? '更新我的邀請函' : mode === 'claim' ? '建立帳號並保存' : '生成我的邀請函';
     show('register');
   }
+  // 帳號裡存的清楚版大頭照
+  function hdUrl() { var h = ACC.read().photoHd; return h ? 'data:image/jpeg;base64,' + h : null; }
   function localVip() { var v = ACC.read().vip; return v && v.name ? v : null; }
   function showLogin() {
     // 以前沒有帳號時報名過的人：邀請函還在這台裝置上，建個帳號就能永久保存
@@ -688,11 +692,12 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outlin
   }
   function showMine() {
     var v = localVip();
+    photoBig = hdUrl();
     if (v) showInvite(v, true); else showForm('edit');
   }
   $('to-reg').addEventListener('click', function () { var v = localVip(); showForm(v ? 'claim' : 'new', v); });
   $('to-login').addEventListener('click', showLogin);
-  $('logout-btn').addEventListener('click', function () { ACC.logout(); $('l-pass').value = ''; showLogin(); });
+  $('logout-btn').addEventListener('click', function () { ACC.logout(); photoBig = null; $('l-pass').value = ''; showLogin(); });
   $('login-form').addEventListener('submit', function (e) {
     e.preventDefault();
     var u = $('l-user').value.trim(), pw = $('l-pass').value;
@@ -730,11 +735,12 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outlin
     // 邀請函也存一份，進總部後別人點「個人資料」就看得到你的 VIP Pass
     var vip = { name: d.name, song: d.song, drink: d.drink, theme: d.theme, photo: d.photo };
     var save = Object.assign(ACC.read(), { name: d.name.slice(0, 12), vip: vip });
+    if (photoHd) save.photoHd = photoHd;
     // 從邀請函報名進來的新人一律從新手「防颱職員」開始（已經在總部練過等級的就保留原本的職業）
     if (formMode === 'new' && !(Number(save.level) > 1)) save.cls = 'staff';
     var btn = $('f-submit'), label = btn.textContent;
     btn.disabled = true; btn.textContent = '存檔中…';
-    var req = formMode === 'edit' ? ACC.save({ name: save.name, vip: vip }) : ACC.register(user, pw, save);
+    var req = formMode === 'edit' ? ACC.save(photoHd ? { name: save.name, vip: vip, photoHd: photoHd } : { name: save.name, vip: vip }) : ACC.register(user, pw, save);
     req.then(function (r) {
       btn.disabled = false; btn.textContent = label;
       if (r.status === 401) { ACC.logout(); showLogin(); $('login-err').textContent = '登入過期了，請重新登入'; return; }

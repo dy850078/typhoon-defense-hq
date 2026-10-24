@@ -1133,7 +1133,7 @@
       main.appendChild(top);
       const idRow = el('div', 'vip-id');
       const ava = el('div', 'vip-ava');
-      if (v.photo) { const img = el('img'); img.src = 'data:image/jpeg;base64,' + v.photo; img.alt = v.name + ' 的大頭照'; ava.appendChild(img); }
+      if (v.photo) { const img = el('img'); img.src = 'data:image/jpeg;base64,' + (v.hd || v.photo); img.alt = v.name + ' 的大頭照'; ava.appendChild(img); }
       idRow.appendChild(ava);
       const who = el('div', 'vip-who');
       const tier = el('span', 'vip-tier');

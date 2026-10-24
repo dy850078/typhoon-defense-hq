@@ -423,15 +423,11 @@
     myInv = inv || {};
     const box = $('inventory');
     box.innerHTML = '';
-    Object.entries(MAP.ITEMS).forEach(([k, it]) => {
-      // 礦泉水、珍奶、雞排可以直接點來吃
-      const can = EDIBLE.includes(k);
-      const e = el(can ? 'button' : 'span', 'inv-item', `${it.icon} ${myInv[k] || 0}`);
-      e.title = can ? `點一下${ITEM_INFO[k].use}` : it.name;
-      if (can) e.onclick = () => eat(k);
-      box.appendChild(e);
-    });
+    // 物資都收在背包裡，按鈕上的小數字是總共有幾個
+    const total = Object.keys(MAP.ITEMS).reduce((n, k) => n + (myInv[k] || 0), 0);
     const bag = el('button', 'inv-item bag-btn', '🎒 背包');
+    if (total) bag.appendChild(el('span', 'bag-n', String(total > 99 ? '99+' : total)));
+    bag.title = Object.entries(MAP.ITEMS).map(([k, it]) => `${it.icon} ${it.name} × ${myInv[k] || 0}`).join('\n');
     bag.onclick = openBag;
     box.appendChild(bag);
     const gear = el('button', 'inv-item bag-btn', '👗 裝備');
@@ -526,6 +522,15 @@
       if (Math.abs(player.getCurrentTime() - pos()) > 3) player.seekTo(pos(), true);
     }, 5000);
     $('music-start').onclick = () => { if (player) { player.seekTo(Math.max(0, pos()), true); player.playVideo(); applyVol(); } };
+    // 播放器可以收成一顆小膠囊（歌照樣播），點一下再展開
+    const fold = (mini) => {
+      $('music').classList.toggle('mini', mini);
+      $('music-fold').title = mini ? '展開' : '收起來';
+      store('hq-music-mini', mini ? '1' : '0');
+    };
+    fold(saved('hq-music-mini') === '1');
+    $('music-fold').onclick = (e) => { e.stopPropagation(); fold(!$('music').classList.contains('mini')); };
+    $('music').addEventListener('click', (e) => { if ($('music').classList.contains('mini') && e.target.id !== 'music-start') fold(false); });
     $('music-mute').onclick = () => { muted = !muted; store('hq-mute', muted ? '1' : '0'); applyVol(); };
     $('music-vol').oninput = (e) => { vol = Number(e.target.value); muted = false; store('hq-vol', String(vol)); store('hq-mute', '0'); applyVol(); };
     $('music-open').onclick = () => open();
@@ -1237,17 +1242,53 @@
     if (clsChanged) renderSkillbar();
     if (modalKind === 'skills') openSkills();
   }
+  // 技能列：一排小方塊，角落標快捷鍵；說明放在滑鼠移上去（手機長按）跳出來的提示框
   function renderSkillbar() {
-    [['skill-btn', special(), 'K'], ['skill2-btn', special2(), 'L']].forEach(([btn, id, key]) => {
+    [['basic-btn', basic(), '空白'], ['skill-btn', special(), 'K'], ['skill2-btn', special2(), 'L']].forEach(([btn, id, key]) => {
       const sk = ST.SKILLS[id], b = $(btn);
       b.innerHTML = '';
       b.appendChild(el('i', 'cd'));
-      b.appendChild(document.createTextNode(sk.icon + ' '));
-      b.appendChild(el('span', 'sk-name', sk.name + ' '));
-      b.appendChild(el('small', null, `${sk.mp} MP · ${key}`));
-      b.title = sk.desc;
+      b.appendChild(el('span', 'sk-icon', sk.icon));
+      b.appendChild(el('kbd', null, key));
+      b.setAttribute('aria-label', sk.name);
+      b.tip = () => [sk.name, `${key === '空白' ? '空白鍵' : key} · ${sk.mp ? sk.mp + ' MP · ' : ''}冷卻 ${sk.cooldown / 1000} 秒` +
+        (sk.support ? '' : ` · 射程 ${sk.range}`), sk.desc];
     });
   }
+  $('skills-open').tip = () => ['技能說明', '', '看你的職業和全部技能'];
+  $('fw-btn').tip = () => ['慶祝煙火', '', `Lv.${ST.LEVEL.fireworkLv} 以上可以在天空放一行字的煙火`];
+  $('cake-btn').tip = () => ['放下蛋糕', '', '把手上的蛋糕放下來'];
+  (() => {
+    const tip = $('sk-tip');
+    let press = null, longPressed = false;
+    const show = (b) => {
+      if (!b.tip) return;
+      const [name, meta, desc] = b.tip();
+      tip.innerHTML = '';
+      tip.appendChild(el('b', null, name));
+      if (meta) tip.appendChild(el('small', null, meta));
+      tip.appendChild(el('p', null, desc));
+      tip.hidden = false;
+      const r = b.getBoundingClientRect(), w = tip.offsetWidth, h = tip.offsetHeight;
+      tip.style.left = Math.max(8, Math.min(innerWidth - w - 8, r.left + r.width / 2 - w / 2)) + 'px';
+      tip.style.top = (r.top - h - 10 < 8 ? r.bottom + 10 : r.top - h - 10) + 'px';
+    };
+    const hide = () => { tip.hidden = true; };
+    document.querySelectorAll('#skillbar .sk-btn').forEach(b => {
+      b.addEventListener('pointerenter', (e) => { if (e.pointerType === 'mouse') show(b); });
+      b.addEventListener('pointerleave', (e) => { clearTimeout(press); if (e.pointerType === 'mouse') hide(); });
+      // 手機長按看說明，放開後不會觸發技能
+      b.addEventListener('pointerdown', (e) => {
+        if (e.pointerType === 'mouse') return;
+        longPressed = false;
+        clearTimeout(press);
+        press = setTimeout(() => { longPressed = true; show(b); }, 450);
+      });
+      b.addEventListener('pointerup', () => { clearTimeout(press); if (longPressed) setTimeout(hide, 1800); });
+      b.addEventListener('click', (e) => { if (longPressed) { e.stopImmediatePropagation(); e.preventDefault(); longPressed = false; } }, true);
+      b.addEventListener('contextmenu', (e) => e.preventDefault());
+    });
+  })();
   function openSkills() {
     const c = ST.CLASSES[myCls()];
     const box = el('div', 'modal-list');
@@ -1452,6 +1493,11 @@
     setTimeout(() => t.remove(), 2600);
   }
   $('action-btn').addEventListener('click', () => scene && scene.doAction());
+  $('basic-btn').addEventListener('click', () => {
+    if (!scene || !scene.me) return;
+    const a = scene.nearbyAction();
+    if (a && a.type === 'attack') scene.doAction(a); else toast('附近沒有可以攻擊的目標');
+  });
   $('skill-btn').addEventListener('click', () => scene && scene.useSkill(special()));
   $('skill2-btn').addEventListener('click', () => scene && scene.useSkill(special2()));
   $('skills-open').addEventListener('click', openSkills);
@@ -2421,9 +2467,7 @@
     onCooking(c) {
       const who = me && c.id === me.id ? this.me : this.remotes.get(c.id);
       if (!who) return;
-      const t = this.add.text(0, -120, '♨️ 咕嘟咕嘟…', {
-        fontSize: '15px', fontStyle: 'bold', color: '#3a3a3c', fontFamily: FONT, backgroundColor: '#ffffff', padding: { x: 8, y: 4 },
-      }).setOrigin(0.5);
+      const t = this.bubbleImg(0, -104, '♨️ 咕嘟咕嘟…');
       who.add(t);
       setTimeout(() => t.destroy(), c.ms);
       let best = null, bd = Infinity;
@@ -2553,17 +2597,68 @@
 
     updateOnline() { $('online').textContent = this.remotes.size + (this.me ? 1 : 0); }
 
+    // 頭上的對話框：蠟筆手繪的白色泡泡，下面有小尾巴指向說話的人
     showBubble(id, text) {
       const who = me && id === me.id ? this.me : this.remotes.get(id);
       if (!who) return;
       if (who.bubble) who.bubble.destroy();
-      const b = this.add.text(0, -94, text.length > 40 ? text.slice(0, 40) + '…' : text, {
-        fontSize: '15px', color: '#3a3a3c', fontFamily: FONT, backgroundColor: '#ffffff',
-        padding: { x: 10, y: 6 }, wordWrap: { width: 200, useAdvancedWrap: true }, align: 'center',
-      }).setOrigin(0.5, 1);
+      const b = this.bubbleImg(0, -88, text).setScale(0.25);
       who.add(b);
       who.bubble = b;
-      this.time.delayedCall(5000, () => { if (who.bubble === b) { b.destroy(); who.bubble = null; } });
+      this.tweens.add({ targets: b, scale: 0.5, duration: 260, ease: 'Back.easeOut' });
+      this.time.delayedCall(4600, () => {
+        if (who.bubble !== b) return;
+        this.tweens.add({ targets: b, alpha: 0, y: b.y - 8, duration: 400, onComplete: () => { b.destroy(); if (who.bubble === b) who.bubble = null; } });
+      });
+    }
+    // 對話框圖片（底部中間對齊說話的人），被拿掉時順便清掉貼圖
+    bubbleImg(x, y, text) {
+      const key = 'bubble-' + (this.bubbleN = (this.bubbleN || 0) + 1);
+      const b = this.add.image(x, y, this.makeBubble(key, text)).setOrigin(0.5, 1).setScale(0.5);
+      b.once('destroy', () => { if (this.textures.exists(key)) this.textures.remove(key); });
+      return b;
+    }
+    makeBubble(key, text) {
+      const S = 2, PAD = 10, TAIL = 9, MAXW = 190, LH = 20;
+      const font = `500 15px ${FONT}`;
+      const m = document.createElement('canvas').getContext('2d');
+      m.font = font;
+      // 自動換行，最多 3 行
+      const lines = [];
+      let cur = '';
+      for (const ch of [...text]) {
+        if (m.measureText(cur + ch).width > MAXW && cur) { lines.push(cur); cur = ''; }
+        cur += ch;
+      }
+      if (cur) lines.push(cur);
+      if (lines.length > 3) { lines.length = 3; lines[2] = lines[2].slice(0, -1) + '…'; }
+      const tw = Math.max(24, ...lines.map(l => m.measureText(l).width));
+      const w = Math.ceil(tw + PAD * 2), h = lines.length * LH + PAD * 1.4;
+      const cv = document.createElement('canvas');
+      cv.width = (w + 8) * S; cv.height = (h + TAIL + 8) * S;
+      const ctx = cv.getContext('2d');
+      ctx.scale(S, S); ctx.translate(4, 4);
+      const r = CR.rng([...text].reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 7));
+      const J = () => (r() - 0.5) * 1.6;
+      // 圓角外框沿著邊取點加一點抖動，底部中間插進尾巴
+      const R = Math.min(12, h / 2), pts = [];
+      const arc = (cx, cy, a0) => { for (let i = 0; i <= 3; i++) { const a = a0 + i * Math.PI / 6; pts.push([cx + Math.cos(a) * R + J(), cy + Math.sin(a) * R + J()]); } };
+      const edge = (x0, y0, x1, y1) => { const n = Math.max(1, Math.round(Math.hypot(x1 - x0, y1 - y0) / 18)); for (let i = 1; i < n; i++) pts.push([x0 + (x1 - x0) * i / n + J(), y0 + (y1 - y0) * i / n + J()]); };
+      arc(R, R, Math.PI); edge(R, 0, w - R, 0);
+      arc(w - R, R, -Math.PI / 2); edge(w, R, w, h - R);
+      arc(w - R, h - R, 0);
+      const tx = w / 2;
+      edge(w - R, h, tx + 7, h);
+      pts.push([tx + 7, h], [tx + 1, h + TAIL], [tx, h + TAIL], [tx - 6, h]);
+      edge(tx - 6, h, R, h);
+      arc(R, h - R, Math.PI / 2); edge(0, h - R, 0, R);
+      CR.smooth(ctx, pts);
+      CR.fill(ctx, '#fffdf6', r, [0, 0, w, h + TAIL], 0.25);
+      CR.stroke(ctx, r, 2.2);
+      ctx.font = font; ctx.fillStyle = '#3a3a3c'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      lines.forEach((l, i) => ctx.fillText(l, w / 2, PAD * 0.7 + LH * (i + 0.5)));
+      this.textures.addCanvas(key, cv);
+      return key;
     }
 
     // ---------- 颱風 ----------
@@ -3612,9 +3707,7 @@
       const dir = who.x < m.x ? -1 : 1;
       this.tweens.add({ targets: m.body_, x: dir * 16, angle: dir * 10, duration: 150, yoyo: true, delay: 250 });
       if (m.say) m.say.destroy();
-      m.say = this.add.text(0, -110, a.say, {
-        fontSize: '14px', color: '#3a3a3c', fontFamily: FONT, backgroundColor: '#ffffff', padding: { x: 8, y: 4 },
-      }).setOrigin(0.5, 1);
+      m.say = this.bubbleImg(0, -104, a.say);
       m.add(m.say);
       const say = m.say;
       this.time.delayedCall(1600, () => { if (m.say === say) { say.destroy(); m.say = null; } });
@@ -3857,21 +3950,26 @@
       const all0 = [this.me, ...this.remotes.values()];
       const near = this.nearbyAction();
       const LABELS = { crate: '🔨 敲箱子', cook: '🍜 煮泡麵', mentor: '💬 找沈理員轉職', dj: '🎧 點歌' };
-      const label = !near || this.isDead() ? '' : near.type === 'attack' ? `${ST.SKILLS[basic()].icon} 攻擊${near.name}` : LABELS[near.type];
+      // 攻擊用技能列的普攻鍵，這顆只放其他互動（敲箱子、點歌…）
+      const canHit = !!near && !this.isDead() && near.type === 'attack';
+      const label = !near || this.isDead() || canHit ? '' : LABELS[near.type];
       if (label !== this.actionLabel) {
         this.actionLabel = label;
         $('action-btn').hidden = !label;
         $('action-btn').textContent = label;
       }
-      // 兩個招牌技能的冷卻條
+      if (canHit !== this.canHit) { this.canHit = canHit; $('basic-btn').classList.toggle('ready', canHit); }
+      // 技能的冷卻遮罩（從下往上退），魔力不夠就變暗
       this.cdPct = this.cdPct || {};
-      [['skill-btn', special()], ['skill2-btn', special2()]].forEach(([btn, sp]) => {
+      [['basic-btn', basic()], ['skill-btn', special()], ['skill2-btn', special2()]].forEach(([btn, sp]) => {
         const cdLeft = Math.max(0, (cooldowns[sp] || 0) - performance.now());
         const pct = cdLeft ? Math.round(100 * cdLeft / ST.SKILLS[sp].cooldown) : 0;
+        const low = !!myStats && myStats.mp < ST.SKILLS[sp].mp;
+        if (low !== $(btn).classList.contains('low')) $(btn).classList.toggle('low', low);
         if (pct === this.cdPct[btn]) return;
         this.cdPct[btn] = pct;
         const bar = document.querySelector(`#${btn} .cd`);
-        if (bar) bar.style.width = pct + '%';
+        if (bar) bar.style.height = pct + '%';
         $(btn).classList.toggle('cooling', pct > 0);
       });
       // 防禦增益時間到就拿掉小盾牌

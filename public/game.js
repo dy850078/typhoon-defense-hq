@@ -2764,8 +2764,7 @@
       const on = GR.LOOK_SLOTS.every(s => GR.GEAR[eq[s]] && GR.GEAR[eq[s]].rarity === 'SSR');
       if (on === !!c.prada) return;
       c.prada = on;
-      const base = c.tag.text.replace(/^✨ /, '');
-      c.tag.setText(on ? '✨ ' + base : base).setColor(on ? '#b07d10' : INK);
+      c.tag.setColor(on ? '#b07d10' : INK); // 全身 SSR：名牌字變金色（光芒另外畫）
       if (!on) {
         if (c.pradaTween) c.pradaTween.stop();
         (c.pradaFx || []).forEach(o => o.destroy());
@@ -2814,7 +2813,8 @@
       if (who === this.me) $('cake-btn').hidden = !(ms > 0);
     }
 
-    tagText(p, prada) { const c = ST.CLASSES[p.cls] || ST.CLASSES.staff; return `${prada ? '✨ ' : ''}Lv.${p.level || 1} ${c.icon} ${p.name}`; }
+    // 名牌只寫等級和名字（職業、全身 SSR 點開個人資料看得到）
+    tagText(p) { return `Lv.${p.level || 1} ${p.name}`; }
 
     // 世界座標上點到的是哪個人（自己也算）
     playerAt(x, y) {
@@ -2849,7 +2849,7 @@
         who.body_.setTexture(who.texKey);
         if (prev.cls) this.burst(who.x, who.y - 40, 10, 0xffd23f);
       }
-      if (st.cls !== prev.cls || st.level !== prev.level) who.tag.setText(this.tagText({ cls: st.cls, name: who.name_, level: st.level }, who.prada));
+      if (st.cls !== prev.cls || st.level !== prev.level) who.tag.setText(this.tagText({ name: who.name_, level: st.level }));
       this.drawHpBar(who, st);
       // 防禦增益：頭上掛一個小盾牌
       if (st.buffMs > 0) {

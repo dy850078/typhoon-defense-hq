@@ -127,7 +127,7 @@
   function doJoin() {
     const vip = savedJson('hq-vip', null);
     const data = Object.assign({}, profile, { level: Number(saved('hq-level')) || 1, exp: Number(saved('hq-exp')) || 0, vip,
-      owned: myOwned, equip: myEquip, furn: myFurn, token: ACC.token(), rk: RK });
+      owned: myOwned, equip: myEquip, furn: myFurn, inv: savedJson('hq-inv', {}), token: ACC.token(), rk: RK });
     // 斷線太久（或伺服器重開）重新加入：從剛剛站的地方繼續，不會被送回出生點
     if (scene && scene.me) Object.assign(data, { x: Math.round(scene.me.x), y: Math.round(scene.me.y) });
     joinedToken = data.token;
@@ -452,6 +452,7 @@
   let myInv = {};
   function renderInventory(inv) {
     myInv = inv || {};
+    store('hq-inv', myInv); // 沒登入的話，重新整理後靠這份把背包帶回來
     const box = $('inventory');
     box.innerHTML = '';
     // 物資都收在背包裡，按鈕上的小數字是總共有幾個

@@ -384,8 +384,169 @@
     const furn = el('button', 'inv-item bag-btn', '🪑 家具');
     furn.onclick = openFurn;
     box.appendChild(furn);
+    const song = el('button', 'inv-item bag-btn', '🎵 點歌');
+    song.onclick = () => MUSIC.open();
+    box.appendChild(song);
     if (modalKind === 'bag') openBag();
   }
+  // ---------------- 點唱機：每一區一條 YouTube 點歌隊伍，同一區的人同步聽 ----------------
+  const MUSIC = (() => {
+    const AREA_NAME = Object.fromEntries(MAP.ROOMS.map(r => [r.id, r.name]));
+    AREA_NAME.out = '🌧️ 戶外';
+    AREA_NAME.lounge = '🛋️ 休息區（含煮泡麵區）';
+    let state = {}, gotAt = 0, area = null, player = null, apiP = null, playing = null, startTimer = null;
+    let vol = Number(saved('hq-vol') == null ? 60 : saved('hq-vol')), muted = saved('hq-mute') === '1';
+    const cur = () => (state[area] && state[area].now) || null;
+    // 現在這首應該播到第幾秒
+    const pos = () => { const n = cur(); return n ? (n.at + performance.now() - gotAt) / 1000 : 0; };
+    function api() {
+      if (apiP) return apiP;
+      apiP = new Promise((res, rej) => {
+        window.onYouTubeIframeAPIReady = res;
+        const s = document.createElement('script');
+        s.src = 'https://www.youtube.com/iframe_api';
+        s.onerror = () => { apiP = null; rej(); };
+        document.head.appendChild(s);
+      }).then(() => new Promise((res) => {
+        player = new YT.Player('music-yt', {
+          width: 192, height: 108,
+          playerVars: { playsinline: 1, controls: 0, disablekb: 1, rel: 0, modestbranding: 1, iv_load_policy: 3 },
+          events: { onReady: () => res(), onStateChange: onState, onError },
+        });
+      }));
+      return apiP;
+    }
+    function onState(e) {
+      if (e.data === YT.PlayerState.PLAYING) $('music-start').hidden = true;
+      if (e.data === YT.PlayerState.ENDED && playing) socket.emit('musicEnded', playing);
+    }
+    function onError() {
+      const vid = playing;
+      toast('🎵 這首播不了，等一下會自動換下一首');
+      setTimeout(() => { if (playing === vid) socket.emit('musicEnded', vid); }, 6000);
+    }
+    function applyVol() {
+      $('music-vol').value = vol;
+      $('music-mute').textContent = muted || !vol ? '🔇' : '🔊';
+      if (!player || !player.setVolume) return;
+      player.setVolume(vol);
+      if (muted) player.mute(); else player.unMute();
+    }
+    // 跟伺服器的進度對齊：換歌、跳到對的秒數，播不出聲音就顯示「點一下開始聽」
+    function sync() {
+      const n = cur();
+      $('music').hidden = !n;
+      if (!n) {
+        playing = null;
+        if (player && player.stopVideo) player.stopVideo();
+        return;
+      }
+      $('music-title').textContent = n.title;
+      $('music-by').textContent = `${n.byName} 點的・${AREA_NAME[area] || ''}`;
+      if (n.vid === playing) return;
+      playing = n.vid;
+      api().then(() => {
+        if (playing !== n.vid) return;
+        const wait = Math.max(0, -pos());
+        clearTimeout(startTimer);
+        startTimer = setTimeout(() => {
+          if (playing !== n.vid) return;
+          player.loadVideoById({ videoId: n.vid, startSeconds: Math.max(0, pos()) });
+          applyVol();
+          // 手機有時候不讓網頁自己出聲，要使用者點一下
+          setTimeout(() => {
+            if (playing !== n.vid || !player.getPlayerState) return;
+            const st = player.getPlayerState();
+            $('music-start').hidden = st === YT.PlayerState.PLAYING || st === YT.PlayerState.BUFFERING;
+          }, 3000);
+        }, wait * 1000);
+      }).catch(() => { $('music-title').textContent = '連不到 YouTube，聽不到音樂'; });
+    }
+    // 每 5 秒檢查一次，差太多就跳到正確的位置
+    setInterval(() => {
+      if (!player || !playing || !player.getCurrentTime || player.getPlayerState() !== YT.PlayerState.PLAYING) return;
+      if (Math.abs(player.getCurrentTime() - pos()) > 3) player.seekTo(pos(), true);
+    }, 5000);
+    $('music-start').onclick = () => { if (player) { player.seekTo(Math.max(0, pos()), true); player.playVideo(); applyVol(); } };
+    $('music-mute').onclick = () => { muted = !muted; store('hq-mute', muted ? '1' : '0'); applyVol(); };
+    $('music-vol').oninput = (e) => { vol = Number(e.target.value); muted = false; store('hq-vol', String(vol)); store('hq-mute', '0'); applyVol(); };
+    $('music-open').onclick = () => open();
+    applyVol();
+
+    function open() {
+      const box = el('div', 'modal-list music-modal');
+      const m = state[area] || { now: null, queue: [] };
+      box.appendChild(el('p', 'modal-hint', `${AREA_NAME[area] || ''}的點唱機：這一區的人會一起聽，走到別的房間就換成那裡的歌。`));
+      const n = m.now;
+      const nowRow = el('div', 'modal-row');
+      nowRow.appendChild(el('div', 'modal-icon', n ? '🎶' : '🔈'));
+      const info = el('div', 'modal-info');
+      info.appendChild(el('b', null, n ? n.title : '現在沒有在放歌'));
+      if (n) info.appendChild(el('p', null, `${n.byName} 點的${n.skips ? `・${n.skips} 人想切歌` : ''}`));
+      nowRow.appendChild(info);
+      if (n) {
+        const mine = me && n.by === me.id;
+        const sk = el('button', 'hud-btn tiny', mine ? '⏭ 切歌' : '⏭ 投票切歌');
+        sk.onclick = () => socket.emit('musicSkip', (r) => {
+          if (!r || !r.ok) { toast((r && r.error) || '切不了'); return; }
+          if (r.voted) toast(`已投票，${r.voted}/${r.need} 人同意就切歌`);
+        });
+        nowRow.appendChild(sk);
+      }
+      box.appendChild(nowRow);
+      if (m.queue.length) {
+        box.appendChild(el('p', 'mono prof-line', `接下來（${m.queue.length}）`));
+        const ol = el('ol', 'music-queue');
+        m.queue.forEach((q, i) => {
+          const li = el('li');
+          li.appendChild(el('span', null, q.title));
+          li.appendChild(el('small', null, q.byName));
+          if (me && q.by === me.id) {
+            const x = el('button', 'music-x', '✕'); x.title = '從隊伍拿掉';
+            x.onclick = () => socket.emit('musicRemove', i, () => {});
+            li.appendChild(x);
+          }
+          ol.appendChild(li);
+        });
+        box.appendChild(ol);
+      }
+      const form = el('form', 'music-form');
+      const input = el('input'); input.placeholder = '貼上 YouTube 連結'; input.maxLength = 200; input.autocomplete = 'off';
+      const btn = el('button', 'primary small', '點歌'); btn.type = 'submit';
+      const err = el('p', 'error');
+      form.append(input, btn);
+      form.onsubmit = (e) => {
+        e.preventDefault();
+        if (!input.value.trim()) return;
+        btn.disabled = true; err.textContent = '';
+        socket.emit('musicAdd', input.value, (r) => {
+          btn.disabled = false;
+          if (!r || !r.ok) { err.textContent = (r && r.error) || '點歌失敗'; return; }
+          input.value = '';
+          // 點歌那一下就是使用者的點擊，順便讓手機可以出聲
+          api().catch(() => {});
+        });
+      };
+      box.append(form, err);
+      box.appendChild(el('p', 'modal-hint', `每人最多排 3 首。點歌的人可以直接切歌，其他人要超過一半同意才會切。`));
+      openModal('music', '🎵 點歌', box);
+      setTimeout(() => input.focus(), 50);
+    }
+    return {
+      set(s) { state = s || {}; gotAt = performance.now(); sync(); if (modalKind === 'music' && !$('modal').hidden) open(); },
+      setArea(rid) {
+        const a = rid === 'kitchen' ? 'lounge' : rid || 'out';
+        if (a === area) return;
+        area = a; sync();
+        if (modalKind === 'music' && !$('modal').hidden) open();
+      },
+      area: () => area,
+      open,
+    };
+  })();
+  socket.on('music', (s) => MUSIC.set(s));
+  socket.on('toastArea', (t) => { if (joined && t.area === MUSIC.area()) toast(t.text); });
+
   function openBag() {
     const list = el('div', 'modal-list');
     Object.entries(MAP.ITEMS).forEach(([k, it]) => {
@@ -2218,6 +2379,7 @@
       this.decor.forEach(d => d.destroy());
       this.decor.clear();
       (res.decor || []).forEach(d => this.setDecor(d));
+      MUSIC.set(res.music);
       this.walls.forEach((w, id) => this.onWallGone(id, true));
       (res.walls || []).forEach(w => this.onWall(w));
       renderStats(res.you);
@@ -3613,6 +3775,7 @@
         this.roomId = rid;
         $('room-name').textContent = room ? room.name : '🌧️ 戶外（風雨很大！）';
         $('video-prompt').hidden = rid !== 'video';
+        MUSIC.setArea(rid);
         if (rid !== 'video') ROOM.close();
         if (room && !first) toast(`進入 ${room.name}`);
         const tips = {

@@ -56,6 +56,16 @@
     </div>
     <div id="inventory"></div>
     <div id="toasts"></div>
+    <div id="music" hidden>
+      <div class="music-video"><div id="music-yt"></div></div>
+      <div class="music-info"><b id="music-title"></b><small id="music-by"></small></div>
+      <button id="music-start" class="primary small" type="button" hidden>▶ 點一下開始聽</button>
+      <div class="music-ctl">
+        <button id="music-mute" type="button" title="靜音">🔊</button>
+        <input id="music-vol" type="range" min="0" max="100" aria-label="音量">
+        <button id="music-open" type="button">🎵 點歌</button>
+      </div>
+    </div>
     <button id="action-btn" class="primary" hidden></button>
     <div id="skillbar">
       <button id="cake-btn" class="hud-btn" type="button" title="放下蛋糕" hidden>🎂<span> 放下蛋糕 <small id="cake-left"></small></span></button>

@@ -200,6 +200,49 @@ function videoList() {
   const count = (code) => [...players.values()].filter(p => p.video === code).length;
   return videoRooms.map(r => ({ code: r.code, name: r.name, by: r.by, ago: Date.now() - r.at, count: count(r.code) }));
 }
+// ---------------- 點唱機：每一區一條 YouTube 點歌隊伍，同一區的人同步聽同一首 ----------------
+// 煮泡麵區在休息區裡面，算同一區；不在任何房間就是「戶外」
+const musicArea = (p) => { const r = MAP.roomAt(p.x, p.y); return !r ? 'out' : r.id === 'kitchen' ? 'lounge' : r.id; };
+const MUSIC_MAX_QUEUE = 20, MUSIC_PER_PERSON = 3;
+const music = {}; // area -> { now: { vid, title, by, byName, startedAt }, queue: [...], skips: Set }
+const musicOf = (area) => music[area] || (music[area] = { now: null, queue: [], skips: new Set() });
+// 支援 youtu.be/ID、watch?v=ID、shorts/ID、embed/ID、music.youtube.com，或直接貼 11 碼 ID
+function youtubeId(text) {
+  const t = String(text || '').trim();
+  if (/^[A-Za-z0-9_-]{11}$/.test(t)) return t;
+  const m = t.match(/(?:youtu\.be\/|[?&]v=|\/shorts\/|\/embed\/|\/live\/)([A-Za-z0-9_-]{11})/);
+  return m ? m[1] : null;
+}
+// 用 YouTube 的 oEmbed 拿歌名（不用 API key）；不能嵌入播放的影片會回 401
+async function youtubeInfo(vid) {
+  try {
+    const r = await fetch(`https://www.youtube.com/oembed?format=json&url=${encodeURIComponent('https://www.youtube.com/watch?v=' + vid)}`,
+      { signal: AbortSignal.timeout(4000) });
+    if (r.status === 401 || r.status === 403) return { error: '這首歌不開放在別的網站播放，換一首試試' };
+    if (r.status === 404 || r.status === 400) return { error: '找不到這個影片' };
+    if (!r.ok) return { title: 'YouTube 影片' };
+    const j = await r.json();
+    return { title: clean(j.title, 80) || 'YouTube 影片' };
+  } catch (e) { return { title: 'YouTube 影片' }; } // 連不到 YouTube 也先讓它排進去
+}
+function musicState() {
+  const out = {};
+  Object.entries(music).forEach(([area, m]) => {
+    if (!m.now && !m.queue.length) return;
+    out[area] = { now: m.now && Object.assign({}, m.now, { at: Date.now() - m.now.startedAt, skips: m.skips.size }),
+      queue: m.queue.map(q => ({ vid: q.vid, title: q.title, byName: q.byName, by: q.by })) };
+  });
+  return out;
+}
+const emitMusic = () => io.emit('music', musicState());
+function musicNext(area) {
+  const m = musicOf(area);
+  const n = m.queue.shift();
+  m.now = n ? Object.assign(n, { startedAt: Date.now() + 1500 }) : null; // 留一點時間讓大家載入
+  m.skips = new Set();
+  emitMusic();
+}
+
 function addVideoRoom(code, name, by) {
   let r = videoRooms.find(x => x.code === code);
   if (r) return r;
@@ -923,7 +966,7 @@ io.on('connection', (socket) => {
     ack({ ok: true, you: Object.assign(publicPlayer(p), { owned: p.owned, furn: p.furn }), players: [...players.values()].map(publicPlayer), history,
       monster: monsterState(), mobs: mobs.map(mobState), emptyCrates: emptyCrates(),
       summons: summons.map(summonState), decor: decorList(),
-      walls: walls.map(w => ({ id: w.id, kind: w.kind, pts: w.pts, ms: w.until - Date.now() })) });
+      walls: walls.map(w => ({ id: w.id, kind: w.kind, pts: w.pts, ms: w.until - Date.now() })), music: musicState() });
     socket.broadcast.emit('playerJoined', publicPlayer(p));
     pushChat({ system: true, text: `${p.name} 進入了防衛總部 🌀`, t: Date.now() });
   });
@@ -1428,6 +1471,58 @@ io.on('connection', (socket) => {
     p.video = code;
     io.emit('videoRooms', videoList());
     ack({ ok: true, code });
+  });
+
+  socket.on('musicAdd', async (text, ack) => {
+    if (typeof ack !== 'function') return;
+    const p = players.get(socket.id);
+    if (!p) return ack({ ok: false });
+    const vid = youtubeId(text);
+    if (!vid) return ack({ ok: false, error: '貼 YouTube 的影片連結，例如 https://youtu.be/…' });
+    const area = musicArea(p), m = musicOf(area);
+    if (m.queue.length >= MUSIC_MAX_QUEUE) return ack({ ok: false, error: '這一區已經排了太多首，等等再點' });
+    if (m.queue.filter(q => q.by === p.id).length >= MUSIC_PER_PERSON) return ack({ ok: false, error: `每個人最多排 ${MUSIC_PER_PERSON} 首，等前面的播完再點` });
+    const info = await youtubeInfo(vid);
+    if (info.error) return ack({ ok: false, error: info.error });
+    if (!players.has(socket.id)) return;
+    m.queue.push({ vid, title: info.title, by: p.id, byName: p.name });
+    if (!m.now) musicNext(area); else emitMusic();
+    ack({ ok: true, title: info.title, area });
+    io.emit('toastArea', { area, text: `🎵 ${p.name} 點了「${info.title}」` });
+  });
+  // 切歌：點歌的人可以直接切，其他人投票，同一區超過一半的人同意就切
+  socket.on('musicSkip', (ack) => {
+    if (typeof ack !== 'function') return;
+    const p = players.get(socket.id);
+    if (!p) return ack({ ok: false });
+    const area = musicArea(p), m = musicOf(area);
+    if (!m.now) return ack({ ok: false, error: '現在沒有在放歌' });
+    const here = [...players.values()].filter(o => musicArea(o) === area).length;
+    if (m.now.by !== p.id) {
+      m.skips.add(p.id);
+      const need = Math.floor(here / 2) + 1;
+      if (m.skips.size < need) { emitMusic(); return ack({ ok: true, voted: m.skips.size, need }); }
+    }
+    musicNext(area);
+    ack({ ok: true, skipped: true });
+  });
+  // 把自己排的歌從隊伍拿掉
+  socket.on('musicRemove', (i, ack) => {
+    if (typeof ack !== 'function') return;
+    const p = players.get(socket.id);
+    if (!p) return ack({ ok: false });
+    const m = musicOf(musicArea(p)), q = m.queue[i];
+    if (!q || q.by !== p.id) return ack({ ok: false });
+    m.queue.splice(i, 1);
+    emitMusic();
+    ack({ ok: true });
+  });
+  // 有人的播放器播完了就換下一首（開頭幾秒內的不算，避免載入失敗就被跳過）
+  socket.on('musicEnded', (vid) => {
+    const p = players.get(socket.id);
+    if (!p) return;
+    const area = musicArea(p), m = musicOf(area);
+    if (m.now && m.now.vid === vid && Date.now() - m.now.startedAt > 5000) musicNext(area);
   });
 
   socket.on('chat', (text) => {

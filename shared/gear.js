@@ -1,4 +1,5 @@
-// 裝備：服裝、頭飾、披風。資料前後端共用，畫法只在瀏覽器用
+// 裝備：服裝、頭飾、披風、武器。資料前後端共用，畫法只在瀏覽器用
+// 武器只會在副本打倒最終頭目時掉落，拿在右手上，會把普通攻擊換成武器的打法（basic 對應 stats.js 的技能）
 // 每件裝備分成幾層畫，跟人物疊在一起：
 //   cape（披風）→ back（服裝在頭後面的部分，例如布偶裝的帽兜）→ front（服裝，取代職業服）→ 頭 → head（頭飾）→ over（蓋在最上面，例如頭盔）
 // 畫的座標跟 avatar.js 一樣是 64x80 的人物框，可以畫到框外（上面多 32、左右各多 16）
@@ -8,7 +9,8 @@
     SR: { name: 'SR', color: '#ffb020', weight: 30 },
     SSR: { name: 'SSR', color: '#e46bd6', weight: 10 },
   };
-  const SLOTS = { outfit: '服裝', head: '頭飾', cape: '披風' };
+  const SLOTS = { outfit: '服裝', head: '頭飾', cape: '披風', weapon: '武器' };
+  const LOOK_SLOTS = ['outfit', 'head', 'cape']; // 「穿著Prada的惡魔」只看這三格
 
   const GEAR = {
     // 服裝 10 件：R 4、SR 4、SSR 2
@@ -45,12 +47,17 @@
     rainbowCape: { slot: 'cape', name: '彩虹披風', rarity: 'R', icon: '🌈' },
     butterfly: { slot: 'cape', name: '蝴蝶翅膀', rarity: 'SR', icon: '🦋' },
     phoenix: { slot: 'cape', name: '鳳凰火焰翅膀', rarity: 'SSR', icon: '🔥' },
+    // 武器：花蓮副本（打倒傅昆騎才會掉）
+    lilyDart: { slot: 'weapon', name: '金針花標', rarity: 'R', icon: '🌼', basic: 'lilyDart', dungeon: 'hualien' },
+    qixingStaff: { slot: 'weapon', name: '七星潭法杖', rarity: 'SR', icon: '🔮', basic: 'pebbleOrb', dungeon: 'hualien' },
+    tarokoHammer: { slot: 'weapon', name: '太魯閣戰錘', rarity: 'SSR', icon: '🔨', basic: 'marbleSmash', dungeon: 'hualien' },
   };
 
   // 依稀有度抽一件，盡量抽還沒有的；rare 為 true 時只抽 SR、SSR（打倒颱風的獎勵）
   function roll(owned, rare) {
     const have = new Set(owned || []);
-    const pool = Object.keys(GEAR).filter(id => !have.has(id) && (!rare || GEAR[id].rarity !== 'R'));
+    // 武器只從副本掉，不會從這裡抽到
+    const pool = Object.keys(GEAR).filter(id => !have.has(id) && !GEAR[id].dungeon && (!rare || GEAR[id].rarity !== 'R'));
     if (!pool.length) return null;
     const total = pool.reduce((s, id) => s + RARITY[GEAR[id].rarity].weight, 0);
     let x = Math.random() * total;
@@ -439,6 +446,47 @@
     }
   }
 
+  // ---------- 武器（hand 層：畫在右手，人物翻面時跟著翻） ----------
+  // 右手在 (51, 63)
+  Object.assign(DRAW, {
+    lilyDart: { hand(ctx, C, r) {
+      // 金針花標：只有一朵金針花（花瓣＋花蕊），像飛鏢一樣捏在手上，放低一點不擋到臉
+      ctx.save(); ctx.translate(57, 66); ctx.rotate(0.3);
+      for (let i = 0; i < 6; i++) {
+        ctx.save(); ctx.rotate(i * Math.PI / 3);
+        C.blob(ctx, 0, -5, 2.6, 5.4, r, 0.1, 12); C.fill(ctx, i % 2 ? '#ff8a3d' : '#ffa53a', r, null); C.stroke(ctx, r, 1.2);
+        ctx.restore();
+      }
+      dot(ctx, 0, 0, 2.4, '#ffd23f'); C.blob(ctx, 0, 0, 2.4, 2.4, r, 0.1, 10); C.stroke(ctx, r, 1);
+      ctx.restore();
+    } },
+    qixingStaff: { hand(ctx, C, r) {
+      // 七星潭法杖：漂流木杖身，頂端一圈七顆彩色小石頭圍著一顆藍色的海水球
+      C.line(ctx, 55, 76, 56, 18, r, 5, C.INK, 0.4); C.line(ctx, 55, 76, 56, 18, r, 3, '#b98457', 0.4);
+      C.line(ctx, 55, 60, 56, 44, r, 1.2, 'rgba(255,255,255,0.45)', 0.3);
+      C.blob(ctx, 56, 10, 8, 8, r, 0.06); C.fill(ctx, '#7fb2e5', r, null); C.stroke(ctx, r, 2);
+      ctx.save(); ctx.globalAlpha = 0.85; C.line(ctx, 52, 7, 55, 5, r, 1.6, '#ffffff', 0.2); ctx.restore();
+      ['#e8384f', '#ff8a3d', '#ffd23f', '#6baf7b', '#4f7cc2', '#8a5cd6', '#fbfbf8'].forEach((col, i) => {
+        const a = -Math.PI / 2 + i * Math.PI * 2 / 7;
+        C.blob(ctx, 56 + Math.cos(a) * 12, 10 + Math.sin(a) * 12, 2.8, 2.4, r, 0.12, 10); C.fill(ctx, col, r, null); C.stroke(ctx, r, 1.1);
+      });
+    } },
+    tarokoHammer: { hand(ctx, C, r) {
+      // 太魯閣戰錘：木柄＋一大塊有灰色紋路的白色大理石錘頭
+      ctx.save(); ctx.translate(52, 66); ctx.rotate(0.28);
+      C.line(ctx, 0, 6, 0, -40, r, 5, C.INK, 0.3); C.line(ctx, 0, 6, 0, -40, r, 3, '#8a5a3a', 0.3);
+      // 錘頭橫在柄的頂端，兩端包鐵片，看起來才像錘子不像旗子
+      C.rect(ctx, -22, -60, 44, 22, r, 1.2); C.fill(ctx, '#dedbd2', r, [-22, -60, 44, 22], 0.6); C.stroke(ctx, r, 2.6);
+      [-22, 14].forEach(x => { C.rect(ctx, x, -61, 8, 24, r, 0.6); C.fill(ctx, '#5b6577', r, null); C.stroke(ctx, r, 2); });
+      // 大理石紋：一條斜斜的灰紋＋一點亮光
+      C.line(ctx, -12, -42, 10, -57, r, 1.6, 'rgba(96,104,120,0.7)', 1.2);
+      C.line(ctx, -4, -42, 6, -49, r, 1, 'rgba(96,104,120,0.45)', 0.6);
+      ctx.fillStyle = 'rgba(255,255,255,0.9)'; ctx.fillRect(-11, -57, 6, 3);
+      C.rect(ctx, -4, -40, 8, 4, r, 0.4); C.fill(ctx, '#ffb020', r, null); C.stroke(ctx, r, 1.4);
+      ctx.restore();
+    } },
+  });
+
   // 某件裝備在某一層有沒有東西要畫
   function hasLayer(id, layer) { return !!(DRAW[id] && DRAW[id][layer]); }
   function drawLayer(ctx, id, layer, p) {
@@ -449,7 +497,18 @@
     ctx.save(); f(ctx, C, C.rng(seed), p || {}); ctx.restore();
   }
 
-  const gear = { RARITY, SLOTS, GEAR, roll, hasLayer, drawLayer, LAYERS: ['cape', 'back', 'front', 'head', 'over'] };
+  // 抽副本武器：none 是什麼都沒掉的機率；抽到的稀有度裡選一把（同稀有度只有一把就是它）
+  const DROP = { none: 40, R: 35, SR: 18, SSR: 7 };
+  function rollWeapon(dungeon) {
+    const total = Object.values(DROP).reduce((a, b) => a + b, 0);
+    let x = Math.random() * total, rar = 'none';
+    for (const [k, w] of Object.entries(DROP)) { x -= w; if (x <= 0) { rar = k; break; } }
+    if (rar === 'none') return null;
+    const pool = Object.keys(GEAR).filter(id => GEAR[id].dungeon === dungeon && GEAR[id].rarity === rar);
+    return pool.length ? pool[Math.floor(Math.random() * pool.length)] : null;
+  }
+
+  const gear = { RARITY, SLOTS, LOOK_SLOTS, GEAR, DROP, roll, rollWeapon, hasLayer, drawLayer, LAYERS: ['cape', 'back', 'front', 'head', 'over', 'hand'] };
   if (typeof module !== 'undefined' && module.exports) module.exports = gear;
   else root.HQ_GEAR = gear;
 })(this);

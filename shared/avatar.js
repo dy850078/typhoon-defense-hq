@@ -69,6 +69,7 @@
 
     // 手臂（袖子 + 手）
     if (p.npc !== 'chiang') [[13, -0.5], [51, 0.5]].forEach(([x, tilt]) => {
+      if (p.fist && x > 32) return; // 傅昆騎舉拳：右手另外畫在上面
       // 超能力霸王露出粗粗的手臂
       if (cos === 'tank') { C.blob(ctx, x + tilt * 2, 55, 6.5, 9.5, r, 0.08); C.fill(ctx, skin, r, null); C.stroke(ctx, r, W); return; }
       C.blob(ctx, x, 54, 5, 9, r, 0.08); C.fill(ctx, sleeve, r, [x - 5, 45, 10, 18]); C.stroke(ctx, r, W);
@@ -228,10 +229,48 @@
       });
     }
 
+    if (p.npc === 'fu') drawFu(ctx, C, r, p, W, skin);
+
     gear('head', 'head');
     gear('outfit', 'over');
+    gear('weapon', 'hand'); // 武器拿在右手，畫在最上面
 
     ctx.restore();
+  }
+
+  // 副本頭目傅昆騎：往旁邊梳的黑色短髮、圓臉大笑、黑色盔甲；舉拳（p.fist）是衝鋒前的預告
+  function drawFu(ctx, C, r, p, W, skin) {
+    ctx.beginPath();
+    ctx.moveTo(14.5, 28); ctx.quadraticCurveTo(12.5, 7.5, 32, 8); ctx.quadraticCurveTo(51, 7.5, 50.5, 26);
+    ctx.quadraticCurveTo(47, 17.5, 38, 16.5); ctx.quadraticCurveTo(27, 15.5, 21.5, 20); ctx.quadraticCurveTo(17.5, 23, 17, 28); ctx.closePath();
+    C.fill(ctx, '#1f1d24', r, [13, 8, 38, 20]); C.stroke(ctx, r, W);
+    C.line(ctx, 24, 10, 21.5, 17.5, r, 1.3, 'rgba(255,255,255,0.4)', 0.3); // 旁分的分線
+    C.line(ctx, 33, 10.5, 44, 14, r, 1.1, 'rgba(255,255,255,0.25)', 0.3);
+    // 開口大笑，露出一排白牙
+    ctx.beginPath(); ctx.moveTo(25, 38.2); ctx.quadraticCurveTo(32, 47, 39, 38.2); ctx.quadraticCurveTo(32, 39.6, 25, 38.2); ctx.closePath();
+    C.fill(ctx, '#8a2f35', r, null); C.stroke(ctx, r, 1.6);
+    ctx.beginPath(); ctx.moveTo(26.2, 38.8); ctx.quadraticCurveTo(32, 40.2, 37.8, 38.8); ctx.lineTo(37, 40.6); ctx.quadraticCurveTo(32, 42, 27, 40.6); ctx.closePath();
+    ctx.fillStyle = '#ffffff'; ctx.fill();
+    // 黑色盔甲：肩甲、胸前的紫色徽章
+    [16, 48].forEach((x) => {
+      C.blob(ctx, x, 48.5, 8.5, 5.5, r, 0.06); C.fill(ctx, '#3a3746', r, null); C.stroke(ctx, r, W);
+      C.line(ctx, x - 5.5, 47.5, x + 5.5, 47.5, r, 1.4, '#a07be8', 0.3);
+    });
+    C.blob(ctx, 32, 56, 4.6, 4.6, r, 0.1, 12); C.fill(ctx, '#8a5cd6', r, null); C.stroke(ctx, r, 1.6);
+    if (p.fist) {
+      // 右手握拳舉到臉旁邊
+      ctx.beginPath(); ctx.moveTo(47, 52); ctx.quadraticCurveTo(57, 46, 57, 33);
+      C.stroke(ctx, r, 9, C.INK); C.stroke(ctx, r, 6.4, '#3a3746');
+      C.blob(ctx, 57, 28, 6, 6.5, r, 0.1, 14); C.fill(ctx, skin, r, null); C.stroke(ctx, r, W);
+      [24.5, 27.5, 30.5].forEach(y => C.line(ctx, 53.5, y, 57, y, r, 1, 'rgba(43,42,51,0.6)', 0.2));
+    } else {
+      // 右手拿一把發紫光的黑劍
+      ctx.save(); ctx.globalAlpha = 0.35; C.line(ctx, 52, 62, 62, 16, r, 9, '#a07be8', 0.3); ctx.restore();
+      ctx.beginPath(); ctx.moveTo(51, 60); ctx.lineTo(59.5, 18); ctx.lineTo(63, 17); ctx.lineTo(55, 61); ctx.closePath();
+      C.fill(ctx, '#2b2a33', r, null); C.stroke(ctx, r, 1.6);
+      C.line(ctx, 55, 52, 60, 24, r, 1, 'rgba(255,255,255,0.45)', 0.2);
+      C.line(ctx, 46, 60, 58, 63, r, 3.2, '#ffd23f', 0.3);
+    }
   }
 
   // 衣服上的細節（畫在身體上面）

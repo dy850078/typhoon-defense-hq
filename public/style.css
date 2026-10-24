@@ -67,9 +67,23 @@ input:focus { border-color: var(--accent); }
   display: flex; gap: 14px; align-items: center; box-shadow: 0 4px 16px rgba(0,0,0,.25); }
 #banner .hot { color: var(--accent); font: 700 13px var(--mono); letter-spacing: 0.06em; }
 #banner .mono { font: 700 12px var(--mono); color: var(--navy-dim); letter-spacing: 0.08em; }
-#video-prompt { bottom: 56px; left: 50%; transform: translateX(-50%); background: var(--ground);
+#video-prompt, #dg-panel { bottom: 56px; left: 50%; transform: translateX(-50%); background: var(--ground);
   border-top: 4px solid var(--accent); border-radius: 4px 4px 16px 16px; padding: 8px 10px 8px 16px;
   display: flex; gap: 12px; align-items: center; font-weight: 700; box-shadow: 0 6px 20px rgba(0,0,0,.25); }
+#dg-panel[hidden] { display: none; }
+#dg-panel { border-top-color: #ffb020; z-index: 3; }
+/* 平板：底下有聊天室和技能列，副本面板改放上面、在線條下面，提示往下讓一點 */
+@media (min-width: 601px) and (max-width: 1100px) {
+  #dg-panel { bottom: auto; top: 68px; }
+  body:has(#dg-panel:not([hidden])) #toasts { top: 136px; }
+}
+.dg-seq { display: inline-flex; gap: 5px; align-items: center; }
+.dg-seq i { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--ink); display: inline-block; }
+.dg-seq i.on { box-shadow: 0 0 0 3px #ffd23f; }
+.dg-seq i.on::after { content: '✓'; display: block; font: 900 10px/12px sans-serif; text-align: center; color: var(--ink); }
+/* 進副本的台灣地圖過場 */
+#tw-intro { position: fixed; inset: 0; z-index: 60; cursor: pointer; }
+#tw-intro canvas { display: block; }
 #inventory { top: 12px; right: 12px; display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; max-width: calc(50vw - 230px); }
 .inv-item { background: var(--ground); border: 2px solid var(--ink); border-radius: 999px; padding: 3px 10px;
   font: 700 14px var(--mono); color: var(--ink); }
@@ -447,6 +461,9 @@ button.inv-item:hover { border-color: var(--accent); }
   #video-prompt { gap: 8px; padding: 6px 8px; font-size: 14px; left: 12px; transform: none; white-space: nowrap; }
   #video-prompt > span { display: none; }
   #video-prompt .primary { padding: 8px 14px; font-size: 14px; }
+  #dg-panel { bottom: auto; top: 240px; left: 12px; transform: none; max-width: calc(100vw - 100px); flex-wrap: wrap;
+    gap: 6px 8px; padding: 6px 10px; font-size: 13px; }
+  #dg-panel .primary { padding: 8px 14px; font-size: 14px; }
   .modal-row { flex-wrap: wrap; }
   #action-btn { bottom: 24px; right: 90px; }
   #chat { width: calc(100vw - 24px - 170px); min-width: 180px; }
@@ -478,7 +495,7 @@ button.inv-item:hover { border-color: var(--accent); }
   .sk-btn { width: 48px; height: 48px; font-size: 22px; }
   #basic-btn { width: 54px; height: 54px; }
   #action-btn { bottom: 74px; }
-  #video-prompt { bottom: auto; top: 76px; }
+  #video-prompt, #dg-panel { bottom: auto; top: 76px; }
 }
 .acct-note { text-align: center; font-size: 13px; color: var(--muted, #6E6E73); margin: 12px 0 0; }
 .acct-note a { color: var(--accent, #FF6A13); }

@@ -120,6 +120,7 @@
     const vip = savedJson('hq-vip', null);
     const data = Object.assign({}, profile, { level: Number(saved('hq-level')) || 1, exp: Number(saved('hq-exp')) || 0, vip,
       owned: myOwned, equip: myEquip, furn: myFurn, token: ACC.token() });
+    joinedToken = data.token;
     socket.emit('join', data, (res) => {
       if (!res.ok) { $('join-error').textContent = res.error; return; }
       joined = true;
@@ -146,6 +147,19 @@
   });
 
   socket.on('connect', () => { if (joined) doJoin(); });
+  // 在別的分頁登入或註冊了：這個分頁的角色也換成帳號的，畫面上才不會同時有兩個自己
+  let joinedToken = '';
+  window.addEventListener('storage', (e) => {
+    if (e.key !== 'hq-token' || !e.newValue || !joined || e.newValue === joinedToken) return;
+    joinedToken = e.newValue;
+    // 等另一個分頁把角色資料寫完
+    setTimeout(() => {
+      showAcct();
+      readProfile();
+      myOwned = savedJson('hq-owned', []); myEquip = savedJson('hq-equip', {}); myFurn = savedJson('hq-furn', {});
+      socket.disconnect(); socket.connect();
+    }, 500);
+  });
   // 同一個帳號在別的地方登入，這裡就停下來，不要自動重連搶回來
   socket.on('kicked', (msg) => {
     joined = false;

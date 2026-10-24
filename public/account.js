@@ -48,7 +48,9 @@
       return api('/api/register', { username: username, password: password, save: save }).then(function (r) { return r.ok ? signedIn(r) : r; });
     },
     login: function (username, password) {
-      return api('/api/login', { username: username, password: password }).then(function (r) { return r.ok ? signedIn(r) : r; });
+      // 還沒登入過的裝置：把這台裝置上的角色一起送上去，伺服器會把進度併進帳號
+      var local = token() ? null : read();
+      return api('/api/login', { username: username, password: password, local: local }).then(function (r) { return r.ok ? signedIn(r) : r; });
     },
     // 有登入就從伺服器拿最新的角色資料；登入過期的話回傳 null
     sync: function () {

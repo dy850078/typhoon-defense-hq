@@ -106,8 +106,29 @@ app.post('/api/login', (req, res) => {
   const b = req.body || {};
   const r = accounts.login(b.username, b.password);
   if (r.error) { failed(req); return res.status(400).json({ ok: false, error: r.error }); }
+  // 這台裝置上有沒登入時玩的角色：把進度併進帳號，不會被帳號裡的舊資料蓋掉
+  if (b.local && typeof b.local === 'object') mergeGuest(r.user, sanitizeSave(b.local));
   res.json(Object.assign(meOf(r.user), { token: r.token }));
 });
+// 合併規則：等級取高的那邊（職業跟著走）、裝備和家具取聯集／最大值、外觀和邀請函以帳號為準
+function mergeGuest(u, g) {
+  const a = sanitizeSave(u.save);
+  const owned = [...new Set([...a.owned, ...g.owned])];
+  const furn = Object.fromEntries(Object.keys(a.furn).map(k => [k, Math.max(a.furn[k], g.furn[k])]));
+  const gHigher = g.level > a.level || (g.level === a.level && g.exp > a.exp);
+  const changed = gHigher || owned.length > a.owned.length || Object.keys(furn).some(k => furn[k] !== a.furn[k]) || (!a.vip && g.vip);
+  if (!changed) return;
+  // 人在總部裡的話先存檔、請他重新進來，才不會被下一次自動存檔蓋回去
+  [...players.values()].filter(p => p.account === u).forEach(p => {
+    snapshot(p); p.account = null;
+    const s = io.sockets.sockets.get(p.id);
+    if (s) { s.emit('kicked', '你的帳號剛合併了另一台裝置的進度，請重新進入總部'); s.disconnect(true); }
+  });
+  const patch = { owned, furn, equip: Object.keys(a.equip).length ? a.equip : g.equip };
+  if (gHigher) Object.assign(patch, { level: g.level, exp: g.exp, cls: g.cls });
+  if (!a.vip && g.vip) Object.assign(patch, { vip: g.vip, photoHd: a.photoHd || g.photoHd });
+  accounts.update(u, patch);
+}
 app.get('/api/me', (req, res) => {
   const u = accounts.byToken(bearer(req));
   if (!u) return res.status(401).json({ ok: false });

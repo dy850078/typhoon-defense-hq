@@ -255,7 +255,7 @@
     myOwned = g.owned;
     store('hq-owned', myOwned);
     const it = GR.GEAR[g.item];
-    if (it) toast(`🎁 獲得【${it.rarity}】${it.icon} ${it.name}！到 👗 裝備 穿上看看`);
+    if (it) toast(`🎁 ${g.from === 'admin' ? '管理員送你' : '獲得'}【${it.rarity}】${it.icon} ${it.name}！到 👗 裝備 穿上看看`);
     if (scene && scene.me) scene.burst(scene.me.x, scene.me.y - 40, 16, 0xffd23f);
     if (modalKind === 'gear') openGear();
   });
@@ -3847,7 +3847,7 @@
       // 頭目血條：在前線或看得到颱風的時候才顯示
       const showBoss = this.mState.alive && (this.roomId === 'front' ||
         Math.hypot(this.me.x - this.monster.x, this.me.y - this.monster.y) < 700);
-      if (showBoss !== this.showBoss) { this.showBoss = showBoss; $('boss').hidden = !showBoss; }
+      if (showBoss !== this.showBoss) { this.showBoss = showBoss; $('boss').hidden = !showBoss; document.body.classList.toggle('boss-on', showBoss); }
       if (!this.mState.alive && this.respawnAt) {
         const left = Math.max(0, Math.ceil((this.respawnAt - performance.now()) / 1000));
         this.mDead.setText(`🎉 颱風${ST.MONSTER.name}被擊退了！\n${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')} 後重新生成`);

@@ -138,7 +138,12 @@ button.inv-item:hover { border-color: var(--accent); }
 /* 有怪物血條的時候，預告條移到血條下面（手機版的血條在下方，不用移） */
 @media (min-width: 601px) { body.boss-on #notice-bar { top: 108px; } }
 @media (min-width: 601px) and (max-height: 520px) { body.boss-on #notice-bar { top: 92px; } }
-@media (max-width: 600px) { #notice-bar { top: 46px; font-size: 12px; white-space: normal; text-align: center; border-radius: 14px; } }
+/* 手機：預告條放在在線條下面、佔滿寬度，出現時把點唱機和提示往下推，才不會疊在角色資料上 */
+@media (max-width: 600px) {
+  #notice-bar { top: 184px; left: 12px; right: 12px; transform: none; max-width: none; font-size: 12px; white-space: normal; text-align: center; border-radius: 14px; }
+  body:has(#notice-bar:not([hidden])) #music { top: 226px; }
+  body:has(#notice-bar:not([hidden])) #toasts, body:has(#notice-bar:not([hidden])) #video-prompt { top: 282px; }
+}
 .stat-cls { font-weight: 900; font-size: 14px; color: #ffd23f; }
 .stat-v.lv { margin-left: auto; color: #ffd23f; }
 .def-k { margin-left: 10px; }
@@ -407,8 +412,9 @@ button.inv-item:hover { border-color: var(--accent); }
   #messages { height: 90px; font-size: 13px; }
   #help { display: none; }
   #banner { font-size: 12px; gap: 8px; top: 146px; left: 12px; transform: none; padding: 5px 12px; }
-  #toasts { top: 184px; }
-  #video-prompt { bottom: auto; top: 184px; }
+  /* 左邊由上往下：角色資料、在線條、點唱機，提示和視訊入口排在點唱機下面 */
+  #toasts { top: 240px; }
+  #video-prompt { bottom: auto; top: 240px; }
   .toast { white-space: normal; max-width: calc(100vw - 40px); text-align: center; }
   #banner .hot { display: none; }
   #boss { top: auto; bottom: 150px; left: 12px; transform: none; width: calc(100vw - 90px); }
@@ -518,7 +524,7 @@ button.inv-item:hover { border-color: var(--accent); }
 .music-form { display: flex; gap: 8px; margin-top: 6px; }
 .music-form input { flex: 1; min-width: 0; font: 500 15px var(--display); padding: 8px 12px; border: 2px solid var(--line, #D9D9DE); border-radius: 10px; }
 @media (max-width: 600px) {
-  #music { top: 128px; left: 12px; width: 196px; padding: 8px; }
+  #music { top: 184px; left: 12px; width: 196px; padding: 8px; }
   .vinyl { width: 64px; height: 64px; }
   .vinyl img { width: 36px; height: 36px; margin: -18px 0 0 -18px; }
   .tonearm { left: 60px; height: 40px; }

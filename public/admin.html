@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>管理員｜颱風假開趴</title>
+<style>
+:root { --ink: #1C1C1E; --muted: #6E6E73; --line: #D9D9DE; --paper: #FFFFFF; --ground: #FAFAF7; --accent: #FF6A13; --accent-ink: #B23F00; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--ground); color: var(--ink); font: 16px/1.6 "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif; }
+main { max-width: 860px; margin: 0 auto; padding: 32px 16px 64px; }
+[hidden] { display: none !important; }
+h1 { font-size: 28px; margin: 0 0 4px; }
+h2 { font-size: 20px; margin: 0 0 12px; }
+.eyebrow { font: 700 12px/1 ui-monospace, monospace; letter-spacing: .12em; color: var(--accent-ink); margin: 0 0 8px; }
+.card { background: var(--paper); border: 2px solid var(--ink); border-radius: 18px; padding: 20px; margin-top: 20px; }
+.row { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
+label { display: flex; flex-direction: column; gap: 6px; font-weight: 700; font-size: 14px; }
+input { font: 500 17px inherit; font-family: inherit; padding: 10px 12px; border: 2px solid var(--line); border-radius: 10px; background: var(--paper); min-height: 46px; }
+input:focus { outline: none; border-color: var(--accent); }
+button { font: 700 15px inherit; font-family: inherit; border-radius: 999px; padding: 10px 20px; min-height: 46px; border: 2px solid var(--ink); background: transparent; cursor: pointer; }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+button.small { min-height: 34px; padding: 4px 12px; font-size: 13px; }
+button.danger { border-color: #C0391B; color: #C0391B; }
+.msg { min-height: 1.4em; margin: 10px 0 0; font-size: 14px; }
+.msg.err { color: #C0391B; }
+.msg.ok { color: #1E7B3A; }
+.note { color: var(--muted); font-size: 14px; margin: 8px 0 0; }
+.preview { margin-top: 12px; padding: 12px 14px; border-radius: 12px; background: var(--ground); font: 600 15px ui-monospace, monospace; }
+.scroll { overflow-x: auto; margin: 0 -4px; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { color: var(--muted); font-weight: 700; }
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #34C759; margin-right: 4px; }
+.empty { color: var(--muted); padding: 16px 0; }
+</style>
+</head>
+<body>
+<main>
+  <p class="eyebrow">TYPHOON DAY · ADMIN</p>
+  <h1>管理員介面</h1>
+  <p class="note">伺服器啟動時會在終端機印出管理員密碼，也可以用環境變數 ADMIN_PASSWORD 自己指定。</p>
+
+  <form class="card" id="login">
+    <h2>登入</h2>
+    <div class="row">
+      <label>管理員密碼<input type="password" id="pw" autocomplete="current-password"></label>
+      <button type="submit" class="primary">登入</button>
+    </div>
+    <p class="msg err" id="login-msg"></p>
+  </form>
+
+  <div id="panel" hidden>
+    <form class="card" id="party">
+      <h2>派對時間</h2>
+      <div class="row">
+        <label>日期<input type="date" id="p-date" required></label>
+        <label>時間（台灣時間）<input type="time" id="p-time" required></label>
+        <button type="submit" class="primary">儲存</button>
+      </div>
+      <div class="preview" id="p-preview"></div>
+      <p class="note">報名頁、邀請函、IG 限時動態、總部裡的 VIP Pass 都會換成新的時間。已經存下來的限時動態影片不會變。</p>
+      <p class="msg" id="party-msg"></p>
+    </form>
+
+    <section class="card">
+      <div class="row" style="justify-content: space-between; align-items: center">
+        <h2 style="margin: 0">帳號（<span id="count">0</span>）</h2>
+        <button type="button" class="small" id="reload">重新整理</button>
+      </div>
+      <p class="msg" id="acct-msg"></p>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>帳號</th><th>角色</th><th>職業</th><th>等級</th><th>邀請函</th><th>最後上線</th><th></th></tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+</main>
+<script src="/shared/stats.js"></script>
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var token = '';
+  try { token = sessionStorage.getItem('hq-admin') || ''; } catch (e) {}
+  function api(path, body) {
+    return fetch(path, {
+      method: body ? 'POST' : 'GET',
+      headers: { 'Content-Type': 'application/json', 'X-Admin-Token': token },
+      body: body ? JSON.stringify(body) : undefined
+    }).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (j) { j.status = r.status; return j; });
+    }, function () { return { ok: false, error: '連不上伺服器' }; });
+  }
+  function say(id, text, ok) { $(id).textContent = text; $(id).className = 'msg ' + (ok ? 'ok' : 'err'); }
+
+  var DOW = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+  function preview() {
+    var d = $('p-date').value, t = $('p-time').value;
+    if (!d || !t) { $('p-preview').textContent = ''; return; }
+    var p = d.split('-'), dow = new Date(Date.UTC(+p[0], p[1] - 1, +p[2])).getUTCDay();
+    $('p-preview').textContent = p[0] + '.' + p[1] + '.' + p[2] + ' ' + DOW[dow] + '. ' + t + '　｜　特約職員・' + p[1] + '.' + p[2] + ' 颱風假開趴';
+  }
+  $('p-date').addEventListener('input', preview);
+  $('p-time').addEventListener('input', preview);
+
+  function ago(ms) {
+    if (!ms) return '—';
+    var m = Math.round((Date.now() - ms) / 60000);
+    if (m < 1) return '剛剛';
+    if (m < 60) return m + ' 分鐘前';
+    if (m < 1440) return Math.round(m / 60) + ' 小時前';
+    return Math.round(m / 1440) + ' 天前';
+  }
+  function td(text) { var c = document.createElement('td'); c.textContent = text; return c; }
+  function render(list) {
+    var tb = $('rows'); tb.textContent = '';
+    $('count').textContent = list.length;
+    if (!list.length) { var r0 = tb.insertRow(); var c0 = td('還沒有人建立帳號'); c0.colSpan = 7; c0.className = 'empty'; r0.appendChild(c0); return; }
+    list.sort(function (a, b) { return (b.seen || 0) - (a.seen || 0); }).forEach(function (a) {
+      var tr = document.createElement('tr');
+      var first = td(a.username);
+      if (a.online) { var dot = document.createElement('span'); dot.className = 'dot'; dot.title = '在總部裡'; first.prepend(dot); }
+      tr.appendChild(first);
+      tr.appendChild(td(a.name || '—'));
+      var cls = window.HQ_STATS && HQ_STATS.CLASSES[a.cls];
+      tr.appendChild(td(cls ? cls.name : a.cls));
+      tr.appendChild(td('Lv.' + a.level));
+      tr.appendChild(td(a.vip ? '有' : '—'));
+      tr.appendChild(td(a.online ? '在線上' : ago(a.seen)));
+      var act = document.createElement('td');
+      var reset = document.createElement('button'); reset.type = 'button'; reset.className = 'small'; reset.textContent = '重設密碼';
+      reset.onclick = function () {
+        var pw = prompt('幫「' + a.username + '」設定新密碼（至少 4 個字）：');
+        if (!pw) return;
+        api('/api/admin/password', { username: a.username, password: pw }).then(function (r) {
+          if (r.ok) say('acct-msg', '「' + a.username + '」的新密碼是：' + pw + '，記得轉告對方。', true);
+          else say('acct-msg', r.error || '失敗了');
+        });
+      };
+      var del = document.createElement('button'); del.type = 'button'; del.className = 'small danger'; del.textContent = '刪除';
+      del.style.marginLeft = '6px';
+      del.onclick = function () {
+        if (!confirm('確定要刪除「' + a.username + '」？角色和邀請函都會不見，不能復原。')) return;
+        api('/api/admin/delete', { username: a.username }).then(function (r) {
+          say('acct-msg', r.ok ? '已刪除「' + a.username + '」' : '刪除失敗', r.ok);
+          load();
+        });
+      };
+      act.appendChild(reset); act.appendChild(del);
+      tr.appendChild(act);
+      tb.appendChild(tr);
+    });
+  }
+  function load() {
+    return api('/api/admin/state').then(function (r) {
+      if (!r.ok) { token = ''; $('panel').hidden = true; $('login').hidden = false; return; }
+      $('login').hidden = true; $('panel').hidden = false;
+      if (!$('p-date').value) { $('p-date').value = r.party.date; $('p-time').value = r.party.time; preview(); }
+      render(r.accounts);
+    });
+  }
+  $('login').addEventListener('submit', function (e) {
+    e.preventDefault();
+    api('/api/admin/login', { password: $('pw').value }).then(function (r) {
+      if (!r.ok) { say('login-msg', r.error || '登入失敗'); return; }
+      token = r.token;
+      try { sessionStorage.setItem('hq-admin', token); } catch (e2) {}
+      $('pw').value = ''; $('login-msg').textContent = '';
+      load();
+    });
+  });
+  $('party').addEventListener('submit', function (e) {
+    e.preventDefault();
+    api('/api/admin/settings', { date: $('p-date').value, time: $('p-time').value }).then(function (r) {
+      if (r.ok) say('party-msg', '已儲存：' + r.party.dateDot + ' ' + r.party.dowEn + '. ' + r.party.time, true);
+      else say('party-msg', r.error || '儲存失敗');
+    });
+  });
+  $('reload').addEventListener('click', load);
+  if (token) load();
+})();
+</script>
+</body>
+</html>

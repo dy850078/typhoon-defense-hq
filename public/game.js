@@ -22,19 +22,23 @@
   const $ = (id) => document.getElementById(id);
 
   // ---------------- 角色創建 ----------------
-  const profile = {
-    name: localStorage.getItem('hq-name') || '',
-    hair: localStorage.getItem('hq-hair') || 'short',
-    hairColor: localStorage.getItem('hq-hairColor') || AV.HAIR_COLORS[0],
-    skin: localStorage.getItem('hq-skin') || AV.SKINS[0],
-    outfit: localStorage.getItem('hq-outfit') || AV.OUTFITS[0],
-    glasses: localStorage.getItem('hq-glasses') || '1',
-    cls: localStorage.getItem('hq-cls') || 'staff',
-  };
-  // 舊版存的是動物的顏色，對不上就換回預設
-  if (!AV.HAIRS[profile.hair]) profile.hair = 'short';
-  if (!AV.OUTFITS.includes(profile.outfit)) profile.outfit = AV.OUTFITS[0];
-  if (!ST.CLASSES[profile.cls]) profile.cls = 'staff';
+  const profile = {};
+  function readProfile() {
+    Object.assign(profile, {
+      name: localStorage.getItem('hq-name') || '',
+      hair: localStorage.getItem('hq-hair') || 'short',
+      hairColor: localStorage.getItem('hq-hairColor') || AV.HAIR_COLORS[0],
+      skin: localStorage.getItem('hq-skin') || AV.SKINS[0],
+      outfit: localStorage.getItem('hq-outfit') || AV.OUTFITS[0],
+      glasses: localStorage.getItem('hq-glasses') || '1',
+      cls: localStorage.getItem('hq-cls') || 'staff',
+    });
+    // 舊版存的是動物的顏色，對不上就換回預設
+    if (!AV.HAIRS[profile.hair]) profile.hair = 'short';
+    if (!AV.OUTFITS.includes(profile.outfit)) profile.outfit = AV.OUTFITS[0];
+    if (!ST.CLASSES[profile.cls]) profile.cls = 'staff';
+  }
+  readProfile();
 
   function renderPreview() {
     const c = $('preview');
@@ -61,18 +65,23 @@
   }
 
   const swatch = (b, v) => { b.style.background = v; };
-  buildPicker($('hairs'), Object.entries(AV.HAIRS), 'hair', (b, v, l) => { b.textContent = l; });
-  buildPicker($('hair-colors'), AV.HAIR_COLORS.map(c => [c]), 'hairColor', swatch);
-  buildPicker($('skins'), AV.SKINS.map(c => [c]), 'skin', swatch);
-  buildPicker($('outfits'), AV.OUTFITS.map(c => [c]), 'outfit', swatch);
-  buildPicker($('glasses'), [['1', AV.GLASSES[1]], ['0', AV.GLASSES[0]]], 'glasses', (b, v, l) => { b.textContent = l; });
-  $('name').value = profile.name;
-  renderPreview();
+  function buildCreate() {
+    buildPicker($('hairs'), Object.entries(AV.HAIRS), 'hair', (b, v, l) => { b.textContent = l; });
+    buildPicker($('hair-colors'), AV.HAIR_COLORS.map(c => [c]), 'hairColor', swatch);
+    buildPicker($('skins'), AV.SKINS.map(c => [c]), 'skin', swatch);
+    buildPicker($('outfits'), AV.OUTFITS.map(c => [c]), 'outfit', swatch);
+    buildPicker($('glasses'), [['1', AV.GLASSES[1]], ['0', AV.GLASSES[0]]], 'glasses', (b, v, l) => { b.textContent = l; });
+    $('name').value = profile.name;
+    renderPreview();
+  }
+  buildCreate();
 
   // ---------------- 連線 ----------------
   const socket = io();
-  let config = { jitsiDomain: 'meet.jit.si', jitsiRoom: 'TyphoonDefenseHQ' };
+  let config = { jitsiDomain: 'meet.jit.si', jitsiRoom: 'TyphoonDefenseHQ', party: { md: '10.23', dateDot: '2026.10.23', time: '20:00' } };
   fetch('/config').then(r => r.json()).then(c => { config = c; }).catch(() => {});
+  // 管理員改了派對時間
+  socket.on('party', (p) => { config.party = p; });
 
   let me = null;
   let scene = null;
@@ -87,10 +96,30 @@
   let myOwned = savedJson('hq-owned', []);
   let myEquip = savedJson('hq-equip', {});
   let myFurn = savedJson('hq-furn', {});
+
+  // 有登入的話，先從帳號拿最新的角色（可能在別台裝置玩過）
+  const ACC = window.HQ_ACCOUNT;
+  const showAcct = () => {
+    const u = ACC.user(), box = $('join-acct');
+    box.innerHTML = '';
+    if (u) {
+      box.append('已登入：', Object.assign(document.createElement('b'), { textContent: u }), '・角色會自動存到帳號');
+    } else {
+      box.append('還沒登入，角色只存在這台裝置上・');
+      box.appendChild(Object.assign(document.createElement('a'), { href: './', textContent: '登入或建立帳號' }));
+    }
+  };
+  showAcct();
+  const synced = ACC.sync().then((r) => {
+    showAcct();
+    if (!r || joined) return;
+    readProfile(); buildCreate();
+    myOwned = savedJson('hq-owned', []); myEquip = savedJson('hq-equip', {}); myFurn = savedJson('hq-furn', {});
+  }).catch(() => {});
   function doJoin() {
     const vip = savedJson('hq-vip', null);
     const data = Object.assign({}, profile, { level: Number(saved('hq-level')) || 1, exp: Number(saved('hq-exp')) || 0, vip,
-      owned: myOwned, equip: myEquip, furn: myFurn });
+      owned: myOwned, equip: myEquip, furn: myFurn, token: ACC.token() });
     socket.emit('join', data, (res) => {
       if (!res.ok) { $('join-error').textContent = res.error; return; }
       joined = true;
@@ -113,10 +142,17 @@
     if (!profile.name) { $('join-error').textContent = '請輸入名字'; return; }
     Object.entries(profile).forEach(([k, v]) => localStorage.setItem('hq-' + k, v));
     $('join-error').textContent = '';
-    doJoin();
+    synced.then(doJoin);
   });
 
   socket.on('connect', () => { if (joined) doJoin(); });
+  // 同一個帳號在別的地方登入，這裡就停下來，不要自動重連搶回來
+  socket.on('kicked', (msg) => {
+    joined = false;
+    try { sessionStorage.setItem('hq-kicked', msg); } catch (e) { /* 無痕模式 */ }
+    location.reload();
+  });
+  try { $('join-error').textContent = sessionStorage.getItem('hq-kicked') || ''; sessionStorage.removeItem('hq-kicked'); } catch (e) { /* 無痕模式 */ }
   socket.on('disconnect', () => { if (joined) addMessage({ system: true, text: '連線中斷，重新連線中…' }); });
   socket.on('playerJoined', (p) => scene && scene.addRemote(p));
   socket.on('playerMoved', (m) => scene && scene.moveRemote(m));
@@ -1105,7 +1141,7 @@
       tier.appendChild(el('span', null, TIERS[hashOf(v.name) % TIERS.length]));
       who.appendChild(tier);
       who.appendChild(el('span', 'vip-name', v.name));
-      who.appendChild(el('span', 'vip-sub', '特約職員・10.23 颱風假開趴'));
+      who.appendChild(el('span', 'vip-sub', `特約職員・${config.party.md} 颱風假開趴`));
       idRow.appendChild(who);
       main.appendChild(idRow);
       const facts = el('div', 'vip-facts');
@@ -1120,7 +1156,7 @@
       const stub = el('div', 'vip-stub');
       stub.appendChild(el('span', 'vip-k', 'GUEST NO.'));
       stub.appendChild(el('span', 'vip-no', guestNo(v.name)));
-      stub.appendChild(el('span', 'vip-k', '2026.10.23 / 20:00'));
+      stub.appendChild(el('span', 'vip-k', `${config.party.dateDot} / ${config.party.time}`));
       const bar = el('div', 'vip-bar');
       let seed = hashOf(v.name) || 1;
       for (let i = 0; i < 30; i++) {

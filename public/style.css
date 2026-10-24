@@ -4,6 +4,8 @@ html, body, * { touch-action: manipulation; }
 /* 平板、手機往下拉不會整頁重新整理，捲到底也不會帶動後面的畫面 */
 html, body { overscroll-behavior: none; }
 .overlay, .modal-card, .draw-card { overscroll-behavior: contain; }
+/* iPad／iPhone 的 Safari 點到字小於 16px 的輸入框會自動放大整個畫面，觸控裝置上的輸入框一律至少 16px */
+@media (pointer: coarse) { #chat-input, .music-form input { font-size: 16px !important; } }
 :root {
   --ground: #FAFAF7;
   --paper: #FFFFFF;

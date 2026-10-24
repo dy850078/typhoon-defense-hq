@@ -7,6 +7,15 @@
   const DC = HQ_DECOR;
   // iOS 不理 viewport 的 user-scalable，手指捏合會放大，這裡擋掉；連點兩下靠 CSS 的 touch-action
   ['gesturestart', 'gesturechange'].forEach(t => document.addEventListener(t, e => e.preventDefault(), { passive: false }));
+  document.addEventListener('dblclick', e => e.preventDefault(), { passive: false });
+  // 萬一畫面還是被放大了（iPad 的「電腦版網站」模式會忽略禁止縮放），輸入框離開時把縮放拉回原本大小
+  const vpMeta = document.querySelector('meta[name=viewport]');
+  document.addEventListener('focusout', (e) => {
+    if (!vpMeta || !/^(INPUT|TEXTAREA)$/.test(e.target.tagName)) return;
+    const c = vpMeta.content;
+    vpMeta.content = c + ', minimum-scale=1';
+    setTimeout(() => { vpMeta.content = c; }, 50);
+  });
   document.addEventListener('touchmove', e => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
   // 近距離的普攻：打到時角色往前撲一下
   const MELEE = ['strike', 'power', 'syringe', 'punch', 'kick'];

@@ -1,6 +1,9 @@
 // 地圖資料：前後端共用（瀏覽器會掛在 window.HQ_MAP，Node 用 module.exports）
 (function (root) {
-  const W = 40;
+  // 總部本體 40 格寬；右邊隔兩格空地（走不過去）是副本區，只能從副本入口傳送過去
+  const MW = 40;
+  const DX = 42; // 副本區最左邊那一格
+  const W = DX + 22;
   const H = 46;
   const TILE = 48;
 
@@ -10,8 +13,11 @@
   // M  會議桌    P  螢幕牆     S  沙發       V  視訊室地板
   // F  圍欄      :  前線泥地   G  爐台       N  轉職導師
   // W  戰情室電視牆（擋路）     C  會議椅（不擋路）   R  冰箱
-  // J  DJ 台（點唱機）
-  const BLOCKING = new Set(['#', 'T', 'B', 'K', 'M', 'P', 'S', 'F', 'G', 'N', 'W', 'R', 'J']);
+  // J  DJ 台（點唱機）     O  副本傳送門（不擋路）
+  // 副本區：(空白) 虛空    Y  峽谷岩壁    Z  深海       y  七星潭礫石灘
+  //         u  洞穴地板    x  大理石要推到的凹槽         n  斷崖上的草地
+  //         X  關卡之間的石門（關著的時候擋路）          E  七星潭石碑
+  const BLOCKING = new Set(['#', 'T', 'B', 'K', 'M', 'P', 'S', 'F', 'G', 'N', 'W', 'R', 'J', ' ', 'Y', 'Z', 'E']);
 
   const g = [];
   for (let y = 0; y < H; y++) g.push(new Array(W).fill(','));
@@ -68,11 +74,103 @@
     .forEach(([x, y]) => set(x, y, '~'));
 
   // 颱風前線：圍欄以南，中間留一個出口
-  rect(0, 31, W - 1, H - 1, ':');
-  rect(0, 30, W - 1, 30, 'F');
+  rect(0, 31, MW - 1, H - 1, ':');
+  rect(0, 30, MW - 1, 30, 'F');
   rect(26, 30, 29, 30, ',');
   [[4, 35], [5, 35], [33, 40], [34, 41], [10, 43], [30, 34]].forEach(([x, y]) => set(x, y, '~'));
   [[1, 33], [38, 33], [2, 44], [37, 44]].forEach(([x, y]) => set(x, y, 'T'));
+
+  // 副本入口：總部東邊的草地，站進候場區就能出發
+  const LOBBY = { x1: 36, y1: 11, x2: 39, y2: 16 };
+  const PORTAL_TILE = { x: 38, y: 13 };
+  set(PORTAL_TILE.x, PORTAL_TILE.y, 'O');
+
+  // ---------------- 花蓮副本 ----------------
+  // 一關接一關往下走：七星潭 → 太魯閣九曲洞 → 清水斷崖，關卡之間的石門解開謎題才會打開
+  rect(MW, 0, W - 1, H - 1, ' ');
+  const HUALIEN = [
+    // 第一關：七星潭（上面三排是海）
+    'ZZZZZZZZZZZZZZZZZZZZZZ',
+    'ZZZZZZZZZZZZZZZZZZZZZZ',
+    'ZZZZZZZZZZZZZZZZZZZZZZ',
+    'YyyyyyyyyyEEyyyyyyyyyY',
+    'YyyyyyyyyyyyyyyyyyyyyY',
+    'YyyyyyyyyyyyyyyyyyyyyY',
+    'YyyyyyyyyyyyyyyyyyyyyY',
+    'YyyyyyyyyyyyyyyyyyyyyY',
+    'YyyyyyyyyyyyyyyyyyyyyY',
+    'YyyyyyyyyyyyyyyyyyyyyY',
+    'YyyyyyyyyyyyyyyyyyyyyY',
+    'YyyyyyyyyyyyyyyyyyyyyY',
+    'YyyyyyyyyyyyyyyyyyyyyY',
+    'YYYYYYYYYYXXYYYYYYYYYY',
+    // 第二關：太魯閣九曲洞（把三顆大理石推進凹槽）
+    'YuuuuuuuuuuuuuuuuuuuuY',
+    'YuuuuuuuuuuuuuuuuuuuuY',
+    'YuuuYYuuuuuuuuuuYYuuuY',
+    'YuuuYYuuuuuuuuuuYYuuuY',
+    'YuuuuuuuuuuuuuuuuuuuuY',
+    'YuuuuuuuuuuuuuuuuuuuuY',
+    'YYYYYYYuuuuuuuuYYYYYYY',
+    'YuuuuuuuuuuuuuuuuuuuuY',
+    'YuuuuuuuuuuuuuuuuuuuuY',
+    'YuuuYYuuuuuuuuuuYYuuuY',
+    'YuuuuuuuuuuuuuuuuuuuuY',
+    'YuuuuuuuuuuuuuuuuuuuuY',
+    'YuuuxuuuuuxuuuuuuxuuuY',
+    'YuuuuuuuuuuuuuuuuuuuuY',
+    'YuuuuuuuuuuuuuuuuuuuuY',
+    'YYYYYYYYYYXXYYYYYYYYYY',
+    // 第三關：清水斷崖（右邊是太平洋）
+    'YnnnnnnnnnnnnnnnnnZZZY',
+    'YnnnnnnnnnnnnnnnnnnZZY',
+    'YnnnnnnnnnnnnnnnnnnZZY',
+    'YnnnnnnnnnnnnnnnnnnnZY',
+    'YnnnnnnnnnnnnnnnnnnnZY',
+    'YnnnnnnnnnnnnnnnnnnnZY',
+    'YnnnnnnnnnnnnnnnnnnnZY',
+    'YnnnnnnnnnnnnnnnnnnnZY',
+    'YnnnnnnnnnnnnnnnnnnnZY',
+    'YnnnnnnnnnnnnnnnnnnnZY',
+    'YnnnnnnnnnnnnnnnnnnnZY',
+    'YnnnnnnnnnnnnnnnnnnZZY',
+    'YnnnnnnnnnnnnnnnnnnZZY',
+    'YnnnnnnnnnnnnnnnnnZZZY',
+    'YnnnnnnnnnnnnnnnnnZZZY',
+    'YYYYYYYYYYYYYYYYYYYYYY',
+  ];
+  HUALIEN.forEach((row, y) => [...row].forEach((c, x) => set(DX + x, y, c)));
+  const px = (x) => (DX + x + 0.5) * TILE, py = (y) => (y + 0.5) * TILE;
+  const DUNGEON = {
+    id: 'hualien', name: '花蓮', title: '花蓮・太魯閣峽谷',
+    maxPlayers: 6, countdownMs: 10000, timeLimitMs: 20 * 60 * 1000, respawnMs: 10000,
+    // 每一關的起點（倒下也是在這裡復活）和範圍（像素）
+    stages: [
+      { id: 'd1', name: '🌊 七星潭', start: { x: px(10.5), y: py(11) },
+        box: { x1: (DX + 1) * TILE, y1: 3 * TILE, x2: (DX + 21) * TILE, y2: 13 * TILE } },
+      { id: 'd2', name: '🪨 太魯閣九曲洞', start: { x: px(10.5), y: py(14.6) },
+        box: { x1: (DX + 1) * TILE, y1: 14 * TILE, x2: (DX + 21) * TILE, y2: 29 * TILE } },
+      { id: 'd3', name: '⚔️ 清水斷崖', start: { x: px(10.5), y: py(30.6) },
+        box: { x1: (DX + 1) * TILE, y1: 30 * TILE, x2: (DX + 20) * TILE, y2: 45 * TILE } },
+    ],
+    // 關卡之間的石門：第 n 關過了就打開第 n 道
+    gates: [[[DX + 10, 13], [DX + 11, 13]], [[DX + 10, 29], [DX + 11, 29]]],
+    // 七星潭的七顆彩色石頭（七種顏色），石碑上會畫出要踩的順序
+    stones: [
+      { x: px(4), y: py(6), color: '#e8384f', name: '紅' },
+      { x: px(8), y: py(5), color: '#ff8a3d', name: '橘' },
+      { x: px(13), y: py(5), color: '#ffd23f', name: '黃' },
+      { x: px(17), y: py(6), color: '#6baf7b', name: '綠' },
+      { x: px(6), y: py(9), color: '#4f7cc2', name: '藍' },
+      { x: px(11), y: py(8), color: '#8a5cd6', name: '紫' },
+      { x: px(16), y: py(9), color: '#fbfbf8', name: '白' },
+    ],
+    stele: { x: (DX + 11) * TILE, y: 3 * TILE + 16 }, // 石碑上畫順序的位置
+    seqLen: 5,
+    // 九曲洞：三顆大理石的起點（格子座標）
+    blocks: [[DX + 6, 18], [DX + 15, 18], [DX + 10, 23]],
+    boss: { x: px(10), y: py(38) },
+  };
 
   // 物資箱：每一堆會掉出不同的東西
   const ITEMS = {
@@ -96,13 +194,20 @@
     { id: 'storage', name: '📦 物資倉庫', x1: 5, y1: 15, x2: 19, y2: 23 },
     { id: 'kitchen', name: '🍜 煮泡麵區', x1: 30, y1: 20, x2: 34, y2: 23 },
     { id: 'lounge', name: '🛋️ 休息區', x1: 21, y1: 15, x2: 34, y2: 23 },
-    { id: 'front', name: '🌀 颱風前線', x1: 0, y1: 31, x2: W - 1, y2: H - 1 },
+    { id: 'front', name: '🌀 颱風前線', x1: 0, y1: 31, x2: MW - 1, y2: H - 1 },
+    { id: 'lobby', name: '🌀 花蓮副本入口', lobby: true, ...LOBBY },
+    { id: 'd1', name: '🌊 七星潭', dungeon: true, x1: DX + 1, y1: 3, x2: DX + 20, y2: 12 },
+    { id: 'd2', name: '🪨 太魯閣九曲洞', dungeon: true, x1: DX + 1, y1: 14, x2: DX + 20, y2: 28 },
+    { id: 'd3', name: '⚔️ 清水斷崖', dungeon: true, x1: DX + 1, y1: 30, x2: DX + 20, y2: 44 },
   ];
   // 颱風怪物活動的範圍（像素）
-  const MONSTER_ZONE = { x1: 4 * TILE, y1: 34 * TILE, x2: (W - 4) * TILE, y2: (H - 3) * TILE };
+  const MONSTER_ZONE = { x1: 4 * TILE, y1: 34 * TILE, x2: (MW - 4) * TILE, y2: (H - 3) * TILE };
 
+  // 會變動的擋路格子（關著的石門、九曲洞的大理石）：'tx,ty'
+  const dyn = new Set();
   const map = {
-    W, H, TILE, BLOCKING, ROOMS, ITEMS, CRATES, MONSTER_ZONE,
+    W, H, MW, DX, TILE, BLOCKING, ROOMS, ITEMS, CRATES, MONSTER_ZONE, DUNGEON, LOBBY, dyn,
+    portal: { x: (PORTAL_TILE.x + 0.5) * TILE, y: (PORTAL_TILE.y + 0.5) * TILE },
     mentor: { x: (MENTOR_TILE.x + 0.5) * TILE, y: (MENTOR_TILE.y + 0.5) * TILE },
     tiles: g,
     spawn: { x: 28 * TILE, y: 27 * TILE },
@@ -110,7 +215,20 @@
       const tx = Math.floor(px / TILE);
       const ty = Math.floor(py / TILE);
       if (tx < 0 || ty < 0 || tx >= W || ty >= H) return true;
-      return BLOCKING.has(g[ty][tx]);
+      return BLOCKING.has(g[ty][tx]) || (dyn.size > 0 && dyn.has(tx + ',' + ty));
+    },
+    // 石門開關：第 i 道（0 起算）
+    setGate(i, open) {
+      DUNGEON.gates[i].forEach(([x, y]) => { if (open) dyn.delete(x + ',' + y); else dyn.add(x + ',' + y); });
+    },
+    // 在副本裡的第幾關（0 起算），不在副本就是 -1
+    stageAt(px, py) {
+      return DUNGEON.stages.findIndex(s => px >= s.box.x1 && px < s.box.x2 && py >= s.box.y1 && py < s.box.y2);
+    },
+    inDungeon(px) { return px >= MW * TILE; },
+    inLobby(px, py) {
+      const tx = Math.floor(px / TILE), ty = Math.floor(py / TILE);
+      return tx >= LOBBY.x1 && tx <= LOBBY.x2 && ty >= LOBBY.y1 && ty <= LOBBY.y2;
     },
     // 回傳 (tx, ty) 這格所屬的物資箱堆編號，沒有就回傳 -1
     crateAt(tx, ty) {

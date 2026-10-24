@@ -99,6 +99,16 @@
       desc: '呼叫外星母艦從天上照下一道光束，目標附近的怪都受到普攻 1.8 倍傷害，並被削弱 5 秒。' },
   });
 
+  // 武器的普通攻擊：裝備武器以後，空白鍵的普攻換成這些（不管什麼職業）
+  Object.assign(SKILLS, {
+    lilyDart: { name: '金針花鏢', icon: '🌼', mp: 0, cooldown: 450, power: 1.05, range: 420, basic: true, weapon: true,
+      desc: '射出一朵旋轉的金針花，遠距離。（金針花標）' },
+    pebbleOrb: { name: '七星彩石彈', icon: '🔮', mp: 0, cooldown: 600, power: 1.05, range: 320, aoeAt: 110, basic: true, weapon: true,
+      desc: '法杖射出一顆彩石魔法彈，中距離，打到會在一小塊範圍裡炸開。（七星潭法杖）' },
+    marbleSmash: { name: '大理石重錘', icon: '🔨', mp: 0, cooldown: 700, power: 1.8, range: 140, aoe: 150, basic: true, weapon: true,
+      desc: '掄起大理石錘往地上砸，近距離，身邊的怪全部打到，傷害最高。（太魯閣戰錘）' },
+  });
+
   // 召喚師叫出來的奇異生物：weight 越大越常出現，越強的越少見
   const SUMMONS = {
     gray: { name: '灰灰外星人', atk: 7, hp: 280, speed: 120, weight: 32 },
@@ -149,7 +159,26 @@
     hsu: { name: '徐小心', level: 15, hp: 1100, dmg: [12, 18], range: 90, speed: 65, exp: 180,
       say: ['小心喔！', '我要查你喔～', '⚠️ 小心！', '你過來一下'] },
   };
+  // 副本裡的怪（只在副本出現，不會自己重生）
+  // scale：畫多大；gap：打得到的身體範圍（半寬、頭頂多高、腳下多低）
+  Object.assign(MOBS, {
+    rock: { name: '落石怪', level: 18, hp: 650, dmg: [9, 14], range: 80, speed: 60, exp: 120, dungeon: true,
+      say: ['轟隆隆～', '落石注意！', '擋路擋路', '🪨'] },
+    horse: { name: '黑馬分身', level: 40, hp: 900, dmg: [14, 20], range: 90, speed: 95, exp: 150, dungeon: true, scale: 0.8,
+      say: ['嘶～', '🐴', '衝啊！'] },
+    fu: { name: '傅昆騎', level: 50, hp: 9000, dmg: [0, 0], range: 0, speed: 70, exp: 800, dungeon: true, boss: true, scale: 1,
+      gap: { half: 46, top: 130, bottom: 16 }, phase2: { name: '暗黑傅昆騎', level: 60 },
+      say: ['花蓮是我的！', '我們一起努力！', '凍蒜！', '這個我不同意', '👊'] },
+  });
   const MOB_RESPAWN_MS = 45000;
+
+  // 現在的普通攻擊：有拿武器就用武器的打法
+  function basicOf(cls, equip) {
+    const G = typeof module !== 'undefined' && module.exports ? require('./gear') : root.HQ_GEAR;
+    const w = equip && G && G.GEAR[equip.weapon];
+    return w && w.basic && SKILLS[w.basic] ? w.basic : (CLASSES[cls] || CLASSES.staff).skills[0];
+  }
+  const skillsOf = (cls, equip) => { const c = CLASSES[cls] || CLASSES.staff; return [basicOf(cls, equip), c.skills[1], c.skills[2]]; };
 
   function statsFor(cls, level = 1) {
     const c = CLASSES[cls] || CLASSES.staff;
@@ -167,14 +196,15 @@
   // 再多給一點寬限，抵掉位置同步的延遲（颱風和人都在動）
   function foeGap(p, foe, isBoss) {
     const k = isBoss && foe.phase === 2 ? MONSTER2.scale : 1; // 變身後體型變大，打得到的範圍也跟著變大
-    const half = isBoss ? 100 * k : 26, top = isBoss ? 180 * k : 70, bottom = isBoss ? 30 * k : 10;
+    const kind = !isBoss && (foe.kind || (foe.state && foe.state.kind)), g = kind && MOBS[kind] && MOBS[kind].gap;
+    const half = g ? g.half : isBoss ? 100 * k : 26, top = g ? g.top : isBoss ? 180 * k : 70, bottom = g ? g.bottom : isBoss ? 30 * k : 10;
     const dx = Math.max(0, Math.abs(p.x - foe.x) - half);
     const dy = Math.max(0, foe.y - top - p.y, p.y - (foe.y + bottom));
     return Math.hypot(dx, dy) - 40;
   }
 
   const stats = { BASE, CLASSES, SKILLS, SUMMONS, SUMMON_MAX, SUMMON_HIT_MS, FOODS, REGEN, MONSTER, MONSTER2, RESPAWN_MS, WEAKEN, LEVEL,
-    MOBS, MOB_RESPAWN_MS, statsFor, reduce, boost, bonusDef, foeGap };
+    MOBS, MOB_RESPAWN_MS, statsFor, reduce, boost, bonusDef, foeGap, basicOf, skillsOf };
   if (typeof module !== 'undefined' && module.exports) module.exports = stats;
   else root.HQ_STATS = stats;
 })(this);

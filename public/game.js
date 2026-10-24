@@ -18,10 +18,11 @@
   });
   document.addEventListener('touchmove', e => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
   // 近距離的普攻：打到時角色往前撲一下
-  const MELEE = ['strike', 'power', 'syringe', 'punch', 'kick'];
+  const MELEE = ['strike', 'power', 'syringe', 'punch', 'kick', 'marbleSmash'];
   // 會飛過去的攻擊：特效打到才跳數字（毫秒）
   const HIT_DELAY = { arrow: 520, barbell: 330, skate: 950, shot: 260, orb: 300, ray: 120,
-    defib: 150, arrowRain: 650, roar: 200, icicle: 330, mothership: 600, note: 280, paint: 260, noteBlade: 760 };
+    defib: 150, arrowRain: 650, roar: 200, icicle: 330, mothership: 600, note: 280, paint: 260, noteBlade: 760,
+    lilyDart: 280, pebbleOrb: 330, marbleSmash: 160 };
   // 人物貼圖比 64x80 大一圈，翅膀、氣球、帽子才畫得下；(16,32) 是人物框的左上角，腳底在 y=108
   const FRAME = { w: 96, h: 112, ox: 16, oy: 32 };
   const AV_ORIGIN_Y = (FRAME.oy + 76) / FRAME.h;
@@ -298,6 +299,14 @@
   socket.on('mAttackHit', (a) => scene && scene.onMonsterAttackHit(a));
   socket.on('skillFx', (fx) => scene && scene.onSkillFx(fx));
   socket.on('mob', (m) => scene && scene.setMob(m));
+  socket.on('dungeon', (d) => scene && scene.setDungeon(d));
+  socket.on('dgEnter', (e) => HQ_TAIWAN.play({ region: e.region, title: e.title, sub: 'DUNGEON · 副本' }));
+  socket.on('dgStone', (e) => scene && scene.onStone(e));
+  socket.on('dgBlock', (e) => scene && scene.onBlock(e));
+  socket.on('dgStage', (e) => scene && scene.onDgStage(e));
+  socket.on('dgAttack', (a) => scene && scene.onFuAttack(a));
+  socket.on('dgAttackHit', (a) => scene && scene.onFuAttackHit(a));
+  socket.on('dgClear', (c) => scene && scene.onDgClear(c));
   socket.on('mobHit', (m) => scene && scene.onMobHit(m));
   socket.on('mobAttack', (a) => scene && scene.onMobAttack(a));
   socket.on('levelUp', (l) => scene && scene.onLevelUp(l));
@@ -314,7 +323,8 @@
     myOwned = g.owned;
     store('hq-owned', myOwned);
     const it = GR.GEAR[g.item];
-    if (it) toast(`🎁 ${g.from === 'admin' ? '管理員送你' : '獲得'}【${it.rarity}】${it.icon} ${it.name}！到 👗 裝備 穿上看看`);
+    // 副本掉的武器，通關畫面會自己說
+    if (it && !(it.dungeon && g.from !== 'admin')) toast(`🎁 ${g.from === 'admin' ? '管理員送你' : '獲得'}【${it.rarity}】${it.icon} ${it.name}！到 👗 裝備 穿上看看`);
     if (scene && scene.me) scene.burst(scene.me.x, scene.me.y - 40, 16, 0xffd23f);
     if (modalKind === 'gear') openGear();
   });
@@ -773,6 +783,11 @@
       if (!res || !res.ok) return;
       myEquip = res.equip;
       store('hq-equip', myEquip);
+      if (slot === 'weapon') {
+        renderSkillbar();
+        const sk = ST.SKILLS[basic()];
+        toast(id ? `⚔️ 普攻變成「${sk.icon} ${sk.name}」` : `普攻換回「${sk.icon} ${sk.name}」`);
+      }
       if (modalKind === 'gear') openGear();
     });
   }
@@ -791,7 +806,7 @@
       if (it) { const off = el('button', 'hud-btn tiny', '脫下'); off.onclick = () => equipGear(slot, null); row.appendChild(off); }
       slots.appendChild(row);
     });
-    slots.appendChild(el('p', 'modal-hint', `收集 ${myOwned.length} / ${Object.keys(GR.GEAR).length} 件。到 🎖️ 戰情室玩 🎨 你畫我猜，猜對就會拿到新裝備！`));
+    slots.appendChild(el('p', 'modal-hint', `收集 ${myOwned.length} / ${Object.keys(GR.GEAR).length} 件。到 🎖️ 戰情室玩 🎨 你畫我猜，猜對就會拿到新裝備！武器要到總部東邊的 🌀 副本入口，打倒最終頭目才會掉。`));
     top.appendChild(slots);
     box.appendChild(top);
     Object.entries(GR.SLOTS).forEach(([slot, label]) => {
@@ -1320,7 +1335,7 @@
   let myStats = null;
   const myCls = () => (myStats && ST.CLASSES[myStats.cls] ? myStats.cls : 'staff');
   const special = () => ST.CLASSES[myCls()].skills[1];
-  const basic = () => ST.CLASSES[myCls()].skills[0];
+  const basic = () => ST.basicOf(myCls(), myEquip); // 拿武器的話普攻換成武器的打法
   const special2 = () => ST.CLASSES[myCls()].skills[2];
   const cooldowns = {}; // skillId -> 冷卻結束的時間（performance.now）
   function renderStats(st) {
@@ -1771,6 +1786,25 @@
     return c;
   }
   const FX = {
+    // 金針花標射出去的那朵金針花
+    lily: () => fxCanvas(40, 40, 81, (ctx, r) => {
+      ctx.translate(20, 20);
+      for (let i = 0; i < 6; i++) {
+        ctx.save(); ctx.rotate(i * Math.PI / 3);
+        CR.blob(ctx, 0, -9, 4.4, 9.5, r, 0.1, 12); CR.fill(ctx, i % 2 ? '#ff8a3d' : '#ffa53a', r, null); CR.stroke(ctx, r, 1.6);
+        ctx.restore();
+      }
+      CR.blob(ctx, 0, 0, 4, 4, r, 0.1, 10); CR.fill(ctx, '#ffd23f', r, null); CR.stroke(ctx, r, 1.4);
+    }),
+    // 九曲洞要推的大理石塊
+    marble: () => fxCanvas(52, 60, 82, (ctx, r) => {
+      ctx.fillStyle = 'rgba(19,26,40,0.2)'; ctx.beginPath(); ctx.ellipse(26, 54, 22, 5, 0, 0, Math.PI * 2); ctx.fill();
+      CR.rect(ctx, 4, 16, 44, 38, r, 1.4); CR.fill(ctx, '#e2e0da', r, [4, 16, 44, 38]); CR.stroke(ctx, r, 2.6);
+      CR.rect(ctx, 4, 6, 44, 14, r, 1.2); CR.fill(ctx, '#f7f6f2', r, null); CR.stroke(ctx, r, 2.6);
+      CR.line(ctx, 8, 30, 22, 38, r, 1.4, 'rgba(110,118,132,0.7)', 1);
+      CR.line(ctx, 22, 38, 30, 28, r, 1.2, 'rgba(110,118,132,0.6)', 1);
+      CR.line(ctx, 30, 44, 44, 36, r, 1.4, 'rgba(110,118,132,0.7)', 1);
+    }),
     // 全身 SSR：腳下的彩虹光暈（畫成圓的，遊戲裡壓扁再慢慢轉）、繞著飄的小星星
     aura: () => fxCanvas(120, 120, 61, (ctx, r) => {
       const g = ctx.createRadialGradient(60, 60, 10, 60, 60, 58);
@@ -2016,6 +2050,65 @@
     return c;
   }
 
+  // ---------------- 副本的怪（畫法跟 drawNpc 一樣大：96x84，兩倍解析度） ----------------
+  function mobCanvas(seed, draw) {
+    const c = document.createElement('canvas');
+    c.width = 96 * 2; c.height = 84 * 2;
+    const ctx = c.getContext('2d');
+    ctx.scale(2, 2);
+    draw(ctx, CR.rng(seed));
+    return c;
+  }
+  // 落石怪：一顆生氣的大石頭，長了兩隻小腳
+  const drawRockMob = () => mobCanvas(91, (ctx, r) => {
+    ctx.fillStyle = 'rgba(19,26,40,0.18)'; ctx.beginPath(); ctx.ellipse(48, 81, 24, 4, 0, 0, Math.PI * 2); ctx.fill();
+    [[38, 76], [58, 76]].forEach(([x, y]) => { CR.blob(ctx, x, y, 6, 4, r, 0.08); CR.fill(ctx, '#6e6a64', r, null); CR.stroke(ctx, r, 2.2); });
+    CR.blob(ctx, 48, 52, 30, 25, r, 0.12, 14); CR.fill(ctx, '#a39d93', r, [18, 27, 60, 50], 1.2); CR.stroke(ctx, r, 2.8);
+    CR.blob(ctx, 40, 40, 12, 7, r, 0.15, 10); ctx.fillStyle = 'rgba(255,255,255,0.3)'; ctx.fill();
+    CR.line(ctx, 62, 36, 68, 50, r, 1.6, 'rgba(43,42,51,0.55)', 1); CR.line(ctx, 30, 58, 36, 66, r, 1.6, 'rgba(43,42,51,0.55)', 1);
+    // 生氣的眉毛和眼睛
+    CR.line(ctx, 36, 44, 44, 48, r, 2.6); CR.line(ctx, 60, 44, 52, 48, r, 2.6);
+    ctx.fillStyle = CR.INK; [[41, 52], [55, 52]].forEach(([x, y]) => { ctx.beginPath(); ctx.ellipse(x, y, 2.4, 2.8, 0, 0, Math.PI * 2); ctx.fill(); });
+    ctx.beginPath(); ctx.moveTo(42, 62); ctx.quadraticCurveTo(48, 58, 54, 62); CR.stroke(ctx, r, 2);
+  });
+  // 黑馬分身：黑色的小馬，紫色鬃毛、紅眼睛
+  const drawHorseMob = () => mobCanvas(92, (ctx, r) => {
+    ctx.fillStyle = 'rgba(19,26,40,0.2)'; ctx.beginPath(); ctx.ellipse(48, 81, 28, 4, 0, 0, Math.PI * 2); ctx.fill();
+    [[30, 64], [40, 66], [56, 66], [66, 64]].forEach(([x, y]) => { CR.rect(ctx, x - 3.5, y, 7, 15, r, 0.6); CR.fill(ctx, '#2b2a33', r, null); CR.stroke(ctx, r, 2); });
+    CR.blob(ctx, 48, 56, 26, 14, r, 0.06); CR.fill(ctx, '#3a3746', r, [22, 42, 52, 28]); CR.stroke(ctx, r, 2.6);
+    // 尾巴
+    ctx.beginPath(); ctx.moveTo(24, 50); ctx.quadraticCurveTo(10, 52, 12, 70); ctx.quadraticCurveTo(18, 60, 26, 58); ctx.closePath();
+    CR.fill(ctx, '#8a5cd6', r, null); CR.stroke(ctx, r, 2);
+    // 脖子＋頭
+    ctx.beginPath(); ctx.moveTo(60, 50); ctx.quadraticCurveTo(66, 30, 72, 24); ctx.lineTo(86, 34); ctx.quadraticCurveTo(80, 40, 72, 42); ctx.quadraticCurveTo(70, 52, 70, 58); ctx.closePath();
+    CR.fill(ctx, '#3a3746', r, null); CR.stroke(ctx, r, 2.6);
+    ctx.beginPath(); ctx.moveTo(64, 46); ctx.quadraticCurveTo(62, 30, 72, 20); ctx.quadraticCurveTo(66, 34, 70, 46); ctx.closePath();
+    CR.fill(ctx, '#8a5cd6', r, null); CR.stroke(ctx, r, 1.6);
+    ctx.fillStyle = '#ff3b3b'; ctx.beginPath(); ctx.arc(77, 29, 2.2, 0, Math.PI * 2); ctx.fill();
+  });
+  // 傅昆騎：黑色披風在後面，前面是 avatar.js 畫的人（npc: 'fu'）
+  const drawFuMob = (fist) => mobCanvas(93, (ctx, r) => {
+    ctx.beginPath(); ctx.moveTo(28, 50); ctx.quadraticCurveTo(14, 70, 18, 84); ctx.lineTo(78, 84); ctx.quadraticCurveTo(82, 70, 68, 50); ctx.closePath();
+    CR.fill(ctx, '#2b2a33', r, null); CR.stroke(ctx, r, 2.4);
+    ctx.beginPath(); ctx.moveTo(30, 56); ctx.quadraticCurveTo(24, 72, 26, 84); ctx.lineTo(70, 84); ctx.quadraticCurveTo(72, 72, 66, 56); ctx.closePath();
+    ctx.fillStyle = '#5b3f8f'; ctx.fill();
+    ctx.save(); ctx.translate(16, 4);
+    AV.drawAvatar(ctx, { hair: 'bald', skin: AV.SKINS[1], glasses: '0', cls: 'suit', suit: '#2b2a33', tie: '#8a5cd6', npc: 'fu', fist });
+    ctx.restore();
+  });
+  // 關卡之間的石門
+  const drawGate = () => {
+    const c = document.createElement('canvas');
+    c.width = T * 2; c.height = 72 * 2;
+    const ctx = c.getContext('2d'), r = CR.rng(94);
+    ctx.scale(2, 2);
+    CR.rect(ctx, 2, 6, T - 4, 64, r, 1.4); CR.fill(ctx, '#8d867b', r, [2, 6, T - 4, 64], 1.2); CR.stroke(ctx, r, 2.6);
+    CR.rect(ctx, 8, 14, T - 16, 46, r, 1); CR.stroke(ctx, r, 1.6, 'rgba(43,42,51,0.5)');
+    ctx.font = '900 16px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = 'rgba(255,210,63,0.85)';
+    ctx.fillText('✦', T / 2, 38);
+    return c;
+  };
+
   // 慶祝煙火：把文字畫在小畫布上，取樣成一顆顆火花的位置
   // 煙火會用到的顏色（每個顏色一格火花貼圖）
   const SPARK_COLORS = [0xff6a13, 0xffb020, 0x4f7cc2, 0xe8384f, 0x3f9f5a, 0x8a5cd6, 0xffd23f];
@@ -2058,8 +2151,10 @@
     const kitchen = MAP.ROOMS.find(rm => rm.id === 'kitchen');
     const inKitchen = (x, y) => x >= kitchen.x1 && x <= kitchen.x2 && y >= kitchen.y1 && y <= kitchen.y2;
     const floorOf = (ch, x, y) => {
+      if (ch === ' ') return 'void';
+      if (x >= MAP.MW) return ch === 'Z' ? 'sea' : ch === 'Y' ? 'rock' : 'yE'.includes(ch) ? 'sand' : ch === 'n' ? 'cliff' : 'cave';
       if (y > 30 && ':T~'.includes(ch)) return 'mud';
-      if (',T~BF'.includes(ch)) return 'grass';
+      if (',T~BFO'.includes(ch)) return 'grass';
       if (ch === '#') return 'wall';
       if (inKitchen(x, y)) return 'tile';
       return inVideo(x, y) ? 'carpet' : 'wood';
@@ -2097,6 +2192,31 @@
           ctx.fillStyle = '#f5ecd9'; ctx.fillRect(px, py, T, T);
           CR.plaid(ctx, px, py, T, T, 24, 'rgba(255,122,47,0.18)', r, 2.4);
           CR.plaid(ctx, px + 12, py + 12, T, T, 24, 'rgba(255,255,255,0.9)', r, 1.4);
+        } else if (base === 'void') {
+          ctx.fillStyle = '#131a28'; ctx.fillRect(px, py, T, T);
+        } else if (base === 'sand') {
+          // 七星潭的礫石灘：米色底＋各種顏色的小圓石
+          ctx.fillStyle = (x + y) % 2 ? '#ece0c6' : '#e8dbbf'; ctx.fillRect(px, py, T, T);
+          ['#c9c3b8', '#9aa3b5', '#d9b38c', '#b8c9d9'].forEach(c => CR.dots(ctx, px, py, T, T, 3, c, r, 3));
+          CR.dots(ctx, px, py, T, T, 4, 'rgba(255,255,255,0.6)', r, 1.6);
+        } else if (base === 'cave') {
+          // 九曲洞的大理石地板：灰白色、細細的紋路
+          ctx.fillStyle = (x * 3 + y) % 4 ? '#c9ccd3' : '#c2c6ce'; ctx.fillRect(px, py, T, T);
+          CR.line(ctx, px + r() * 20, py + r() * T, px + 28 + r() * 20, py + r() * T, r, 1, 'rgba(110,118,132,0.35)', 6);
+          CR.dots(ctx, px, py, T, T, 3, 'rgba(255,255,255,0.5)', r, 1.6);
+        } else if (base === 'cliff') {
+          // 清水斷崖上的草地
+          ctx.fillStyle = (x * 3 + y) % 5 ? '#b5d68f' : '#aed087'; ctx.fillRect(px, py, T, T);
+          CR.dots(ctx, px, py, T, T, 5, 'rgba(255,255,255,0.4)', r, 2);
+          const gx = px + 8 + r() * (T - 16), gy = py + 10 + r() * (T - 16);
+          CR.line(ctx, gx, gy, gx - 2, gy - 6, r, 1.6, '#6f9c5c', 0.6);
+        } else if (base === 'sea') {
+          // 太平洋：深藍色＋白色浪花
+          ctx.fillStyle = (x + y) % 2 ? '#4f86c6' : '#4a80c0'; ctx.fillRect(px, py, T, T);
+          ctx.save(); ctx.beginPath(); ctx.arc(px + 10 + r() * 28, py + 14 + r() * 22, 8, Math.PI * 1.1, Math.PI * 1.9);
+          CR.stroke(ctx, r, 2, 'rgba(255,255,255,0.7)'); ctx.restore();
+        } else if (base === 'rock') {
+          ctx.fillStyle = '#b3aca1'; ctx.fillRect(px, py, T, T);
         }
       }
     }
@@ -2115,6 +2235,38 @@
           if (at(x, y + 1) !== '#') CR.line(ctx, px - 1, py + T, px + T + 1, py + T, r, 3);
           if (at(x - 1, y) !== '#') CR.line(ctx, px, py - 1, px, py + T + 1, r, 3);
           if (at(x + 1, y) !== '#') CR.line(ctx, px + T, py - 1, px + T, py + T + 1, r, 3);
+        } else if (ch === 'Y') {
+          // 峽谷岩壁：灰褐色的大岩石，斜斜的紋路，只描外緣
+          ctx.fillStyle = '#c4beb3'; ctx.fillRect(px, py, T, T * 0.45);
+          CR.line(ctx, px + 4, py + 30 + r() * 10, px + 40, py + 12 + r() * 10, r, 1.4, 'rgba(90,80,70,0.35)', 3);
+          CR.dots(ctx, px, py, T, T, 6, 'rgba(255,255,255,0.35)', r, 1.6);
+          const rk = (dx, dy) => at(x + dx, y + dy) === 'Y' || at(x + dx, y + dy) === ' ';
+          if (!rk(0, -1)) CR.line(ctx, px - 1, py, px + T + 1, py, r, 3);
+          if (!rk(0, 1)) CR.line(ctx, px - 1, py + T, px + T + 1, py + T, r, 3);
+          if (!rk(-1, 0)) CR.line(ctx, px, py - 1, px, py + T + 1, r, 3);
+          if (!rk(1, 0)) CR.line(ctx, px + T, py - 1, px + T, py + T + 1, r, 3);
+        } else if (ch === 'Z' && at(x, y + 1) !== 'Z' || ch === 'Z' && at(x - 1, y) !== 'Z' && at(x - 1, y) !== 'Y') {
+          // 浪打到岸邊的白邊
+          const down = at(x, y + 1) !== 'Z';
+          ctx.save(); ctx.globalAlpha = 0.85;
+          if (down) CR.line(ctx, px - 2, py + T - 4, px + T + 2, py + T - 6, r, 5, '#ffffff', 2);
+          else CR.line(ctx, px + 4, py - 2, px + 2, py + T + 2, r, 5, '#ffffff', 2);
+          ctx.restore();
+        } else if (ch === 'x') {
+          // 九曲洞地上的凹槽：大理石要推到這裡
+          CR.rect(ctx, px + 4, py + 4, T - 8, T - 8, r, 1); CR.fill(ctx, 'rgba(47,59,85,0.28)', r, null);
+          ctx.save(); ctx.setLineDash([5, 4]); CR.rect(ctx, px + 4, py + 4, T - 8, T - 8, r, 1); CR.stroke(ctx, r, 2.4, '#ffb020'); ctx.restore();
+          ctx.font = '18px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('⬇️', px + T / 2, py + T / 2 + 1);
+          ctx.textBaseline = 'alphabetic';
+        } else if (ch === 'E' && at(x - 1, y) !== 'E') {
+          // 七星潭的石碑（兩格寬），上面要踩的顏色順序另外畫
+          CR.rect(ctx, px + 4, py - 30, T * 2 - 8, T + 22, r, 1.4); CR.fill(ctx, '#9aa3b5', r, [px, py - 30, T * 2, T + 22]); CR.stroke(ctx, r, 2.8);
+          CR.rect(ctx, px + 10, py - 24, T * 2 - 20, T + 8, r, 1); CR.fill(ctx, '#b8c0cc', r, null); CR.stroke(ctx, r, 1.6);
+          ctx.font = '900 11px sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#2b2a33'; ctx.fillText('七星潭', px + T, py - 12);
+        } else if (ch === 'O') {
+          // 副本傳送門的石座（漩渦另外畫，會轉）
+          CR.blob(ctx, px + 24, py + 30, 30, 15, r, 0.06); CR.fill(ctx, '#9aa3b5', r, [px - 6, py + 15, T + 12, 30]); CR.stroke(ctx, r, 2.6);
+          CR.blob(ctx, px + 24, py + 28, 22, 10, r, 0.08); CR.fill(ctx, '#2f3b55', r, null); CR.stroke(ctx, r, 2);
         } else if (ch === '=') {
           // 門口的腳踏墊
           CR.rect(ctx, px + 5, py + 10, T - 10, T - 20, r, 1.5); CR.fill(ctx, '#2f3b55', r, [px, py + 10, T, T - 20]);
@@ -2244,6 +2396,14 @@
       ctx.fillText(cr.icon || (cr.item ? MAP.ITEMS[cr.item].icon : '❓'), cx, cy + 1);
     });
     ctx.textBaseline = 'alphabetic';
+
+    // 副本入口的候場區：地上一圈虛線框
+    const L = MAP.LOBBY, lr = CR.rng(77);
+    ctx.save(); ctx.setLineDash([10, 8]);
+    CR.rect(ctx, L.x1 * T + 4, L.y1 * T + 4, (L.x2 - L.x1 + 1) * T - 8, (L.y2 - L.y1 + 1) * T - 8, lr, 2);
+    ctx.fillStyle = 'rgba(255,176,32,0.12)'; ctx.fill(); CR.stroke(ctx, lr, 3, '#ff7a2f'); ctx.restore();
+    ctx.font = '900 15px ' + FONT; ctx.textAlign = 'center'; ctx.fillStyle = '#2b2a33';
+    ctx.fillText('候場區', (L.x1 + L.x2 + 1) / 2 * T, (L.y2 + 1) * T - 14);
     return c;
   }
 
@@ -2254,7 +2414,7 @@
     create() {
       this.textures.addCanvas('map', drawMap());
       this.add.image(0, 0, 'map').setOrigin(0).setDepth(-10);
-      this.cameras.main.setBounds(0, 0, MAP.W * T, MAP.H * T);
+      this.cameras.main.setBounds(0, 0, MAP.MW * T, MAP.H * T); // 副本區另外設（見 update）
       this.cameras.main.setBackgroundColor('#131a28');
       this.applyZoom();
       this.scale.on('resize', () => this.applyZoom());
@@ -2347,6 +2507,11 @@
         cls: 'suit', suit: '#2f3b55', tie: '#e8384f', npc: 'chiang' }));
       this.textures.addCanvas('mob-hsu', drawNpc({ hair: 'long', hairColor: '#3a2a26', skin: AV.SKINS[0], glasses: '0',
         cls: 'suit', suit: '#f2f4f8', tie: '#f2f4f8', npc: 'hsu' }, 'sign'));
+      this.textures.addCanvas('mob-rock', drawRockMob());
+      this.textures.addCanvas('mob-horse', drawHorseMob());
+      this.textures.addCanvas('mob-fu', drawFuMob(false));
+      this.textures.addCanvas('mob-fu-fist', drawFuMob(true));
+      this.textures.addCanvas('dg-gate', drawGate());
       this.mobs = new Map();
       const mx = MAP.mentor.x, my = MAP.mentor.y + 18;
       this.add.image(mx, my, 'mentor').setScale(0.55).setOrigin(0.5, 0.95).setDepth(my);
@@ -2420,6 +2585,7 @@
         .setDepth(1001).setAlpha(0);
       this.scheduleLightning();
 
+      this.initDungeon();
       this.lastSent = 0;
       scene = this;
       pending.splice(0).forEach(f => f());
@@ -2525,7 +2691,7 @@
     // 星星只有 4 顆、只用一個 tween 算位置，平板也跑得動
     applyPrada(c) {
       const eq = c.look.equip || {};
-      const on = Object.keys(GR.SLOTS).every(s => GR.GEAR[eq[s]] && GR.GEAR[eq[s]].rarity === 'SSR');
+      const on = GR.LOOK_SLOTS.every(s => GR.GEAR[eq[s]] && GR.GEAR[eq[s]].rarity === 'SSR');
       if (on === !!c.prada) return;
       c.prada = on;
       const base = c.tag.text.replace(/^✨ /, '');
@@ -2626,7 +2792,10 @@
         who.atkUntil = performance.now() + st.atkBuffMs;
       }
       if (who === this.me) {
-        if (st.dead && !prev.dead) { toast(`你被${ST.MONSTER.name}吹倒了！${ST.RESPAWN_MS / 1000} 秒後回到總部`); this.target = null; }
+        if (st.dead && !prev.dead) {
+          toast(this.inDg() ? `你倒下了！${MAP.DUNGEON.respawnMs / 1000} 秒後在這一關的起點復活` : `你被${ST.MONSTER.name}吹倒了！${ST.RESPAWN_MS / 1000} 秒後回到總部`);
+          this.target = null;
+        }
         renderStats(st);
       }
     }
@@ -2722,6 +2891,7 @@
       this.mobs.clear();
       (res.mobs || []).forEach(m => this.setMob(m));
       renderInventory(res.you.inv);
+      if (res.dungeon) this.setDungeon(res.dungeon);
       this.summons.forEach(sm => sm.destroy());
       this.summons.clear();
       (res.summons || []).forEach(sm => this.onSummon(sm));
@@ -2887,9 +3057,11 @@
       const M = this.monster.phase === 2 ? ST.MONSTER2 : ST.MONSTER;
       const label = `Lv.${M.level} ${M.name}`;
       if (this.mName.text !== label) this.mName.setText(label);
-      document.querySelector('#boss .boss-lv').textContent = 'Lv.' + M.level;
-      document.querySelector('#boss .boss-lv').nextSibling.textContent = ' ' + M.name + ' ';
-      $('boss').classList.toggle('phase2', this.monster.phase === 2);
+      if (this.bossFor !== 'fu') {
+        document.querySelector('#boss .boss-lv').textContent = 'Lv.' + M.level;
+        document.querySelector('#boss .boss-lv').nextSibling.textContent = ' ' + M.name + ' ';
+        $('boss').classList.toggle('phase2', this.monster.phase === 2);
+      }
       this.mSwirl.setTint(this.monster.phase === 2 ? 0xff5a7a : 0xffffff);
       this.applyMonsterTint();
     }
@@ -2918,8 +3090,10 @@
     // 楓之谷的頭目血條放在畫面上方（DOM），怪物頭上再留一條細的
     drawMonsterBar() {
       const ratio = this.mState.maxHp ? this.mState.hp / this.mState.maxHp : 0;
-      $('boss-fill').style.width = (ratio * 100) + '%';
-      $('boss-pct').textContent = Math.ceil(ratio * 100) + '%';
+      if (this.bossFor !== 'fu') {
+        $('boss-fill').style.width = (ratio * 100) + '%';
+        $('boss-pct').textContent = Math.ceil(ratio * 100) + '%';
+      }
       const g = this.mBar, w = 120;
       g.clear();
       g.fillStyle(0x131a28, 0.9); g.fillRoundedRect(-w / 2 - 2, -178, w + 4, 10, 5);
@@ -3155,6 +3329,39 @@
         who.body_.setFlipX(dir === -1);
         this.tweens.add({ targets: who.body_, x: -dir * 5, duration: 90, yoyo: true });
         this.time.delayedCall(60, () => fly('fx-arrow', 200, 0xff6b81, { scale: 0.8 }));
+      } else if (fx.skill === 'lilyDart') {
+        // 金針花標：一朵金針花轉著圈飛過去
+        const sx = who.x + (mx < who.x ? -16 : 16), sy = who.y - 50;
+        const f = this.add.image(sx, sy, 'fx-lily').setDepth(2050).setScale(0.7);
+        this.tweens.add({ targets: f, x: mx, y: my, angle: 900, duration: 270, ease: 'Linear',
+          onComplete: () => { f.destroy(); this.burst(mx, my, 7, 0xff8a3d, 45); } });
+      } else if (fx.skill === 'pebbleOrb') {
+        // 七星潭法杖：一顆藍色的海水球飛過去，炸開成七種顏色的小石頭
+        const sx = who.x + (mx < who.x ? -20 : 20), sy = who.y - 92;
+        const o = this.add.image(sx, sy, 'fx-crystal').setDepth(2050).setScale(0.26).setTint(0x7fb2e5);
+        this.tweens.add({ targets: o, x: mx, y: my, duration: 300, ease: 'Quad.in', onComplete: () => {
+          o.destroy();
+          const g = this.add.graphics({ x: mx, y: my + 30 }).setDepth(-4);
+          g.fillStyle(0x7fb2e5, 0.3); g.fillEllipse(0, 0, 220, 130); g.lineStyle(4, 0x4f7cc2, 0.8); g.strokeEllipse(0, 0, 220, 130);
+          this.tweens.add({ targets: g, scale: { from: 0.3, to: 1 }, alpha: { from: 1, to: 0 }, duration: 600, onComplete: () => g.destroy() });
+          [0xe8384f, 0xff8a3d, 0xffd23f, 0x6baf7b, 0x4f7cc2, 0x8a5cd6, 0xffffff].forEach(c => this.burst(mx, my, 2, c, 70));
+        } });
+      } else if (fx.skill === 'marbleSmash') {
+        // 太魯閣戰錘：往地上一砸，地面裂開、碎石噴出來
+        const dir = mx < who.x ? -1 : 1;
+        who.body_.setFlipX(dir === -1);
+        this.tweens.add({ targets: who.body_, angle: dir * -18, duration: 90, yoyo: true });
+        this.time.delayedCall(120, () => {
+          const cx = who.x + dir * 30, cy = who.y;
+          ring(sk.aoe, 0xc9ccd3);
+          const crack = this.add.graphics({ x: cx, y: cy }).setDepth(-4);
+          crack.lineStyle(4, 0x2b2a33, 0.7);
+          for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2 + 0.3; crack.lineBetween(0, 0, Math.cos(a) * 46, Math.sin(a) * 24); }
+          this.tweens.add({ targets: crack, alpha: 0, delay: 300, duration: 600, onComplete: () => crack.destroy() });
+          this.burst(cx, cy - 10, 10, 0xe2e0da, 90);
+          this.floatText(cx, cy - 60, '轟！', '#ffffff', 26);
+          this.cameras.main.shake(140, 0.007);
+        });
       } else if (fx.skill === 'orb') {
         fly('fx-crystal', 260, 0x9b7be8, { scale: 0.32 });
       } else if (fx.skill === 'ray') {
@@ -3605,6 +3812,14 @@
           return { type: 'attack', target: m.state.id };
         }
       }
+      const bi = this.inDg() ? this.blockAt(x, y) : -1;
+      if (bi >= 0) {
+        const [bx, by] = this.blockPos[bi], ddx = (bx + 0.5) * T - this.me.x, ddy = (by + 0.5) * T - (this.me.y - 4);
+        if (Math.hypot(ddx, ddy) < 1.5 * T) {
+          const hz = Math.abs(ddx) >= Math.abs(ddy);
+          return { type: 'push', dx: hz ? Math.sign(ddx) : 0, dy: hz ? 0 : Math.sign(ddy) };
+        }
+      }
       const tx = Math.floor(x / T), ty = Math.floor(y / T);
       if (MAP.crateAt(tx, ty) >= 0 && Math.hypot(this.me.x - (tx + 0.5) * T, this.me.y - (ty + 0.5) * T) < 1.7 * T) {
         return { type: 'crate', tx, ty };
@@ -3650,6 +3865,8 @@
       socket.emit('move', { x: Math.round(this.me.x), y: Math.round(this.me.y), dir: this.me.dir, moving: false });
       if (act.type === 'attack') {
         this.castSkill(act.skill || basic(), act.target);
+      } else if (act.type === 'push') {
+        this.tryPush(act.dx, act.dy);
       } else if (act.type === 'mentor') {
         openMentor();
       } else if (act.type === 'fridge') {
@@ -3700,7 +3917,7 @@
       if (left > 0) { toast(`${sk.name}還在冷卻，${Math.ceil(left / 1000)} 秒後可以再用`); return; }
       if (myStats && myStats.mp < sk.mp) { toast(`魔力不夠，${sk.name}要 ${sk.mp} 點`); return; }
       const room = MAP.roomAt(this.me.x, this.me.y);
-      if (!room || room.id !== 'front') { toast('要在 🌀 颱風前線才能畫城牆'); return; }
+      if (!room || (room.id !== 'front' && !room.dungeon)) { toast('要在 🌀 颱風前線或副本裡才能畫城牆'); return; }
       this.target = null;
       this.drawing = { id, pts: [], len: 0, max: sk.wall.len, g: this.add.graphics().setDepth(2060),
         timer: this.time.delayedCall(10000, () => { if (this.drawing) { this.cancelWall(); toast('太久沒畫，取消畫城牆'); } }) };
@@ -3810,6 +4027,7 @@
       const now = performance.now();
       if (now < m.frozenUntil) m.body_.setTint(0x9fd8ff);
       else if (now < m.weakUntil) m.body_.setTint(0xd9c4ff);
+      else if (m.state.kind === 'fu' && m.state.phase === 2) m.body_.setTint(0xb8a4e8); // 黑化：整個人偏紫
       else m.body_.clearTint();
     }
 
@@ -3818,21 +4036,24 @@
       let m = this.mobs.get(st.id);
       const def = ST.MOBS[st.kind];
       if (!m) {
-        const body = this.add.image(0, 0, 'mob-' + st.kind).setScale(0.62).setOrigin(0.5, 0.95);
+        // 副本的怪有自己的大小（傅昆騎比較大），血條、對話框跟著往上
+        const sc = def.scale || 0.62, k = sc / 0.62;
+        const body = this.add.image(0, 0, 'mob-' + st.kind).setScale(sc).setOrigin(0.5, 0.95);
         const tag = this.add.text(0, 10, `Lv.${def.level} ${def.name}`, {
           fontSize: '13px', fontStyle: 'bold', color: '#ffd23f', fontFamily: FONT,
           backgroundColor: 'rgba(19,26,40,0.85)', padding: { x: 6, y: 2 },
         }).setOrigin(0.5, 0);
         const bar = this.add.graphics();
-        const ice = this.add.image(0, 4, 'fx-ice').setOrigin(0.5, 1).setScale(1.2, 0.9).setVisible(false);
+        const ice = this.add.image(0, 4, 'fx-ice').setOrigin(0.5, 1).setScale(1.2 * k, 0.9 * k).setVisible(false);
         m = this.add.container(st.x, st.y, [body, ice, bar, tag]);
-        m.body_ = body; m.bar = bar; m.ice = ice;
+        m.body_ = body; m.bar = bar; m.ice = ice; m.k = k; m.tag = tag;
         m.tx = st.x; m.ty = st.y;
         this.mobs.set(st.id, m);
       }
       const was = m.state;
       m.state = st;
       const now = performance.now();
+      if (st.kind === 'fu') this.updateFuLook(m, was);
       m.frozenUntil = now + (st.frozen || 0);
       m.weakUntil = now + (st.weak || 0);
       if (st.alive && (!was || !was.alive)) {
@@ -3848,10 +4069,11 @@
     }
 
     drawMobBar(m) {
-      const w = 54, ratio = m.state.maxHp ? m.state.hp / m.state.maxHp : 0;
+      const w = 54 * Math.sqrt(m.k || 1), ratio = m.state.maxHp ? m.state.hp / m.state.maxHp : 0, y = -104 * (m.k || 1);
       m.bar.clear();
-      m.bar.fillStyle(0x131a28, 0.9); m.bar.fillRoundedRect(-w / 2 - 2, -104, w + 4, 8, 4);
-      m.bar.fillStyle(0xff3b3b, 1); m.bar.fillRoundedRect(-w / 2, -102, Math.max(3, w * ratio), 4, 2);
+      m.bar.fillStyle(0x131a28, 0.9); m.bar.fillRoundedRect(-w / 2 - 2, y, w + 4, 8, 4);
+      m.bar.fillStyle(0xff3b3b, 1); m.bar.fillRoundedRect(-w / 2, y + 2, Math.max(3, w * ratio), 4, 2);
+      if (m.state.kind === 'fu' && this.bossFor === 'fu') this.drawFuBar(m);
     }
 
     moveMobs(list) {
@@ -3888,7 +4110,7 @@
       const dir = who.x < m.x ? -1 : 1;
       this.tweens.add({ targets: m.body_, x: dir * 16, angle: dir * 10, duration: 150, yoyo: true, delay: 250 });
       if (m.say) m.say.destroy();
-      m.say = this.bubbleImg(0, -104, a.say);
+      m.say = this.bubbleImg(0, -104 * (m.k || 1), a.say);
       m.add(m.say);
       const say = m.say;
       this.time.delayedCall(1600, () => { if (m.say === say) { say.destroy(); m.say = null; } });
@@ -4005,6 +4227,295 @@
       this.tweens.add({ targets: t, y: y - 40, alpha: 0, duration: 900, onComplete: () => t.destroy() });
     }
 
+    // ---------- 副本 ----------
+    initDungeon() {
+      const D = MAP.DUNGEON;
+      this.dg = null;
+      this.bossFor = 'typhoon';
+      // 副本入口的漩渦（一直轉）＋招牌
+      const pt = MAP.portal;
+      this.portal = this.add.image(pt.x, pt.y + 6, 'typhoon').setScale(0.34, 0.14).setTint(0xffb020).setDepth(pt.y - 20);
+      this.add.text(pt.x, pt.y - 58, '🌀 花蓮副本', { fontSize: '15px', fontStyle: '900', color: '#ffd23f', fontFamily: FONT,
+        backgroundColor: 'rgba(19,26,40,0.85)', padding: { x: 8, y: 3 } }).setOrigin(0.5).setDepth(pt.y + 60);
+      // 七星潭的石頭：每顆一個顏色，踩對會亮起來
+      this.stoneImgs = D.stones.map((st, i) => {
+        const g = this.add.graphics({ x: st.x, y: st.y }).setDepth(-7);
+        const glow = this.add.graphics({ x: st.x, y: st.y }).setDepth(-7.5).setVisible(false);
+        glow.fillStyle(0xffd23f, 0.45); glow.fillEllipse(0, 0, 70, 40);
+        const col = Phaser.Display.Color.HexStringToColor(st.color).color;
+        g.fillStyle(0x131a28, 0.18); g.fillEllipse(3, 5, 46, 26);
+        g.fillStyle(col, 1); g.fillEllipse(0, 0, 44, 26);
+        g.lineStyle(3, 0x2b2a33, 0.9); g.strokeEllipse(0, 0, 44, 26);
+        g.fillStyle(0xffffff, 0.45); g.fillEllipse(-8, -5, 14, 6);
+        return { g, glow };
+      });
+      this.steleG = this.add.graphics().setDepth(D.stele.y + 20);
+      // 關卡之間的石門、九曲洞的大理石
+      this.gateImgs = D.gates.map(cells => cells.map(([x, y]) =>
+        Object.assign(this.add.image((x + 0.5) * T, (y + 1) * T + 4, 'dg-gate').setOrigin(0.5, 1).setScale(0.5).setDepth((y + 1) * T), { baseY: (y + 1) * T + 4 })));
+      this.blockImgs = D.blocks.map(([x, y]) => this.add.image((x + 0.5) * T, (y + 1) * T + 2, 'fx-marble').setOrigin(0.5, 1).setDepth((y + 1) * T));
+      this.blockPos = D.blocks.map(b => b.slice());
+      this.blockPos.forEach(([x, y]) => MAP.dyn.add(x + ',' + y));
+      D.gates.forEach((g, i) => MAP.setGate(i, false));
+      // 副本的面板按鈕
+      $('dg-panel').addEventListener('click', (e) => {
+        const b = e.target.closest('button');
+        if (!b) return;
+        if (b.dataset.act === 'start') socket.emit('dgStart', (res) => { if (res && !res.ok && res.error) toast(res.error); });
+        if (b.dataset.act === 'leave') socket.emit('dgLeave', () => {});
+        if (b.dataset.act === 'reset') socket.emit('dgReset', (res) => { if (res && !res.ok && res.error) toast(res.error); });
+      });
+    }
+    inDg() { return !!(this.dg && me && this.dg.members.includes(me.id) && this.dg.phase !== 'idle'); }
+
+    setDungeon(d) {
+      const first = !this.dg;
+      this.dg = d;
+      d.gates.forEach((open, i) => {
+        MAP.setGate(i, open);
+        this.gateImgs[i].forEach(img => {
+          if (open && img.visible && !img.opening) {
+            img.opening = true;
+            if (first) { img.setVisible(false); return; }
+            this.tweens.add({ targets: img, y: img.y + 30, alpha: 0, duration: 900, ease: 'Quad.in', onComplete: () => img.setVisible(false) });
+            this.burst(img.x, img.y - 20, 8, 0x9aa3b5, 60);
+          } else if (!open && (!img.visible || img.opening)) {
+            this.tweens.killTweensOf(img);
+            img.opening = false;
+            img.setVisible(true).setAlpha(1).setY(img.baseY);
+          }
+        });
+      });
+      d.blocks.forEach(([x, y], i) => this.placeBlock(i, x, y, true));
+      this.drawStele();
+      this.renderDgPanel(true);
+    }
+
+    placeBlock(i, x, y, instant) {
+      const [ox, oy] = this.blockPos[i];
+      if (ox === x && oy === y) return;
+      MAP.dyn.delete(ox + ',' + oy);
+      MAP.dyn.add(x + ',' + y);
+      this.blockPos[i] = [x, y];
+      const img = this.blockImgs[i], tx = (x + 0.5) * T, ty = (y + 1) * T + 2;
+      this.tweens.killTweensOf(img);
+      if (instant) img.setPosition(tx, ty);
+      else this.tweens.add({ targets: img, x: tx, y: ty, duration: 180, ease: 'Quad.out' });
+      img.setDepth(ty);
+      // 推進凹槽：亮一下
+      if (!instant && MAP.tiles[y][x] === 'x') { this.burst(tx, ty - 24, 10, 0xffb020, 60); this.floatText(tx, ty - 70, '喀！', '#ffd23f', 22); }
+    }
+    onBlock(e) {
+      this.placeBlock(e.i, e.tx, e.ty, false);
+      const img = this.blockImgs[e.i];
+      this.burst(img.x, img.y - 6, 4, 0xc9ccd3, 30);
+    }
+
+    // 石碑上畫出要踩的顏色順序，已經踩對的打勾
+    drawStele() {
+      const g = this.steleG, d = this.dg, S = MAP.DUNGEON.stele;
+      g.clear();
+      this.stoneImgs.forEach(s => s.glow.setVisible(false));
+      if (!d || !d.seq || !d.seq.length || d.phase === 'idle') return;
+      const n = d.seq.length, gap = 15, x0 = S.x - (n - 1) * gap / 2, y = S.y;
+      d.seq.forEach((si, k) => {
+        const col = Phaser.Display.Color.HexStringToColor(MAP.DUNGEON.stones[si].color).color, done = k < d.progress;
+        g.fillStyle(col, 1); g.fillCircle(x0 + k * gap, y, 6);
+        g.lineStyle(2, done ? 0xffd23f : 0x2b2a33, 1); g.strokeCircle(x0 + k * gap, y, done ? 7.5 : 6);
+        if (done) this.stoneImgs[si].glow.setVisible(true);
+      });
+      if (d.stage > 0) { g.lineStyle(3, 0xffd23f, 1); g.strokeRoundedRect(S.x - n * gap / 2 - 6, y - 12, n * gap + 12, 24, 8); }
+    }
+    onStone(e) {
+      const st = MAP.DUNGEON.stones[e.i];
+      if (this.dg) this.dg.progress = e.progress;
+      this.drawStele();
+      if (e.ok) {
+        this.burst(st.x, st.y - 10, 10, Phaser.Display.Color.HexStringToColor(st.color).color, 60);
+        this.floatText(st.x, st.y - 50, `${st.name} ✓`, '#ffd23f', 20);
+        return;
+      }
+      // 踩錯：一道浪打上來
+      const w = this.add.image(st.x, st.y - 120, 'fx-drop').setDepth(st.y + 100).setScale(2.4).setTint(0x7fb2e5);
+      this.tweens.add({ targets: w, y: st.y - 10, duration: 220, ease: 'Quad.in', onComplete: () => {
+        w.destroy();
+        const sp = this.add.graphics({ x: st.x, y: st.y }).setDepth(-4);
+        sp.fillStyle(0x7fb2e5, 0.7); sp.fillEllipse(0, 0, 140, 80); sp.lineStyle(3, 0xffffff, 0.9); sp.strokeEllipse(0, 0, 140, 80);
+        this.tweens.add({ targets: sp, alpha: 0, scale: 1.4, duration: 800, onComplete: () => sp.destroy() });
+        this.burst(st.x, st.y - 10, 12, 0xffffff, 80);
+      } });
+      this.floatText(st.x, st.y - 60, '🌊 踩錯了！', '#bfe6ff', 22);
+      if (me && e.id === me.id) toast('🌊 踩錯顏色，被浪打回起點了！要從石碑上的第一顆重新踩');
+    }
+    onDgStage(e) {
+      if (!this.inDg()) return;
+      this.cameras.main.shake(500, 0.006);
+      toast(e.stage === 1 ? '✨ 石門打開了！往下走到太魯閣九曲洞' : '✨ 石門打開了！往下走到清水斷崖……小心');
+    }
+    onDgClear(c) {
+      if (!this.inDg()) return;
+      const mine = c.drops.find(d => me && d.id === me.id);
+      for (let i = 0; i < 4; i++) this.time.delayedCall(i * 300, () => this.burst(this.me.x + (Math.random() - 0.5) * 200, this.me.y - 120 - Math.random() * 80, 16, [0xffd23f, 0xff8fab, 0x7fd1ff, 0x7be08f][i], 120));
+      this.floatText(this.me.x, this.me.y - 150, '🎉 副本通關！', '#ffd23f', 30);
+      if (!mine) return;
+      const g = mine.item && GR.GEAR[mine.item];
+      if (!g) toast('🍃 這次什麼都沒掉……下次再來挑戰！');
+      else if (mine.dup) toast(`🔁 又是【${g.rarity}】${g.icon} ${g.name}，換成 600 經驗`);
+      else toast(`⚔️ 獲得武器【${g.rarity}】${g.icon} ${g.name}！到 👗 裝備換上，普攻就會變`);
+      toast(`${Math.round(c.ms / 1000)} 秒後送回副本入口`);
+    }
+
+    // 副本的面板：候場區按出發、副本裡看關卡和時間、離開
+    renderDgPanel(force) {
+      const d = this.dg, box = $('dg-panel');
+      if (!d || !this.me) { box.hidden = true; return; }
+      const sec = (ms) => { const t = Math.ceil(ms / 1000); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`; };
+      const D = MAP.DUNGEON;
+      let key, html;
+      if (this.inDg()) {
+        const st = D.stages[Math.min(d.stage, 2)];
+        const left = d.phase === 'clear' ? d.clearLeft - (performance.now() - this.dgAt) : d.timeLeft - (performance.now() - this.dgAt);
+        const what = d.phase === 'clear' ? `🎉 通關！${sec(Math.max(0, left))} 後回入口` : `第 ${Math.min(d.stage, 2) + 1} 關 ${st.name} · ⏱ ${sec(Math.max(0, left))}`;
+        // 七星潭：面板上也畫出石碑的顏色順序（手機上石碑常常被上面的條擋住）
+        const seq = d.stage === 0 && d.phase === 'run' ? '<span class="dg-seq">' + d.seq.map((si, k) =>
+          `<i style="background:${D.stones[si].color}" class="${k < d.progress ? 'on' : ''}"></i>`).join('') + '</span>' : '';
+        key = 'in|' + what + d.stage + '|' + d.progress;
+        html = `<span>🌀 ${D.name}副本 · ${what}</span>` + seq + (d.stage === 1 && d.phase === 'run' ? '<button class="hud-btn tiny" data-act="reset" type="button">🔄 重排大理石</button>' : '') +
+          '<button class="hud-btn tiny" data-act="leave" type="button">🚪 離開</button>';
+      } else if (this.roomId === 'lobby') {
+        if (d.phase === 'idle') { key = 'idle'; html = `<span>🌀 ${D.title} · 1～${d.max} 人 · 限時 ${D.timeLimitMs / 60000} 分</span><button class="primary" data-act="start" type="button">出發</button>`; }
+        else if (d.phase === 'countdown') {
+          const left = d.countdown - (performance.now() - this.dgAt);
+          key = 'cd' + Math.ceil(left / 1000);
+          html = `<span>⏳ ${Math.max(0, Math.ceil(left / 1000))} 秒後出發！站在候場區就會一起去</span>`;
+        } else { key = 'busy' + d.members.length + d.stage; html = `<span>⚔️ 副本進行中：${d.members.length} 人，打到第 ${Math.min(d.stage, 2) + 1} 關，等他們出來</span>`; }
+      } else { box.hidden = true; this.dgKey = null; return; }
+      if (force) this.dgAt = performance.now();
+      box.hidden = false;
+      if (key === this.dgKey) return;
+      this.dgKey = key;
+      box.innerHTML = html;
+    }
+
+    // 九曲洞：往大理石的方向走（或點石頭）就會推
+    tryPush(dx, dy) {
+      if (!this.dg || this.dg.stage !== 1 || !this.inDg() || MAP.stageAt(this.me.x, this.me.y) !== 1) return;
+      const fx = Math.floor((this.me.x + dx * 26) / T), fy = Math.floor((this.me.y - 4 + dy * 26) / T);
+      const i = this.blockPos.findIndex(([x, y]) => x === fx && y === fy);
+      if (i < 0) return;
+      const now = performance.now();
+      if (now - (this.lastPush || 0) < 260) return;
+      this.lastPush = now;
+      socket.emit('move', { x: Math.round(this.me.x), y: Math.round(this.me.y), dir: this.me.dir, moving: false });
+      socket.emit('dgPush', { i, dx, dy });
+    }
+    blockAt(x, y) {
+      const tx = Math.floor(x / T), ty = Math.floor(y / T);
+      return this.blockPos.findIndex(([bx, by]) => bx === tx && (by === ty || by === ty + 1));
+    }
+
+    // ---------- 傅昆騎 ----------
+    fuMob() { for (const m of this.mobs.values()) if (m.state.kind === 'fu' && m.state.alive) return m; return null; }
+    updateFuLook(m, was) {
+      const def = ST.MOBS.fu, p2 = m.state.phase === 2, M = p2 ? def.phase2 : def;
+      m.tag.setText(`Lv.${M.level} ${M.name}`).setColor(p2 ? '#d9c4ff' : '#ffd23f');
+      if (!m.aura) {
+        m.aura = this.add.graphics();
+        m.aura.fillStyle(0x5b3f8f, 0.35); m.aura.fillEllipse(0, 0, 150, 46);
+        m.addAt(m.aura, 0);
+        this.tweens.add({ targets: m.aura, scaleX: 1.15, scaleY: 1.15, alpha: 0.6, duration: 800, yoyo: true, repeat: -1 });
+      }
+      m.aura.setVisible(p2);
+      if (p2 && was && was.phase !== 2 && m.visible) {
+        this.cameras.main.shake(900, 0.008);
+        for (let i = 0; i < 3; i++) this.time.delayedCall(i * 350, () => this.burst(m.x, m.y - 80, 16, i % 2 ? 0x8a5cd6 : 0x2b2a33, 160));
+        this.floatText(m.x, m.y - 190, `🌑 黑化成「${def.phase2.name}」了！`, '#d9c4ff', 26);
+        this.tweens.add({ targets: m.body_, angle: 360, duration: 1200, ease: 'Cubic.inOut', onComplete: () => m.body_.setAngle(0) });
+      }
+      if (this.bossFor === 'fu') this.refreshBossLabel();
+    }
+    refreshBossLabel() {
+      if (this.bossFor === 'fu') {
+        const m = this.fuMob(), def = ST.MOBS.fu, p2 = m && m.state.phase === 2, M = p2 ? def.phase2 : def;
+        document.querySelector('#boss .boss-lv').textContent = 'Lv.' + M.level;
+        document.querySelector('#boss .boss-lv').nextSibling.textContent = ' ' + M.name + ' ';
+        $('boss').classList.toggle('phase2', !!p2);
+        if (m) this.drawFuBar(m);
+      } else {
+        this.applyMonsterLook();
+        this.drawMonsterBar();
+      }
+    }
+    drawFuBar(m) {
+      const ratio = m.state.maxHp ? m.state.hp / m.state.maxHp : 0;
+      $('boss-fill').style.width = (ratio * 100) + '%';
+      $('boss-pct').textContent = Math.ceil(ratio * 100) + '%';
+    }
+    // 出招預告：地上畫出紅色範圍，裡面的顏色慢慢填滿
+    onFuAttack(a) {
+      const m = this.mobs.get(a.mid);
+      const tele = (g, draw) => {
+        draw(g, 0xff3b3b, 0.16, 3);
+        this.tweens.add({ targets: g, alpha: { from: 1, to: 0.55 }, duration: 160, yoyo: true, repeat: -1 });
+        this.time.delayedCall(a.delay + 60, () => { this.tweens.killTweensOf(g); g.destroy(); });
+      };
+      const mine = (hit) => { if (this.me && !this.isDead() && this.inDg() && hit(this.me)) toast('⚠️ 快離開紅色範圍！'); };
+      if (a.type === 'slash' || a.type === 'wave') {
+        const spots = a.type === 'slash' ? [{ x: a.x, y: a.y }] : a.spots;
+        spots.forEach(sp => {
+          tele(this.add.graphics({ x: sp.x, y: sp.y }).setDepth(-5), (g, c, al, w) => { g.fillStyle(c, al); g.fillEllipse(0, 0, a.r * 2, a.r * 1.4); g.lineStyle(w, c, 0.9); g.strokeEllipse(0, 0, a.r * 2, a.r * 1.4); });
+          const fill = this.add.graphics({ x: sp.x, y: sp.y }).setDepth(-5).setScale(0);
+          fill.fillStyle(0x8a5cd6, 0.35); fill.fillEllipse(0, 0, a.r * 2, a.r * 1.4);
+          this.tweens.add({ targets: fill, scale: 1, duration: a.delay, onComplete: () => fill.destroy() });
+        });
+        if (m) this.floatText(m.x, m.y - 200, a.type === 'slash' ? '🗡️ 黑暗劍氣！' : '🌑 劍氣波！', '#d9c4ff', 22);
+        mine(p => spots.some(sp => Math.hypot(p.x - sp.x, p.y - sp.y) <= a.r));
+      } else if (a.type === 'charge') {
+        const ang = Math.atan2(a.y2 - a.y1, a.x2 - a.x1), len = Math.max(40, Math.hypot(a.x2 - a.x1, a.y2 - a.y1));
+        const g = this.add.graphics({ x: a.x1, y: a.y1 }).setDepth(-5).setRotation(ang);
+        tele(g, (gg, c, al, w) => { gg.fillStyle(c, al); gg.fillRect(0, -a.w / 2, len, a.w); gg.lineStyle(w, c, 0.9); gg.strokeRect(0, -a.w / 2, len, a.w); });
+        const fill = this.add.graphics({ x: a.x1, y: a.y1 }).setDepth(-5).setRotation(ang).setScale(0, 1);
+        fill.fillStyle(0xff8a3d, 0.35); fill.fillRect(0, -a.w / 2, len, a.w);
+        this.tweens.add({ targets: fill, scaleX: 1, duration: a.delay, onComplete: () => fill.destroy() });
+        if (m) {
+          // 舉起拳頭：衝鋒前的預告
+          m.body_.setTexture('mob-fu-fist');
+          m.body_.setFlipX(a.x2 < a.x1);
+          this.tweens.add({ targets: m.body_, y: -8, duration: 200, yoyo: true, repeat: 1 });
+          this.floatText(m.x, m.y - 200, '👊 衝鋒！', '#ffb020', 24);
+        }
+        const segD = (p) => {
+          const dx = a.x2 - a.x1, dy = a.y2 - a.y1, l2 = dx * dx + dy * dy || 1;
+          const k = Math.max(0, Math.min(1, ((p.x - a.x1) * dx + (p.y - a.y1) * dy) / l2));
+          return Math.hypot(p.x - (a.x1 + dx * k), p.y - (a.y1 + dy * k));
+        };
+        mine(p => segD(p) <= a.w / 2);
+      }
+    }
+    onFuAttackHit(a) {
+      const m = this.mobs.get(a.mid);
+      const near = this.me && this.inDg();
+      if (a.type === 'charge') {
+        if (m) {
+          m.body_.setTexture('mob-fu');
+          this.tweens.add({ targets: m, x: a.x2, y: a.y2, duration: 220, ease: 'Quad.in' });
+          m.tx = a.x2; m.ty = a.y2;
+          for (let i = 0; i < 5; i++) this.time.delayedCall(i * 40, () => this.burst(a.x1 + (a.x2 - a.x1) * i / 4, a.y1 + (a.y2 - a.y1) * i / 4, 4, 0x9aa3b5, 40));
+        }
+        if (near) this.cameras.main.shake(260, 0.01);
+      } else {
+        const spots = a.type === 'slash' ? [{ x: a.x, y: a.y }] : a.spots;
+        spots.forEach(sp => {
+          const g = this.add.graphics({ x: sp.x, y: sp.y - 30 }).setDepth(sp.y + 100);
+          g.lineStyle(10, 0x5b3f8f, 0.85); g.beginPath(); g.arc(0, 0, a.r * 0.8, -2.6, 0.5); g.strokePath();
+          g.lineStyle(4, 0xd9c4ff, 1); g.beginPath(); g.arc(0, 0, a.r * 0.8, -2.6, 0.5); g.strokePath();
+          this.tweens.add({ targets: g, scale: 1.3, alpha: 0, angle: 120, duration: 450, onComplete: () => g.destroy() });
+          this.burst(sp.x, sp.y - 20, 10, 0x8a5cd6, a.r);
+        });
+        if (near) this.cameras.main.shake(200, 0.007);
+      }
+    }
+
     canStand(x, y) {
       // 用腳底的一個小方框判斷碰撞
       return !MAP.isBlocked(x - 12, y - 8) && !MAP.isBlocked(x + 12, y - 8) &&
@@ -4046,6 +4557,11 @@
         if (this.canStand(nx, this.me.y)) this.me.x = nx;
         if (this.canStand(this.me.x, ny)) this.me.y = ny;
         moving = this.me.x !== ox || this.me.y !== oy;
+        // 九曲洞：往大理石走過去就是推
+        if (this.dg && this.dg.stage === 1) {
+          const hz = Math.abs(dx) >= Math.abs(dy), pdx = hz ? Math.sign(dx) : 0, pdy = hz ? 0 : Math.sign(dy);
+          if (!this.canStand(this.me.x + pdx * 4, this.me.y + pdy * 4)) this.tryPush(pdx, pdy);
+        }
         if (!moving) this.target = null;
         if (dx !== 0) { this.me.dir = dx < 0 ? -1 : 1; this.me.body_.setFlipX(this.me.dir === -1); }
       }
@@ -4120,9 +4636,20 @@
         if (this.mHitUntil && performance.now() > this.mHitUntil) { this.mHitUntil = 0; this.mFace.setTexture('typhoon-face'); this.applyMonsterTint(); }
         this.monster.setDepth(this.monster.y);
       }
-      // 頭目血條：在前線或看得到颱風的時候才顯示
-      const showBoss = this.mState.alive && (this.roomId === 'front' ||
-        Math.hypot(this.me.x - this.monster.x, this.me.y - this.monster.y) < 700);
+      // 副本區和總部分開設鏡頭範圍，才不會看到中間的空地
+      const inD = MAP.inDungeon(this.me.x);
+      if (inD !== this.camInD) {
+        this.camInD = inD;
+        if (inD) this.cameras.main.setBounds(MAP.DX * T, 0, (MAP.W - MAP.DX) * T, MAP.H * T);
+        else this.cameras.main.setBounds(0, 0, MAP.MW * T, MAP.H * T);
+      }
+      this.portal.rotation -= dt * 3;
+      this.renderDgPanel();
+      // 頭目血條：在前線或看得到颱風的時候才顯示；在清水斷崖就顯示傅昆騎的
+      const fu = this.inDg() && this.roomId === 'd3' ? this.fuMob() : null;
+      if ((fu ? 'fu' : 'typhoon') !== this.bossFor) { this.bossFor = fu ? 'fu' : 'typhoon'; this.refreshBossLabel(); }
+      const showBoss = !!fu || (!inD && this.mState.alive && (this.roomId === 'front' ||
+        Math.hypot(this.me.x - this.monster.x, this.me.y - this.monster.y) < 700));
       if (showBoss !== this.showBoss) { this.showBoss = showBoss; $('boss').hidden = !showBoss; document.body.classList.toggle('boss-on', showBoss); }
       if (!this.mState.alive && this.respawnAt) {
         const left = Math.max(0, Math.ceil((this.respawnAt - performance.now()) / 1000));
@@ -4206,6 +4733,10 @@
           command: '找右上角的 📂 轉職資料沈理員，可以換職業',
           storage: '走到箱子旁按空白鍵（或點箱子）敲三下',
           kitchen: '站在爐台旁按空白鍵煮泡麵補血，有蔬菜會自動加進去',
+          lobby: `站在候場區按「出發」，${MAP.DUNGEON.countdownMs / 1000} 秒後一起傳送到花蓮副本（最多 ${MAP.DUNGEON.maxPlayers} 人），打倒最終頭目會掉武器`,
+          d1: '照石碑上的顏色順序踩石頭，踩錯會被浪打回起點',
+          d2: '往大理石走過去就能推（手機點石頭也可以），三顆都推進地上有 ⬇️ 的凹槽，石門就會開；卡住可以按「重排大理石」',
+          d3: '傅昆騎！地上出現紅色範圍快閃開，他舉起拳頭就是要衝鋒了',
         };
         if (tips[rid] && !this.told[rid]) { this.told[rid] = true; toast(tips[rid]); }
       }

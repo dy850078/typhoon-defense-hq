@@ -9,6 +9,7 @@ const STATS = require('./shared/stats');
 const GEAR = require('./shared/gear');
 const DECOR = require('./shared/decor');
 const ACCOUNTS = require('./accounts');
+const createDungeon = require('./dungeon');
 
 const PORT = Number(process.env.PORT) || 3000;
 const MAX_PLAYERS = Number(process.env.MAX_PLAYERS) || 40;
@@ -485,6 +486,7 @@ function placeMob(m) {
 }
 mobs.forEach(placeMob);
 function mobState(m) {
+  if (m.dg) return DG.mobState(m);
   const now = Date.now();
   return { id: m.id, kind: m.kind, alive: m.alive, hp: m.hp, maxHp: m.maxHp, x: Math.round(m.x), y: Math.round(m.y),
     frozen: Math.max(0, m.frozenUntil - now), weak: Math.max(0, m.weakUntil - now) };
@@ -537,10 +539,11 @@ setInterval(() => {
   mobs.forEach(m => tickMob(m, now));
   summons.slice().forEach(sm => tickSummon(sm, now));
   tickMonster(now);
+  DG.tick(now);
   tickWalls(now);
   // 所有會動的東西合成一則送出：volatile 在同一個 tick 連送好幾則時，後面的常常被丟掉（颱風位置就一直沒更新）
   io.volatile.emit('world', {
-    mobs: mobs.filter(m => m.alive).map(m => [m.id, Math.round(m.x), Math.round(m.y)]),
+    mobs: mobs.concat(DG.foes()).filter(m => m.alive).map(m => [m.id, Math.round(m.x), Math.round(m.y)]),
     summons: summons.map(sm => [sm.id, Math.round(sm.x), Math.round(sm.y)]),
     boss: monster.alive ? [Math.round(monster.x), Math.round(monster.y)] : null,
   });
@@ -618,6 +621,7 @@ function hurt(p, raw, by) {
   if (p.hp > 0) return sendStats(p);
   p.dead = true;
   sendStats(p);
+  if (DG.isMember(p)) return DG.onDeath(p, by); // 副本裡倒下：在這一關的起點復活
   pushChat({ system: true, text: `💫 ${p.name} 被${by}打倒了，${STATS.RESPAWN_MS / 1000} 秒後回到總部`, t: Date.now() });
   setTimeout(() => {
     if (!players.has(p.id)) return;
@@ -674,14 +678,15 @@ const cross = (ax, ay, bx, by, cx, cy, dx, dy) => {
 const behindWall = (ax, ay, bx, by) => walls.some(w => w.pts.slice(1).some((q, i) => cross(ax, ay, bx, by, w.pts[i][0], w.pts[i][1], q[0], q[1])));
 // 檢查玩家畫的線：點要在前線、離自己不太遠，總長度超過上限就截斷
 function wallLine(p, pts, maxLen) {
-  if (!inField(p) || !Array.isArray(pts) || pts.length < 2) return null;
+  if ((!inField(p) && !DG.inFight(p)) || !Array.isArray(pts) || pts.length < 2) return null;
+  const B = DG.boxAt(p.x, p.y) || { x1: Z.x1 - 2 * T, y1: Z.y1 - 2 * T, x2: Z.x2 + 2 * T, y2: Z.y2 + 2 * T };
   const out = [];
   let len = 0;
   for (const q of pts.slice(0, 80)) {
     if (!Array.isArray(q)) return null;
     let x = Number(q[0]), y = Number(q[1]);
     if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
-    x = clamp(x, Z.x1 - 2 * T, Z.x2 + 2 * T); y = clamp(y, Z.y1 - 2 * T, Z.y2 + 2 * T);
+    x = clamp(x, B.x1, B.x2); y = clamp(y, B.y1, B.y2);
     if (dist(x, y, p.x, p.y) > 700) return null;
     if (out.length) {
       const [lx, ly] = out[out.length - 1], seg = dist(x, y, lx, ly);
@@ -703,7 +708,7 @@ function tickWalls(now) {
     const w = walls[i];
     if (now >= w.until) { walls.splice(i, 1); io.emit('wallGone', { id: w.id }); continue; }
     const owner = players.get(w.owner);
-    const foes = [...(monster.alive ? [[monster, true]] : []), ...mobs.filter(m => m.alive).map(m => [m, false])]
+    const foes = [...(monster.alive ? [[monster, true]] : []), ...mobs.concat(DG.foes()).filter(m => m.alive).map(m => [m, false])]
       .filter(([f, b]) => wallDist(w, f.x, f.y) < (b ? WALL_R.boss : WALL_R.mob) + 24);
     if (w.kind === 'ice') {
       foes.forEach(([f, b]) => {
@@ -733,6 +738,7 @@ function emptyCrates() {
 // ---------------- 打怪：扣血、打倒、掉落 ----------------
 // p 是拿到傷害和經驗的玩家，hitBy 是實際出手的人或召喚物（給畫面用）
 function damageFoe(p, foe, isBoss, dmg, crit, skillId, hitBy) {
+  if (foe.dg) return DG.damage(p, foe, dmg, crit, skillId, hitBy);
   const now = Date.now();
   if (isBoss && now < monster.transformUntil) return; // 變身中打不動
   foe.hp = Math.max(0, foe.hp - dmg);
@@ -810,17 +816,25 @@ function tickSummon(sm, now) {
   // 找最近的敵人：小怪或颱風
   // 整個前線都找得到，離最近的那隻走過去打
   let foe = null, isBoss = false, fd = 1600;
-  mobs.forEach(m => { if (!m.alive) return; const d = dist(m.x, m.y, sm.x, sm.y); if (d < fd) { fd = d; foe = m; isBoss = false; } });
-  if (monster.alive) { const d = dist(monster.x, monster.y, sm.x, sm.y); if (d < fd) { fd = d; foe = monster; isBoss = true; } }
+  const box = DG.boxAt(sm.x, sm.y); // 在副本裡：只找同一關的怪，也不會走出這一關
+  (box ? DG.foes().filter(m => m.x >= box.x1 && m.x < box.x2 && m.y >= box.y1 && m.y < box.y2) : mobs).forEach(m => {
+    if (!m.alive) return; const d = dist(m.x, m.y, sm.x, sm.y); if (d < fd) { fd = d; foe = m; isBoss = false; }
+  });
+  if (monster.alive && !box) { const d = dist(monster.x, monster.y, sm.x, sm.y); if (d < fd) { fd = d; foe = monster; isBoss = true; } }
   let tx, ty, stop;
-  if (foe) { tx = foe.x; ty = foe.y; stop = isBoss ? 110 : 60; }
-  else if (inField(owner)) { tx = owner.x + 50; ty = owner.y + 10; stop = 40; }
+  if (foe) { tx = foe.x; ty = foe.y; stop = isBoss ? 110 : foe.kind === 'fu' ? 90 : 60; }
+  else if (box ? DG.boxAt(owner.x, owner.y) === box : inField(owner)) { tx = owner.x + 50; ty = owner.y + 10; stop = 40; }
   else { tx = sm.x; ty = sm.y; stop = 1e9; }
   const d = dist(sm.x, sm.y, tx, ty);
   if (d > stop) {
     const step = Math.min(d - stop, def.speed * TICK / 1000);
-    sm.x = clamp(sm.x + (tx - sm.x) / d * step, Z.x1 - 3 * T, Z.x2 + 3 * T);
-    sm.y = clamp(sm.y + (ty - sm.y) / d * step, 32 * T, Z.y2 + T);
+    if (box) {
+      sm.x = clamp(sm.x + (tx - sm.x) / d * step, box.x1 + 20, box.x2 - 20);
+      sm.y = clamp(sm.y + (ty - sm.y) / d * step, box.y1 + 30, box.y2 - 10);
+    } else {
+      sm.x = clamp(sm.x + (tx - sm.x) / d * step, Z.x1 - 3 * T, Z.x2 + 3 * T);
+      sm.y = clamp(sm.y + (ty - sm.y) / d * step, 32 * T, Z.y2 + T);
+    }
   }
   if (foe && d <= stop + 20 && now >= sm.nextHit) {
     sm.nextHit = now + STATS.SUMMON_HIT_MS;
@@ -830,6 +844,15 @@ function tickSummon(sm, now) {
     damageFoe(owner, foe, isBoss, dmg, crit, 'pet', sm.id);
   }
 }
+
+// ---------------- 副本（dungeon.js） ----------------
+const DG = createDungeon({
+  io, players, MAP, STATS, GEAR, pushChat, sendStats, gainExp, TICK, wallBlocks, behindWall,
+  hurtPlayer: (p, dmg, by) => hurt(p, dmg, by),
+  isAway: (p) => awayTimers.has(p.id),
+  summons: () => summons,
+  hurtSummon,
+});
 
 // ---------------- 室內設計：家具 ----------------
 // 打怪掉落的家具可以擺在總部室內，擺好的家具存在 data/decor.json，伺服器重開也還在
@@ -884,7 +907,7 @@ function giveDecor(p) {
 // 這格能不能擺家具：要在室內、不能是牆或門、不能擋到東西
 function canDecorate(tx, ty) {
   const room = MAP.roomAt((tx + 0.5) * T, (ty + 0.5) * T);
-  if (!room || room.id === 'front') return false;
+  if (!room || room.id === 'front' || room.dungeon || room.lobby) return false;
   const ch = MAP.tiles[ty] && MAP.tiles[ty][tx];
   return !!ch && !MAP.BLOCKING.has(ch) && ch !== '=' && ch !== ',';
 }
@@ -1099,7 +1122,8 @@ io.on('connection', (socket) => {
     const rk = typeof data.rk === 'string' ? data.rk.slice(0, 40) : '';
     if (rk) [...players.values()].filter(o => o.rk === rk && awayTimers.has(o.id)).forEach(o => removePlayer(o.id));
     const x = Number(data.x), y = Number(data.y);
-    const back = Number.isFinite(x) && Number.isFinite(y) && !MAP.isBlocked(x, y);
+    // 副本裡的位置不能直接接回去（副本要從入口出發）
+    const back = Number.isFinite(x) && Number.isFinite(y) && !MAP.isBlocked(x, y) && !MAP.inDungeon(x);
 
     if (account) keepProgress(d, account);
     const p = Object.assign({
@@ -1115,7 +1139,7 @@ io.on('connection', (socket) => {
 
     growMonster();
     ack({ ok: true, you: Object.assign(publicPlayer(p), { owned: p.owned, furn: p.furn }), players: [...players.values()].map(publicPlayer), history,
-      monster: monsterState(), mobs: mobs.map(mobState), emptyCrates: emptyCrates(),
+      monster: monsterState(), mobs: mobs.map(mobState).concat(DG.allFoes().map(mobState)), emptyCrates: emptyCrates(), dungeon: DG.state(),
       summons: summons.map(summonState), decor: decorList(),
       walls: walls.map(w => ({ id: w.id, kind: w.kind, pts: w.pts, ms: w.until - Date.now() })), music: musicState() });
     socket.broadcast.emit('playerJoined', publicPlayer(p));
@@ -1127,6 +1151,8 @@ io.on('connection', (socket) => {
     if (!p || !m || p.dead) return;
     const x = Number(m.x), y = Number(m.y);
     if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+    // 副本的門：不合法的位置不收，把人拉回伺服器記得的位置（也擋掉傳送之後才到的舊封包）
+    if (!DG.allowMove(p, x, y)) return socket.emit('playerMoved', { id: p.id, x: p.x, y: p.y, dir: p.dir, moving: false, teleport: true });
     p.x = clamp(x, 0, MAP.W * MAP.TILE);
     p.y = clamp(y, 0, MAP.H * MAP.TILE);
     p.dir = m.dir === -1 ? -1 : 1;
@@ -1174,7 +1200,7 @@ io.on('connection', (socket) => {
     if (typeof ack !== 'function') return;
     if (!p || p.dead) return ack({ ok: false });
     const skill = STATS.SKILLS[skillId];
-    if (!skill || !STATS.CLASSES[p.cls].skills.includes(skillId)) return ack({ ok: false });
+    if (!skill || !STATS.skillsOf(p.cls, p.equip).includes(skillId)) return ack({ ok: false });
     const now = Date.now();
     if (now - lastAction < 300 || now < (p.cooldowns[skillId] || 0)) return ack({ ok: false });
     // 插畫結界師的城牆：target 是畫出來的線
@@ -1182,7 +1208,7 @@ io.on('connection', (socket) => {
     if (skill.wall && !line) return ack({ ok: false, error: '要在 🌀 颱風前線、自己附近畫一條線' });
     if (skill.wall) target = 'boss';
     const isBoss = !target || target === 'boss';
-    const foe = isBoss ? monster : mobs.find(m => m.id === target);
+    const foe = isBoss ? monster : mobs.find(m => m.id === target) || DG.foe(target);
     const foeName = isBoss ? `颱風${STATS.MONSTER.name}` : foe ? STATS.MOBS[foe.kind].name : '';
     if (!skill.support) {
       if (!foe || !foe.alive) return ack({ ok: false, error: isBoss ? `颱風${STATS.MONSTER.name}還沒出現` : '它已經被打倒了' });
@@ -1191,7 +1217,7 @@ io.on('connection', (socket) => {
     if (p.mp < skill.mp) return ack({ ok: false, error: '魔力不夠' });
     let kind = null;
     if (skill.summon) {
-      if (!inField(p)) return ack({ ok: false, error: '要在 🌀 颱風前線才能召喚' });
+      if (!inField(p) && !DG.inFight(p)) return ack({ ok: false, error: '要在 🌀 颱風前線或副本裡才能召喚' });
       if (summons.filter(sm => sm.owner === p.id).length >= STATS.SUMMON_MAX) return ack({ ok: false, error: `最多同時召喚 ${STATS.SUMMON_MAX} 隻` });
       kind = pickSummonKind();
     }
@@ -1251,7 +1277,7 @@ io.on('connection', (socket) => {
     const center = skill.aoe ? p : skill.aoeAt && foe ? foe : null, reach = skill.aoe || skill.aoeAt;
     const hits = center
       ? [...(monster.alive && (monster === foe || STATS.foeGap(center, monster, true) <= reach) ? [[monster, true]] : []),
-         ...mobs.filter(m => m.alive && (m === foe || STATS.foeGap(center, m, false) <= reach)).map(m => [m, false])]
+         ...mobs.concat(DG.foes()).filter(m => m.alive && (m === foe || STATS.foeGap(center, m, false) <= reach)).map(m => [m, false])]
       : foe ? [[foe, isBoss]] : [];
     if (center) fx.hits = hits.map(([f, b]) => b ? 'boss' : f.id);
     if (skill.weaken) hits.forEach(([f]) => { f.weakUntil = now + skill.weaken; });
@@ -1262,7 +1288,10 @@ io.on('connection', (socket) => {
       hits.forEach(([f, b]) => {
         const d = Math.max(1, dist(f.x, f.y, p.x, p.y)), push = b ? skill.knock.boss : skill.knock.mob;
         const ux = d > 5 ? (f.x - p.x) / d : (Math.random() < 0.5 ? -1 : 1), uy = d > 5 ? (f.y - p.y) / d : 0;
-        f.x = clamp(f.x + ux * push, Z.x1, Z.x2); f.y = clamp(f.y + uy * push, Z.y1, Z.y2);
+        const B = f.dg ? DG.boundsOf(f) : Z, pad = f.dg ? T : 0;
+        let nx = clamp(f.x + ux * push, B.x1 + pad, B.x2 - pad), ny = clamp(f.y + uy * push, B.y1 + pad, B.y2 - pad);
+        if (f.dg && MAP.isBlocked(nx, ny)) { nx = f.x; ny = f.y; } // 副本裡撞到岩壁就不推
+        f.x = nx; f.y = ny;
         f.tx = f.x; f.ty = f.y;
         f.stunUntil = now + skill.knock.stun;
         fx.knock.push([b ? 'boss' : f.id, Math.round(f.x), Math.round(f.y)]);
@@ -1406,6 +1435,30 @@ io.on('connection', (socket) => {
     io.emit('decor', { key: String(key), removed: true });
     saveDecor();
     ack({ ok: true, furn: p.furn });
+  });
+
+  // ---------------- 副本 ----------------
+  socket.on('dgStart', (ack) => {
+    const p = players.get(socket.id);
+    if (!p || typeof ack !== 'function') return;
+    ack(DG.start(p));
+  });
+  socket.on('dgLeave', (ack) => {
+    const p = players.get(socket.id);
+    if (!p) return;
+    const r = DG.leave(p);
+    if (typeof ack === 'function') ack(r);
+  });
+  socket.on('dgPush', (m, ack) => {
+    const p = players.get(socket.id);
+    if (!p || !m) return;
+    const r = DG.push(p, Number(m.i), Number(m.dx), Number(m.dy));
+    if (typeof ack === 'function') ack(r);
+  });
+  socket.on('dgReset', (ack) => {
+    const p = players.get(socket.id);
+    if (!p || typeof ack !== 'function') return;
+    ack(DG.resetBlocks(p));
   });
 
   // 穿上 / 脫下裝備（id 是 null 就是脫掉）
@@ -1776,6 +1829,7 @@ function removePlayer(id) {
   awayTimers.delete(id);
   snapshot(p);
   GAMES.forEach(g => g.remove(id));
+  DG.remove(id);
   summons.filter(sm => sm.owner === id).forEach(sm => removeSummon(sm));
   const hadVideo = !!p.video;
   players.delete(id);

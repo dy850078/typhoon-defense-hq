@@ -1,4 +1,4 @@
-// 副本（花蓮）：候場區倒數 → 傳送進去鎖門 → 七星潭踩石頭 → 九曲洞推大理石 → 清水斷崖打傅昆騎 → 掉武器
+// 副本（花蓮）：候場區倒數 → 傳送進去鎖門 → 七星潭踩石頭 → 九曲洞推大理石 → 清水斷崖打花蓮王 → 掉武器
 // 同時只有一場；打完、全隊倒下、所有人離開或超過時間就重置，入口重新開放
 // server.js 把要用到的東西（io、玩家、扣血…）傳進來，這裡只管副本自己的狀態
 module.exports = function createDungeon(ctx) {
@@ -7,7 +7,7 @@ module.exports = function createDungeon(ctx) {
   const envNum = (v, d) => (v !== undefined && v !== '' && Number.isFinite(Number(v)) ? Number(v) : d);
   const BOSS_HP = Math.max(1, envNum(process.env.DG_BOSS_HP, 8000));
   const BOSS_HP_PER_PLAYER = envNum(process.env.DG_BOSS_HP_PER_PLAYER, 3000);
-  const CLEAR_SHOW_MS = 20000; // 打倒傅昆騎後還能在裡面待多久
+  const CLEAR_SHOW_MS = 20000; // 打倒花蓮王後還能在裡面待多久
   const ROCK_RESPAWN_MS = 25000;
   const dist = (ax, ay, bx, by) => Math.hypot(ax - bx, ay - by);
   const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
@@ -317,7 +317,7 @@ module.exports = function createDungeon(ctx) {
     m.x = nx; m.y = ny;
   }
 
-  // ---------------- 最終頭目：傅昆騎 ----------------
+  // ---------------- 最終頭目：花蓮王 ----------------
   // 出招前地上先畫出範圍：舉拳之後直線衝鋒、原地揮一圈黑暗劍氣；第二階段多了劍氣波，還會叫出黑馬分身
   const ATK = {
     slash: { r: 190, delay: 1000, dmg: [24, 32] },

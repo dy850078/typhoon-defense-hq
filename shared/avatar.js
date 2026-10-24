@@ -69,7 +69,7 @@
 
     // 手臂（袖子 + 手）
     if (p.npc !== 'chiang') [[13, -0.5], [51, 0.5]].forEach(([x, tilt]) => {
-      if (p.fist && x > 32) return; // 傅昆騎舉拳：右手另外畫在上面
+      if (p.fist && x > 32) return; // 花蓮王舉拳：右手另外畫在上面
       // 超能力霸王露出粗粗的手臂
       if (cos === 'tank') { C.blob(ctx, x + tilt * 2, 55, 6.5, 9.5, r, 0.08); C.fill(ctx, skin, r, null); C.stroke(ctx, r, W); return; }
       C.blob(ctx, x, 54, 5, 9, r, 0.08); C.fill(ctx, sleeve, r, [x - 5, 45, 10, 18]); C.stroke(ctx, r, W);
@@ -238,7 +238,7 @@
     ctx.restore();
   }
 
-  // 副本頭目傅昆騎：往旁邊梳的黑色短髮、圓臉大笑、黑色盔甲；舉拳（p.fist）是衝鋒前的預告
+  // 副本頭目花蓮王：往旁邊梳的黑色短髮、圓臉大笑、黑色盔甲；舉拳（p.fist）是衝鋒前的預告
   function drawFu(ctx, C, r, p, W, skin) {
     ctx.beginPath();
     ctx.moveTo(14.5, 28); ctx.quadraticCurveTo(12.5, 7.5, 32, 8); ctx.quadraticCurveTo(51, 7.5, 50.5, 26);

@@ -166,8 +166,8 @@
       say: ['轟隆隆～', '落石注意！', '擋路擋路', '🪨'] },
     horse: { name: '黑馬分身', level: 40, hp: 900, dmg: [14, 20], range: 90, speed: 95, exp: 150, dungeon: true, scale: 0.8,
       say: ['嘶～', '🐴', '衝啊！'] },
-    fu: { name: '傅昆騎', level: 50, hp: 9000, dmg: [0, 0], range: 0, speed: 70, exp: 800, dungeon: true, boss: true, scale: 1,
-      gap: { half: 46, top: 130, bottom: 16 }, phase2: { name: '暗黑傅昆騎', level: 60 },
+    fu: { name: '花蓮王', level: 50, hp: 9000, dmg: [0, 0], range: 0, speed: 70, exp: 800, dungeon: true, boss: true, scale: 1,
+      gap: { half: 46, top: 130, bottom: 16 }, phase2: { name: '暗黑花蓮王', level: 60 },
       say: ['花蓮是我的！', '我們一起努力！', '凍蒜！', '這個我不同意', '👊'] },
   });
   const MOB_RESPAWN_MS = 45000;

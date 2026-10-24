@@ -2138,7 +2138,7 @@
     CR.fill(ctx, '#8a5cd6', r, null); CR.stroke(ctx, r, 1.6);
     ctx.fillStyle = '#ff3b3b'; ctx.beginPath(); ctx.arc(77, 29, 2.2, 0, Math.PI * 2); ctx.fill();
   });
-  // 傅昆騎：黑色披風在後面，前面是 avatar.js 畫的人（npc: 'fu'）
+  // 花蓮王：黑色披風在後面，前面是 avatar.js 畫的人（npc: 'fu'）
   const drawFuMob = (fist) => mobCanvas(93, (ctx, r) => {
     ctx.beginPath(); ctx.moveTo(28, 50); ctx.quadraticCurveTo(14, 70, 18, 84); ctx.lineTo(78, 84); ctx.quadraticCurveTo(82, 70, 68, 50); ctx.closePath();
     CR.fill(ctx, '#2b2a33', r, null); CR.stroke(ctx, r, 2.4);
@@ -4132,7 +4132,7 @@
       let m = this.mobs.get(st.id);
       const def = ST.MOBS[st.kind];
       if (!m) {
-        // 副本的怪有自己的大小（傅昆騎比較大），血條、對話框跟著往上
+        // 副本的怪有自己的大小（花蓮王比較大），血條、對話框跟著往上
         const sc = def.scale || 0.62, k = sc / 0.62;
         const body = this.add.image(0, 0, 'mob-' + st.kind).setScale(sc).setOrigin(0.5, 0.95);
         const tag = this.add.text(0, 10, `Lv.${def.level} ${def.name}`, {
@@ -4519,7 +4519,7 @@
       return this.blockPos.findIndex(([bx, by]) => bx === tx && (by === ty || by === ty + 1));
     }
 
-    // ---------- 傅昆騎 ----------
+    // ---------- 花蓮王 ----------
     fuMob() { for (const m of this.mobs.values()) if (m.state.kind === 'fu' && m.state.alive) return m; return null; }
     updateFuLook(m, was) {
       const def = ST.MOBS.fu, p2 = m.state.phase === 2, M = p2 ? def.phase2 : def;
@@ -4760,7 +4760,7 @@
       }
       this.portal.rotation -= dt * 3;
       this.renderDgPanel();
-      // 頭目血條：在前線或看得到颱風的時候才顯示；在清水斷崖就顯示傅昆騎的
+      // 頭目血條：在前線或看得到颱風的時候才顯示；在清水斷崖就顯示花蓮王的
       const fu = this.inDg() && this.roomId === 'd3' ? this.fuMob() : null;
       if ((fu ? 'fu' : 'typhoon') !== this.bossFor) { this.bossFor = fu ? 'fu' : 'typhoon'; this.refreshBossLabel(); }
       const showBoss = !!fu || (!inD && this.mState.alive && (this.roomId === 'front' ||
@@ -4851,7 +4851,7 @@
           lobby: `站在古城候位區按「出發」，${MAP.DUNGEON.countdownMs / 1000} 秒後一起傳送到花蓮副本（最多 ${MAP.DUNGEON.maxPlayers} 人），打倒最終頭目會掉武器；按「回總部」回到指揮中心`,
           d1: '照石碑上的顏色順序踩石頭，踩錯會被浪打回起點',
           d2: '往大理石走過去就能推（手機點石頭也可以），三顆都推進地上有 ⬇️ 的凹槽，石門就會開；卡住可以按「重排大理石」',
-          d3: '傅昆騎！地上出現紅色範圍快閃開，他舉起拳頭就是要衝鋒了',
+          d3: '花蓮王！地上出現紅色範圍快閃開，他舉起拳頭就是要衝鋒了',
         };
         if (tips[rid] && !this.told[rid]) { this.told[rid] = true; toast(tips[rid]); }
       }

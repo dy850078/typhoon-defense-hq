@@ -47,7 +47,7 @@
     rainbowCape: { slot: 'cape', name: '彩虹披風', rarity: 'R', icon: '🌈' },
     butterfly: { slot: 'cape', name: '蝴蝶翅膀', rarity: 'SR', icon: '🦋' },
     phoenix: { slot: 'cape', name: '鳳凰火焰翅膀', rarity: 'SSR', icon: '🔥' },
-    // 武器：花蓮副本（打倒傅昆騎才會掉）
+    // 武器：花蓮副本（打倒花蓮王才會掉）
     lilyDart: { slot: 'weapon', name: '金針花標', rarity: 'R', icon: '🌼', basic: 'lilyDart', dungeon: 'hualien' },
     qixingStaff: { slot: 'weapon', name: '七星潭法杖', rarity: 'SR', icon: '🔮', basic: 'pebbleOrb', dungeon: 'hualien' },
     tarokoHammer: { slot: 'weapon', name: '太魯閣戰錘', rarity: 'SSR', icon: '🔨', basic: 'marbleSmash', dungeon: 'hualien' },

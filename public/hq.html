@@ -57,7 +57,7 @@
     <div id="inventory"></div>
     <div id="toasts"></div>
     <div id="music" hidden>
-      <div class="dj-head"><span class="dj-live">ON AIR</span><span id="music-by"></span></div>
+      <div class="dj-head"><span class="dj-live">ON AIR</span><span id="music-by"></span><button id="music-fold" type="button" title="收起來" aria-label="收起播放器">▾</button></div>
       <div class="dj-deck">
         <div class="vinyl" aria-hidden="true"><img id="music-art" alt=""></div>
         <div class="tonearm" aria-hidden="true"></div>
@@ -76,12 +76,14 @@
     </div>
     <button id="action-btn" class="primary" hidden></button>
     <div id="skillbar">
-      <button id="cake-btn" class="hud-btn" type="button" title="放下蛋糕" hidden>🎂<span> 放下蛋糕 <small id="cake-left"></small></span></button>
-      <button id="fw-btn" class="hud-btn" type="button" title="放慶祝煙火">🎆</button>
-      <button id="skills-open" class="hud-btn" type="button">📖<span> 技能</span></button>
-      <button id="skill-btn" type="button"></button>
-      <button id="skill2-btn" type="button"></button>
+      <button id="cake-btn" class="sk-btn" type="button" hidden>🎂<small id="cake-left"></small></button>
+      <button id="basic-btn" class="sk-btn" type="button"></button>
+      <button id="skill-btn" class="sk-btn" type="button"></button>
+      <button id="skill2-btn" class="sk-btn" type="button"></button>
+      <button id="skills-open" class="sk-btn plain" type="button">📖</button>
+      <button id="fw-btn" class="sk-btn plain" type="button">🎆</button>
     </div>
+    <div id="sk-tip" role="tooltip" hidden></div>
     <div id="video-prompt" hidden>
       <span>🎖️ 你在戰情室</span>
       <button id="video-btn" class="primary">加入視訊</button>

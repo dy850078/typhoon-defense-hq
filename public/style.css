@@ -95,14 +95,34 @@ button.inv-item:hover { border-color: var(--accent); }
 .toast { background: var(--navy); color: var(--navy-fg); border-left: 4px solid var(--accent); border-radius: 10px;
   padding: 8px 16px; font-weight: 700; animation: toast 2.2s ease forwards; white-space: nowrap; }
 @keyframes toast { 0% { opacity: 0; transform: translateY(-6px); } 10%, 80% { opacity: 1; transform: none; } 100% { opacity: 0; } }
-#action-btn { right: 16px; bottom: 56px; font-size: 18px; padding: 14px 24px; box-shadow: 0 6px 20px rgba(255,106,19,.4); }
-#skillbar { right: 16px; bottom: 124px; display: flex; gap: 8px; align-items: center; }
-#skill-btn, #skill2-btn { position: relative; overflow: hidden; font: 700 15px var(--display); background: #4f7cc2; color: #fff; border: 0;
-  border-radius: 999px; padding: 10px 18px; cursor: pointer; box-shadow: 0 6px 20px rgba(79,124,194,.4); }
-#skill-btn small, #skill2-btn small { font: 700 11px var(--mono); opacity: .8; margin-left: 4px; position: relative; }
-#skill-btn .cd, #skill2-btn .cd { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: rgba(19,26,40,.45); pointer-events: none; }
-#skill2-btn { background: #8a5cd6; box-shadow: 0 6px 20px rgba(138,92,214,.4); }
-#skill-btn.cooling, #skill2-btn.cooling { cursor: default; }
+/* 場景互動（敲箱子、點歌…）：技能列上面的小膠囊 */
+#action-btn { right: 16px; bottom: 128px; font-size: 15px; padding: 8px 18px; box-shadow: 0 4px 14px rgba(255,106,19,.4); }
+/* 技能列：一排蠟筆風小方塊，角落標快捷鍵 */
+#skillbar { right: 16px; bottom: 52px; display: flex; gap: 8px; align-items: flex-end; }
+.sk-btn { position: relative; overflow: hidden; width: 54px; height: 54px; padding: 0; border-radius: 14px; cursor: pointer;
+  background: #4f7cc2; color: #fff; border: 2.5px solid #131a28; box-shadow: 0 3px 0 #131a28, 0 6px 16px rgba(0,0,0,.25);
+  font: 700 26px var(--display); display: flex; align-items: center; justify-content: center; transition: transform .08s, filter .2s; }
+.sk-btn:active { transform: translateY(2px); box-shadow: 0 1px 0 #131a28; }
+.sk-btn .sk-icon { position: relative; line-height: 1; }
+.sk-btn kbd { position: absolute; right: 3px; bottom: 2px; font: 700 10px var(--mono); background: rgba(19,26,40,.75); color: #fff;
+  border-radius: 4px; padding: 0 3px; line-height: 14px; }
+.sk-btn .cd { position: absolute; left: 0; right: 0; bottom: 0; height: 0; background: rgba(19,26,40,.55); pointer-events: none; }
+.sk-btn.cooling { cursor: default; }
+.sk-btn.low { filter: grayscale(.7) brightness(.8); }
+#basic-btn { background: #ff6a13; width: 62px; height: 62px; font-size: 30px; }
+#basic-btn:not(.ready) { filter: saturate(.35) brightness(.95); }
+#skill2-btn { background: #8a5cd6; }
+.sk-btn.plain { background: var(--ground); color: var(--ink); width: 44px; height: 44px; font-size: 20px; border-radius: 12px; }
+#cake-btn { background: #ffd23f; }
+#cake-btn small { position: absolute; left: 0; right: 0; bottom: 1px; font: 700 9px var(--mono); color: #131a28; }
+/* 技能說明提示框 */
+#sk-tip { position: fixed; z-index: 25; max-width: 240px; background: var(--navy); color: var(--navy-fg); border: 2px solid #131a28;
+  border-radius: 12px; padding: 8px 12px; box-shadow: 0 6px 18px rgba(0,0,0,.35); pointer-events: none; }
+#sk-tip b { display: block; font-size: 14px; color: #ffd23f; }
+#sk-tip small { display: block; font: 700 11px var(--mono); color: var(--navy-dim); margin-top: 2px; }
+#sk-tip p { margin: 4px 0 0; font-size: 13px; line-height: 1.45; }
+.bag-n { display: inline-block; margin-left: 4px; min-width: 18px; padding: 0 5px; border-radius: 999px; background: var(--accent);
+  color: #fff; font: 700 11px/18px var(--mono); text-align: center; }
 .hud-btn { font: 700 14px var(--display); background: var(--ground); color: var(--ink); border: 2px solid var(--ink);
   border-radius: 999px; padding: 8px 14px; cursor: pointer; box-shadow: 0 4px 14px rgba(0,0,0,.25); }
 .hud-btn:hover, .bag-btn:hover { border-color: var(--accent); }
@@ -397,16 +417,16 @@ button.inv-item:hover { border-color: var(--accent); }
   #inventory { top: 12px; right: 12px; max-width: calc(100vw - 190px); gap: 4px; }
   .inv-item { font-size: 12px; padding: 2px 7px; }
   /* 手機：技能欄改成右邊一排圓形按鈕 */
-  #skillbar { bottom: 84px; right: 12px; flex-direction: column-reverse; gap: 8px; }
-  #skill-btn, #skill2-btn { width: 54px; height: 54px; padding: 0; font-size: 24px; border-radius: 50%; }
-  #skill-btn small, #skill-btn .sk-name, #skill2-btn small, #skill2-btn .sk-name { display: none; }
-  #skillbar .hud-btn { width: 44px; height: 44px; padding: 0; font-size: 18px; overflow: hidden; white-space: nowrap; }
-  #skills-open span, #cake-btn span { display: none; }
+  /* 手機：技能列改成右邊直排，方塊做大一點比較好按 */
+  #skillbar { bottom: 16px; right: 12px; flex-direction: column-reverse; align-items: flex-end; gap: 8px; }
+  .sk-btn { width: 58px; height: 58px; }
+  #basic-btn { width: 66px; height: 66px; }
+  .sk-btn.plain { width: 46px; height: 46px; }
   #video-prompt { gap: 8px; padding: 6px 8px; font-size: 14px; left: 12px; transform: none; white-space: nowrap; }
   #video-prompt > span { display: none; }
   #video-prompt .primary { padding: 8px 14px; font-size: 14px; }
   .modal-row { flex-wrap: wrap; }
-  #action-btn { bottom: 16px; right: 12px; }
+  #action-btn { bottom: 24px; right: 90px; }
   #chat { width: calc(100vw - 24px - 170px); min-width: 180px; }
   #chat:not(.collapsed) { width: calc(100vw - 24px); bottom: 12px; z-index: 6; }
 }
@@ -432,8 +452,10 @@ button.inv-item:hover { border-color: var(--accent); }
   #messages { height: 80px; font-size: 13px; }
   #chat { width: 300px; bottom: 8px; }
   #chat-input { padding: 6px 10px; font-size: 14px; }
-  #skillbar { bottom: 72px; }
-  #action-btn { bottom: 12px; }
+  #skillbar { bottom: 12px; }
+  .sk-btn { width: 48px; height: 48px; font-size: 22px; }
+  #basic-btn { width: 54px; height: 54px; }
+  #action-btn { bottom: 74px; }
   #video-prompt { bottom: auto; top: 76px; }
 }
 .acct-note { text-align: center; font-size: 13px; color: var(--muted, #6E6E73); margin: 12px 0 0; }
@@ -505,6 +527,21 @@ button.inv-item:hover { border-color: var(--accent); }
 @media (min-width: 601px) and (max-height: 520px) {
   #music { top: 120px; }
 }
+#music-fold { margin-left: auto; flex-shrink: 0; background: none; border: 0; color: var(--navy-dim); font-size: 14px; line-height: 1; cursor: pointer; padding: 2px 4px; }
+#music-fold:hover { color: #ffd23f; }
+/* 收起來：小黑膠＋歌名＋ON AIR 一行。影片框只是藏起來，不能拿掉，不然歌會停 */
+#music.mini { flex-direction: row; align-items: center; gap: 8px; padding: 6px 10px; cursor: pointer; border-top-width: 3px; }
+#music.mini .dj-deck { order: 0; background: none; padding: 0; }
+#music.mini .vinyl { width: 30px; height: 30px; }
+#music.mini .vinyl img { width: 16px; height: 16px; margin: -8px 0 0 -8px; border-width: 1px; }
+#music.mini .vinyl::after { width: 3px; height: 3px; margin: -1.5px 0 0 -1.5px; }
+#music.mini .tonearm, #music.mini .eq, #music.mini .music-ctl, #music.mini #music-by { display: none; }
+#music.mini .dj-side { position: absolute; width: 1px; height: 1px; overflow: hidden; opacity: 0; pointer-events: none; }
+#music.mini .music-info { order: 1; flex: 1; }
+#music.mini .music-info b { font-size: 12px; -webkit-line-clamp: 1; }
+#music.mini .dj-head { order: 2; gap: 4px; }
+#music.mini #music-fold { transform: rotate(-90deg); }
+#music.mini #music-start { order: 3; flex-basis: 100%; }
 .music-results li { display: flex; gap: 10px; align-items: center; }
 .music-r-info { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .music-r-info b { font-size: 14px; line-height: 1.35; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }

@@ -2551,8 +2551,8 @@
           const a = t.a + i * Math.PI / 2, front = Math.sin(a) > 0;
           // 轉到後面就躲到角色身後
           if (st.front !== front) { st.front = front; if (front) c.bringToTop(st); else c.moveTo(st, 1); }
-          st.setPosition(Math.cos(a) * 30, -28 + Math.sin(a) * 12 + Math.sin(t.a * 3 + i) * 5);
-          st.setScale((front ? 0.7 : 0.5) + Math.max(0, Math.sin(t.a * 5 + i * 2)) * 0.25).setAlpha(front ? 1 : 0.6);
+          st.setPosition(Math.cos(a) * 30, -14 + Math.sin(a) * 10 + Math.sin(t.a * 3 + i) * 4);
+          st.setScale((front ? 0.48 : 0.36) + Math.max(0, Math.sin(t.a * 5 + i * 2)) * 0.16).setAlpha(front ? 1 : 0.6);
         });
       } });
       c.once('destroy', () => { if (c.pradaTween) c.pradaTween.stop(); });

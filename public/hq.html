@@ -57,8 +57,16 @@
     <div id="inventory"></div>
     <div id="toasts"></div>
     <div id="music" hidden>
-      <div class="music-video"><div id="music-yt"></div></div>
-      <div class="music-info"><b id="music-title"></b><small id="music-by"></small></div>
+      <div class="dj-head"><span class="dj-live">ON AIR</span><span id="music-by"></span></div>
+      <div class="dj-deck">
+        <div class="vinyl" aria-hidden="true"><img id="music-art" alt=""></div>
+        <div class="tonearm" aria-hidden="true"></div>
+        <div class="dj-side">
+          <div class="music-video"><div id="music-yt"></div></div>
+          <div class="eq" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+        </div>
+      </div>
+      <div class="music-info"><b id="music-title"></b></div>
       <button id="music-start" class="primary small" type="button" hidden>▶ 點一下開始聽</button>
       <div class="music-ctl">
         <button id="music-mute" type="button" title="靜音">🔊</button>

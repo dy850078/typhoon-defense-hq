@@ -10,7 +10,8 @@
   // M  會議桌    P  螢幕牆     S  沙發       V  視訊室地板
   // F  圍欄      :  前線泥地   G  爐台       N  轉職導師
   // W  戰情室電視牆（擋路）     C  會議椅（不擋路）   R  冰箱
-  const BLOCKING = new Set(['#', 'T', 'B', 'K', 'M', 'P', 'S', 'F', 'G', 'N', 'W', 'R']);
+  // J  DJ 台（點唱機）
+  const BLOCKING = new Set(['#', 'T', 'B', 'K', 'M', 'P', 'S', 'F', 'G', 'N', 'W', 'R', 'J']);
 
   const g = [];
   for (let y = 0; y < H; y++) g.push(new Array(W).fill(','));
@@ -56,6 +57,8 @@
   rect(31, 22, 33, 22, 'G');
   const FRIDGE_TILE = { x: 34, y: 20 };
   set(FRIDGE_TILE.x, FRIDGE_TILE.y, 'R');
+  // 休息區左上角的 DJ 台：走過去就能點歌
+  rect(21, 15, 22, 15, 'J');
 
   // 戶外：沙包、樹、水窪
   rect(24, 26, 25, 26, 'B'); rect(30, 26, 31, 26, 'B');
@@ -128,6 +131,10 @@
     fridge: { x: (FRIDGE_TILE.x + 0.5) * TILE, y: (FRIDGE_TILE.y + 0.5) * TILE },
     nearFridge(px, py) {
       return Math.hypot(px - this.fridge.x, py - this.fridge.y) < 2 * TILE;
+    },
+    dj: { x: 22 * TILE, y: 15.5 * TILE },
+    nearDj(px, py) {
+      return Math.hypot(px - this.dj.x, py - this.dj.y) < 2 * TILE;
     },
     nearMentor(px, py) {
       return Math.hypot(px - this.mentor.x, py - this.mentor.y) < 2 * TILE;

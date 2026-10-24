@@ -1786,7 +1786,6 @@
         });
       }
       ctx.globalAlpha = 1;
-      CR.blob(ctx, 60, 60, 52, 52, r, 0.03); CR.stroke(ctx, r, 1.6, 'rgba(43,42,51,0.55)');
     }),
     star: () => fxCanvas(26, 26, 62, (ctx, r) => {
       const pts = [];

@@ -154,6 +154,25 @@ app.post('/api/save', (req, res) => {
 });
 app.post('/api/logout', (req, res) => { accounts.logout(bearer(req)); res.json({ ok: true }); });
 
+// 瀏覽器回報的錯誤和畫面停住，記到 data/client-errors.log 方便查問題（每個 IP 10 分鐘最多 30 則，檔案最多 2MB）
+const CLIENT_LOG = path.join(DATA_DIR, 'client-errors.log');
+const clientLogs = new Map(); // ip -> { n, until }
+app.post('/api/client-log', (req, res) => {
+  res.json({ ok: true });
+  const ip = ipOf(req), now = Date.now(), c = clientLogs.get(ip);
+  const cur = c && c.until > now ? c : { n: 0, until: now + 10 * 60 * 1000 };
+  if (++cur.n > 30) return;
+  clientLogs.set(ip, cur);
+  const b = req.body || {}, str = (v, n) => String(v == null ? '' : v).replace(/[\r\n]+/g, ' ').slice(0, n);
+  const line = JSON.stringify({ t: new Date(now).toISOString(), ip, kind: str(b.kind, 10), msg: str(b.msg, 500), name: str(b.name, 12),
+    open: str(b.open, 60), ua: str(b.ua, 200), screen: str(b.screen, 30), mem: Number(b.mem) || 0, up: Number(b.up) || 0 }) + '\n';
+  fs.stat(CLIENT_LOG, (err, st) => {
+    if (!err && st.size > 2 * 1024 * 1024) return;
+    fs.appendFile(CLIENT_LOG, line, () => {});
+  });
+  if (b.kind === 'freeze' || b.kind === 'error') console.log('📱 瀏覽器回報', str(b.name, 12), str(b.kind, 10), str(b.msg, 120));
+});
+
 // ---------------- 管理員 API ----------------
 const adminTokens = new Set();
 const isAdmin = (req) => adminTokens.has(String(req.headers['x-admin-token'] || ''));

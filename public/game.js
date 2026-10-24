@@ -7,6 +7,15 @@
   const DC = HQ_DECOR;
   // iOS 不理 viewport 的 user-scalable，手指捏合會放大，這裡擋掉；連點兩下靠 CSS 的 touch-action
   ['gesturestart', 'gesturechange'].forEach(t => document.addEventListener(t, e => e.preventDefault(), { passive: false }));
+  document.addEventListener('dblclick', e => e.preventDefault(), { passive: false });
+  // 萬一畫面還是被放大了（iPad 的「電腦版網站」模式會忽略禁止縮放），輸入框離開時把縮放拉回原本大小
+  const vpMeta = document.querySelector('meta[name=viewport]');
+  document.addEventListener('focusout', (e) => {
+    if (!vpMeta || !/^(INPUT|TEXTAREA)$/.test(e.target.tagName)) return;
+    const c = vpMeta.content;
+    vpMeta.content = c + ', minimum-scale=1';
+    setTimeout(() => { vpMeta.content = c; }, 50);
+  });
   document.addEventListener('touchmove', e => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
   // 近距離的普攻：打到時角色往前撲一下
   const MELEE = ['strike', 'power', 'syringe', 'punch', 'kick'];
@@ -155,6 +164,27 @@
     $('join-error').textContent = '';
     synced.then(doJoin);
   });
+
+  // ---------------- 問題回報 ----------------
+  // 網頁出錯、或畫面停住好幾秒，把當時的狀況送回伺服器記下來（data/client-errors.log），之後才查得到原因
+  let reported = 0;
+  function report(kind, msg) {
+    if (reported++ >= 20) return;
+    const open = [!$('games').hidden && 'games', !$('modal').hidden && $('modal-title').textContent, !$('music').hidden && 'music'].filter(Boolean);
+    const body = { kind, msg: String(msg).slice(0, 500), name: (me && me.name) || '', open: open.join(','),
+      ua: navigator.userAgent, screen: `${screen.width}x${screen.height}@${devicePixelRatio}`, mem: navigator.deviceMemory || 0, up: Math.round(performance.now() / 1000) };
+    try { fetch('/api/client-log', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), keepalive: true }); } catch (e) { /* 送不出去就算了 */ }
+  }
+  window.addEventListener('error', (e) => report('error', `${e.message} @ ${(e.filename || '').split('/').pop()}:${e.lineno}`));
+  window.addEventListener('unhandledrejection', (e) => report('error', 'promise: ' + ((e.reason && e.reason.message) || e.reason)));
+  // 每秒打一次卡，看得到畫面時隔了 3 秒以上才打到，就是畫面停住了（切到背景本來就會停，不算）
+  let beat = performance.now();
+  setInterval(() => {
+    const now = performance.now(), gap = now - beat;
+    beat = now;
+    if (gap > 3000 && document.visibilityState === 'visible') report('freeze', `畫面停住 ${(gap / 1000).toFixed(1)} 秒`);
+  }, 1000);
+  document.addEventListener('visibilitychange', () => { beat = performance.now(); });
 
   // 重新連上：網路只是閃斷的話會接回原本的連線（socket.recovered），角色和畫面都不用動，補送一次位置就好
   socket.on('connect', () => {
@@ -1243,7 +1273,8 @@
       Object.keys(GAMES).forEach(g => { $(g + '-panel').hidden = g !== k; });
     }
     function open() {
-      // 先把目前位置告訴伺服器，它才知道你在戰情室裡
+      // 先停下來（點地板後還在走的話，會走出戰情室把遊戲關掉），再把位置告訴伺服器，它才知道你在戰情室裡
+      if (scene) scene.target = null;
       const m = scene && scene.me;
       if (m) socket.emit('move', { x: Math.round(m.x), y: Math.round(m.y), dir: m.dir, moving: false });
       GAMES[tab].join(() => { show(tab); $('games').hidden = false; chatInput.blur(); });
@@ -2225,7 +2256,7 @@
       this.input.on('pointerupoutside', () => { if (this.drawing && this.drawing.pts.length) this.finishWall(); });
       this.input.on('pointermove', (p) => { if (this.drawing && this.drawing.pts.length && p.isDown) this.extendWall(p.worldX, p.worldY); });
       this.input.on('pointerdown', (p) => {
-        if (!this.me) return;
+        if (!this.me || !$('games').hidden) return;
         // 插畫結界師畫城牆中：按下去就開始畫，不會走路
         if (this.drawing && !p.rightButtonDown()) { chatInput.blur(); this.target = null; this.drawing.pts = [[p.worldX, p.worldY]]; this.drawing.len = 0; this.drawPreview(); return; }
         chatInput.blur();
@@ -3931,6 +3962,8 @@
         if (k.W.isDown || k.UP.isDown) dy -= 1;
         if (k.S.isDown || k.DOWN.isDown) dy += 1;
       }
+      // 遊戲視窗開著的時候不能走路，才不會不小心走出戰情室
+      if (!$('games').hidden) { dx = 0; dy = 0; this.target = null; }
       if (dx || dy || this.isDead()) this.target = null;
       else if (this.target) {
         const tx = this.target.x - this.me.x, ty = this.target.y - this.me.y;
@@ -4099,7 +4132,7 @@
         this.roomId = rid;
         $('room-name').textContent = room ? room.name : '🌧️ 戶外（風雨很大！）';
         $('video-prompt').hidden = rid !== 'video';
-        if (rid !== 'video') ROOM.close();
+        if (rid !== 'video' && !$('games').hidden) { ROOM.close(); toast('離開戰情室了，已經退出遊戲'); }
         if (room && !first) toast(`進入 ${room.name}`);
         const tips = {
           front: `野外有颱風${ST.MONSTER.name}和小怪！空白鍵攻擊、K 和 L 放技能，看到紅圈快閃開；回到圍欄裡就安全了`,

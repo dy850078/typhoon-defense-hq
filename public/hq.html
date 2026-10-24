@@ -190,6 +190,21 @@
     </div>
   </div>
 
+  <!-- 管理員預告更新的倒數條 -->
+  <div id="notice-bar" role="status" hidden></div>
+  <!-- 伺服器重啟過了，請大家重新整理 -->
+  <div id="update" class="overlay" hidden>
+    <div class="card update-card" role="alertdialog" aria-modal="true" aria-labelledby="update-title">
+      <p class="eyebrow">TYPHOON DAY · UPDATE</p>
+      <h2 id="update-title">✨ 總部更新了！</h2>
+      <p class="sub">重新整理才會拿到新版本，你的角色都存好了。</p>
+      <div class="update-btns">
+        <button id="update-now" class="primary" type="button">立即重新整理（<span id="update-sec">10</span>）</button>
+        <button id="update-later" class="hud-btn" type="button">稍後</button>
+      </div>
+    </div>
+  </div>
+
   <!-- 彈出視窗：背包、技能、轉職、煙火共用 -->
   <div id="modal" class="overlay" hidden>
     <div class="card modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title">

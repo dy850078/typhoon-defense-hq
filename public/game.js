@@ -147,6 +147,62 @@
   });
 
   socket.on('connect', () => { if (joined) doJoin(); });
+
+  // ---------------- 更新提醒 ----------------
+  // 伺服器每次啟動版本號都不同；重新連上時版本變了，代表伺服器更新過，請玩家重新整理
+  let bootId = null, updateTimer = null, laterTimer = null;
+  function showUpdate() {
+    clearInterval(updateTimer);
+    let sec = 10;
+    $('update-sec').textContent = sec;
+    $('update').hidden = false;
+    updateTimer = setInterval(() => {
+      sec -= 1;
+      $('update-sec').textContent = sec;
+      if (sec <= 0) location.reload();
+    }, 1000);
+  }
+  $('update-now').onclick = () => location.reload();
+  // 正在打怪的人可以先按稍後，2 分鐘後再提醒一次
+  $('update-later').onclick = () => {
+    clearInterval(updateTimer);
+    $('update').hidden = true;
+    clearTimeout(laterTimer);
+    laterTimer = setTimeout(showUpdate, 2 * 60 * 1000);
+    renderNotice();
+  };
+  // 管理員預告：畫面上方倒數
+  let notice = null, noticeAt = 0;
+  function renderNotice() {
+    const bar = $('notice-bar');
+    if (bootId && updatePending) {
+      bar.hidden = false;
+      bar.innerHTML = '';
+      bar.append('✨ 總部已經更新，');
+      const b = el('button', null, '按這裡重新整理'); b.type = 'button'; b.onclick = () => location.reload();
+      bar.appendChild(b);
+      return;
+    }
+    if (!notice) { bar.hidden = true; return; }
+    const left = Math.max(0, notice.ms - (performance.now() - noticeAt));
+    const m = Math.floor(left / 60000), s = Math.floor(left / 1000) % 60;
+    bar.hidden = false;
+    bar.textContent = notice.ready || left <= 0
+      ? `🔧 ${notice.text}・角色已經存好，總部馬上要重新啟動`
+      : `🔧 ${notice.text}・${m}:${String(s).padStart(2, '0')} 後更新`;
+  }
+  let updatePending = false;
+  setInterval(renderNotice, 1000);
+  socket.on('hello', (h) => {
+    if (bootId && h.boot !== bootId) {
+      updatePending = true;
+      notice = null;
+      showUpdate();
+    } else bootId = h.boot;
+    if (!updatePending) { notice = h.notice; noticeAt = performance.now(); }
+    renderNotice();
+  });
+  socket.on('notice', (n) => { notice = n; noticeAt = performance.now(); renderNotice(); });
   // 在別的分頁登入或註冊了：這個分頁的角色也換成帳號的，畫面上才不會同時有兩個自己
   let joinedToken = '';
   window.addEventListener('storage', (e) => {

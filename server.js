@@ -165,7 +165,7 @@ app.post('/api/admin/login', (req, res) => {
 app.get('/api/admin/state', (req, res) => {
   if (!isAdmin(req)) return res.status(401).json({ ok: false });
   const online = new Set([...players.values()].map(p => p.account && p.account.username));
-  res.json({ ok: true, party: partyInfo(), accounts: accounts.list().map(a => Object.assign(a, { online: online.has(a.username) })) });
+  res.json({ ok: true, party: partyInfo(), notice: noticeState(), accounts: accounts.list().map(a => Object.assign(a, { online: online.has(a.username) })) });
 });
 app.post('/api/admin/settings', (req, res) => {
   if (!isAdmin(req)) return res.status(401).json({ ok: false });
@@ -183,6 +183,30 @@ app.post('/api/admin/password', (req, res) => {
   if (r.error) return res.status(400).json({ ok: false, error: r.error });
   res.json({ ok: true });
 });
+// ---------------- 更新公告 ----------------
+// 每次啟動有不同的版本號，瀏覽器重新連上時發現版本變了，就請玩家重新整理
+const BOOT_ID = Date.now().toString(36);
+// 管理員預告：所有人畫面上出現倒數，時間到先幫大家存檔，再提醒管理員可以重啟
+let notice = null; // { text, until, ready }
+let noticeTimer = null;
+const noticeState = () => notice && { text: notice.text, ms: Math.max(0, notice.until - Date.now()), ready: notice.ready };
+app.post('/api/admin/announce', (req, res) => {
+  if (!isAdmin(req)) return res.status(401).json({ ok: false });
+  const b = req.body || {};
+  clearTimeout(noticeTimer);
+  if (b.cancel) { notice = null; io.emit('notice', null); return res.json({ ok: true, notice: null }); }
+  const minutes = [1, 3, 5].includes(Number(b.minutes)) ? Number(b.minutes) : 3;
+  notice = { text: clean(b.text, 60) || '總部要更新了，先找個安全的地方', until: Date.now() + minutes * 60000, ready: false };
+  noticeTimer = setTimeout(() => {
+    players.forEach(snapshot);
+    accounts.flush();
+    notice.ready = true;
+    io.emit('notice', noticeState());
+  }, minutes * 60000);
+  io.emit('notice', noticeState());
+  res.json({ ok: true, notice: noticeState() });
+});
+
 app.post('/api/admin/delete', (req, res) => {
   if (!isAdmin(req)) return res.status(401).json({ ok: false });
   const name = String((req.body || {}).username || '');
@@ -969,6 +993,7 @@ const GAMES = [draw, song];
 
 io.on('connection', (socket) => {
   let lastChat = 0;
+  socket.emit('hello', { boot: BOOT_ID, notice: noticeState() });
 
   socket.on('join', (data, ack) => {
     if (typeof ack !== 'function') return;

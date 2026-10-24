@@ -764,6 +764,110 @@
     };
   })();
   socket.on('music', (s) => MUSIC.set(s));
+
+  // ---------------- 許願池：大家想要的新功能登記在這裡 ----------------
+  // 有帳號才能許願，大家都能按讚；狀態（考慮中／做好了／不做）由管理員在管理頁改
+  const WISH = (() => {
+    // 沒登入的人按讚用這台裝置的代號
+    let wid = saved('hq-wid');
+    if (!wid || !/^[a-z0-9]{8,24}$/.test(wid)) { wid = Math.random().toString(36).slice(2, 12) + Date.now().toString(36); store('hq-wid', wid); }
+    let sort = saved('hq-wish-sort') === 'new' ? 'new' : 'hot';
+    let draft = '';
+    let last = null;
+    const STATUS = { thinking: '考慮中', done: '做好了', no: '先不做' };
+    const ago = (t) => {
+      const m = Math.round((Date.now() - t) / 60000);
+      return m < 1 ? '剛剛' : m < 60 ? `${m} 分鐘前` : m < 1440 ? `${Math.round(m / 60)} 小時前` : `${Math.round(m / 1440)} 天前`;
+    };
+    const isOpen = () => modalKind === 'wish' && !$('modal').hidden;
+    function load() { socket.emit('wishList', wid, (r) => { if (r && r.ok) render(r); }); }
+    let fresh = false; // 剛打開許願板：游標直接放進輸入框
+    function act(ev, data, btn) {
+      if (btn) btn.disabled = true;
+      socket.emit(ev, Object.assign({ wid }, data), (r) => {
+        if (btn) btn.disabled = false;
+        if (!r || !r.ok) { toast((r && r.error) || '沒成功，再試一次'); return; }
+        if (ev === 'wishAdd') { draft = ''; toast('願望丟進許願池了'); }
+        render(r);
+      });
+    }
+    function render(r) {
+      last = r;
+      // 別人按讚或許願時會重畫，正在打字的話游標要留在輸入框
+      const typing = !!(document.activeElement && document.activeElement.closest && document.activeElement.closest('.wish-form'));
+      const box = el('div', 'modal-list wish-modal');
+      // 許願的地方
+      const form = el('form', 'wish-form');
+      if (r.login && !r.left) {
+        form.appendChild(el('p', 'modal-hint', `今天的 ${r.perDay} 個願都許完了，明天再來。還是可以幫別人的願望按讚。`));
+      } else if (r.login) {
+        const input = el('textarea'); input.maxLength = r.maxLen; input.rows = 2; input.value = draft;
+        input.placeholder = '想要總部多什麼功能？例如：可以養寵物、加一張新地圖…';
+        const count = el('small', 'wish-count', `${draft.length}/${r.maxLen}`);
+        input.oninput = () => { draft = input.value; count.textContent = `${draft.length}/${r.maxLen}`; };
+        const btn = el('button', 'primary small', '丟硬幣許願'); btn.type = 'submit';
+        btn.prepend(icon('wish-coin', ''));
+        const foot = el('div', 'wish-foot');
+        foot.append(el('small', null, `今天還可以許 ${r.left} 個願`), count, btn);
+        form.append(input, foot);
+        form.onsubmit = (e) => { e.preventDefault(); if (input.value.trim()) act('wishAdd', { text: input.value }, btn); };
+        if (fresh || typing) setTimeout(() => { if (isOpen()) { input.focus(); input.setSelectionRange(draft.length, draft.length); } }, 50);
+      } else {
+        form.appendChild(el('p', 'modal-hint', '登入帳號才能許願。沒帳號也可以幫喜歡的願望按讚。'));
+      }
+      box.appendChild(form);
+      // 排序
+      const tabs = el('div', 'wish-tabs');
+      [['hot', '最多讚'], ['new', '最新']].forEach(([k, label]) => {
+        const b = el('button', 'wish-tab' + (sort === k ? ' on' : ''), label); b.type = 'button';
+        b.onclick = () => { sort = k; store('hq-wish-sort', k); render(last); };
+        tabs.appendChild(b);
+      });
+      tabs.appendChild(el('small', null, `共 ${r.list.length} 個願望`));
+      box.appendChild(tabs);
+      // 一張張小紙條
+      const list = r.list.slice().sort((a, b) => sort === 'new' ? b.at - a.at : (b.likes - a.likes) || (b.at - a.at));
+      if (!list.length) box.appendChild(el('p', 'modal-hint', '池子裡還沒有願望，來當第一個許願的人吧！'));
+      const board = el('div', 'wish-board');
+      list.forEach((w) => {
+        const note = el('div', 'wish-note' + (w.status === 'done' ? ' done' : w.status === 'no' ? ' no' : ''));
+        note.style.setProperty('--tilt', `${((w.id * 37) % 5 - 2) * 0.6}deg`);
+        note.appendChild(el('p', 'wish-text', w.text));
+        const meta = el('div', 'wish-meta');
+        meta.appendChild(el('small', null, `${w.name}・${ago(w.at)}`));
+        if (w.status === 'thinking' || w.status === 'no') meta.appendChild(el('span', 'wish-status', STATUS[w.status]));
+        if (w.mine) {
+          const x = el('button', 'wish-x', '收回'); x.type = 'button';
+          x.onclick = () => { if (confirm('要把這個願望收回來嗎？')) act('wishWithdraw', { id: w.id }, x); };
+          meta.appendChild(x);
+        }
+        const like = el('button', 'wish-like' + (w.liked ? ' on' : '')); like.type = 'button';
+        like.title = w.liked ? '收回讚' : '我也想要';
+        like.append(icon(w.liked ? 'wish-heart' : 'wish-heart-off', ''), el('b', null, String(w.likes)));
+        like.onclick = () => act('wishLike', { id: w.id }, like);
+        meta.appendChild(like);
+        note.appendChild(meta);
+        if (w.status === 'done') {
+          const st = el('div', 'wish-stamp');
+          st.append(icon('wish-stamp', ''), el('span', null, STATUS.done));
+          note.appendChild(st);
+        }
+        board.appendChild(note);
+      });
+      box.appendChild(board);
+      const card = $('modal').querySelector('.modal-card'), top = isOpen() && card ? card.scrollTop : 0;
+      openModal('wish', '許願池', box);
+      $('modal').classList.add('wide');
+      if (card) card.scrollTop = top;
+      fresh = false;
+    }
+    // 有人許願、按讚，或管理員改了狀態：開著許願板的人重新拿一次
+    socket.on('wishes', (m) => {
+      if (m && m.coin && scene && scene.wishCoin) scene.wishCoin(m.coin);
+      if (isOpen()) load();
+    });
+    return { open() { fresh = true; load(); } };
+  })();
   socket.on('toastArea', (t) => { if (joined && t.area === MUSIC.area()) toast(t.text); });
 
   function openBag() {
@@ -2466,6 +2570,24 @@
           if (L) CR.line(ctx, px + 2, py + 8, px + 2, py + T - 4, r, 2.6);
           if (Rr) CR.line(ctx, px + T - 2, py + 8, px + T - 2, py + T - 4, r, 2.6);
           ctx.fillStyle = '#ff6a13'; ctx.fillRect(px + (L ? 6 : 0), py + T - 12, T - (L ? 6 : 0) - (Rr ? 6 : 0), 3);
+        } else if (ch === 'L') {
+          // 許願池：2x2 格，在左上那格一次畫完；石頭圍一圈，水裡沉著幾枚硬幣
+          if (at(x - 1, y) === 'L' || at(x, y - 1) === 'L') continue;
+          const cx = px + T, cy = py + T + 6;
+          ctx.fillStyle = 'rgba(19,26,40,0.16)'; ctx.beginPath(); ctx.ellipse(cx, cy + 22, 40, 9, 0, 0, Math.PI * 2); ctx.fill();
+          CR.blob(ctx, cx, cy + 6, 40, 28, r, 0.05, 26); CR.fill(ctx, '#b9b2a4', r, [cx - 42, cy - 24, 84, 60]); CR.stroke(ctx, r, 2.6);
+          CR.blob(ctx, cx, cy, 40, 26, r, 0.05, 26); CR.fill(ctx, '#d6d0c2', r, [cx - 42, cy - 28, 84, 56]); CR.stroke(ctx, r, 2.6);
+          // 石頭的縫
+          for (let i = 0; i < 12; i++) {
+            const a = i / 12 * Math.PI * 2, k = 0.8 + r() * 0.12;
+            CR.line(ctx, cx + Math.cos(a) * 31, cy + Math.sin(a) * 19, cx + Math.cos(a) * 40 * k / 0.86, cy + Math.sin(a) * 26 * k / 0.86, r, 1.4, 'rgba(43,42,51,0.45)');
+          }
+          CR.blob(ctx, cx, cy - 1, 30, 18, r, 0.05, 24); CR.fill(ctx, '#6fb4e0', r, [cx - 32, cy - 20, 64, 38]); CR.stroke(ctx, r, 2.2);
+          CR.plaid(ctx, cx - 30, cy - 19, 60, 36, 9, 'rgba(255,255,255,0.35)', r, 1);
+          [[-12, 4], [6, -5], [14, 6], [-2, 9]].forEach(([dx, dy], i) => {
+            CR.blob(ctx, cx + dx, cy + dy, 4.5, 3, r, 0.1, 10); CR.fill(ctx, i % 2 ? '#ffd23f' : '#f2b632', r, null); CR.stroke(ctx, r, 1.2);
+          });
+          CR.blob(ctx, cx - 14, cy - 8, 7, 2.5, r, 0.15, 10); ctx.fillStyle = 'rgba(255,255,255,0.8)'; ctx.fill();
         } else if (ch === 'H') {
           // 古城守門員腳下的石板台座
           CR.blob(ctx, px + 24, py + 30, 26, 15, r, 0.06); CR.fill(ctx, '#9a8f7a', r, [px - 2, py + 15, T + 4, 30]); CR.stroke(ctx, r, 2.4);
@@ -2990,6 +3112,39 @@
       }
     }
 
+    // 許願池的名牌；有人許願時，從他身上丟一枚硬幣劃進池子，濺起水花
+    makeWell() {
+      if (this.wellSign) return;
+      const { x, y } = MAP.well;
+      this.wellSign = this.add.text(x, y - 46, '許願池', {
+        fontSize: '10px', fontStyle: 'bold', color: INK, fontFamily: FONT,
+        backgroundColor: PAPER, padding: { x: 10, y: 4 },
+      }).setOrigin(0.5).setDepth(y + T);
+      if (window.HQ_ICONS && !this.textures.exists('wish-coin')) this.textures.addBase64('wish-coin', HQ_ICONS.url('wish-coin'));
+    }
+    wishCoin(id) {
+      const who = id === (me && me.id) ? this.me : this.remotes.get(id);
+      const { x, y } = MAP.well;
+      const sx = who ? who.x : x - 60, sy = who ? who.y - 40 : y - 60;
+      if (Math.hypot(sx - this.cameras.main.midPoint.x, sy - this.cameras.main.midPoint.y) > 900) return;
+      const coin = this.textures.exists('wish-coin') ? this.add.image(sx, sy, 'wish-coin').setDisplaySize(22, 22)
+        : this.add.circle(sx, sy, 8, 0xffd23f).setStrokeStyle(2, 0x2b2a33);
+      coin.setDepth(y + 2 * T);
+      const peak = Math.min(sy, y) - 70;
+      this.tweens.addCounter({ from: 0, to: 1, duration: 700, ease: 'Sine.in', onUpdate: (tw) => {
+        const k = tw.getValue();
+        coin.x = sx + (x - sx) * k;
+        coin.y = (1 - k) * (1 - k) * sy + 2 * (1 - k) * k * peak + k * k * (y + 4);
+        coin.rotation = k * 9;
+      }, onComplete: () => {
+        coin.destroy();
+        [0, 160].forEach((delay) => {
+          const ring = this.add.ellipse(x, y + 4, 10, 6).setStrokeStyle(2, 0xffffff, 0.9).setDepth(y + T);
+          this.tweens.add({ targets: ring, scaleX: 5, scaleY: 5, alpha: 0, delay, duration: 700, onComplete: () => ring.destroy() });
+        });
+      } });
+    }
+
     setupWorld(res) {
       this.remotes.forEach(r => r.destroy());
       this.remotes.clear();
@@ -3011,6 +3166,7 @@
       this.decor.clear();
       (res.decor || []).forEach(d => this.setDecor(d));
       this.makeDj();
+      this.makeWell();
       MUSIC.set(res.music);
       this.walls.forEach((w, id) => this.onWallGone(id, true));
       (res.walls || []).forEach(w => this.onWall(w));
@@ -3951,6 +4107,7 @@
       if (Math.hypot(x - MAP.guard.x, y - (MAP.guard.y - 20)) < 50 && MAP.nearGuard(this.me.x, this.me.y)) return { type: 'guard' };
       if (Math.hypot(x - MAP.fridge.x, y - (MAP.fridge.y - 10)) < 40 && MAP.nearFridge(this.me.x, this.me.y)) return { type: 'fridge' };
       if (MAP.tiles[ty] && MAP.tiles[ty][tx] === 'J' && MAP.nearDj(this.me.x, this.me.y)) return { type: 'dj' };
+      if (MAP.tiles[ty] && MAP.tiles[ty][tx] === 'L' && MAP.nearWell(this.me.x, this.me.y)) return { type: 'well' };
       return null;
     }
 
@@ -3974,6 +4131,7 @@
       if (!best && MAP.nearMentor(this.me.x, this.me.y)) return { type: 'mentor' };
       if (!best && MAP.nearGuard(this.me.x, this.me.y)) return { type: 'guard' };
       if (!best && MAP.nearDj(this.me.x, this.me.y)) return { type: 'dj' };
+      if (!best && MAP.nearWell(this.me.x, this.me.y)) return { type: 'well' };
       return best;
     }
 
@@ -4002,6 +4160,8 @@
         openFridge();
       } else if (act.type === 'dj') {
         MUSIC.open();
+      } else if (act.type === 'well') {
+        WISH.open();
       } else if (act.type === 'cook') {
         socket.emit('cook', (res) => {
           if (!res || !res.ok) { if (res && res.error) toast(res.error); return; }
@@ -4896,7 +5056,7 @@
       // 互動按鈕
       const all0 = [this.me, ...this.remotes.values()];
       const near = this.nearbyAction();
-      const LABELS = { crate: '🔨 敲箱子', cook: '🍜 煮泡麵', mentor: '💬 找沈理員轉職', guard: '🏯 前往副本候位區', dj: '🎧 點歌' };
+      const LABELS = { crate: '🔨 敲箱子', cook: '🍜 煮泡麵', mentor: '💬 找沈理員轉職', guard: '🏯 前往副本候位區', dj: '🎧 點歌', well: '許個願' };
       // 攻擊用技能列的普攻鍵，這顆只放其他互動（敲箱子、點歌…）
       const canHit = !!near && !this.isDead() && near.type === 'attack';
       const label = !near || this.isDead() || canHit ? '' : LABELS[near.type];
@@ -4970,6 +5130,7 @@
           command: '找右上角的 📂 轉職資料沈理員，可以換職業',
           storage: '走到箱子旁按空白鍵（或點箱子）敲三下',
           kitchen: '站在爐台旁按空白鍵煮泡麵補血，有蔬菜會自動加進去',
+          lounge: '右上角有許願池，想要總部多什麼功能，走過去許個願',
           lobby: `站在古城候位區按「出發」，${MAP.DUNGEON.countdownMs / 1000} 秒後一起傳送到花蓮副本（最多 ${MAP.DUNGEON.maxPlayers} 人），打倒最終頭目會掉武器；按「回總部」回到指揮中心`,
           d1: '照石碑上的顏色順序踩石頭，踩錯會被浪打回起點',
           d2: '往大理石走過去就能推（手機點石頭也可以），三顆都推進地上有 ⬇️ 的凹槽，石門就會開；卡住可以按「重排大理石」',

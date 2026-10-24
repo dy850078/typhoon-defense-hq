@@ -9,6 +9,7 @@ const STATS = require('./shared/stats');
 const GEAR = require('./shared/gear');
 const DECOR = require('./shared/decor');
 const ACCOUNTS = require('./accounts');
+const WISHES = require('./wishes');
 const createDungeon = require('./dungeon');
 
 const PORT = Number(process.env.PORT) || 3000;
@@ -63,6 +64,7 @@ function partyInfo() {
 }
 
 const accounts = ACCOUNTS.create(DATA_DIR);
+const wishes = WISHES.create(DATA_DIR);
 
 const app = express();
 app.use(express.json({ limit: '400kb' }));
@@ -187,7 +189,7 @@ app.post('/api/admin/login', (req, res) => {
 app.get('/api/admin/state', (req, res) => {
   if (!isAdmin(req)) return res.status(401).json({ ok: false });
   const online = new Set([...players.values()].map(p => p.account && p.account.username));
-  res.json({ ok: true, party: partyInfo(), notice: noticeState(), accounts: accounts.list().map(a => Object.assign(a, { online: online.has(a.username) })) });
+  res.json({ ok: true, party: partyInfo(), notice: noticeState(), wishes: wishes.all(), accounts: accounts.list().map(a => Object.assign(a, { online: online.has(a.username) })) });
 });
 app.post('/api/admin/settings', (req, res) => {
   if (!isAdmin(req)) return res.status(401).json({ ok: false });
@@ -222,6 +224,7 @@ app.post('/api/admin/announce', (req, res) => {
   noticeTimer = setTimeout(() => {
     players.forEach(snapshot);
     accounts.flush();
+  wishes.flush();
     notice.ready = true;
     io.emit('notice', noticeState());
   }, minutes * 60000);
@@ -275,6 +278,17 @@ app.post('/api/admin/delete', (req, res) => {
   const name = String((req.body || {}).username || '');
   [...players.values()].filter(p => p.account && p.account.username.toLowerCase() === name.toLowerCase()).forEach(p => { p.account = null; });
   res.json({ ok: accounts.remove(name) });
+});
+
+// 許願池：標狀態（考慮中／做好了／不做）或刪掉，總部裡開著許願板的人會馬上看到
+app.post('/api/admin/wish', (req, res) => {
+  if (!isAdmin(req)) return res.status(401).json({ ok: false });
+  const b = req.body || {}, id = Number(b.id);
+  const r = b.delete ? wishes.remove(id) : wishes.setStatus(id, b.status);
+  if (r.error) return res.status(400).json({ ok: false, error: r.error });
+  if (r.wish && r.wish.status === 'done' && r.was !== 'done') pushChat({ system: true, text: `許願池：「${r.wish.text.slice(0, 30)}」實現了！謝謝 ${r.wish.name} 的願望`, t: Date.now() });
+  io.emit('wishes');
+  res.json({ ok: true, wishes: wishes.all() });
 });
 
 // ---------------- 視訊房間 ----------------
@@ -1880,6 +1894,44 @@ io.on('connection', (socket) => {
     if (m.now && m.now.vid === vid && Date.now() - m.now.startedAt > 5000) musicNext(area);
   });
 
+  // ---------- 許願池 ----------
+  // 按讚用帳號算；沒登入的用瀏覽器存的裝置代號（wid）
+  const voterOf = (p, wid) => p.account ? 'u:' + p.account.username.toLowerCase()
+    : (typeof wid === 'string' && /^[a-z0-9]{8,24}$/.test(wid) ? 'g:' + wid : '');
+  const wishView = (p, wid) => ({ ok: true, list: wishes.view(voterOf(p, wid), p.account && p.account.username),
+    login: !!p.account, left: wishes.left(p.account && p.account.username), perDay: wishes.PER_DAY, maxLen: wishes.MAX_LEN });
+  socket.on('wishList', (wid, ack) => {
+    const p = players.get(socket.id);
+    if (!p || typeof ack !== 'function') return;
+    ack(wishView(p, wid));
+  });
+  socket.on('wishAdd', (m, ack) => {
+    const p = players.get(socket.id);
+    if (!p || typeof ack !== 'function' || !m) return;
+    if (!MAP.nearWell(p.x, p.y)) return ack({ ok: false, error: '走到許願池旁邊才能許願' });
+    const r = wishes.add(p.account && p.account.username, p.name, m.text);
+    if (r.error) return ack({ ok: false, error: r.error });
+    pushChat({ system: true, text: `${p.name} 在休息區的許願池許了一個願：「${r.wish.text.slice(0, 30)}${r.wish.text.length > 30 ? '…' : ''}」`, t: Date.now() });
+    io.emit('wishes', { coin: p.id });
+    ack(wishView(p, m.wid));
+  });
+  socket.on('wishLike', (m, ack) => {
+    const p = players.get(socket.id);
+    if (!p || typeof ack !== 'function' || !m) return;
+    const r = wishes.like(Number(m.id), voterOf(p, m.wid));
+    if (r.error) return ack({ ok: false, error: r.error });
+    io.emit('wishes');
+    ack(wishView(p, m.wid));
+  });
+  socket.on('wishWithdraw', (m, ack) => {
+    const p = players.get(socket.id);
+    if (!p || typeof ack !== 'function' || !m) return;
+    const r = wishes.withdraw(Number(m.id), p.account && p.account.username);
+    if (r.error) return ack({ ok: false, error: r.error });
+    io.emit('wishes');
+    ack(wishView(p, m.wid));
+  });
+
   socket.on('chat', (text) => {
     const p = players.get(socket.id);
     if (!p) return;
@@ -1958,5 +2010,6 @@ server.listen(PORT, () => {
 ['SIGINT', 'SIGTERM'].forEach(sig => process.on(sig, () => {
   players.forEach(snapshot);
   accounts.flush();
+  wishes.flush();
   process.exit(0);
 }));

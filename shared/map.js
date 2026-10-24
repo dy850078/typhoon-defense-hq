@@ -15,12 +15,12 @@
   // M  會議桌    P  螢幕牆     S  沙發       V  視訊室地板
   // F  圍欄      :  前線泥地   G  爐台       N  轉職導師
   // W  戰情室電視牆（擋路）     C  會議椅（不擋路）   R  冰箱
-  // J  DJ 台（點唱機）     O  副本傳送門（不擋路）
+  // J  DJ 台（點唱機）     O  副本傳送門（不擋路）     L  許願池（2x2）
   // 副本區：(空白) 虛空    Y  峽谷岩壁    Z  深海       y  七星潭礫石灘
   //         u  洞穴地板    x  大理石要推到的凹槽         n  斷崖上的草地
   //         X  關卡之間的石門（關著的時候擋路）          E  七星潭石碑
   // 候位區：Q  古城石牆    q  古城石板地    H  古城守門員（站在指揮中心）
-  const BLOCKING = new Set(['#', 'T', 'B', 'K', 'M', 'P', 'S', 'F', 'G', 'N', 'W', 'R', 'J', ' ', 'Y', 'Z', 'E', 'Q', 'H']);
+  const BLOCKING = new Set(['#', 'T', 'B', 'K', 'M', 'P', 'S', 'F', 'G', 'N', 'W', 'R', 'J', 'L', ' ', 'Y', 'Z', 'E', 'Q', 'H']);
 
   const g = [];
   for (let y = 0; y < H; y++) g.push(new Array(W).fill(','));
@@ -71,6 +71,8 @@
   set(FRIDGE_TILE.x, FRIDGE_TILE.y, 'R');
   // 休息區左上角的 DJ 台：走過去就能點歌
   rect(21, 15, 22, 15, 'J');
+  // 休息區右上角的許願池：走過去就能許願、幫別人的願望按讚
+  rect(33, 15, 34, 16, 'L');
 
   // 戶外：沙包、樹、水窪
   rect(24, 26, 25, 26, 'B'); rect(30, 26, 31, 26, 'B');
@@ -269,6 +271,10 @@
     dj: { x: 22 * TILE, y: 15.5 * TILE },
     nearDj(px, py) {
       return Math.hypot(px - this.dj.x, py - this.dj.y) < 2 * TILE;
+    },
+    well: { x: 34 * TILE, y: 16 * TILE },
+    nearWell(px, py) {
+      return Math.hypot(px - this.well.x, py - this.well.y) < 2.4 * TILE;
     },
     nearMentor(px, py) {
       return Math.hypot(px - this.mentor.x, py - this.mentor.y) < 2 * TILE;

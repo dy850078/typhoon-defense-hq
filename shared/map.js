@@ -1,9 +1,11 @@
 // 地圖資料：前後端共用（瀏覽器會掛在 window.HQ_MAP，Node 用 module.exports）
 (function (root) {
-  // 總部本體 40 格寬；右邊隔兩格空地（走不過去）是副本區，只能從副本入口傳送過去
+  // 總部本體 40 格寬；右邊隔兩格空地（走不過去）是副本區，再隔兩格是古城候位區
+  // 副本區和候位區都走不過去，只能找指揮中心的古城守門員傳送
   const MW = 40;
   const DX = 42; // 副本區最左邊那一格
-  const W = DX + 22;
+  const LX = DX + 24; // 古城候位區最左邊那一格
+  const W = LX + 12;
   const H = 46;
   const TILE = 48;
 
@@ -17,7 +19,8 @@
   // 副本區：(空白) 虛空    Y  峽谷岩壁    Z  深海       y  七星潭礫石灘
   //         u  洞穴地板    x  大理石要推到的凹槽         n  斷崖上的草地
   //         X  關卡之間的石門（關著的時候擋路）          E  七星潭石碑
-  const BLOCKING = new Set(['#', 'T', 'B', 'K', 'M', 'P', 'S', 'F', 'G', 'N', 'W', 'R', 'J', ' ', 'Y', 'Z', 'E']);
+  // 候位區：Q  古城石牆    q  古城石板地    H  古城守門員（站在指揮中心）
+  const BLOCKING = new Set(['#', 'T', 'B', 'K', 'M', 'P', 'S', 'F', 'G', 'N', 'W', 'R', 'J', ' ', 'Y', 'Z', 'E', 'Q', 'H']);
 
   const g = [];
   for (let y = 0; y < H; y++) g.push(new Array(W).fill(','));
@@ -48,6 +51,9 @@
   // 轉職導師站在螢幕牆右邊
   const MENTOR_TILE = { x: 17, y: 6 };
   set(MENTOR_TILE.x, MENTOR_TILE.y, 'N');
+  // 古城守門員站在螢幕牆左邊，跟他說話就送你去副本的候位區
+  const GUARD_TILE = { x: 6, y: 6 };
+  set(GUARD_TILE.x, GUARD_TILE.y, 'H');
   // 戰情室：電視牆、長會議桌、兩排椅子
   rect(23, 4, 32, 4, 'W');
   rect(24, 8, 31, 9, 'M');
@@ -79,11 +85,6 @@
   rect(26, 30, 29, 30, ',');
   [[4, 35], [5, 35], [33, 40], [34, 41], [10, 43], [30, 34]].forEach(([x, y]) => set(x, y, '~'));
   [[1, 33], [38, 33], [2, 44], [37, 44]].forEach(([x, y]) => set(x, y, 'T'));
-
-  // 副本入口：總部東邊的草地，站進候場區就能出發
-  const LOBBY = { x1: 36, y1: 11, x2: 39, y2: 16 };
-  const PORTAL_TILE = { x: 38, y: 13 };
-  set(PORTAL_TILE.x, PORTAL_TILE.y, 'O');
 
   // ---------------- 花蓮副本 ----------------
   // 一關接一關往下走：七星潭 → 太魯閣九曲洞 → 清水斷崖，關卡之間的石門解開謎題才會打開
@@ -140,6 +141,15 @@
     'YYYYYYYYYYYYYYYYYYYYYY',
   ];
   HUALIEN.forEach((row, y) => [...row].forEach((c, x) => set(DX + x, y, c)));
+
+  // ---------------- 古城候位區 ----------------
+  // 四面石牆圍起來的前庭，上面是通往副本的古城門；站在裡面按「出發」
+  rect(LX, 2, LX + 11, 15, 'Q');
+  rect(LX + 1, 3, LX + 10, 14, 'q');
+  [[LX + 2, 6], [LX + 9, 6], [LX + 2, 11], [LX + 9, 11]].forEach(([x, y]) => set(x, y, 'Q')); // 四根石柱
+  const PORTAL_TILE = { x: LX + 5, y: 4 };
+  set(PORTAL_TILE.x, PORTAL_TILE.y, 'O');
+  const LOBBY = { x1: LX + 1, y1: 3, x2: LX + 10, y2: 14 };
   const px = (x) => (DX + x + 0.5) * TILE, py = (y) => (y + 0.5) * TILE;
   const DUNGEON = {
     id: 'hualien', name: '花蓮', title: '花蓮・太魯閣峽谷',
@@ -195,7 +205,7 @@
     { id: 'kitchen', name: '🍜 煮泡麵區', x1: 30, y1: 20, x2: 34, y2: 23 },
     { id: 'lounge', name: '🛋️ 休息區', x1: 21, y1: 15, x2: 34, y2: 23 },
     { id: 'front', name: '🌀 颱風前線', x1: 0, y1: 31, x2: MW - 1, y2: H - 1 },
-    { id: 'lobby', name: '🌀 花蓮副本入口', lobby: true, ...LOBBY },
+    { id: 'lobby', name: '🏯 古城候位區', lobby: true, ...LOBBY },
     { id: 'd1', name: '🌊 七星潭', dungeon: true, x1: DX + 1, y1: 3, x2: DX + 20, y2: 12 },
     { id: 'd2', name: '🪨 太魯閣九曲洞', dungeon: true, x1: DX + 1, y1: 14, x2: DX + 20, y2: 28 },
     { id: 'd3', name: '⚔️ 清水斷崖', dungeon: true, x1: DX + 1, y1: 30, x2: DX + 20, y2: 44 },
@@ -206,9 +216,10 @@
   // 會變動的擋路格子（關著的石門、九曲洞的大理石）：'tx,ty'
   const dyn = new Set();
   const map = {
-    W, H, MW, DX, TILE, BLOCKING, ROOMS, ITEMS, CRATES, MONSTER_ZONE, DUNGEON, LOBBY, dyn,
+    W, H, MW, DX, LX, TILE, BLOCKING, ROOMS, ITEMS, CRATES, MONSTER_ZONE, DUNGEON, LOBBY, dyn,
     portal: { x: (PORTAL_TILE.x + 0.5) * TILE, y: (PORTAL_TILE.y + 0.5) * TILE },
     mentor: { x: (MENTOR_TILE.x + 0.5) * TILE, y: (MENTOR_TILE.y + 0.5) * TILE },
+    guard: { x: (GUARD_TILE.x + 0.5) * TILE, y: (GUARD_TILE.y + 0.5) * TILE },
     tiles: g,
     spawn: { x: 28 * TILE, y: 27 * TILE },
     isBlocked(px, py) {
@@ -225,7 +236,12 @@
     stageAt(px, py) {
       return DUNGEON.stages.findIndex(s => px >= s.box.x1 && px < s.box.x2 && py >= s.box.y1 && py < s.box.y2);
     },
-    inDungeon(px) { return px >= MW * TILE; },
+    inDungeon(px) { return px >= DX * TILE && px < (DX + 22) * TILE; },
+    // 這個位置在哪一區：總部 hq、副本 dungeon、候位區 lobby（三區之間走不過去，只能傳送）
+    zoneOf(px) { return px < MW * TILE ? 'hq' : px < LX * TILE ? 'dungeon' : 'lobby'; },
+    nearGuard(px, py) {
+      return Math.hypot(px - this.guard.x, py - this.guard.y) < 2 * TILE;
+    },
     inLobby(px, py) {
       const tx = Math.floor(px / TILE), ty = Math.floor(py / TILE);
       return tx >= LOBBY.x1 && tx <= LOBBY.x2 && ty >= LOBBY.y1 && ty <= LOBBY.y2;

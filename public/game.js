@@ -809,7 +809,7 @@
       if (it) { const off = el('button', 'hud-btn tiny', '脫下'); off.onclick = () => equipGear(slot, null); row.appendChild(off); }
       slots.appendChild(row);
     });
-    slots.appendChild(el('p', 'modal-hint', `收集 ${myOwned.length} / ${Object.keys(GR.GEAR).length} 件。到 🎖️ 戰情室玩 🎨 你畫我猜，猜對就會拿到新裝備！武器要到總部東邊的 🌀 副本入口，打倒最終頭目才會掉。`));
+    slots.appendChild(el('p', 'modal-hint', `收集 ${myOwned.length} / ${Object.keys(GR.GEAR).length} 件。到 🎖️ 戰情室玩 🎨 你畫我猜，猜對就會拿到新裝備！武器要找指揮中心的 🏯 古城守門員進副本，打倒最終頭目才會掉。`));
     top.appendChild(slots);
     box.appendChild(top);
     Object.entries(GR.SLOTS).forEach(([slot, label]) => {
@@ -2041,6 +2041,16 @@
       });
       ctx.fillStyle = '#ffffff'; ctx.fillRect(52, 52, 12, 3);
       ctx.fillStyle = CR.INK; ctx.font = '900 6px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('資料', 58, 64);
+    } else if (prop === 'spear') {
+      // 古城守門員：頭盔＋長矛
+      CR.line(ctx, 76, 8, 74, 80, r, 3.4, '#8a5a3a', 0.4);
+      ctx.beginPath(); ctx.moveTo(76, -2); ctx.lineTo(82, 12); ctx.lineTo(70, 12); ctx.closePath();
+      CR.fill(ctx, '#c9ccd3', r, null); CR.stroke(ctx, r, 2);
+      CR.rect(ctx, 70, 12, 12, 4, r, 0.4); CR.fill(ctx, '#e0b84a', r, null); CR.stroke(ctx, r, 1.4);
+      ctx.beginPath(); ctx.arc(48, 22, 22, Math.PI * 1.02, Math.PI * 1.98); ctx.closePath();
+      CR.fill(ctx, '#9a8f7a', r, null); CR.stroke(ctx, r, 2.4);
+      CR.rect(ctx, 25, 20, 46, 6, r, 0.6); CR.fill(ctx, '#e0b84a', r, null); CR.stroke(ctx, r, 2);
+      CR.line(ctx, 48, -1, 48, 6, r, 3, '#e8384f', 0.4);
     } else if (prop === 'sign') {
       // 舉著「小心」的警告牌
       CR.line(ctx, 78, 30, 76, 66, r, 2.6, '#8a5a3a', 0.4);
@@ -2155,6 +2165,7 @@
     const inKitchen = (x, y) => x >= kitchen.x1 && x <= kitchen.x2 && y >= kitchen.y1 && y <= kitchen.y2;
     const floorOf = (ch, x, y) => {
       if (ch === ' ') return 'void';
+      if (x >= MAP.LX) return ch === 'q' || ch === 'O' ? 'temple' : ch === 'Q' ? 'templewall' : 'void';
       if (x >= MAP.MW) return ch === 'Z' ? 'sea' : ch === 'Y' ? 'rock' : 'yE'.includes(ch) ? 'sand' : ch === 'n' ? 'cliff' : 'cave';
       if (y > 30 && ':T~'.includes(ch)) return 'mud';
       if (',T~BFO'.includes(ch)) return 'grass';
@@ -2220,6 +2231,18 @@
           CR.stroke(ctx, r, 2, 'rgba(255,255,255,0.7)'); ctx.restore();
         } else if (base === 'rock') {
           ctx.fillStyle = '#b3aca1'; ctx.fillRect(px, py, T, T);
+        } else if (base === 'temple') {
+          // 古城候位區：一塊一塊的米灰色石板，偶爾有裂縫和青苔
+          ctx.fillStyle = (x + y) % 2 ? '#c8bea9' : '#c1b6a0'; ctx.fillRect(px, py, T, T);
+          CR.rect(ctx, px + 2, py + 2, T - 4, T - 4, r, 1); CR.stroke(ctx, r, 1.4, 'rgba(90,76,58,0.45)');
+          if (r() < 0.25) CR.line(ctx, px + 8 + r() * 10, py + 10, px + 22 + r() * 14, py + 30 + r() * 10, r, 1.2, 'rgba(90,76,58,0.5)', 3);
+          if (r() < 0.2) CR.dots(ctx, px + 4, py + T - 14, 16, 10, 5, 'rgba(107,175,123,0.7)', r, 2.2);
+        } else if (base === 'templewall') {
+          // 古城石牆：深一點的大石磚
+          ctx.fillStyle = '#7d7262'; ctx.fillRect(px, py, T, T);
+          CR.rect(ctx, px + 2, py + 3, T - 4, T / 2 - 4, r, 1); CR.fill(ctx, '#91866f', r, null); CR.stroke(ctx, r, 1.6, 'rgba(40,34,28,0.7)');
+          CR.rect(ctx, px + 2, py + T / 2 + 1, T - 4, T / 2 - 4, r, 1); CR.fill(ctx, '#867b66', r, null); CR.stroke(ctx, r, 1.6, 'rgba(40,34,28,0.7)');
+          ctx.fillStyle = '#e0b84a'; if ((x + y) % 5 === 0) ctx.fillRect(px + T / 2 - 3, py + T / 2 - 3, 6, 6);
         }
       }
     }
@@ -2374,6 +2397,10 @@
           if (L) CR.line(ctx, px + 2, py + 8, px + 2, py + T - 4, r, 2.6);
           if (Rr) CR.line(ctx, px + T - 2, py + 8, px + T - 2, py + T - 4, r, 2.6);
           ctx.fillStyle = '#ff6a13'; ctx.fillRect(px + (L ? 6 : 0), py + T - 12, T - (L ? 6 : 0) - (Rr ? 6 : 0), 3);
+        } else if (ch === 'H') {
+          // 古城守門員腳下的石板台座
+          CR.blob(ctx, px + 24, py + 30, 26, 15, r, 0.06); CR.fill(ctx, '#9a8f7a', r, [px - 2, py + 15, T + 4, 30]); CR.stroke(ctx, r, 2.4);
+          CR.blob(ctx, px + 24, py + 30, 17, 9, r, 0.06); CR.stroke(ctx, r, 1.6, '#e0b84a');
         } else if (ch === 'N') {
           // 轉職導師腳下的星星地毯
           CR.blob(ctx, px + 24, py + 30, 26, 15, r, 0.06); CR.fill(ctx, '#6a4fb8', r, [px - 2, py + 15, T + 4, 30]); CR.stroke(ctx, r, 2.4);
@@ -2400,13 +2427,13 @@
     });
     ctx.textBaseline = 'alphabetic';
 
-    // 副本入口的候場區：地上一圈虛線框
+    // 古城候位區：地上刻一圈金色的框，中間寫「候位區」
     const L = MAP.LOBBY, lr = CR.rng(77);
     ctx.save(); ctx.setLineDash([10, 8]);
-    CR.rect(ctx, L.x1 * T + 4, L.y1 * T + 4, (L.x2 - L.x1 + 1) * T - 8, (L.y2 - L.y1 + 1) * T - 8, lr, 2);
-    ctx.fillStyle = 'rgba(255,176,32,0.12)'; ctx.fill(); CR.stroke(ctx, lr, 3, '#ff7a2f'); ctx.restore();
-    ctx.font = '900 15px ' + FONT; ctx.textAlign = 'center'; ctx.fillStyle = '#2b2a33';
-    ctx.fillText('候場區', (L.x1 + L.x2 + 1) / 2 * T, (L.y2 + 1) * T - 14);
+    CR.rect(ctx, (L.x1 + 2) * T + 4, (L.y1 + 4) * T + 4, (L.x2 - L.x1 - 3) * T - 8, 6 * T - 8, lr, 2);
+    ctx.fillStyle = 'rgba(224,184,74,0.14)'; ctx.fill(); CR.stroke(ctx, lr, 3, '#c9962a'); ctx.restore();
+    ctx.font = '900 17px ' + FONT; ctx.textAlign = 'center'; ctx.fillStyle = '#5a4630';
+    ctx.fillText('候 位 區', (L.x1 + L.x2 + 1) / 2 * T, (L.y1 + 10) * T - 14);
     return c;
   }
 
@@ -2515,6 +2542,9 @@
       this.textures.addCanvas('mob-fu', drawFuMob(false));
       this.textures.addCanvas('mob-fu-fist', drawFuMob(true));
       this.textures.addCanvas('dg-gate', drawGate());
+      // 指揮中心的古城守門員：頭盔、石灰色鎧甲、拿著長矛
+      this.textures.addCanvas('guard', drawNpc({ hair: 'short', hairColor: '#2b2a33', skin: AV.SKINS[2], glasses: '0',
+        cls: 'suit', suit: '#7d7262', tie: '#e0b84a', npc: 'guard' }, 'spear'));
       this.mobs = new Map();
       const mx = MAP.mentor.x, my = MAP.mentor.y + 18;
       this.add.image(mx, my, 'mentor').setScale(0.55).setOrigin(0.5, 0.95).setDepth(my);
@@ -2524,6 +2554,15 @@
       }).setOrigin(0.5).setDepth(my);
       const talk = this.add.text(mx + 26, my - 66, '💬', { fontSize: '22px' }).setOrigin(0.5).setDepth(my + 1);
       this.tweens.add({ targets: talk, y: my - 74, duration: 700, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
+      // 古城守門員：跟他說話就傳送到副本的候位區
+      const gx = MAP.guard.x, gy = MAP.guard.y + 18;
+      this.add.image(gx, gy, 'guard').setScale(0.55).setOrigin(0.5, 0.95).setDepth(gy);
+      this.add.text(gx, gy - 96, '🏯 古城守門員', {
+        fontSize: '14px', fontStyle: 'bold', color: '#ffd23f', fontFamily: FONT,
+        backgroundColor: 'rgba(19,26,40,0.85)', padding: { x: 7, y: 2 },
+      }).setOrigin(0.5).setDepth(gy);
+      const gTalk = this.add.text(gx + 26, gy - 70, '💬', { fontSize: '22px' }).setOrigin(0.5).setDepth(gy + 1);
+      this.tweens.add({ targets: gTalk, y: gy - 78, duration: 760, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
 
       // 煙火的火花統一畫在一張 graphics 上
       // 煙火的火花：先把每個顏色的發光小點畫成一張貼圖，再用 Blitter 大量貼上去
@@ -3836,6 +3875,7 @@
       }
       if (MAP.tiles[ty] && MAP.tiles[ty][tx] === 'G' && MAP.nearStove(this.me.x, this.me.y, 1.8 * T)) return { type: 'cook' };
       if (Math.hypot(x - MAP.mentor.x, y - (MAP.mentor.y - 20)) < 50 && MAP.nearMentor(this.me.x, this.me.y)) return { type: 'mentor' };
+      if (Math.hypot(x - MAP.guard.x, y - (MAP.guard.y - 20)) < 50 && MAP.nearGuard(this.me.x, this.me.y)) return { type: 'guard' };
       if (Math.hypot(x - MAP.fridge.x, y - (MAP.fridge.y - 10)) < 40 && MAP.nearFridge(this.me.x, this.me.y)) return { type: 'fridge' };
       if (MAP.tiles[ty] && MAP.tiles[ty][tx] === 'J' && MAP.nearDj(this.me.x, this.me.y)) return { type: 'dj' };
       return null;
@@ -3859,6 +3899,7 @@
       }
       if (!best && MAP.nearStove(this.me.x, this.me.y, 1.8 * T)) return { type: 'cook' };
       if (!best && MAP.nearMentor(this.me.x, this.me.y)) return { type: 'mentor' };
+      if (!best && MAP.nearGuard(this.me.x, this.me.y)) return { type: 'guard' };
       if (!best && MAP.nearDj(this.me.x, this.me.y)) return { type: 'dj' };
       return best;
     }
@@ -3879,6 +3920,11 @@
         this.tryPush(act.dx, act.dy);
       } else if (act.type === 'mentor') {
         openMentor();
+      } else if (act.type === 'guard') {
+        socket.emit('dgGo', (res) => {
+          if (res && res.ok) toast('🏯 守門員：「去吧！在古城候位區集合，人到齊就按出發。」');
+          else if (res && res.error) toast(res.error);
+        });
       } else if (act.type === 'fridge') {
         openFridge();
       } else if (act.type === 'dj') {
@@ -4252,7 +4298,7 @@
       // 副本入口的漩渦（一直轉）＋招牌
       const pt = MAP.portal;
       this.portal = this.add.image(pt.x, pt.y + 6, 'typhoon').setScale(0.34, 0.14).setTint(0xffb020).setDepth(pt.y - 20);
-      this.add.text(pt.x, pt.y - 58, '🌀 花蓮副本', { fontSize: '15px', fontStyle: '900', color: '#ffd23f', fontFamily: FONT,
+      this.add.text(pt.x, pt.y - 58, '🏯 古城門・花蓮副本', { fontSize: '15px', fontStyle: '900', color: '#ffd23f', fontFamily: FONT,
         backgroundColor: 'rgba(19,26,40,0.85)', padding: { x: 8, y: 3 } }).setOrigin(0.5).setDepth(pt.y + 60);
       // 七星潭的石頭：每顆一個顏色，踩對會亮起來
       this.stoneImgs = D.stones.map((st, i) => {
@@ -4280,6 +4326,7 @@
         if (!b) return;
         if (b.dataset.act === 'start') socket.emit('dgStart', (res) => { if (res && !res.ok && res.error) toast(res.error); });
         if (b.dataset.act === 'leave') socket.emit('dgLeave', () => {});
+        if (b.dataset.act === 'home') socket.emit('dgHome', () => {});
         if (b.dataset.act === 'reset') socket.emit('dgReset', (res) => { if (res && !res.ok && res.error) toast(res.error); });
       });
     }
@@ -4379,7 +4426,7 @@
       if (!g) toast('🍃 這次什麼都沒掉……下次再來挑戰！');
       else if (mine.dup) toast(`🔁 又是【${g.rarity}】${g.icon} ${g.name}，換成 600 經驗`);
       else toast(`⚔️ 獲得武器【${g.rarity}】${g.icon} ${g.name}！到 👗 裝備換上，普攻就會變`);
-      toast(`${Math.round(c.ms / 1000)} 秒後送回副本入口`);
+      toast(`${Math.round(c.ms / 1000)} 秒後送回古城候位區`);
     }
 
     // 副本的面板：候場區按出發、副本裡看關卡和時間、離開
@@ -4400,12 +4447,13 @@
         html = `<span>🌀 ${D.name}副本 · ${what}</span>` + seq + (d.stage === 1 && d.phase === 'run' ? '<button class="hud-btn tiny" data-act="reset" type="button">🔄 重排大理石</button>' : '') +
           '<button class="hud-btn tiny" data-act="leave" type="button">🚪 離開</button>';
       } else if (this.roomId === 'lobby') {
-        if (d.phase === 'idle') { key = 'idle'; html = `<span>🌀 ${D.title} · 1～${d.max} 人 · 限時 ${D.timeLimitMs / 60000} 分</span><button class="primary" data-act="start" type="button">出發</button>`; }
+        const homeBtn = '<button class="hud-btn tiny" data-act="home" type="button">🏠 回總部</button>';
+        if (d.phase === 'idle') { key = 'idle'; html = `<span>🌀 ${D.title} · 1～${d.max} 人 · 限時 ${D.timeLimitMs / 60000} 分</span><button class="primary" data-act="start" type="button">出發</button>` + homeBtn; }
         else if (d.phase === 'countdown') {
           const left = d.countdown - (performance.now() - this.dgAt);
           key = 'cd' + Math.ceil(left / 1000);
-          html = `<span>⏳ ${Math.max(0, Math.ceil(left / 1000))} 秒後出發！站在候場區就會一起去</span>`;
-        } else { key = 'busy' + d.members.length + d.stage; html = `<span>⚔️ 副本進行中：${d.members.length} 人，打到第 ${Math.min(d.stage, 2) + 1} 關，等他們出來</span>`; }
+          html = `<span>⏳ ${Math.max(0, Math.ceil(left / 1000))} 秒後出發！站在候位區就會一起去</span>` + homeBtn;
+        } else { key = 'busy' + d.members.length + d.stage; html = `<span>⚔️ 副本進行中：${d.members.length} 人，打到第 ${Math.min(d.stage, 2) + 1} 關，等他們出來</span>` + homeBtn; }
       } else { box.hidden = true; this.dgKey = null; return; }
       if (force) this.dgAt = performance.now();
       box.hidden = false;
@@ -4653,12 +4701,22 @@
         if (this.mHitUntil && performance.now() > this.mHitUntil) { this.mHitUntil = 0; this.mFace.setTexture('typhoon-face'); this.applyMonsterTint(); }
         this.monster.setDepth(this.monster.y);
       }
-      // 副本區和總部分開設鏡頭範圍，才不會看到中間的空地
-      const inD = MAP.inDungeon(this.me.x);
-      if (inD !== this.camInD) {
-        this.camInD = inD;
-        if (inD) this.cameras.main.setBounds(MAP.DX * T, 0, (MAP.W - MAP.DX) * T, MAP.H * T);
-        else this.cameras.main.setBounds(0, 0, MAP.MW * T, MAP.H * T);
+      // 總部、副本、候位區分開設鏡頭範圍，才不會看到中間的空地；比螢幕窄的區域放在畫面正中間
+      const zone = MAP.zoneOf(this.me.x), inD = zone === 'dungeon';
+      const cam = this.cameras.main, vw = cam.width / cam.zoom, vh = cam.height / cam.zoom;
+      const camKey = zone + '|' + Math.round(vw) + 'x' + Math.round(vh);
+      if (camKey !== this.camKey) {
+        this.camKey = camKey;
+        const [x1, x2, y1, y2] = zone === 'dungeon' ? [MAP.DX, MAP.DX + 22, 0, MAP.H]
+          : zone === 'lobby' ? [MAP.LX, MAP.W, 0, 18] : [0, MAP.MW, 0, MAP.H];
+        const w = (x2 - x1) * T, h = (y2 - y1) * T;
+        const bw = Math.max(w, vw), bh = Math.max(h, vh), bx = x1 * T - (bw - w) / 2, by = y1 * T - (bh - h) / 2;
+        cam.setBounds(bx, by, bw, bh);
+        // 置中後兩邊會露出隔壁區域，用深色蓋住
+        if (!this.zoneMask) this.zoneMask = this.add.graphics().setDepth(100000);
+        const m = this.zoneMask.clear().fillStyle(0x131a28, 1);
+        if (bw > w) { m.fillRect(bx, by, x1 * T - bx, bh); m.fillRect(x2 * T, by, bx + bw - x2 * T, bh); }
+        if (bh > h) { m.fillRect(bx, by, bw, y1 * T - by); m.fillRect(bx, y2 * T, bw, by + bh - y2 * T); }
       }
       this.portal.rotation -= dt * 3;
       this.renderDgPanel();
@@ -4676,7 +4734,7 @@
       // 互動按鈕
       const all0 = [this.me, ...this.remotes.values()];
       const near = this.nearbyAction();
-      const LABELS = { crate: '🔨 敲箱子', cook: '🍜 煮泡麵', mentor: '💬 找沈理員轉職', dj: '🎧 點歌' };
+      const LABELS = { crate: '🔨 敲箱子', cook: '🍜 煮泡麵', mentor: '💬 找沈理員轉職', guard: '🏯 前往副本候位區', dj: '🎧 點歌' };
       // 攻擊用技能列的普攻鍵，這顆只放其他互動（敲箱子、點歌…）
       const canHit = !!near && !this.isDead() && near.type === 'attack';
       const label = !near || this.isDead() || canHit ? '' : LABELS[near.type];
@@ -4750,7 +4808,7 @@
           command: '找右上角的 📂 轉職資料沈理員，可以換職業',
           storage: '走到箱子旁按空白鍵（或點箱子）敲三下',
           kitchen: '站在爐台旁按空白鍵煮泡麵補血，有蔬菜會自動加進去',
-          lobby: `站在候場區按「出發」，${MAP.DUNGEON.countdownMs / 1000} 秒後一起傳送到花蓮副本（最多 ${MAP.DUNGEON.maxPlayers} 人），打倒最終頭目會掉武器`,
+          lobby: `站在古城候位區按「出發」，${MAP.DUNGEON.countdownMs / 1000} 秒後一起傳送到花蓮副本（最多 ${MAP.DUNGEON.maxPlayers} 人），打倒最終頭目會掉武器；按「回總部」回到指揮中心`,
           d1: '照石碑上的顏色順序踩石頭，踩錯會被浪打回起點',
           d2: '往大理石走過去就能推（手機點石頭也可以），三顆都推進地上有 ⬇️ 的凹槽，石門就會開；卡住可以按「重排大理石」',
           d3: '傅昆騎！地上出現紅色範圍快閃開，他舉起拳頭就是要衝鋒了',

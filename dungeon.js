@@ -49,7 +49,8 @@ module.exports = function createDungeon(ctx) {
     io.emit('playerMoved', { id: p.id, x, y, dir: p.dir, moving: false, teleport: true });
   }
   const jitter = (pt, i) => ({ x: pt.x + ((i % 3) - 1) * 40, y: pt.y + Math.floor(i / 3) * 34 });
-  const lobbySpot = (i) => ({ x: (MAP.LOBBY.x1 + 1 + (i % 3) * 0.7) * T, y: (MAP.LOBBY.y1 + 3.5 + Math.floor(i / 3) * 0.8) * T });
+  const lobbyCx = (MAP.LOBBY.x1 + MAP.LOBBY.x2 + 1) / 2;
+  const lobbySpot = (i) => ({ x: (lobbyCx - 0.7 + (i % 3) * 0.7) * T, y: (MAP.LOBBY.y1 + 5 + Math.floor(i / 3) * 0.8) * T });
 
   function closeAll() {
     D.gates.forEach((g, i) => MAP.setGate(i, false));
@@ -71,21 +72,36 @@ module.exports = function createDungeon(ctx) {
     emit();
   }
 
+  // ---------------- 古城守門員：總部 ⇄ 候位區 ----------------
+  function go(p) {
+    if (p.dead) return { ok: false };
+    if (st.members.has(p.id) && st.phase !== 'idle') return { ok: false };
+    if (!MAP.nearGuard(p.x, p.y)) return { ok: false, error: '走到古城守門員旁邊再跟他說話' };
+    const s = lobbySpot(Math.floor(Math.random() * 6));
+    teleport(p, s.x, s.y);
+    return { ok: true };
+  }
+  function home(p) {
+    if (p.dead || MAP.zoneOf(p.x) !== 'lobby') return { ok: false };
+    teleport(p, MAP.guard.x + T, MAP.guard.y + T * 0.6);
+    return { ok: true };
+  }
+
   // ---------------- 出發 ----------------
   function start(p) {
     if (st.phase === 'countdown') return { ok: false, error: '已經在倒數了，站在候場區就會一起出發' };
     if (st.phase !== 'idle') return { ok: false, error: '副本裡面還有人在挑戰，等他們出來' };
-    if (!MAP.inLobby(p.x, p.y)) return { ok: false, error: '要站在副本入口的候場區' };
+    if (!MAP.inLobby(p.x, p.y)) return { ok: false, error: '要站在古城候位區' };
     if (p.dead) return { ok: false };
     st.phase = 'countdown';
     st.countdownAt = now0() + D.countdownMs;
     emit();
-    say(`🌀 ${p.name} 按下了出發！${D.countdownMs / 1000} 秒後前往${D.name}副本，想去的人快到總部東邊的副本入口集合（最多 ${D.maxPlayers} 人）`);
+    say(`🌀 ${p.name} 按下了出發！${D.countdownMs / 1000} 秒後前往${D.name}副本，想去的人快找指揮中心的古城守門員，到古城候位區集合（最多 ${D.maxPlayers} 人）`);
     return { ok: true };
   }
   function launch() {
     const list = [...players.values()].filter(p => !p.dead && !isAway(p) && MAP.inLobby(p.x, p.y)).slice(0, D.maxPlayers);
-    if (!list.length) { st.phase = 'idle'; emit(); say('🌀 候場區沒有人，副本取消出發'); return; }
+    if (!list.length) { st.phase = 'idle'; emit(); say('🌀 候位區沒有人，副本取消出發'); return; }
     closeAll();
     // 七顆石頭裡隨機挑 5 顆排順序
     const order = D.stones.map((s, i) => i).sort(() => Math.random() - 0.5);
@@ -433,14 +449,16 @@ module.exports = function createDungeon(ctx) {
 
   return {
     state: publicState,
-    start, leave, remove, push, resetBlocks, onDeath, damage, tick, mobState,
+    go, home, start, leave, remove, push, resetBlocks, onDeath, damage, tick, mobState,
     isMember: (p) => st.members.has(p.id) && st.phase !== 'idle',
     // 現在在副本裡、可以打怪放技能的人
-    // 自己回報的位置：不是隊員不能進副本；隊員不能跑出副本，也不能跳到還沒開門的關卡
+    // 自己回報的位置：總部、副本、候位區之間只能靠傳送，不能自己走過去；
+    // 隊員不能跑出副本，也不能跳到還沒開門的關卡
     allowMove: (p, x, y) => {
       const member = st.members.has(p.id) && st.phase !== 'idle';
-      if (!MAP.inDungeon(x)) return !member;
-      if (!member) return false;
+      const zone = MAP.zoneOf(x);
+      if (!member) return zone !== 'dungeon' && zone === MAP.zoneOf(p.x);
+      if (zone !== 'dungeon') return false;
       // 門所在的那一排算進前一關
       return y < D.stages[Math.max(0, st.stage)].box.y2 + MAP.TILE;
     },

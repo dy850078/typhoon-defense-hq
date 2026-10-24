@@ -628,7 +628,7 @@ setInterval(() => {
   });
 }, 1000);
 
-// ---------------- 插畫家的城牆 ----------------
+// ---------------- 插畫結界師的城牆 ----------------
 // 畫在前線的一條折線，存活 ms 毫秒；怪物走不過去，火牆會燒、冰牆第一次碰到會凍住
 const walls = [];
 let wallSeq = 0;
@@ -1152,7 +1152,7 @@ io.on('connection', (socket) => {
     if (!skill || !STATS.CLASSES[p.cls].skills.includes(skillId)) return ack({ ok: false });
     const now = Date.now();
     if (now - lastAction < 300 || now < (p.cooldowns[skillId] || 0)) return ack({ ok: false });
-    // 插畫家的城牆：target 是畫出來的線
+    // 插畫結界師的城牆：target 是畫出來的線
     const line = skill.wall ? wallLine(p, target && target.pts, skill.wall.len) : null;
     if (skill.wall && !line) return ack({ ok: false, error: '要在 🌀 颱風前線、自己附近畫一條線' });
     if (skill.wall) target = 'boss';

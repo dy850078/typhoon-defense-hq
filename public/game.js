@@ -384,8 +384,214 @@
     const furn = el('button', 'inv-item bag-btn', '🪑 家具');
     furn.onclick = openFurn;
     box.appendChild(furn);
+    const song = el('button', 'inv-item bag-btn', '🎵 點歌');
+    song.onclick = () => MUSIC.open();
+    box.appendChild(song);
     if (modalKind === 'bag') openBag();
   }
+  // ---------------- 點唱機：全場一條 YouTube 點歌隊伍，所有人同步聽 ----------------
+  const MUSIC = (() => {
+    let draft = '', results = null;
+    let state = {}, gotAt = 0, area = 'all', player = null, apiP = null, playing = null, startTimer = null;
+    let vol = Number(saved('hq-vol') == null ? 60 : saved('hq-vol')), muted = saved('hq-mute') === '1';
+    const cur = () => (state[area] && state[area].now) || null;
+    // 現在這首應該播到第幾秒
+    const pos = () => { const n = cur(); return n ? (n.at + performance.now() - gotAt) / 1000 : 0; };
+    function api() {
+      if (apiP) return apiP;
+      apiP = new Promise((res, rej) => {
+        window.onYouTubeIframeAPIReady = res;
+        const s = document.createElement('script');
+        s.src = 'https://www.youtube.com/iframe_api';
+        s.onerror = () => { apiP = null; rej(); };
+        document.head.appendChild(s);
+      }).then(() => new Promise((res) => {
+        player = new YT.Player('music-yt', {
+          width: 192, height: 108,
+          playerVars: { playsinline: 1, controls: 0, disablekb: 1, rel: 0, modestbranding: 1, iv_load_policy: 3 },
+          events: { onReady: () => res(), onStateChange: onState, onError },
+        });
+      }));
+      return apiP;
+    }
+    function onState(e) {
+      // 真的有聲音在播的時候，唱片才會轉、唱臂才會放下
+      $('music').classList.toggle('playing', e.data === YT.PlayerState.PLAYING);
+      if (e.data === YT.PlayerState.PLAYING) $('music-start').hidden = true;
+      if (e.data === YT.PlayerState.ENDED && playing) socket.emit('musicEnded', playing);
+    }
+    function onError() {
+      const vid = playing;
+      toast('🎵 這首播不了，等一下會自動換下一首');
+      setTimeout(() => { if (playing === vid) socket.emit('musicEnded', vid); }, 6000);
+    }
+    function applyVol() {
+      $('music-vol').value = vol;
+      $('music-mute').textContent = muted || !vol ? '🔇' : '🔊';
+      if (!player || !player.setVolume) return;
+      player.setVolume(vol);
+      if (muted) player.mute(); else player.unMute();
+    }
+    // 跟伺服器的進度對齊：換歌、跳到對的秒數，播不出聲音就顯示「點一下開始聽」
+    function sync() {
+      const n = cur();
+      $('music').hidden = !n;
+      if (!n) {
+        $('music').classList.remove('playing');
+        playing = null;
+        if (player && player.stopVideo) player.stopVideo();
+        return;
+      }
+      $('music-title').textContent = n.title;
+      $('music-by').textContent = `DJ ${n.byName}`;
+      $('music-art').src = `https://i.ytimg.com/vi/${n.vid}/mqdefault.jpg`;
+      if (n.vid === playing) return;
+      playing = n.vid;
+      api().then(() => {
+        if (playing !== n.vid) return;
+        const wait = Math.max(0, -pos());
+        clearTimeout(startTimer);
+        startTimer = setTimeout(() => {
+          if (playing !== n.vid) return;
+          player.loadVideoById({ videoId: n.vid, startSeconds: Math.max(0, pos()) });
+          applyVol();
+          // 手機有時候不讓網頁自己出聲，要使用者點一下
+          setTimeout(() => {
+            if (playing !== n.vid || !player.getPlayerState) return;
+            const st = player.getPlayerState();
+            $('music-start').hidden = st === YT.PlayerState.PLAYING || st === YT.PlayerState.BUFFERING;
+          }, 3000);
+        }, wait * 1000);
+      }).catch(() => { $('music-title').textContent = '連不到 YouTube，聽不到音樂'; });
+    }
+    // 每 5 秒檢查一次，差太多就跳到正確的位置
+    setInterval(() => {
+      if (!player || !playing || !player.getCurrentTime || player.getPlayerState() !== YT.PlayerState.PLAYING) return;
+      if (Math.abs(player.getCurrentTime() - pos()) > 3) player.seekTo(pos(), true);
+    }, 5000);
+    $('music-start').onclick = () => { if (player) { player.seekTo(Math.max(0, pos()), true); player.playVideo(); applyVol(); } };
+    $('music-mute').onclick = () => { muted = !muted; store('hq-mute', muted ? '1' : '0'); applyVol(); };
+    $('music-vol').oninput = (e) => { vol = Number(e.target.value); muted = false; store('hq-vol', String(vol)); store('hq-mute', '0'); applyVol(); };
+    $('music-open').onclick = () => open();
+    applyVol();
+
+    // 唱片封套：縮圖當封面，旁邊露出半張黑膠；正在放的那張會轉
+    function sleeve(vid, spin) {
+      const s = el('div', 'sleeve' + (spin ? ' spin' : ''));
+      s.appendChild(el('i', 'sleeve-disc'));
+      const c = el('div', 'sleeve-cover');
+      if (vid) { const img = el('img'); img.src = `https://i.ytimg.com/vi/${vid}/mqdefault.jpg`; img.alt = ''; img.loading = 'lazy'; c.appendChild(img); }
+      else c.textContent = '🔈';
+      s.appendChild(c);
+      return s;
+    }
+    function open() {
+      const box = el('div', 'modal-list music-modal');
+      const m = state[area] || { now: null, queue: [] };
+      box.appendChild(el('p', 'modal-hint', '總部的點唱機：全場的人一起聽同一首，進度大家都一樣。'));
+      const n = m.now;
+      const nowRow = el('div', 'modal-row dj-now');
+      nowRow.appendChild(sleeve(n && n.vid, !!n));
+      const info = el('div', 'modal-info');
+      info.appendChild(el('b', null, n ? n.title : '現在沒有在放歌'));
+      if (n) info.appendChild(el('p', null, `DJ ${n.byName}${n.skips ? `・${n.skips} 人想切歌` : ''}`));
+      nowRow.appendChild(info);
+      if (n) {
+        const mine = me && n.by === me.id;
+        const sk = el('button', 'hud-btn tiny', mine ? '⏭ 切歌' : '⏭ 投票切歌');
+        sk.onclick = () => socket.emit('musicSkip', (r) => {
+          if (!r || !r.ok) { toast((r && r.error) || '切不了'); return; }
+          if (r.voted) toast(`已投票，${r.voted}/${r.need} 人同意就切歌`);
+        });
+        nowRow.appendChild(sk);
+      }
+      box.appendChild(nowRow);
+      if (m.queue.length) {
+        box.appendChild(el('p', 'mono prof-line', `📦 唱片箱・接下來 ${m.queue.length} 張`));
+        const ol = el('ol', 'music-queue');
+        m.queue.forEach((q, i) => {
+          const li = el('li');
+          li.appendChild(sleeve(q.vid, false));
+          const t = el('div', 'music-r-info');
+          t.appendChild(el('b', null, q.title));
+          t.appendChild(el('small', null, `DJ ${q.byName}`));
+          li.appendChild(t);
+          if (me && q.by === me.id) {
+            const x = el('button', 'music-x', '✕'); x.title = '從隊伍拿掉';
+            x.onclick = () => socket.emit('musicRemove', i, () => {});
+            li.appendChild(x);
+          }
+          ol.appendChild(li);
+        });
+        box.appendChild(ol);
+      }
+      const form = el('form', 'music-form');
+      const input = el('input'); input.placeholder = '打歌名搜尋，或貼 YouTube 連結'; input.maxLength = 200; input.autocomplete = 'off';
+      input.value = draft;
+      input.oninput = () => { draft = input.value; };
+      const btn = el('button', 'primary small', '搜尋'); btn.type = 'submit';
+      const err = el('p', 'error');
+      form.append(input, btn);
+      const add = (req, b) => {
+        if (b) b.disabled = true;
+        err.textContent = '';
+        socket.emit('musicAdd', req, (r) => {
+          if (b) b.disabled = false;
+          if (!r || !r.ok) { err.textContent = (r && r.error) || '點歌失敗'; return; }
+          draft = ''; results = null;
+          toast(`🎵 已點「${r.title}」`);
+          // 點歌那一下就是使用者的點擊，順便讓手機可以出聲
+          api().catch(() => {});
+          open();
+        });
+      };
+      form.onsubmit = (e) => {
+        e.preventDefault();
+        const q = input.value.trim();
+        if (!q) return;
+        // 貼的是連結就直接點，不是就當歌名搜尋
+        if (/youtu\.?be|^[A-Za-z0-9_-]{11}$/.test(q)) { add(q, btn); return; }
+        btn.disabled = true; err.textContent = '';
+        socket.emit('musicSearch', q, (r) => {
+          btn.disabled = false;
+          if (!r || !r.ok) { err.textContent = (r && r.error) || '搜尋失敗'; return; }
+          results = { q, list: r.list };
+          open();
+        });
+      };
+      box.append(form, err);
+      if (results) {
+        if (!results.list.length) box.appendChild(el('p', 'modal-hint', `找不到「${results.q}」，換個關鍵字試試`));
+        const ul = el('ul', 'music-results');
+        results.list.forEach((v) => {
+          const li = el('li');
+          const img = sleeve(v.vid, false);
+          const txt = el('div', 'music-r-info');
+          txt.appendChild(el('b', null, v.title));
+          txt.appendChild(el('small', null, [v.channel, v.len].filter(Boolean).join('・')));
+          const b = el('button', 'primary small', '點這首');
+          b.onclick = () => add({ vid: v.vid, title: v.title }, b);
+          li.append(img, txt, b);
+          ul.appendChild(li);
+        });
+        box.appendChild(ul);
+      }
+      box.appendChild(el('p', 'modal-hint', `每人最多排 3 首。點歌的人可以直接切歌，其他人要超過一半同意才會切。`));
+      const focused = document.activeElement && document.activeElement.closest && document.activeElement.closest('.music-form');
+      openModal('music', '🎵 點歌', box);
+      if (focused || !results) setTimeout(() => input.focus(), 50);
+    }
+    return {
+      set(s) { state = s || {}; gotAt = performance.now(); sync(); if (modalKind === 'music' && !$('modal').hidden) open(); },
+      area: () => area,
+      // 伺服器說現在有歌在放（DJ 台的唱片會轉）
+      playing: () => !!cur() && pos() >= 0,
+      open,
+    };
+  })();
+  socket.on('music', (s) => MUSIC.set(s));
+  socket.on('toastArea', (t) => { if (joined && t.area === MUSIC.area()) toast(t.text); });
+
   function openBag() {
     const list = el('div', 'modal-list');
     Object.entries(MAP.ITEMS).forEach(([k, it]) => {
@@ -1783,6 +1989,15 @@
           CR.line(ctx, px + T - 13, py - 8, px + T - 13, py + 1, r, 2.6, '#9aa3b5');
           CR.line(ctx, px + T - 13, py + 12, px + T - 13, py + 24, r, 2.6, '#9aa3b5');
           CR.blob(ctx, px + 16, py - 4, 4, 4, r, 0.15, 10); CR.fill(ctx, '#ff7a2f', r, null); CR.stroke(ctx, r, 1.4);
+        } else if (ch === 'J') {
+          // DJ 台：黑色桌子，兩台唱盤另外畫在上面（播歌時會轉）
+          const L = at(x - 1, y) !== 'J', Rr = at(x + 1, y) !== 'J';
+          CR.rect(ctx, px + (L ? 2 : 0), py + 8, T - (L ? 2 : 0) - (Rr ? 2 : 0), T - 12, r, 1); CR.fill(ctx, '#2b2a33', r, null);
+          CR.line(ctx, px + (L ? 2 : -1), py + 8, px + T + (Rr ? -2 : 1), py + 8, r, 2.6);
+          CR.line(ctx, px + (L ? 2 : -1), py + T - 4, px + T + (Rr ? -2 : 1), py + T - 4, r, 2.6);
+          if (L) CR.line(ctx, px + 2, py + 8, px + 2, py + T - 4, r, 2.6);
+          if (Rr) CR.line(ctx, px + T - 2, py + 8, px + T - 2, py + T - 4, r, 2.6);
+          ctx.fillStyle = '#ff6a13'; ctx.fillRect(px + (L ? 6 : 0), py + T - 12, T - (L ? 6 : 0) - (Rr ? 6 : 0), 3);
         } else if (ch === 'N') {
           // 轉職導師腳下的星星地毯
           CR.blob(ctx, px + 24, py + 30, 26, 15, r, 0.06); CR.fill(ctx, '#6a4fb8', r, [px - 2, py + 15, T + 4, 30]); CR.stroke(ctx, r, 2.4);
@@ -2199,6 +2414,37 @@
       if (empty) this.emptyCrates.set(key, this.add.image((tx + 0.5) * T, (ty + 0.5) * T, 'crate-empty').setDepth(-9));
     }
 
+    // DJ 台上的兩張黑膠：有歌在放就會轉，還會飄出音符
+    makeDj() {
+      if (this.djParts) return;
+      const { x, y } = MAP.dj;
+      const disc = (dx) => {
+        const g = this.add.graphics();
+        g.fillStyle(0x111111, 1).fillCircle(0, 0, 17);
+        g.lineStyle(1, 0x3a3a44, 1); [13, 10, 7].forEach(r => g.strokeCircle(0, 0, r));
+        g.fillStyle(0xff6a13, 1).fillCircle(0, 0, 5);
+        g.fillStyle(0xffffff, 1).fillCircle(0, -11, 1.6);
+        return this.add.container(x + dx, y - 4, [g]).setDepth(y + T / 2 - 1);
+      };
+      const sign = this.add.text(x, y - 38, '🎧 DJ', { fontFamily: FONT, fontSize: '15px', fontStyle: '900', color: '#ffd23f',
+        stroke: '#131a28', strokeThickness: 4 }).setOrigin(0.5).setDepth(y + T / 2);
+      this.djParts = { discs: [disc(-24), disc(24)], sign, nextNote: 0 };
+    }
+    tickDj(time, delta) {
+      const d = this.djParts;
+      if (!d) return;
+      const on = MUSIC.playing();
+      d.discs.forEach((c, i) => { if (on) c.rotation += (i ? 0.004 : 0.0045) * delta; });
+      d.sign.setText(on ? '🎧 DJ ♪' : '🎧 DJ');
+      if (on && time > d.nextNote) {
+        d.nextNote = time + 650;
+        const n = this.add.text(MAP.dj.x + (Math.random() - 0.5) * 60, MAP.dj.y - 20, Math.random() < 0.5 ? '♪' : '♫',
+          { fontFamily: FONT, fontSize: '20px', fontStyle: '900', color: ['#ffd23f', '#ff8fab', '#7fd1ff'][Math.floor(Math.random() * 3)],
+            stroke: '#131a28', strokeThickness: 3 }).setOrigin(0.5).setDepth(MAP.dj.y + T);
+        this.tweens.add({ targets: n, y: n.y - 60, x: n.x + (Math.random() - 0.5) * 30, alpha: 0, duration: 1800, onComplete: () => n.destroy() });
+      }
+    }
+
     setupWorld(res) {
       this.remotes.forEach(r => r.destroy());
       this.remotes.clear();
@@ -2218,6 +2464,8 @@
       this.decor.forEach(d => d.destroy());
       this.decor.clear();
       (res.decor || []).forEach(d => this.setDecor(d));
+      this.makeDj();
+      MUSIC.set(res.music);
       this.walls.forEach((w, id) => this.onWallGone(id, true));
       (res.walls || []).forEach(w => this.onWall(w));
       renderStats(res.you);
@@ -3036,6 +3284,7 @@
       if (MAP.tiles[ty] && MAP.tiles[ty][tx] === 'G' && MAP.nearStove(this.me.x, this.me.y, 1.8 * T)) return { type: 'cook' };
       if (Math.hypot(x - MAP.mentor.x, y - (MAP.mentor.y - 20)) < 50 && MAP.nearMentor(this.me.x, this.me.y)) return { type: 'mentor' };
       if (Math.hypot(x - MAP.fridge.x, y - (MAP.fridge.y - 10)) < 40 && MAP.nearFridge(this.me.x, this.me.y)) return { type: 'fridge' };
+      if (MAP.tiles[ty] && MAP.tiles[ty][tx] === 'J' && MAP.nearDj(this.me.x, this.me.y)) return { type: 'dj' };
       return null;
     }
 
@@ -3057,6 +3306,7 @@
       }
       if (!best && MAP.nearStove(this.me.x, this.me.y, 1.8 * T)) return { type: 'cook' };
       if (!best && MAP.nearMentor(this.me.x, this.me.y)) return { type: 'mentor' };
+      if (!best && MAP.nearDj(this.me.x, this.me.y)) return { type: 'dj' };
       return best;
     }
 
@@ -3076,6 +3326,8 @@
         openMentor();
       } else if (act.type === 'fridge') {
         openFridge();
+      } else if (act.type === 'dj') {
+        MUSIC.open();
       } else if (act.type === 'cook') {
         socket.emit('cook', (res) => {
           if (!res || !res.ok) { if (res && res.error) toast(res.error); return; }
@@ -3433,7 +3685,8 @@
         !MAP.isBlocked(x - 12, y + 2) && !MAP.isBlocked(x + 12, y + 2);
     }
 
-    update(time) {
+    update(time, delta) {
+      this.tickDj(time, delta || 16);
       // 用真實時間算位移，電腦或手機掉幀時走路速度也不會變慢
       const now = performance.now();
       const dt = Math.min(0.1, (now - (this.prevNow || now)) / 1000);
@@ -3551,7 +3804,7 @@
       // 互動按鈕
       const all0 = [this.me, ...this.remotes.values()];
       const near = this.nearbyAction();
-      const LABELS = { crate: '🔨 敲箱子', cook: '🍜 煮泡麵', mentor: '💬 找沈理員轉職' };
+      const LABELS = { crate: '🔨 敲箱子', cook: '🍜 煮泡麵', mentor: '💬 找沈理員轉職', dj: '🎧 點歌' };
       const label = !near || this.isDead() ? '' : near.type === 'attack' ? `${ST.SKILLS[basic()].icon} 攻擊${near.name}` : LABELS[near.type];
       if (label !== this.actionLabel) {
         this.actionLabel = label;

@@ -17,6 +17,9 @@
     setTimeout(() => { vpMeta.content = c; }, 50);
   });
   document.addEventListener('touchmove', e => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
+  // 分頁切到背景時瀏覽器會停掉畫面更新，這時收到的特效動畫都會卡住排隊，切回來一次全播。
+  // 背景時就不產生純視覺的特效，血量、位置這些狀態照樣更新
+  const fxOff = () => document.hidden;
   // 近距離的普攻：打到時角色往前撲一下
   const MELEE = ['strike', 'power', 'syringe', 'punch', 'kick', 'marbleSmash'];
   // 會飛過去的攻擊：特效打到才跳數字（毫秒）
@@ -3123,7 +3126,7 @@
     onMonsterHit(m) {
       // 弓箭、槓鈴、溜冰要等特效打到才跳數字
       const delay = HIT_DELAY[m.skill] || 0;
-      if (delay) { this.time.delayedCall(delay, () => this.showMonsterHit(m)); return; }
+      if (delay && !fxOff()) { this.time.delayedCall(delay, () => this.showMonsterHit(m)); return; }
       this.showMonsterHit(m);
     }
 
@@ -3131,6 +3134,7 @@
       // 傷害數字會晚一點才跳；變身前打的那一下不要把變身後的新血條歸零
       if (!m.phase || m.phase === this.monster.phase) this.mState.hp = Math.min(this.mState.hp, m.hp);
       this.drawMonsterBar();
+      if (fxOff()) return;
       const who = this.actorOf(m.id);
       if (who && (MELEE.includes(m.skill) || m.skill === 'pet')) this.lunge(who, this.monster.x);
       if (m.skill === 'power' || m.skill === 'barbell') this.cameras.main.shake(200, m.skill === 'barbell' ? 0.012 : 0.006);
@@ -3156,6 +3160,7 @@
 
     // 颱風出招前：地上先出現紅圈圈，裡面的圓慢慢長大，滿了就打下來
     onMonsterAttack(a) {
+      if (fxOff()) return;
       const color = { gust: 0xffffff, rain: 0x4f7cc2, bolt: 0xffd23f, tornado: 0xff5a7a, hail: 0xbfe6ff }[a.type];
       a.spots.forEach(sp => {
         const ring = this.add.graphics({ x: sp.x, y: sp.y }).setDepth(-5);
@@ -3176,6 +3181,7 @@
     }
 
     onMonsterAttackHit(a) {
+      if (fxOff()) return;
       a.spots.forEach(sp => {
         if (a.type === 'gust' || a.type === 'tornado') {
           // 一圈往外捲的風；龍捲風捲得更多圈、更大、帶紅色
@@ -3303,6 +3309,7 @@
 
     // 職業技能的特效
     onSkillFx(fx) {
+      if (fxOff()) return;
       const who = me && fx.id === me.id ? this.me : this.remotes.get(fx.id);
       if (!who) return;
       const sk = ST.SKILLS[fx.skill];
@@ -3724,6 +3731,7 @@
 
     // 慶祝煙火：火箭往上衝，炸開後火花飛到文字的位置，停一下再掉下來
     launchFirework(f) {
+      if (fxOff()) return;
       const who = me && f.id === me.id ? this.me : this.remotes.get(f.id);
       const x = who ? who.x : f.x, y0 = who ? who.y - 60 : f.y - 60, y1 = y0 - 190;
       const palette = [0xff6a13, 0xffb020, 0x4f7cc2, 0xe8384f, 0x3f9f5a, 0x8a5cd6];
@@ -3788,6 +3796,7 @@
 
     // ---------- 物資箱 ----------
     onCrateHit(c) {
+      if (fxOff()) return;
       const img = this.add.image((c.tx + 0.5) * T, (c.ty + 0.5) * T, 'crate').setDepth((c.ty + 1) * T - 1);
       this.tweens.add({ targets: img, angle: { from: -10, to: 10 }, duration: 60, yoyo: true, repeat: 1,
         onComplete: () => img.destroy() });
@@ -3797,6 +3806,7 @@
     }
 
     onItemGot(g) {
+      if (fxOff()) return;
       const who = me && g.id === me.id ? this.me : this.remotes.get(g.id);
       const it = MAP.ITEMS[g.item];
       if (who && it) this.floatText(who.x, who.y - 110, it.icon, '#ffffff', 34);
@@ -3994,7 +4004,7 @@
       this.walls.delete(id);
       w.blink.remove();
       const all = [w.g, ...w.deco];
-      if (now) { all.forEach(o => o.destroy()); return; }
+      if (now || fxOff()) { all.forEach(o => o.destroy()); return; }
       all.forEach(o => this.tweens.killTweensOf(o));
       this.tweens.add({ targets: all, alpha: 0, duration: 350, onComplete: () => all.forEach(o => o.destroy()) });
     }
@@ -4092,6 +4102,7 @@
         if (!m) return;
         m.state.hp = Math.min(m.state.hp, h.hp);
         this.drawMobBar(m);
+        if (fxOff()) return;
         const who = this.actorOf(h.id);
         if (who && (MELEE.includes(h.skill) || h.skill === 'pet')) this.lunge(who, m.x);
         m.body_.setTintFill(0xffffff);
@@ -4099,10 +4110,11 @@
         this.tweens.add({ targets: m.body_, x: (who && m.x < who.x ? -8 : 8), duration: 70, yoyo: true });
         this.damageNumber(h.dmg, h.crit, { x: m.x, y: m.y - 100 });
       };
-      if (delay) this.time.delayedCall(delay, show); else show();
+      if (delay && !fxOff()) this.time.delayedCall(delay, show); else show();
     }
 
     onMobAttack(a) {
+      if (fxOff()) return;
       const m = this.mobs.get(a.mid);
       const who = this.actorOf(a.id);
       if (!m || !who) return;
@@ -4132,6 +4144,7 @@
       c.tx = st.x; c.ty = st.y; c.dir = 1; c.phase = Math.random() * 6;
       this.summons.set(st.id, c);
       this.drawSummonBar(c);
+      if (fxOff()) return;
       c.setScale(0.1);
       this.tweens.add({ targets: c, scale: 1, duration: 450, ease: 'Back.out' });
       this.burst(st.x, st.y - 30, 12, 0x7be08f, 70);
@@ -4155,6 +4168,7 @@
       if (!c) return;
       c.state.hp = h.hp;
       this.drawSummonBar(c);
+      if (fxOff()) return;
       c.body_.setTintFill(0xffffff);
       this.time.delayedCall(90, () => c.body_ && c.body_.clearTint());
       this.floatText(c.x, c.y - 56, '-' + h.dmg, '#ff6a13', 18);
@@ -4163,6 +4177,7 @@
       const c = this.summons.get(g.id);
       if (!c) return;
       this.summons.delete(g.id);
+      if (fxOff()) { c.destroy(); return; }
       this.tweens.add({ targets: c, alpha: 0, angle: g.dead ? 90 : 0, y: c.y - 20, duration: 500, onComplete: () => c.destroy() });
       if (g.dead) this.burst(c.x, c.y - 20, 8, 0x9aa3b5, 50);
     }
@@ -4191,11 +4206,13 @@
     onLevelUp(l) {
       const who = me && l.id === me.id ? this.me : this.remotes.get(l.id);
       if (!who) return;
-      this.burst(who.x, who.y - 50, 16, 0xffd23f, 90);
-      const t = this.add.text(who.x, who.y - 120, `LEVEL UP! Lv.${l.level}`, {
-        fontSize: '24px', fontStyle: '900', fontFamily: '"Space Mono", ' + FONT, color: '#ffd23f', stroke: '#5a2a00', strokeThickness: 6,
-      }).setOrigin(0.5).setDepth(2100);
-      this.tweens.add({ targets: t, y: who.y - 170, alpha: { from: 1, to: 0 }, delay: 600, duration: 900, onComplete: () => t.destroy() });
+      if (!fxOff()) {
+        this.burst(who.x, who.y - 50, 16, 0xffd23f, 90);
+        const t = this.add.text(who.x, who.y - 120, `LEVEL UP! Lv.${l.level}`, {
+          fontSize: '24px', fontStyle: '900', fontFamily: '"Space Mono", ' + FONT, color: '#ffd23f', stroke: '#5a2a00', strokeThickness: 6,
+        }).setOrigin(0.5).setDepth(2100);
+        this.tweens.add({ targets: t, y: who.y - 170, alpha: { from: 1, to: 0 }, delay: 600, duration: 900, onComplete: () => t.destroy() });
+      }
       if (who === this.me) {
         toast(l.level === ST.LEVEL.fireworkLv ? `⭐ 升到 Lv.${l.level}！可以放慶祝煙火了 🎆` : `⭐ 升到 Lv.${l.level}！`);
         if (l.level === ST.LEVEL.fireworkLv && modalKind === 'firework') openFirework();

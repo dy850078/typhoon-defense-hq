@@ -2765,6 +2765,7 @@
       if (on === !!c.prada) return;
       c.prada = on;
       c.tag.setColor(on ? '#b07d10' : INK); // 全身 SSR：名牌字變金色（光芒另外畫）
+      c.tag.setY(on ? 17 : 6); // 紙條往下挪到彩虹圈外面，才不會蓋住光環
       if (!on) {
         if (c.pradaTween) c.pradaTween.stop();
         (c.pradaFx || []).forEach(o => o.destroy());

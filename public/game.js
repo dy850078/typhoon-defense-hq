@@ -40,6 +40,10 @@
     Txt.updateText = function () {
       const style = this.style;
       if (style.backgroundColor !== PAPER) return orig.call(this);
+      // 留白照字級統一算：字跟紙邊至少隔一截，右下多留一點給影子
+      const fs = parseFloat(style.fontSize) || 12, px = Math.round(fs * 0.65), py = Math.round(fs * 0.3);
+      Object.assign(this.padding, { left: px + 2, right: px + 3, top: py + 2, bottom: py + 3 });
+      style.resolution = Math.max(style.resolution || 1, 2); // 小字用兩倍解析度畫，才不會糊
       style.backgroundColor = null;
       orig.call(this);
       style.backgroundColor = PAPER;
@@ -52,7 +56,7 @@
       ctx.globalCompositeOperation = 'destination-over';
       ctx.scale(res, res);
       // destination-over：先畫的在上面 → 描邊、紙、影子
-      C.rect(ctx, 2, 1.5, w - 5, h - 4.5, r, 1.1); C.stroke(ctx, r, 2, INK);
+      C.rect(ctx, 2, 1.5, w - 5, h - 4.5, r, 1.1); C.stroke(ctx, r, 1.4, INK);
       C.rect(ctx, 2, 1.5, w - 5, h - 4.5, r, 0); ctx.fillStyle = PAPER; ctx.fill();
       C.rect(ctx, 4, 3.5, w - 5, h - 4.5, r, 0.6); ctx.fillStyle = 'rgba(43,42,51,0.28)'; ctx.fill();
       ctx.restore();
@@ -1817,6 +1821,13 @@
     return c;
   }
   const FX = {
+    // NPC 頭上的對話泡泡（自己畫，不用系統 emoji）
+    talk: () => fxCanvas(34, 30, 91, (ctx, r) => {
+      ctx.beginPath(); ctx.moveTo(9, 18); ctx.lineTo(6, 27); ctx.lineTo(16, 20); ctx.closePath();
+      CR.fill(ctx, '#fbf6e9', r, null); CR.stroke(ctx, r, 1.8);
+      CR.blob(ctx, 17, 12, 14, 9.5, r, 0.06, 14); CR.fill(ctx, '#fbf6e9', r, null); CR.stroke(ctx, r, 1.8);
+      [10, 17, 24].forEach(x => { ctx.beginPath(); ctx.arc(x, 12.5, 1.9, 0, Math.PI * 2); ctx.fillStyle = '#2b2a33'; ctx.fill(); });
+    }),
     // 金針花標射出去的那朵金針花
     lily: () => fxCanvas(40, 40, 81, (ctx, r) => {
       ctx.translate(20, 20);
@@ -2576,20 +2587,20 @@
       this.mobs = new Map();
       const mx = MAP.mentor.x, my = MAP.mentor.y + 18;
       this.add.image(mx, my, 'mentor').setScale(0.55).setOrigin(0.5, 0.95).setDepth(my);
-      this.add.text(mx, my - 92, '📂 轉職資料沈理員', {
-        fontSize: '14px', fontStyle: 'bold', color: INK, fontFamily: FONT,
+      this.add.text(mx, my - 92, '轉職資料沈理員', {
+        fontSize: '10px', fontStyle: 'bold', color: INK, fontFamily: FONT,
         backgroundColor: PAPER, padding: { x: 10, y: 4 },
       }).setOrigin(0.5).setDepth(my);
-      const talk = this.add.text(mx + 26, my - 66, '💬', { fontSize: '22px' }).setOrigin(0.5).setDepth(my + 1);
+      const talk = this.add.image(mx + 26, my - 66, 'fx-talk').setDepth(my + 1);
       this.tweens.add({ targets: talk, y: my - 74, duration: 700, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
       // 古城守門員：跟他說話就傳送到副本的候位區
       const gx = MAP.guard.x, gy = MAP.guard.y + 18;
       this.add.image(gx, gy, 'guard').setScale(0.55).setOrigin(0.5, 0.95).setDepth(gy);
-      this.add.text(gx, gy - 96, '🏯 古城守門員', {
-        fontSize: '14px', fontStyle: 'bold', color: INK, fontFamily: FONT,
+      this.add.text(gx, gy - 96, '古城守門員', {
+        fontSize: '10px', fontStyle: 'bold', color: INK, fontFamily: FONT,
         backgroundColor: PAPER, padding: { x: 10, y: 4 },
       }).setOrigin(0.5).setDepth(gy);
-      const gTalk = this.add.text(gx + 26, gy - 70, '💬', { fontSize: '22px' }).setOrigin(0.5).setDepth(gy + 1);
+      const gTalk = this.add.image(gx + 26, gy - 70, 'fx-talk').setDepth(gy + 1);
       this.tweens.add({ targets: gTalk, y: gy - 78, duration: 760, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
 
       // 煙火的火花統一畫在一張 graphics 上
@@ -2617,13 +2628,13 @@
       this.mBar = this.add.graphics();
       // 楓之谷風格：名牌掛在怪物腳下
       this.mName = this.add.text(0, 22, `Lv.${ST.MONSTER.level} ${ST.MONSTER.name}`, {
-        fontSize: '14px', fontStyle: 'bold', color: '#b84300', fontFamily: FONT,
+        fontSize: '10px', fontStyle: 'bold', color: '#b84300', fontFamily: FONT,
         backgroundColor: PAPER, padding: { x: 11, y: 4 },
       }).setOrigin(0.5, 0);
       // 被冰凍、被削弱時腳下的冰晶和狀態文字
       this.mIce = this.add.image(0, 4, 'fx-ice').setOrigin(0.5, 1).setScale(2.4, 1.6).setVisible(false);
       this.mStatus = this.add.text(0, 46, '', {
-        fontSize: '13px', fontStyle: 'bold', color: '#2f5fa8', fontFamily: FONT,
+        fontSize: '10px', fontStyle: 'bold', color: '#2f5fa8', fontFamily: FONT,
         backgroundColor: PAPER, padding: { x: 11, y: 5 },
       }).setOrigin(0.5, 0).setVisible(false);
       this.monster = this.add.container((Z.x1 + Z.x2) / 2, (Z.y1 + Z.y2) / 2,
@@ -2635,7 +2646,7 @@
       this.monster.tx = this.monster.x; this.monster.ty = this.monster.y;
       this.mState = { alive: true, hp: 1, maxHp: 1 };
       this.mDead = this.add.text((Z.x1 + Z.x2) / 2, (Z.y1 + Z.y2) / 2, '', {
-        fontSize: '22px', fontStyle: 'bold', color: '#3a3a3c', fontFamily: FONT, align: 'center',
+        fontSize: '16px', fontStyle: 'bold', color: '#3a3a3c', fontFamily: FONT, align: 'center',
         backgroundColor: PAPER, padding: { x: 23, y: 16 },
       }).setOrigin(0.5).setDepth(900).setVisible(false);
       // 颱風身邊三不五時劈出小閃電
@@ -2685,7 +2696,7 @@
       const key = this.avatarKey(p);
       const body = this.add.image(0, 0, key).setScale(0.5).setOrigin(0.5, AV_ORIGIN_Y);
       const tag = this.add.text(0, 6, this.tagText(p), {
-        fontSize: '14px', fontStyle: 'bold', color: INK, fontFamily: FONT,
+        fontSize: '10px', fontStyle: 'bold', color: INK, fontFamily: FONT,
         backgroundColor: PAPER, padding: { x: 10, y: 4 },
       }).setOrigin(0.5, 0);
       const bar = this.add.graphics();
@@ -2764,8 +2775,8 @@
       const on = GR.LOOK_SLOTS.every(s => GR.GEAR[eq[s]] && GR.GEAR[eq[s]].rarity === 'SSR');
       if (on === !!c.prada) return;
       c.prada = on;
-      const base = c.tag.text.replace(/^✨ /, '');
-      c.tag.setText(on ? '✨ ' + base : base).setColor(on ? '#b07d10' : INK);
+      c.tag.setColor(on ? '#b07d10' : INK); // 全身 SSR：名牌字變金色（光芒另外畫）
+      c.tag.setY(on ? 16 : 6); // 紙條往下挪到彩虹圈外面，才不會蓋住光環
       if (!on) {
         if (c.pradaTween) c.pradaTween.stop();
         (c.pradaFx || []).forEach(o => o.destroy());
@@ -2814,7 +2825,8 @@
       if (who === this.me) $('cake-btn').hidden = !(ms > 0);
     }
 
-    tagText(p, prada) { const c = ST.CLASSES[p.cls] || ST.CLASSES.staff; return `${prada ? '✨ ' : ''}Lv.${p.level || 1} ${c.icon} ${p.name}`; }
+    // 名牌只寫等級和名字（職業、全身 SSR 點開個人資料看得到）
+    tagText(p) { return `Lv.${p.level || 1} ${p.name}`; }
 
     // 世界座標上點到的是哪個人（自己也算）
     playerAt(x, y) {
@@ -2849,7 +2861,7 @@
         who.body_.setTexture(who.texKey);
         if (prev.cls) this.burst(who.x, who.y - 40, 10, 0xffd23f);
       }
-      if (st.cls !== prev.cls || st.level !== prev.level) who.tag.setText(this.tagText({ cls: st.cls, name: who.name_, level: st.level }, who.prada));
+      if (st.cls !== prev.cls || st.level !== prev.level) who.tag.setText(this.tagText({ name: who.name_, level: st.level }));
       this.drawHpBar(who, st);
       // 防禦增益：頭上掛一個小盾牌
       if (st.buffMs > 0) {
@@ -2991,7 +3003,7 @@
       if (!r) return;
       r.setAlpha(away ? 0.45 : 1);
       if (away && !r.awayTag) {
-        r.awayTag = this.add.text(0, -86, '📶 斷線中', { fontSize: '13px', fontStyle: 'bold', color: INK, fontFamily: FONT,
+        r.awayTag = this.add.text(0, -86, '斷線中', { fontSize: '10px', fontStyle: 'bold', color: INK, fontFamily: FONT,
           backgroundColor: PAPER, padding: { x: 11, y: 5 } }).setOrigin(0.5, 1);
         r.add(r.awayTag);
       } else if (!away && r.awayTag) { r.awayTag.destroy(); r.awayTag = null; }
@@ -4124,7 +4136,7 @@
         const sc = def.scale || 0.62, k = sc / 0.62;
         const body = this.add.image(0, 0, 'mob-' + st.kind).setScale(sc).setOrigin(0.5, 0.95);
         const tag = this.add.text(0, 10, `Lv.${def.level} ${def.name}`, {
-          fontSize: '13px', fontStyle: 'bold', color: '#b84300', fontFamily: FONT,
+          fontSize: '10px', fontStyle: 'bold', color: '#b84300', fontFamily: FONT,
           backgroundColor: PAPER, padding: { x: 9, y: 4 },
         }).setOrigin(0.5, 0);
         const bar = this.add.graphics();
@@ -4209,7 +4221,7 @@
       const def = ST.SUMMONS[st.kind];
       const body = this.add.image(0, 0, 'cr-' + st.kind).setScale(0.62).setOrigin(0.5, 76 / 80);
       const tag = this.add.text(0, 8, `${st.ownerName}的${def.name}`, {
-        fontSize: '12px', fontStyle: 'bold', color: '#2f7a45', fontFamily: FONT,
+        fontSize: '10px', fontStyle: 'bold', color: '#2f7a45', fontFamily: FONT,
         backgroundColor: PAPER, padding: { x: 8, y: 3 },
       }).setOrigin(0.5, 0);
       const bar = this.add.graphics();
@@ -4326,7 +4338,7 @@
       // 副本入口的漩渦（一直轉）＋招牌
       const pt = MAP.portal;
       this.portal = this.add.image(pt.x, pt.y + 6, 'typhoon').setScale(0.34, 0.14).setTint(0xffb020).setDepth(pt.y - 20);
-      this.add.text(pt.x, pt.y - 58, '🏯 古城門・花蓮副本', { fontSize: '15px', fontStyle: '900', color: '#8a5a10', fontFamily: FONT,
+      this.add.text(pt.x, pt.y - 58, '古城門・花蓮副本', { fontSize: '11px', fontStyle: '900', color: '#8a5a10', fontFamily: FONT,
         backgroundColor: PAPER, padding: { x: 11, y: 5 } }).setOrigin(0.5).setDepth(pt.y + 60);
       // 七星潭的石頭：每顆一個顏色，踩對會亮起來
       this.stoneImgs = D.stones.map((st, i) => {
@@ -4712,7 +4724,7 @@
         const weak = performance.now() < this.weakUntil;
         if (!frozen) this.mSwirl.rotation -= dt * 2.4;
         this.mIce.setVisible(frozen);
-        const status = [frozen && '❄️ 冰凍中', weak && '🔮 被削弱'].filter(Boolean).join(' ');
+        const status = [frozen && '冰凍中', weak && '被削弱'].filter(Boolean).join(' ');
         if (status !== this.mStatusText) {
           this.mStatusText = status;
           this.mStatus.setText(status).setVisible(!!status);
@@ -4756,7 +4768,7 @@
       if (showBoss !== this.showBoss) { this.showBoss = showBoss; $('boss').hidden = !showBoss; document.body.classList.toggle('boss-on', showBoss); }
       if (!this.mState.alive && this.respawnAt) {
         const left = Math.max(0, Math.ceil((this.respawnAt - performance.now()) / 1000));
-        this.mDead.setText(`🎉 颱風${ST.MONSTER.name}被擊退了！\n${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')} 後重新生成`);
+        this.mDead.setText(`颱風${ST.MONSTER.name}被擊退了！\n${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')} 後重新生成`);
       }
 
       // 互動按鈕

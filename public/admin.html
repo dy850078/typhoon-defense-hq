@@ -152,6 +152,17 @@ th { color: var(--muted); font-weight: 700; }
           else say('acct-msg', r.error || '失敗了');
         });
       };
+      var lv = document.createElement('button'); lv.type = 'button'; lv.className = 'small'; lv.textContent = '調整等級';
+      lv.style.marginLeft = '6px';
+      lv.onclick = function () {
+        var max = window.HQ_STATS ? HQ_STATS.LEVEL.max : 99;
+        var v = prompt('把「' + a.username + '」調成幾級？（1～' + max + '，現在 Lv.' + a.level + '）', a.level);
+        if (v == null || v === '') return;
+        api('/api/admin/level', { username: a.username, level: Number(v) }).then(function (r) {
+          say('acct-msg', r.ok ? '已把「' + a.username + '」調成 Lv.' + r.level : (r.error || '失敗了'), r.ok);
+          if (r.ok) load();
+        });
+      };
       var del = document.createElement('button'); del.type = 'button'; del.className = 'small danger'; del.textContent = '刪除';
       del.style.marginLeft = '6px';
       del.onclick = function () {
@@ -161,7 +172,7 @@ th { color: var(--muted); font-weight: 700; }
           load();
         });
       };
-      act.appendChild(reset); act.appendChild(del);
+      act.appendChild(reset); act.appendChild(lv); act.appendChild(del);
       tr.appendChild(act);
       tb.appendChild(tr);
     });

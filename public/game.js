@@ -628,7 +628,7 @@
         });
         box.appendChild(ul);
       }
-      box.appendChild(el('p', 'modal-hint', `每人最多排 3 首。點歌的人可以直接切歌，其他人要超過一半同意才會切。`));
+      box.appendChild(el('p', 'modal-hint', `最多排 20 首。點歌的人可以直接切歌，其他人要超過一半同意才會切。`));
       const focused = document.activeElement && document.activeElement.closest && document.activeElement.closest('.music-form');
       openModal('music', '🎵 點歌', box);
       if (focused || !results) setTimeout(() => input.focus(), 50);

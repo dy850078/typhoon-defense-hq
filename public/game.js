@@ -531,14 +531,10 @@
     $('music-open').onclick = () => open();
     applyVol();
 
-    // 唱片封套：縮圖當封面，旁邊露出半張黑膠；正在放的那張會轉
-    function sleeve(vid, spin) {
-      const s = el('div', 'sleeve' + (spin ? ' spin' : ''));
-      s.appendChild(el('i', 'sleeve-disc'));
-      const c = el('div', 'sleeve-cover');
-      if (vid) { const img = el('img'); img.src = `https://i.ytimg.com/vi/${vid}/mqdefault.jpg`; img.alt = ''; img.loading = 'lazy'; c.appendChild(img); }
-      else c.textContent = '🔈';
-      s.appendChild(c);
+    // 黑膠唱片：縮圖裁成圓形印在中間當標籤；正在放的那張會轉
+    function record(vid, spin) {
+      const s = el('div', 'record' + (spin ? ' spin' : ''));
+      if (vid) { const img = el('img'); img.src = `https://i.ytimg.com/vi/${vid}/mqdefault.jpg`; img.alt = ''; img.loading = 'lazy'; s.appendChild(img); }
       return s;
     }
     function open() {
@@ -547,7 +543,7 @@
       box.appendChild(el('p', 'modal-hint', '總部的點唱機：全場的人一起聽同一首，進度大家都一樣。'));
       const n = m.now;
       const nowRow = el('div', 'modal-row dj-now');
-      nowRow.appendChild(sleeve(n && n.vid, !!n));
+      nowRow.appendChild(record(n && n.vid, !!n));
       const info = el('div', 'modal-info');
       info.appendChild(el('b', null, n ? n.title : '現在沒有在放歌'));
       if (n) info.appendChild(el('p', null, `DJ ${n.byName}${n.skips ? `・${n.skips} 人想切歌` : ''}`));
@@ -567,7 +563,7 @@
         const ol = el('ol', 'music-queue');
         m.queue.forEach((q, i) => {
           const li = el('li');
-          li.appendChild(sleeve(q.vid, false));
+          li.appendChild(record(q.vid, false));
           const t = el('div', 'music-r-info');
           t.appendChild(el('b', null, q.title));
           t.appendChild(el('small', null, `DJ ${q.byName}`));
@@ -621,7 +617,7 @@
         const ul = el('ul', 'music-results');
         results.list.forEach((v) => {
           const li = el('li');
-          const img = sleeve(v.vid, false);
+          const img = record(v.vid, false);
           const txt = el('div', 'music-r-info');
           txt.appendChild(el('b', null, v.title));
           txt.appendChild(el('small', null, [v.channel, v.len].filter(Boolean).join('・')));

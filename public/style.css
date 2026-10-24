@@ -447,8 +447,8 @@ button.inv-item:hover { border-color: var(--accent); }
 .dj-deck { position: relative; display: flex; gap: 10px; align-items: center; background: #0d1220; border-radius: 12px; padding: 8px; }
 .vinyl { position: relative; width: 84px; height: 84px; flex-shrink: 0; border-radius: 50%;
   background: repeating-radial-gradient(circle, #1a1a1f 0 2px, #26262d 2px 4px); box-shadow: 0 0 0 2px #000, 0 2px 6px rgba(0,0,0,.6); }
-.vinyl::after { content: ''; position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 50%; background: #0d1220; }
-.vinyl img { position: absolute; left: 50%; top: 50%; width: 36px; height: 36px; margin: -18px 0 0 -18px; border-radius: 50%;
+.vinyl::after { content: ''; z-index: 1; position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 50%; background: #0d1220; }
+.vinyl img { position: absolute; left: 50%; top: 50%; width: 46px; height: 46px; margin: -23px 0 0 -23px; border-radius: 50%;
   object-fit: cover; background: #ff6a13; border: 2px solid #ff6a13; }
 #music.playing .vinyl { animation: spin 2.4s linear infinite; }
 /* 唱臂：播的時候放到唱片上，停的時候抬起來 */
@@ -475,16 +475,19 @@ button.inv-item:hover { border-color: var(--accent); }
 .music-ctl input { flex: 1; min-width: 0; accent-color: #ffd23f; }
 .music-ctl button { background: none; border: 0; color: inherit; font-size: 16px; cursor: pointer; padding: 2px; }
 #music-open { font: 700 12px var(--display) !important; border: 1.5px solid var(--navy-dim) !important; border-radius: 999px; padding: 2px 8px !important; }
-/* 唱片箱：封面 + 露出半張黑膠 */
-.sleeve { position: relative; width: 74px; height: 56px; flex-shrink: 0; }
-.sleeve-disc { position: absolute; right: 0; top: 2px; width: 52px; height: 52px; border-radius: 50%;
-  background: repeating-radial-gradient(circle, #1a1a1f 0 2px, #2a2a31 2px 4px); }
-.sleeve-disc::after { content: ''; position: absolute; inset: 18px; border-radius: 50%; background: #ff6a13; }
-.sleeve.spin .sleeve-disc { animation: spin 2.4s linear infinite; }
-.sleeve-cover { position: absolute; left: 0; top: 0; width: 56px; height: 56px; border-radius: 6px; overflow: hidden; background: #e8edf3;
-  display: grid; place-items: center; font-size: 22px; box-shadow: 2px 2px 0 rgba(0,0,0,.25); border: 1.5px solid #2b2a33; }
-.sleeve-cover img { width: 100%; height: 100%; object-fit: cover; }
-.music-queue { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; max-height: 30vh; overflow-y: auto; }
+/* 唱片箱：縮圖印在黑膠中間當標籤，外圈是唱片紋路和反光 */
+.record { position: relative; width: 56px; height: 56px; flex-shrink: 0; border-radius: 50%;
+  background: radial-gradient(circle, transparent 0 47%, rgba(255,255,255,.07) 48% 49%, transparent 50%),
+    repeating-radial-gradient(circle, #18181d 0 1.5px, #24242b 1.5px 3px);
+  box-shadow: 0 0 0 1.5px #000, 2px 2px 0 rgba(0,0,0,.25); }
+.record::before, .vinyl::before { content: ''; position: absolute; inset: 0; border-radius: 50%; pointer-events: none;
+  background: conic-gradient(from 30deg, transparent 0 10%, rgba(255,255,255,.12) 14%, transparent 18% 60%, rgba(255,255,255,.1) 64%, transparent 68%); }
+.record img, .record:empty::after { position: absolute; inset: 26%; width: 48%; height: 48%; border-radius: 50%; object-fit: cover;
+  background: #ff6a13; box-shadow: 0 0 0 2px #ff6a13; }
+.record:empty::after { content: ''; }
+.record.spin { animation: spin 2.4s linear infinite; }
+.music-queue, .music-results { margin: 0; padding: 2px; list-style: none; display: flex; flex-direction: column; gap: 8px; }
+.music-queue { max-height: 30vh; overflow-y: auto; }
 .music-queue li { display: flex; gap: 10px; align-items: center; }
 .music-x { border: 0; background: none; cursor: pointer; color: #C0391B; font-size: 16px; }
 .music-form { display: flex; gap: 8px; margin-top: 6px; }
@@ -492,7 +495,7 @@ button.inv-item:hover { border-color: var(--accent); }
 @media (max-width: 600px) {
   #music { top: 128px; left: 12px; width: 196px; padding: 8px; }
   .vinyl { width: 64px; height: 64px; }
-  .vinyl img { width: 28px; height: 28px; margin: -14px 0 0 -14px; }
+  .vinyl img { width: 36px; height: 36px; margin: -18px 0 0 -18px; }
   .tonearm { left: 60px; height: 40px; }
   #music .music-video { width: 96px; height: 54px; }
 }

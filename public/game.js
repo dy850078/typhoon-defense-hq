@@ -1771,12 +1771,22 @@
     return c;
   }
   const FX = {
-    // 全身 SSR：腳下的金色光暈、繞著飄的小星星
-    aura: () => fxCanvas(104, 40, 61, (ctx, r) => {
-      const g = ctx.createRadialGradient(52, 20, 4, 52, 20, 50);
-      g.addColorStop(0, 'rgba(255,224,120,0.75)'); g.addColorStop(0.6, 'rgba(255,200,80,0.35)'); g.addColorStop(1, 'rgba(255,200,80,0)');
-      ctx.save(); ctx.scale(1, 0.38); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(52, 20 / 0.38, 50, 0, Math.PI * 2); ctx.fill(); ctx.restore();
-      CR.blob(ctx, 52, 20, 40, 13, r, 0.06); CR.stroke(ctx, r, 2.2, '#e0a92a');
+    // 全身 SSR：腳下的彩虹光暈（畫成圓的，遊戲裡壓扁再慢慢轉）、繞著飄的小星星
+    aura: () => fxCanvas(120, 120, 61, (ctx, r) => {
+      const g = ctx.createRadialGradient(60, 60, 10, 60, 60, 58);
+      g.addColorStop(0, 'rgba(255,255,255,0.55)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(60, 60, 58, 0, Math.PI * 2); ctx.fill();
+      // 一圈一段一段換顏色的蠟筆線，外圈淡、內圈濃
+      for (let i = 0; i < 36; i++) {
+        const a0 = i / 36 * Math.PI * 2, a1 = (i + 1.15) / 36 * Math.PI * 2, col = `hsl(${i * 10}, 90%, 65%)`;
+        ctx.lineCap = 'round';
+        [[50, 12, 0.35], [46, 6, 0.95]].forEach(([rad, w, al]) => {
+          ctx.globalAlpha = al; ctx.strokeStyle = col; ctx.lineWidth = w + (r() - 0.5) * 1.5;
+          ctx.beginPath(); ctx.arc(60, 60, rad + (r() - 0.5) * 2, a0, a1); ctx.stroke();
+        });
+      }
+      ctx.globalAlpha = 1;
+      CR.blob(ctx, 60, 60, 52, 52, r, 0.03); CR.stroke(ctx, r, 1.6, 'rgba(43,42,51,0.55)');
     }),
     star: () => fxCanvas(26, 26, 62, (ctx, r) => {
       const pts = [];
@@ -2527,7 +2537,9 @@
         c.pradaTween = null; c.pradaFx = null;
         return;
       }
-      const aura = this.add.image(0, -2, 'fx-aura').setScale(1.1);
+      // 外面的容器把圓壓扁成橢圓，裡面的圖慢慢轉，彩虹顏色就會繞著腳下流動
+      const ring = this.add.image(0, 0, 'fx-aura').setScale(0.82);
+      const aura = this.add.container(0, -2, [ring]).setScale(1, 0.36);
       const stars = [0, 1, 2, 3].map(() => this.add.image(0, 0, 'fx-star'));
       c.addAt(aura, 0);
       stars.forEach(st => c.add(st));
@@ -2535,12 +2547,13 @@
       const t = { a: 0 };
       c.pradaTween = this.tweens.add({ targets: t, a: Math.PI * 2, duration: 4200, repeat: -1, onUpdate: () => {
         aura.setAlpha(0.75 + Math.sin(t.a * 2) * 0.25);
+        ring.rotation = t.a;
         stars.forEach((st, i) => {
           const a = t.a + i * Math.PI / 2, front = Math.sin(a) > 0;
           // 轉到後面就躲到角色身後
           if (st.front !== front) { st.front = front; if (front) c.bringToTop(st); else c.moveTo(st, 1); }
-          st.setPosition(Math.cos(a) * 34, -28 + Math.sin(a) * 10 + Math.sin(t.a * 3 + i) * 5);
-          st.setScale((front ? 0.7 : 0.55) + Math.max(0, Math.sin(t.a * 5 + i * 2)) * 0.25);
+          st.setPosition(Math.cos(a) * 30, -28 + Math.sin(a) * 12 + Math.sin(t.a * 3 + i) * 5);
+          st.setScale((front ? 0.7 : 0.5) + Math.max(0, Math.sin(t.a * 5 + i * 2)) * 0.25).setAlpha(front ? 1 : 0.6);
         });
       } });
       c.once('destroy', () => { if (c.pradaTween) c.pradaTween.stop(); });

@@ -311,7 +311,8 @@
   socket.on('drawState', (st) => DRAW.onState(st));
   socket.on('drawLog', (l) => DRAW.log(l));
   socket.on('drawStroke', (st) => DRAW.paint(st));
-  socket.on('drawClear', () => DRAW.clear());
+  socket.on('drawClear', () => DRAW.wipe());
+  socket.on('drawUndo', (id) => DRAW.undo(id));
   socket.on('songState', (st) => SONG.onState(st));
   socket.on('songLog', (l) => SONG.log(l));
   socket.on('chat', (msg) => {
@@ -900,8 +901,7 @@
     who.innerHTML = '';
     state.members.forEach(m => who.appendChild(el('span', 'chip' + (me && m.id === me.id ? ' me' : ''), (m.id === state.host ? '🎤 ' : tag(m.id)) + m.name)));
     const g = $(k + '-guess');
-    g.placeholder = host ? '主持人不能猜喔' : placeholder;
-    g.disabled = host;
+    g.placeholder = host ? (state.playing ? '聊天…（不能說出答案喔）' : '聊天…') : placeholder;
     renderScores(k, state.scores);
   }
   // 記分板上的小頭像：從場上那個人的角色貼圖切出臉
@@ -978,9 +978,28 @@
     // 筆刷，或是拖一下拉出形狀（圓形、矩形、三角形）
     const TOOLS = [['pen', '✏️', '筆刷'], ['circle', '⭕', '圓形'], ['rect', '⬜', '矩形'], ['tri', '🔺', '三角形']];
     let state = null, answer = '', color = COLORS[0], size = SIZES[1], tool = 'pen', cur = null, sendTimer = 0, snap = null;
+    // strokes：畫布上每一段，上一步時拿來重畫；sid 是每一筆的編號
+    let strokes = [], sid = Math.floor(Math.random() * 1e6) * 1000;
     const amHost = () => state && me && state.host === me.id;
 
     function clear() { ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, cv.width, cv.height); }
+    function wipe() { strokes = []; clear(); }
+    function add(st) { strokes.push(st); paint(st); }
+    // 收回最後一筆（同一個 id 的段落一起），再整張重畫
+    function undo(id) {
+      if (!strokes.length) return;
+      do strokes.pop(); while (id != null && strokes.length && strokes[strokes.length - 1].id === id);
+      clear(); strokes.forEach(paint);
+    }
+    function askUndo() { if (amHost() && state.playing && !cur) socket.emit('drawUndo'); }
+    // 畫畫的指標：淺灰色圓圈，大小跟筆刷一樣，白底也看得到
+    function setCursor() {
+      const d = tool === 'pen' ? Math.max(8, Math.min(120, Math.round(size * cv.clientWidth / 1000))) : 18, r = d / 2 + 2, n = d + 4;
+      const svg = tool === 'pen'
+        ? `<svg xmlns="http://www.w3.org/2000/svg" width="${n}" height="${n}"><circle cx="${r}" cy="${r}" r="${d / 2}" fill="none" stroke="#9a9a9a" stroke-width="3"/><circle cx="${r}" cy="${r}" r="${d / 2}" fill="none" stroke="#d6d6d6" stroke-width="1.5"/></svg>`
+        : `<svg xmlns="http://www.w3.org/2000/svg" width="${n}" height="${n}"><path d="M${r} 2V${n - 2}M2 ${r}H${n - 2}" stroke="#9a9a9a" stroke-width="3"/><path d="M${r} 2V${n - 2}M2 ${r}H${n - 2}" stroke="#d6d6d6" stroke-width="1.5"/></svg>`;
+      cv.style.setProperty('--paint-cursor', `url("data:image/svg+xml,${encodeURIComponent(svg)}") ${Math.round(r)} ${Math.round(r)}, crosshair`);
+    }
     function paint(st) {
       const k = cv.width / 1000, ky = cv.height / 1000;
       ctx.save(); ctx.strokeStyle = st.c; ctx.fillStyle = st.c; ctx.lineWidth = st.w * k; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
@@ -1002,6 +1021,9 @@
       if (!state) return;
       const host = amHost();
       $('draw-panel').classList.toggle('can-paint', host && state.playing);
+      // 出題中按鈕變成「改題目」，輸入框留著目前的答案
+      $('draw-start-btn').textContent = host && state.playing ? '改題目' : '出題';
+      if (!state.playing && answer) { answer = ''; $('draw-answer').value = ''; }
       const guessers = state.members.filter(m => m.id !== state.host);
       const right = guessers.filter(m => state.correct.includes(m.id)).length;
       let info;
@@ -1011,7 +1033,7 @@
       gameRender('draw', state, { info, tag: (id) => (state.correct.includes(id) ? '✅ ' : ''),
         placeholder: state.playing ? `猜猜看（${state.len} 個字）` : '聊天…' });
     }
-    function onState(st) { state = st; if (!amHost()) answer = ''; render(); }
+    function onState(st) { state = st; if (!amHost()) { answer = ''; $('draw-answer').value = ''; } render(); }
 
     // 主持人畫畫：座標換成 0~1000，每 60 毫秒送一段
     function pos(e) {
@@ -1021,7 +1043,8 @@
     function flush() {
       sendTimer = 0;
       if (!cur || cur.pts.length < 1) return;
-      const st = { c: cur.c, w: cur.w, pts: cur.pts };
+      const st = { c: cur.c, w: cur.w, pts: cur.pts, id: cur.id };
+      strokes.push(st);
       socket.emit('drawStroke', st);
       const last = cur.pts[cur.pts.length - 1];
       cur.pts = [last];
@@ -1034,10 +1057,10 @@
       if (tool !== 'pen') {
         // 拖曳時先記下畫布，每次移動都還原再畫一次預覽
         snap = ctx.getImageData(0, 0, cv.width, cv.height);
-        cur = { k: tool, c: color, w: size, pts: [pos(e), pos(e)] };
+        cur = { k: tool, c: color, w: size, pts: [pos(e), pos(e)], id: ++sid };
         return;
       }
-      cur = { c: color, w: size, pts: [pos(e)] };
+      cur = { c: color, w: size, pts: [pos(e)], id: ++sid };
       paint(cur);
     });
     cv.addEventListener('pointermove', (e) => {
@@ -1055,7 +1078,7 @@
       if (cur.k) {
         const [[ax, ay], [bx, by]] = cur.pts;
         // 只是點一下沒有拉開就不算
-        if (Math.abs(ax - bx) > 6 || Math.abs(ay - by) > 6) socket.emit('drawStroke', cur);
+        if (Math.abs(ax - bx) > 6 || Math.abs(ay - by) > 6) { strokes.push(cur); socket.emit('drawStroke', cur); }
         else ctx.putImageData(snap, 0, 0);
         cur = null; snap = null;
         return;
@@ -1078,7 +1101,7 @@
     TOOLS.forEach(([k, icon, name]) => {
       const b = el('button', 'tl' + (k === tool ? ' on' : ''), icon);
       b.type = 'button'; b.title = name; b.setAttribute('aria-label', name);
-      b.onclick = () => { tool = k; [...tl.children].forEach(x => x.classList.toggle('on', x === b)); };
+      b.onclick = () => { tool = k; [...tl.children].forEach(x => x.classList.toggle('on', x === b)); setCursor(); };
       tl.appendChild(b);
     });
     const sz = $('draw-sizes');
@@ -1086,16 +1109,23 @@
       const b = el('button', 'sz' + (w === size ? ' on' : ''));
       b.type = 'button';
       const d = el('i'); d.style.width = d.style.height = Math.max(4, w * 0.8) + 'px'; b.appendChild(d);
-      b.onclick = () => { size = w; [...sz.children].forEach(x => x.classList.toggle('on', x === b)); };
+      b.onclick = () => { size = w; [...sz.children].forEach(x => x.classList.toggle('on', x === b)); setCursor(); };
       sz.appendChild(b);
     });
-    $('draw-clear').onclick = () => { if (amHost()) { clear(); socket.emit('drawClear'); } };
+    $('draw-clear').onclick = () => { if (amHost()) { wipe(); socket.emit('drawClear'); } };
+    $('draw-undo').onclick = askUndo;
+    document.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'z' && !$('games').hidden && !$('draw-panel').hidden
+        && !/^(INPUT|TEXTAREA)$/.test(document.activeElement && document.activeElement.tagName)) { e.preventDefault(); askUndo(); }
+    });
+    if (window.ResizeObserver) new ResizeObserver(setCursor).observe(cv); else setCursor();
     $('draw-start-form').onsubmit = (e) => {
       e.preventDefault();
       const a = $('draw-answer').value.trim();
       socket.emit('drawStart', a, (res) => {
         if (!res || !res.ok) { if (res && res.error) toast(res.error); return; }
-        answer = a; $('draw-answer').value = ''; render();
+        if (res.edited && answer !== a) toast('✏️ 題目改好了');
+        answer = a; render();
       });
     };
     $('draw-guess-form').onsubmit = (e) => {
@@ -1112,9 +1142,10 @@
 
     function join(done) {
       gameJoin('draw', (res) => {
-        clear();
-        res.strokes.forEach(paint);
+        wipe();
+        res.strokes.forEach(add);
         answer = res.answer || '';
+        $('draw-answer').value = answer;
         onState(res.state);
         done();
       });
@@ -1126,7 +1157,7 @@
       state = null;
     }
     clear();
-    return { join, leave, onState, log: (l) => gameLog('draw', l), paint, clear };
+    return { join, leave, onState, log: (l) => gameLog('draw', l), paint: add, wipe, undo };
   })();
 
   // ---------------- 金曲猜歌王 ----------------

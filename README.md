@@ -129,6 +129,8 @@ public/index.html  首頁：颱風假開趴報名頁（專屬 VIP 邀請函、IG
 public/hq.html     遊戲頁：角色創建、聊天框
 public/game.js     遊戲主程式（Phaser 場景、地圖與颱風的繪製）
 public/crayon.js   蠟筆手繪風的繪圖小工具（抖動外框、顆粒、格紋）
+public/icons.js    手繪 icon（職業、按鈕、提示泡泡…），沒有 emoji
+public/icons-more.js 手繪 icon 第二批：每個技能、裝備、家具各一張（sk-／gear-／dec- 開頭）
 public/style.css   介面樣式
 ```
 

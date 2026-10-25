@@ -359,5 +359,7 @@
     if (u) { const i = document.createElement('img'); i.src = u; i.alt = ''; i.className = 'hq-icon' + (cls ? ' ' + cls : ''); return i; }
     const s = document.createElement('span'); s.className = 'em-ol' + (cls ? ' ' + cls : ''); s.textContent = emoji; return s;
   }
-  root.HQ_ICONS = { url, el, canvas, keys: Object.keys(DRAW) };
+  // 其他檔案（icons-more.js）補進來的 icon
+  function add(map) { Object.assign(DRAW, map); api.keys = Object.keys(DRAW); }
+  const api = root.HQ_ICONS = { url, el, canvas, add, keys: Object.keys(DRAW) };
 })(this);

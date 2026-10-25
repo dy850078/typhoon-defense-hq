@@ -151,6 +151,8 @@ button.inv-item:hover { border-color: var(--accent); }
 .sk-btn.plain .hq-icon { width: 82%; height: 82%; }
 .modal-icon .hq-icon { width: 42px; height: 42px; vertical-align: 0; }
 .stat-cls .hq-icon { width: 20px; height: 20px; vertical-align: -5px; }
+.toast .hq-icon { width: 22px; height: 22px; vertical-align: -6px; }
+.prof-line .hq-icon, .modal-info p .hq-icon, .gear-slot .hq-icon { width: 20px; height: 20px; vertical-align: -5px; }
 .bag-n { display: inline-block; margin-left: 4px; min-width: 18px; padding: 0 5px; border-radius: 999px; background: var(--accent);
   color: #fff; font: 700 11px/18px var(--mono); text-align: center; }
 .hud-btn { font: 700 14px var(--display); background: var(--ground); color: var(--ink); border: 2px solid var(--ink);
@@ -306,12 +308,13 @@ button.inv-item:hover { border-color: var(--accent); }
 
 /* 裝備欄 */
 .hud-btn.tiny { font-size: 13px; padding: 4px 10px; box-shadow: none; }
-.gear-top { display: flex; gap: 16px; align-items: center; margin-bottom: 6px; }
-.gear-me { width: 144px; height: 168px; flex-shrink: 0; background: var(--silver); border-radius: 18px; }
+.gear-top { display: flex; gap: 16px; align-items: flex-start; margin-bottom: 6px; }
+/* 人物圖高度 = 四個欄位（46px）加三個間距（8px），上下緣剛好對齊第一格和最後一格；寬度照人物圖比例 96x112 */
+.gear-me { width: 178px; height: 208px; flex-shrink: 0; background: var(--silver); border-radius: 18px; }
 .gear-me.r-SR { box-shadow: 0 0 0 3px #ffb020, 0 0 18px rgba(255,176,32,.6); }
 .gear-me.r-SSR { animation: rainbow 4s linear infinite; }
 .gear-slots { flex: 1; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-.gear-slot { display: flex; align-items: center; gap: 10px; background: var(--paper); border: 2px solid var(--line); border-radius: 12px; padding: 6px 10px; }
+.gear-slot { display: flex; align-items: center; gap: 10px; box-sizing: border-box; height: 46px; background: var(--paper); border: 2px solid var(--line); border-radius: 12px; padding: 6px 10px; }
 .gear-slot b { flex: 1; font-size: 15px; }
 .gear-slot-k { font: 700 12px var(--mono); color: var(--muted); width: 32px; }
 .gear-h { margin: 14px 0 8px; font-size: 16px; }
@@ -447,7 +450,8 @@ button.inv-item:hover { border-color: var(--accent); }
 }
 
 @media (max-width: 600px) {
-  .gear-top { flex-direction: column; }
+  .gear-top { flex-direction: column; align-items: center; }
+  .gear-me { width: 144px; height: 168px; }
   .gear-grid { grid-template-columns: repeat(2, 1fr); }
   .create { flex-direction: column; align-items: center; }
   #messages { height: 90px; font-size: 13px; }

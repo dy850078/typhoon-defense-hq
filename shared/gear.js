@@ -516,11 +516,11 @@
       // 白色蕾絲髮箍沿著頭頂一圈
       for (let i = 0; i <= 8; i++) {
         const a = Math.PI * (1.15 + i * 0.0875);
-        C.blob(ctx, 32 + Math.cos(a) * 19, 26 + Math.sin(a) * 19, 3, 3, r, 0.12, 10); C.fill(ctx, '#ffffff', r, null); C.stroke(ctx, r, 1.2);
+        C.blob(ctx, 32 + Math.cos(a) * 18, 28 + Math.sin(a) * 18, 3, 3, r, 0.12, 10); C.fill(ctx, '#ffffff', r, null); C.stroke(ctx, r, 1.2);
       }
       // 側邊一個粉紅小蝴蝶結
-      [[-1], [1]].forEach(([k]) => { ctx.beginPath(); ctx.moveTo(48, 10); ctx.lineTo(48 + k * 5, 6); ctx.lineTo(48 + k * 5, 14); ctx.closePath(); C.fill(ctx, '#ff8fb8', r, null); C.stroke(ctx, r, 1.2); });
-      dot(ctx, 48, 10, 1.6, '#ff6b9a');
+      [[-1], [1]].forEach(([k]) => { ctx.beginPath(); ctx.moveTo(47, 16); ctx.lineTo(47 + k * 5, 12); ctx.lineTo(47 + k * 5, 20); ctx.closePath(); C.fill(ctx, '#ff8fb8', r, null); C.stroke(ctx, r, 1.2); });
+      dot(ctx, 47, 16, 1.6, '#ff6b9a');
     } },
     maid: { front(ctx, C, r, p) {
       suit(ctx, C, r, p, { body: '#2b2a33', sleeve: '#2b2a33', legs: '#fbfbf8', shoes: '#2b2a33', hem: 69 });
@@ -574,14 +574,18 @@
     for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + (i * Math.PI) / 5, k = i % 2 ? rr * 0.45 : rr; ctx.lineTo(Math.cos(a) * k, Math.sin(a) * k); }
     ctx.closePath(); C.fill(ctx, color, r, null); C.stroke(ctx, r, 1.2); ctx.restore();
   }
+  // 貓耳髮箍：耳朵底部貼在頭頂的弧線上（頭的中心 (32, 28)、半徑約 17.5），往外斜
   function catEars(ctx, C, r, color, stripe) {
-    ctx.beginPath(); ctx.arc(32, 26, 19, Math.PI * 1.1, Math.PI * 1.9); C.stroke(ctx, r, 3.4, C.INK);
-    [[18, -1], [46, 1]].forEach(([x, k]) => {
-      ctx.beginPath(); ctx.moveTo(x - 7, 12); ctx.lineTo(x + k * 2, -2); ctx.lineTo(x + 7, 12); ctx.closePath();
+    ctx.beginPath(); ctx.arc(32, 28, 17.5, Math.PI * 1.12, Math.PI * 1.88); C.stroke(ctx, r, 3.4, C.INK);
+    [-1, 1].forEach(k => {
+      const t = k * 0.78; // 從正上方往兩邊轉的角度
+      ctx.save(); ctx.translate(32 + Math.sin(t) * 16.5, 28 - Math.cos(t) * 16.5); ctx.rotate(t);
+      ctx.beginPath(); ctx.moveTo(-7.5, 3); ctx.lineTo(k * 1.5, -13); ctx.lineTo(7.5, 3); ctx.closePath();
       C.fill(ctx, color, r, null); C.stroke(ctx, r, W);
-      ctx.beginPath(); ctx.moveTo(x - 3.5, 10.5); ctx.lineTo(x + k * 1.2, 3); ctx.lineTo(x + 3.5, 10.5); ctx.closePath();
+      ctx.beginPath(); ctx.moveTo(-4, 1.5); ctx.lineTo(k * 1, -8); ctx.lineTo(4, 1.5); ctx.closePath();
       ctx.fillStyle = '#f4a3a0'; ctx.fill();
-      if (stripe) C.line(ctx, x - 5, 8, x - 1, 5, r, 1.6, stripe, 0.2);
+      if (stripe) C.line(ctx, -k * 5, -1, -k * 2, -5, r, 1.6, stripe, 0.2);
+      ctx.restore();
     });
   }
   // 天使翅膀：上緣一道平順的大圓弧，外下緣一球一球的大圓羽毛往內收成尖角，裡面幾道跟著圓羽走的弧線；頭上一圈光環

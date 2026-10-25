@@ -586,12 +586,13 @@
   }
   // 天使翅膀：上緣一道平順的大圓弧，外下緣一球一球的大圓羽毛往內收成尖角，裡面幾道跟著圓羽走的弧線；頭上一圈光環
   // 右邊的翅膀畫好，左邊用鏡像；人物框左右各只多 16，最外面不要超過 x=79
-  const ANGEL_LOBES = [[78, 17], [74, 30], [67, 37.5], [59.5, 43], [51.5, 47.5], [44, 49]];
-  const ANGEL_BULGE = [0, 8, 5, 5, 5, 6]; // 每一球圓羽往外鼓多少（第 i 段，從上面數下來）
+  // 翅尖到第一球圓羽是一條順的大圓弧（不要凹口），從 (74, 30) 開始才是一球一球的圓羽
+  const ANGEL_LOBES = [[74, 30], [67, 37.5], [59.5, 43], [51.5, 47.5], [44, 49]];
+  const ANGEL_BULGE = [0, 5, 5, 5, 6]; // 每一球圓羽往外鼓多少（第 i 段，從上面數下來）
   function angelWingPath(ctx) {
     ctx.beginPath(); ctx.moveTo(44, 49); ctx.quadraticCurveTo(39, 40, 42, 30);
     ctx.quadraticCurveTo(50, 11, 69, 9);
-    ctx.quadraticCurveTo(80, 8, 78, 18);
+    ctx.bezierCurveTo(82, 8, 83, 24, 74, 30);
     // 圓羽之間的接點往翅膀裡面縮，凹口才會深
     const lobes = ANGEL_LOBES;
     for (let i = 1; i < lobes.length; i++) {
@@ -607,6 +608,7 @@
       ctx.save();
       if (k < 0) { ctx.translate(64, 0); ctx.scale(-1, 1); }
       ctx.translate(-5, 9); // 往下移到背後；外緣的圓羽會往外鼓，往內收一點才不會被人物框切掉
+      ctx.translate(44, 49); ctx.scale(0.86, 0.86); ctx.translate(-44, -49); // 以翅膀根部為中心縮小一點
       angelWingPath(ctx); C.fill(ctx, '#fbfdff', r, [41, 6, 38, 48]);
       // 陰影：靠身體那側漸漸變暗；每一球圓羽沿著邊緣內側一道淡淡的灰藍，看起來比較立體
       ctx.save(); angelWingPath(ctx); ctx.clip();

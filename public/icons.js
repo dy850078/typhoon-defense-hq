@@ -150,19 +150,62 @@
         C.line(x, cx - 2, cy - 4.5, cx - 1, cy + 4.5, r, 1, '#8a6a3a'); };
       bag(24, 16); bag(18, 27); bag(30, 27); bag(12, 38); bag(24, 38); bag(36, 38);
     },
+    // ---- 靠近 NPC／物件時頭上提示泡泡用的 icon ----
+    // 敲箱子：木槌
+    'act-crate'(x, r) {
+      x.save(); x.translate(24, 24); x.rotate(-0.6);
+      C.rect(x, -3, -4, 6, 24, r, 0.5); C.fill(x, '#c28b52', r, [-3, -4, 6, 24]); C.stroke(x, r, 2.2);
+      C.rect(x, -13, -16, 26, 13, r, 0.8); C.fill(x, '#8f5f30', r, [-13, -16, 26, 13]); C.stroke(x, r, 2.4);
+      C.line(x, -6, -15, -6, -4, r, 1.2, '#6b4a32');
+      x.restore();
+      C.line(x, 36, 8, 41, 4, r, 1.8); C.line(x, 39, 13, 45, 12, r, 1.8);
+    },
+    // 煮泡麵：冒煙的碗
+    'act-cook'(x, r) {
+      [17, 24, 31].forEach((sx, i) => { x.beginPath(); x.moveTo(sx, 17); x.quadraticCurveTo(sx - 4, 12, sx, 8 - i % 2 * 2); x.quadraticCurveTo(sx + 4, 4, sx, 1);
+        C.stroke(x, r, 1.6, '#9aa3ad'); });
+      x.beginPath(); x.moveTo(6, 22); x.lineTo(42, 22); x.quadraticCurveTo(40, 40, 24, 41); x.quadraticCurveTo(8, 40, 6, 22); x.closePath();
+      C.fill(x, '#ef4b5c', r, [6, 22, 36, 19]); C.stroke(x, r, 2.4);
+      C.blob(x, 24, 22, 17, 3.2, r, 0.08); C.fill(x, '#ffd23f', r, null); C.stroke(x, r, 1.8);
+      C.line(x, 12, 30, 36, 30, r, 1.4, '#fbf6e9');
+      C.line(x, 30, 21, 42, 6, r, 2, '#7a4f2e'); C.line(x, 34, 21, 45, 9, r, 2, '#7a4f2e');
+    },
+    // 轉職：資料夾
+    'act-mentor'(x, r) {
+      x.beginPath(); x.moveTo(6, 13); x.lineTo(18, 13); x.lineTo(21, 9); x.lineTo(30, 9); x.lineTo(30, 13); x.lineTo(42, 13); x.lineTo(42, 39); x.lineTo(6, 39); x.closePath();
+      C.fill(x, '#e0b84a', r, [6, 9, 36, 30]); C.stroke(x, r, 2.4);
+      C.rect(x, 11, 16, 26, 10, r, 0.5); C.fill(x, '#fbf6e9', r, null); C.stroke(x, r, 1.4);
+      C.line(x, 14, 20, 32, 20, r, 1.2, '#4f7cc2');
+      x.beginPath(); x.moveTo(5, 22); x.lineTo(43, 22); x.lineTo(41, 40); x.lineTo(7, 40); x.closePath();
+      C.fill(x, '#f2cc5e', r, [5, 22, 38, 18]); C.stroke(x, r, 2.4);
+    },
+    // 前往副本：古城門
+    'act-guard'(x, r) {
+      [8, 18, 28, 36].forEach(cx => { C.rect(x, cx, 7, 5, 6, r, 0.4); C.fill(x, '#8d8577', r, null); C.stroke(x, r, 1.6); });
+      C.rect(x, 6, 12, 36, 29, r, 0.8); C.fill(x, '#a89f8f', r, [6, 12, 36, 29]); C.stroke(x, r, 2.4);
+      x.beginPath(); x.moveTo(16, 41); x.lineTo(16, 28); x.quadraticCurveTo(24, 17, 32, 28); x.lineTo(32, 41); x.closePath();
+      C.fill(x, '#5a3d2a', r, [16, 20, 16, 21]); C.stroke(x, r, 2);
+      C.line(x, 24, 22, 24, 41, r, 1.2, '#2b2a33');
+      C.line(x, 9, 20, 13, 20, r, 1.2, '#6f675b'); C.line(x, 35, 34, 39, 34, r, 1.2, '#6f675b');
+    },
   };
 
   const cache = {};
-  function url(key) {
+  // 畫成一張 144x144 的畫布（遊戲畫面裡要直接貼圖的時候用）
+  function canvas(key) {
     if (!DRAW[key] || !C) return null;
-    if (cache[key]) return cache[key];
     const cv = document.createElement('canvas');
     cv.width = cv.height = SIZE * SCALE;
     const x = cv.getContext('2d');
     x.scale(SCALE, SCALE);
     // 每個 icon 固定種子，每次畫出來都一樣
     DRAW[key](x, C.rng([...key].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7)));
-    return (cache[key] = cv.toDataURL());
+    return cv;
+  }
+  function url(key) {
+    if (cache[key]) return cache[key];
+    const cv = canvas(key);
+    return cv ? (cache[key] = cv.toDataURL()) : null;
   }
   // 手繪 icon 的 <img>，沒有的話用 emoji 加墨線外框
   function el(key, emoji, cls) {
@@ -170,5 +213,5 @@
     if (u) { const i = document.createElement('img'); i.src = u; i.alt = ''; i.className = 'hq-icon' + (cls ? ' ' + cls : ''); return i; }
     const s = document.createElement('span'); s.className = 'em-ol' + (cls ? ' ' + cls : ''); s.textContent = emoji; return s;
   }
-  root.HQ_ICONS = { url, el, keys: Object.keys(DRAW) };
+  root.HQ_ICONS = { url, el, canvas, keys: Object.keys(DRAW) };
 })(this);

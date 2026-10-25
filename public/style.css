@@ -120,7 +120,6 @@ button.inv-item:hover { border-color: var(--accent); }
   box-shadow: var(--note-shadow); padding: 7px 16px; font-weight: 700; animation: toast 2.2s ease forwards; white-space: nowrap; }
 @keyframes toast { 0% { opacity: 0; transform: translateY(-6px); } 10%, 80% { opacity: 1; transform: none; } 100% { opacity: 0; } }
 /* 場景互動（敲箱子、點歌…）：技能列上面的小膠囊 */
-#action-btn { right: 16px; bottom: 128px; font-size: 15px; padding: 8px 18px; box-shadow: 0 4px 14px rgba(255,106,19,.4); }
 /* 技能列：一排蠟筆風小方塊，角落標快捷鍵 */
 #skillbar { right: 16px; bottom: 52px; display: flex; gap: 8px; align-items: flex-end; }
 .sk-btn { position: relative; overflow: hidden; width: 54px; height: 54px; padding: 0; border-radius: 14px; cursor: pointer;
@@ -479,7 +478,6 @@ button.inv-item:hover { border-color: var(--accent); }
     gap: 6px 8px; padding: 6px 10px; font-size: 13px; }
   #dg-panel .primary { padding: 8px 14px; font-size: 14px; }
   .modal-row { flex-wrap: wrap; }
-  #action-btn { bottom: 24px; right: 90px; }
   #chat { width: calc(100vw - 24px - 170px); min-width: 180px; }
   #chat:not(.collapsed) { width: calc(100vw - 24px); bottom: 12px; z-index: 6; }
 }
@@ -508,7 +506,6 @@ button.inv-item:hover { border-color: var(--accent); }
   #skillbar { bottom: 12px; }
   .sk-btn { width: 48px; height: 48px; font-size: 22px; }
   #basic-btn { width: 54px; height: 54px; }
-  #action-btn { bottom: 74px; }
   #video-prompt, #dg-panel { bottom: auto; top: 76px; }
 }
 .acct-note { text-align: center; font-size: 13px; color: var(--muted, #6E6E73); margin: 12px 0 0; }

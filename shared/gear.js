@@ -586,22 +586,20 @@
   }
   // 天使翅膀：上緣一道平順的大圓弧，外下緣一球一球的大圓羽毛往內收成尖角，裡面幾道跟著圓羽走的弧線；頭上一圈光環
   // 右邊的翅膀畫好，左邊用鏡像；人物框左右各只多 16，最外面不要超過 x=79
-  // open 為 true 時不畫靠身體那一邊（裡面的小翅膀線只要上緣和圓羽）
-  function angelWingPath(ctx, open) {
-    ctx.beginPath();
-    if (open) ctx.moveTo(42, 30);
-    else { ctx.moveTo(44, 49); ctx.quadraticCurveTo(39, 40, 42, 30); }
+  const ANGEL_LOBES = [[78, 17], [74, 30], [67, 37.5], [59.5, 43], [51.5, 47.5], [44, 49]];
+  function angelWingPath(ctx) {
+    ctx.beginPath(); ctx.moveTo(44, 49); ctx.quadraticCurveTo(39, 40, 42, 30);
     ctx.quadraticCurveTo(50, 11, 69, 9);
     ctx.quadraticCurveTo(80, 8, 78, 18);
     // 圓羽之間的接點往翅膀裡面縮，凹口才會深
-    const lobes = [[78, 18], [74, 27.5], [68, 34.5], [60.5, 40], [52, 45.5], [44, 49]];
+    const lobes = ANGEL_LOBES;
     for (let i = 1; i < lobes.length; i++) {
       const [x0, y0] = lobes[i - 1], [x1, y1] = lobes[i];
       const mx = (x0 + x1) / 2, my = (y0 + y1) / 2, dx = x1 - x0, dy = y1 - y0, d = Math.hypot(dx, dy);
       // 往外（線段的左手邊）鼓起來
       ctx.bezierCurveTo(x0 + dy / d * 8, y0 - dx / d * 8, x1 + dy / d * 8, y1 - dx / d * 8, x1, y1); // 兩個控制點都往外推，每一球比較圓、接縫比較深
     }
-    if (!open) ctx.closePath();
+    ctx.closePath();
   }
   function featherWings(ctx, C, r) {
     [1, -1].forEach(k => {
@@ -609,15 +607,21 @@
       if (k < 0) { ctx.translate(64, 0); ctx.scale(-1, 1); }
       ctx.translate(-5, 9); // 往下移到背後；外緣的圓羽會往外鼓，往內收一點才不會被人物框切掉
       angelWingPath(ctx); C.fill(ctx, '#fbfdff', r, [41, 6, 38, 48]);
-      ctx.save(); angelWingPath(ctx); ctx.clip(); ctx.globalAlpha = 0.4;
-      C.blob(ctx, 64, 44, 16, 9, r, 0.08); ctx.fillStyle = '#c4e2f6'; ctx.fill(); ctx.restore();
-      angelWingPath(ctx); C.stroke(ctx, r, W);
-      // 裡面一個縮小的翅膀輪廓（淡藍線），像一層小羽毛
-      [[0.6, 2.8]].forEach(([k2, w]) => {
-        ctx.save(); ctx.translate(50, 46); ctx.scale(k2, k2); ctx.translate(-46, -47);
-        angelWingPath(ctx, true); C.stroke(ctx, r, w, '#8fb8d8');
-        ctx.restore();
+      // 陰影：靠身體那側漸漸變暗；每一球圓羽沿著邊緣內側一道淡淡的灰藍，看起來比較立體
+      ctx.save(); angelWingPath(ctx); ctx.clip();
+      const g = ctx.createLinearGradient(40, 0, 58, 0);
+      g.addColorStop(0, 'rgba(196,212,230,0.75)'); g.addColorStop(1, 'rgba(196,212,230,0)');
+      ctx.fillStyle = g; ctx.fillRect(36, 0, 24, 60);
+      ANGEL_LOBES.forEach(([x0, y0], i) => {
+        if (!i) return;
+        const [x1, y1] = ANGEL_LOBES[i], [px, py] = ANGEL_LOBES[i - 1];
+        const dx = x1 - px, dy = y1 - py, d = Math.hypot(dx, dy), nx = dy / d, ny = -dx / d;
+        ctx.beginPath(); ctx.moveTo(px - nx * 1.5, py - ny * 1.5);
+        ctx.bezierCurveTo(px + nx * 5.5, py + ny * 5.5, x1 + nx * 5.5, y1 + ny * 5.5, x1 - nx * 1.5, y1 - ny * 1.5);
+        ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(190,207,226,0.8)'; ctx.lineCap = 'round'; ctx.stroke();
       });
+      ctx.restore();
+      angelWingPath(ctx); C.stroke(ctx, r, W);
       ctx.restore();
     });
     ctx.save(); ctx.beginPath(); ctx.ellipse(32, -2, 12, 3.5, 0, 0, Math.PI * 2); C.stroke(ctx, r, 4.5, C.INK); C.stroke(ctx, r, 2.6, '#ffd23f'); ctx.restore();

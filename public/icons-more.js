@@ -544,24 +544,25 @@
     },
     'gear-angel'(x, r) {
       // 跟穿在身上的一樣（shared/gear.js 的 angelWingPath），縮小放進 48x48
-      const path = (open) => {
-        x.beginPath();
-        if (open) x.moveTo(42, 30); else { x.moveTo(44, 49); x.quadraticCurveTo(39, 40, 42, 30); }
+      const path = () => {
+        x.beginPath(); x.moveTo(44, 49); x.quadraticCurveTo(39, 40, 42, 30);
         x.quadraticCurveTo(50, 11, 69, 9); x.quadraticCurveTo(80, 8, 78, 18);
-        const lobes = [[78, 18], [74, 27.5], [68, 34.5], [60.5, 40], [52, 45.5], [44, 49]];
+        const lobes = [[78, 17], [74, 30], [67, 37.5], [59.5, 43], [51.5, 47.5], [44, 49]];
         for (let i = 1; i < lobes.length; i++) {
           const [x0, y0] = lobes[i - 1], [x1, y1] = lobes[i];
           const mx = (x0 + x1) / 2, my = (y0 + y1) / 2, dx = x1 - x0, dy = y1 - y0, d = Math.hypot(dx, dy);
           x.bezierCurveTo(x0 + dy / d * 8, y0 - dx / d * 8, x1 + dy / d * 8, y1 - dx / d * 8, x1, y1); // 兩個控制點都往外推，每一球比較圓、接縫比較深
         }
-        if (!open) x.closePath();
+        x.closePath();
       };
       [1, -1].forEach(k => {
         x.save(); if (k < 0) { x.translate(48, 0); x.scale(-1, 1); }
         x.translate(4, 6); x.scale(0.52, 0.52);
-        path(); C.fill(x, '#fbfdff', r, null); C.stroke(x, r, 4.2);
-        // 裡面一個縮小的翅膀輪廓
-        x.save(); x.translate(50, 46); x.scale(0.6, 0.6); x.translate(-46, -47); path(true); C.stroke(x, r, 4.4, '#8fb8d8'); x.restore();
+        path(); C.fill(x, '#fbfdff', r, null);
+        x.save(); path(); x.clip();
+        const g = x.createLinearGradient(40, 0, 60, 0); g.addColorStop(0, 'rgba(196,212,230,0.8)'); g.addColorStop(1, 'rgba(196,212,230,0)');
+        x.fillStyle = g; x.fillRect(36, 0, 26, 60); x.restore();
+        path(); C.stroke(x, r, 4.2);
         x.restore();
       });
       x.beginPath(); x.ellipse(24, 7, 8, 3, 0, 0, Math.PI * 2); C.stroke(x, r, 2.6, '#ffd23f');

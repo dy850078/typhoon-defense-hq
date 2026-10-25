@@ -107,6 +107,15 @@
       desc: '法杖射出一顆彩石魔法彈，中距離，打到會在一小塊範圍裡炸開。（七星潭法杖）' },
     marbleSmash: { name: '大理石重錘', icon: '🔨', mp: 0, cooldown: 700, power: 1.8, range: 140, aoe: 150, basic: true, weapon: true,
       desc: '掄起大理石錘往地上砸，近距離，身邊的怪全部打到，傷害最高。（太魯閣戰錘）' },
+    cardFlick: { name: '悠遊飛卡', mp: 0, cooldown: 450, power: 1.15, range: 440, basic: true, weapon: true,
+      chain: { n: 2, r: 200, mul: 0.6 },
+      desc: '把悠遊卡甩出去，遠距離，打中以後會彈到旁邊最多 2 隻怪（六成傷害）。（捷運悠遊卡）' },
+    damperSwing: { name: '阻尼甩錘', mp: 0, cooldown: 750, power: 1.6, range: 260, aoeAt: 100, basic: true, weapon: true,
+      knock: { mob: 60, boss: 0, stun: 300, noBoss: true },
+      desc: '甩出金色的阻尼球，中距離，砸到的地方一小圈都打到，小怪會被撞退。（阻尼球流星錘）' },
+    spireThrust: { name: '避雷突刺', mp: 0, cooldown: 650, power: 1.9, range: 200, basic: true, weapon: true,
+      chain: { n: 3, r: 240, mul: 0.8, chance: 0.3, bolt: true },
+      desc: '長槍往前刺，中近距離，傷害很高；有三成機率引來一道雷，劈到附近最多 3 隻怪。（101 避雷針長槍）' },
   });
 
   // 召喚師叫出來的奇異生物：weight 越大越常出現，越強的越少見
@@ -169,6 +178,20 @@
     fu: { name: '花蓮王', level: 50, hp: 9000, dmg: [0, 0], range: 0, speed: 70, exp: 800, dungeon: true, boss: true, scale: 1,
       gap: { half: 46, top: 130, bottom: 16 }, phase2: { name: '暗黑花蓮王', level: 60 },
       say: ['花蓮是我的！', '我們一起努力！', '凍蒜！', '這個我不同意', '👊'] },
+    // 台北101副本（要 Lv.50）：血和傷害照 Lv.50 的人調
+    sign: { name: '飛天招牌', level: 52, hp: 2600, dmg: [35, 50], range: 85, speed: 70, exp: 220, dungeon: true, noFlip: true,
+      say: ['大拍賣！', '最後一天！', '吹走啦～', '跳樓大特價'] },
+    scooter: { name: '暴衝機車', level: 54, hp: 2200, dmg: [40, 55], range: 90, speed: 115, exp: 220, dungeon: true, hitMs: 1600,
+      say: ['叭叭！', '借過借過', '紅燈右轉！', '嗡嗡嗡～'] },
+    bike: { name: '飛天機車', level: 60, hp: 7500, dmg: [60, 80], range: 95, speed: 100, exp: 600, dungeon: true, scale: 0.8,
+      gap: { half: 40, top: 90, bottom: 12 }, say: ['暴衝囉！', '安全帽呢？', '叭——！'] },
+    blackout: { name: '停電小怪', level: 55, hp: 1800, dmg: [35, 45], range: 80, speed: 90, exp: 180, dungeon: true, sight: 600,
+      say: ['啪！', '沒電了～', '誰關燈？', '黑漆漆'] },
+    whirl: { name: '小風窩', level: 62, hp: 4000, dmg: [40, 55], range: 90, speed: 60, exp: 300, dungeon: true,
+      say: ['呼呼～', '轉轉轉', '風好大'] },
+    tianlong: { name: '天龍王', level: 70, hp: 40000, dmg: [0, 0], range: 0, speed: 75, exp: 2500, dungeon: true, boss: true, scale: 1, barY: -200,
+      gap: { half: 70, top: 170, bottom: 18 }, phase2: { name: '狂風天龍王', level: 75 }, phase3: { name: '暴走天龍王', level: 80 },
+      say: ['天龍國是我的！', '你住哪一區？', '這裡不歡迎你', '看我的龍捲風！'] },
   });
   const MOB_RESPAWN_MS = 45000;
 

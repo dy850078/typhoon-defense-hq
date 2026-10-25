@@ -244,6 +244,22 @@
       });
     }
 
+    if (p.npc === 'tianlong') {
+      // 台北101的天龍王：黑色墨鏡、金色小皇冠、胸前口袋插一條金色手帕
+      [[26, 28.5], [38, 28.5]].forEach(([x, y]) => { C.blob(ctx, x, y, 5.4, 4.2, r, 0.06, 14); C.fill(ctx, '#1f1d24', r, null); C.stroke(ctx, r, 1.6); });
+      C.line(ctx, 31, 28, 33, 28, r, 1.8);
+      ctx.save(); ctx.globalAlpha = 0.6; C.line(ctx, 23, 27, 26, 26, r, 1.2, '#ffffff', 0.2); C.line(ctx, 35, 27, 38, 26, r, 1.2, '#ffffff', 0.2); ctx.restore();
+      ctx.beginPath(); ctx.moveTo(23, 13); ctx.lineTo(24, 4); ctx.lineTo(28, 9); ctx.lineTo(32, 2); ctx.lineTo(36, 9); ctx.lineTo(40, 4); ctx.lineTo(41, 13); ctx.closePath();
+      C.fill(ctx, '#ffd23f', r, null); C.stroke(ctx, r, 1.8);
+      [[28, 11, '#e8384f'], [32, 10.5, '#4f7cc2'], [36, 11, '#6baf7b']].forEach(([x, y, col]) => { ctx.fillStyle = col; ctx.beginPath(); ctx.arc(x, y, 1.4, 0, Math.PI * 2); ctx.fill(); });
+      ctx.beginPath(); ctx.moveTo(38, 52); ctx.lineTo(41, 48.5); ctx.lineTo(43, 52); ctx.closePath(); C.fill(ctx, '#ffd23f', r, null); C.stroke(ctx, r, 1.2);
+    }
+    if (p.npc === 'elevator') {
+      // 101 電梯小姐：小圓帽（帽沿一圈金邊）、白手套
+      C.rect(ctx, 22, 7, 20, 8, r, 0.5); C.fill(ctx, '#2f5f5c', r, null); C.stroke(ctx, r, 1.8);
+      C.line(ctx, 22, 13.5, 42, 13.5, r, 1.6, '#ffd23f', 0.2);
+      [[13, 63], [51, 63]].forEach(([x, y]) => { C.blob(ctx, x, y, 3.8, 3.6, r, 0.1); C.fill(ctx, '#fbfbf8', r, null); C.stroke(ctx, r, 1.8); });
+    }
     if (p.npc === 'fu') drawFu(ctx, C, r, p, W, skin);
     if (p.npc === 'greek') drawGreek(ctx, C, r, W, skin);
 

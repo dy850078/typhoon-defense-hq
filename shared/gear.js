@@ -20,6 +20,7 @@
     forest: { name: '森林布偶', fx: 'butterfly', desc: '穿齊：身邊飛出小蝴蝶' },
     typhoon: { name: '防颱', desc: '這個系列沒有披風，純收藏' },
     hualien: { name: '花蓮副本', desc: '打倒花蓮王才會掉的武器' },
+    taipei: { name: '台北101副本', desc: '打倒天龍王才會掉的武器' },
     single: { name: '單品', desc: '不成套，隨你搭' },
   };
 
@@ -71,6 +72,10 @@
     lilyDart: { slot: 'weapon', name: '金針花標', rarity: 'R', series: 'hualien', icon: '🌼', basic: 'lilyDart', dungeon: 'hualien' },
     qixingStaff: { slot: 'weapon', name: '七星潭法杖', rarity: 'SR', series: 'hualien', icon: '🔮', basic: 'pebbleOrb', dungeon: 'hualien' },
     tarokoHammer: { slot: 'weapon', name: '太魯閣戰錘', rarity: 'SSR', series: 'hualien', icon: '🔨', basic: 'marbleSmash', dungeon: 'hualien' },
+    // 武器：台北101副本（打倒天龍王才會掉）
+    easyCard: { slot: 'weapon', name: '捷運悠遊卡', rarity: 'SR', series: 'taipei', basic: 'cardFlick', dungeon: 'taipei' },
+    damperFlail: { slot: 'weapon', name: '阻尼球流星錘', rarity: 'SSR', series: 'taipei', basic: 'damperSwing', dungeon: 'taipei' },
+    spireSpear: { slot: 'weapon', name: '101 避雷針長槍', rarity: 'SSR', series: 'taipei', basic: 'spireThrust', dungeon: 'taipei' },
   };
 
   // 依稀有度抽一件，盡量抽還沒有的；rare 為 true 時只抽 SR、SSR（打倒颱風的獎勵）
@@ -699,6 +704,32 @@
       C.rect(ctx, -4, -40, 8, 4, r, 0.4); C.fill(ctx, '#ffb020', r, null); C.stroke(ctx, r, 1.4);
       ctx.restore();
     } },
+    easyCard: { hand(ctx, C, r) {
+      // 捷運悠遊卡：藍色卡片捏在手上，上面一條白色的捷運線
+      ctx.save(); ctx.translate(56, 62); ctx.rotate(-0.35);
+      C.rect(ctx, -2, -8, 14, 10, r, 0.5); C.fill(ctx, '#4f9fd8', r, null); C.stroke(ctx, r, 1.6);
+      C.line(ctx, 0, -1, 10, -6, r, 1.4, '#ffffff', 0.2);
+      ctx.fillStyle = '#ffd23f'; ctx.beginPath(); ctx.arc(2.5, -5, 1.4, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    } },
+    damperFlail: { hand(ctx, C, r) {
+      // 阻尼球流星錘：短木柄＋一條鐵鍊，垂著一顆金色的阻尼球
+      C.line(ctx, 51, 66, 56, 52, r, 4.4, C.INK, 0.3); C.line(ctx, 51, 66, 56, 52, r, 2.6, '#8a5a3a', 0.3);
+      for (let i = 0; i < 5; i++) { ctx.beginPath(); ctx.ellipse(57 + i * 1.6, 50 + i * 3.6, 1.6, 2.2, 0.3, 0, Math.PI * 2); C.stroke(ctx, r, 1.2, '#5b6577'); }
+      C.blob(ctx, 63, 72, 7.5, 7.5, r, 0.04); C.fill(ctx, '#ffc93c', r, null); C.stroke(ctx, r, 2);
+      C.line(ctx, 56, 72, 70, 72, r, 1, 'rgba(160,112,40,0.7)', 0.2);
+      ctx.fillStyle = 'rgba(255,255,255,0.8)'; ctx.fillRect(59, 67, 3, 2);
+    } },
+    spireSpear: { hand(ctx, C, r) {
+      // 101 避雷針長槍：長長的槍身，槍頭像 101 一節一節往上疊，頂端一根避雷針
+      C.line(ctx, 54, 80, 58, 12, r, 4.4, C.INK, 0.3); C.line(ctx, 54, 80, 58, 12, r, 2.6, '#7fb3ad', 0.3);
+      [[18, 7], [12, 6], [6, 5]].forEach(([y, w]) => {
+        ctx.beginPath(); ctx.moveTo(58 - w, y + 6); ctx.lineTo(58 - w - 1.5, y); ctx.lineTo(58 + w + 1.5, y); ctx.lineTo(58 + w, y + 6); ctx.closePath();
+        C.fill(ctx, '#5f8f8c', r, null); C.stroke(ctx, r, 1.3);
+      });
+      C.line(ctx, 58, 6, 58, -6, r, 1.6);
+      ctx.beginPath(); ctx.moveTo(63, -4); ctx.lineTo(61, 0); ctx.lineTo(63, 0); ctx.lineTo(61, 4); C.stroke(ctx, r, 1.4, '#ffb020');
+    } },
   });
 
   // 某件裝備在某一層有沒有東西要畫
@@ -713,10 +744,17 @@
 
   // 抽副本武器：none 是什麼都沒掉的機率；抽到的稀有度裡選一把（同稀有度只有一把就是它）
   const DROP = { none: 40, R: 35, SR: 18, SSR: 7 };
+  // 有些副本直接寫每一把的機率
+  const DROP_ITEMS = { taipei: { none: 40, easyCard: 40, damperFlail: 15, spireSpear: 5 } };
+  const draw = (table) => {
+    const total = Object.values(table).reduce((a, b) => a + b, 0);
+    let x = Math.random() * total;
+    for (const [k, w] of Object.entries(table)) { x -= w; if (x <= 0) return k; }
+    return 'none';
+  };
   function rollWeapon(dungeon) {
-    const total = Object.values(DROP).reduce((a, b) => a + b, 0);
-    let x = Math.random() * total, rar = 'none';
-    for (const [k, w] of Object.entries(DROP)) { x -= w; if (x <= 0) { rar = k; break; } }
+    if (DROP_ITEMS[dungeon]) { const id = draw(DROP_ITEMS[dungeon]); return GEAR[id] ? id : null; }
+    const rar = draw(DROP);
     if (rar === 'none') return null;
     const pool = Object.keys(GEAR).filter(id => GEAR[id].dungeon === dungeon && GEAR[id].rarity === rar);
     return pool.length ? pool[Math.floor(Math.random() * pool.length)] : null;
@@ -730,7 +768,7 @@
     return SERIES[sid] && SERIES[sid].fx && ids.every(id => GEAR[id].series === sid) ? sid : null;
   }
 
-  const gear = { RARITY, SLOTS, LOOK_SLOTS, SERIES, GEAR, setOf, DROP, roll, rollWeapon, hasLayer, drawLayer, LAYERS: ['cape', 'back', 'front', 'head', 'over', 'hand'] };
+  const gear = { RARITY, SLOTS, LOOK_SLOTS, SERIES, GEAR, setOf, DROP, DROP_ITEMS, roll, rollWeapon, hasLayer, drawLayer, LAYERS: ['cape', 'back', 'front', 'head', 'over', 'hand'] };
   if (typeof module !== 'undefined' && module.exports) module.exports = gear;
   else root.HQ_GEAR = gear;
 })(this);

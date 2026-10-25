@@ -21,11 +21,11 @@
   // 背景時就不產生純視覺的特效，血量、位置這些狀態照樣更新
   const fxOff = () => document.hidden;
   // 近距離的普攻：打到時角色往前撲一下
-  const MELEE = ['strike', 'power', 'syringe', 'punch', 'kick', 'marbleSmash'];
+  const MELEE = ['strike', 'power', 'syringe', 'punch', 'kick', 'marbleSmash', 'spireThrust'];
   // 會飛過去的攻擊：特效打到才跳數字（毫秒）
   const HIT_DELAY = { arrow: 520, barbell: 330, skate: 950, shot: 260, orb: 300, ray: 120,
     defib: 150, arrowRain: 650, roar: 200, icicle: 330, mothership: 600, note: 280, paint: 260, noteBlade: 760,
-    lilyDart: 280, pebbleOrb: 330, marbleSmash: 160 };
+    lilyDart: 280, pebbleOrb: 330, marbleSmash: 160, cardFlick: 260, damperSwing: 340, spireThrust: 150 };
   // 人物貼圖比 64x80 大一圈，翅膀、氣球、帽子才畫得下；(16,32) 是人物框的左上角，腳底在 y=108
   const FRAME = { w: 96, h: 112, ox: 16, oy: 32 };
   const AV_ORIGIN_Y = (FRAME.oy + 76) / FRAME.h;
@@ -344,6 +344,7 @@
   socket.on('dgStone', (e) => scene && scene.onStone(e));
   socket.on('dgBlock', (e) => scene && scene.onBlock(e));
   socket.on('dgStage', (e) => scene && scene.onDgStage(e));
+  socket.on('dgBallHit', (e) => scene && scene.onBallHit(e));
   socket.on('dgAttack', (a) => scene && scene.onFuAttack(a));
   socket.on('dgAttackHit', (a) => scene && scene.onFuAttackHit(a));
   socket.on('dgClear', (c) => scene && scene.onDgClear(c));
@@ -2183,7 +2184,7 @@
   // 靠近 NPC／物件時，頭上冒出的提示紙條：手繪 icon＋動作名稱＋「空白鍵」（手機是「點我」），底下有小尖角指著它
   const HINTS = {
     crate: ['act-crate', '敲箱子'], cook: ['act-cook', '煮泡麵'], mentor: ['act-mentor', '轉職'],
-    guard: ['act-guard', '前往副本'], dj: ['btn-song', '點歌'], tv: ['act-tv', '視訊／遊戲'], well: ['wish-coin', '許個願'], greek: ['act-greek', '說話'],
+    guard: ['act-guard', '前往副本'], elevator: ['act-elevator', '前往 101'], dj: ['btn-song', '點歌'], tv: ['act-tv', '視訊／遊戲'], well: ['wish-coin', '許個願'], greek: ['act-greek', '說話'],
   };
   // tail：尖角朝哪邊（down＝紙條在東西上面；left／right＝紙條在旁邊，上面被介面擋住的時候用）
   function drawHint(type, touch, tail) {
@@ -2276,6 +2277,36 @@
       CR.line(ctx, 8, 30, 22, 38, r, 1.4, 'rgba(110,118,132,0.7)', 1);
       CR.line(ctx, 22, 38, 30, 28, r, 1.2, 'rgba(110,118,132,0.6)', 1);
       CR.line(ctx, 30, 44, 44, 36, r, 1.4, 'rgba(110,118,132,0.7)', 1);
+    }),
+    // 悠遊卡飛出去的那張卡（藍色卡片、白色的捷運線）
+    card: () => fxCanvas(40, 28, 83, (ctx, r) => {
+      CR.rect(ctx, 3, 3, 34, 22, r, 0.8); CR.fill(ctx, '#4f9fd8', r, [3, 3, 34, 22]); CR.stroke(ctx, r, 2);
+      CR.line(ctx, 6, 18, 34, 10, r, 2.2, '#ffffff', 0.4);
+      CR.blob(ctx, 11, 10, 3.4, 3.4, r, 0.1, 10); CR.fill(ctx, '#ffd23f', r, null); CR.stroke(ctx, r, 1);
+    }),
+    // 阻尼球流星錘甩出去的金球
+    goldball: () => fxCanvas(40, 40, 84, (ctx, r) => {
+      CR.blob(ctx, 20, 20, 15, 15, r, 0.04); CR.fill(ctx, '#ffc93c', r, [5, 5, 30, 30]); CR.stroke(ctx, r, 2.4);
+      [[20, 6, 20, 34], [7, 14, 33, 14], [7, 26, 33, 26]].forEach(([a, b, c2, d]) => CR.line(ctx, a, b, c2, d, r, 1.2, 'rgba(160,112,40,0.7)', 0.4));
+      CR.blob(ctx, 14, 13, 4, 2.6, r, 0.1); ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.fill();
+    }),
+    // 87 樓的大阻尼球：金色的大球，一圈一圈的鋼板
+    damper: () => fxCanvas(150, 150, 85, (ctx, r) => {
+      ctx.fillStyle = 'rgba(19,26,40,0.2)'; ctx.beginPath(); ctx.ellipse(75, 140, 52, 8, 0, 0, Math.PI * 2); ctx.fill();
+      CR.blob(ctx, 75, 72, 64, 64, r, 0.02, 30); CR.fill(ctx, '#f2b632', r, [11, 8, 128, 128], 1.4); CR.stroke(ctx, r, 3.2);
+      [-40, -20, 0, 20, 40].forEach(dy => {
+        const w = Math.sqrt(Math.max(0, 64 * 64 - dy * dy));
+        ctx.beginPath(); ctx.ellipse(75, 72 + dy, w, 6, 0, 0, Math.PI); CR.stroke(ctx, r, 1.6, 'rgba(140,96,20,0.6)');
+      });
+      CR.blob(ctx, 52, 44, 16, 10, r, 0.1); ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.fill();
+    }),
+    // 台北101關卡之間的電梯門
+    tpgate: () => fxCanvas(96, 144, 86, (ctx, r) => {
+      ctx.scale(2, 2);
+      CR.rect(ctx, 2, 6, 44, 64, r, 1); CR.fill(ctx, '#c6cbd6', r, [2, 6, 44, 64], 0.8); CR.stroke(ctx, r, 2.6);
+      CR.line(ctx, 24, 8, 24, 69, r, 2);
+      CR.rect(ctx, 14, 12, 20, 9, r, 0.6); CR.fill(ctx, '#2b2a33', r, null); CR.stroke(ctx, r, 1.4);
+      ctx.fillStyle = '#ffb020'; ctx.font = '900 7px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('101', 24, 19);
     }),
     // 全身 SSR：腳下的彩虹光暈（畫成圓的，遊戲裡壓扁再慢慢轉）、繞著飄的小星星
     aura: () => fxCanvas(120, 120, 61, (ctx, r) => {
@@ -2626,6 +2657,102 @@
     AV.drawAvatar(ctx, { hair: 'bald', skin: AV.SKINS[1], glasses: '0', cls: 'suit', suit: '#2b2a33', tie: '#8a5cd6', npc: 'fu', fist });
     ctx.restore();
   });
+  // ---------- 台北101副本的怪 ----------
+  // 飛天招牌：紅色的「大拍賣」招牌長了腳，邊緣被風吹得翹起來
+  const drawSignMob = () => mobCanvas(101, (ctx, r) => {
+    ctx.fillStyle = 'rgba(19,26,40,0.18)'; ctx.beginPath(); ctx.ellipse(48, 81, 22, 4, 0, 0, Math.PI * 2); ctx.fill();
+    [[38, 66], [58, 66]].forEach(([x, y]) => { CR.line(ctx, x, y, x - 1, 78, r, 2.6); CR.blob(ctx, x - 2, 79, 5, 2.6, r, 0.08); CR.fill(ctx, '#2f3b55', r, null); CR.stroke(ctx, r, 2); });
+    ctx.save(); ctx.translate(48, 42); ctx.rotate(-0.08);
+    CR.rect(ctx, -30, -26, 60, 48, r, 1.4); CR.fill(ctx, '#e8384f', r, [-30, -26, 60, 48], 1.2); CR.stroke(ctx, r, 2.8);
+    CR.rect(ctx, -25, -21, 50, 38, r, 1); CR.stroke(ctx, r, 1.6, '#ffd23f');
+    ctx.fillStyle = '#ffd23f'; ctx.font = '900 13px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('大拍賣', 0, -4);
+    // 生氣的小臉
+    ctx.fillStyle = '#ffffff'; [[-9, 9], [9, 9]].forEach(([x, y]) => { ctx.beginPath(); ctx.ellipse(x, y, 4, 4.4, 0, 0, Math.PI * 2); ctx.fill(); });
+    ctx.fillStyle = CR.INK; [[-8, 10], [10, 10]].forEach(([x, y]) => { ctx.beginPath(); ctx.arc(x, y, 1.9, 0, Math.PI * 2); ctx.fill(); });
+    CR.line(ctx, -14, 3, -5, 6, r, 2.2); CR.line(ctx, 14, 3, 5, 6, r, 2.2);
+    ctx.restore();
+    // 上面兩個鐵環被風吹斷了一邊
+    CR.line(ctx, 30, 18, 26, 6, r, 1.8, '#5b6577'); CR.line(ctx, 64, 16, 72, 8, r, 1.8, '#5b6577');
+    [[16, 30], [80, 26], [84, 40]].forEach(([x, y]) => CR.line(ctx, x, y, x + 8, y - 2, r, 1.6, 'rgba(79,124,194,0.7)', 0.5));
+  });
+  // 暴衝機車：黃色的小綿羊機車，大燈是眼睛
+  const drawScooterMob = (wings) => mobCanvas(wings ? 103 : 102, (ctx, r) => {
+    ctx.fillStyle = 'rgba(19,26,40,0.18)'; ctx.beginPath(); ctx.ellipse(48, 81, 30, 4, 0, 0, Math.PI * 2); ctx.fill();
+    const body = wings ? '#4f7cc2' : '#ffd23f';
+    if (wings) [-1, 1].forEach(k => {
+      // 飛天機車：兩邊長出白色翅膀
+      ctx.save(); ctx.translate(48 + k * 6, 46); ctx.scale(k, 1);
+      ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(26, -30, 44, -26); ctx.quadraticCurveTo(36, -16, 40, -10); ctx.quadraticCurveTo(28, -8, 30, 0); ctx.quadraticCurveTo(14, 4, 0, 0); ctx.closePath();
+      CR.fill(ctx, '#fbfbf8', r, null); CR.stroke(ctx, r, 2.2);
+      CR.line(ctx, 10, -6, 30, -18, r, 1.2, 'rgba(110,118,132,0.6)', 0.4);
+      ctx.restore();
+    });
+    [[26, 72], [70, 72]].forEach(([x, y]) => { CR.blob(ctx, x, y, 9, 9, r, 0.06); CR.fill(ctx, '#2b2a33', r, null); CR.stroke(ctx, r, 2.2); CR.blob(ctx, x, y, 3.5, 3.5, r, 0.1); CR.fill(ctx, '#c9ccd3', r, null); });
+    ctx.beginPath(); ctx.moveTo(22, 64); ctx.quadraticCurveTo(20, 50, 34, 50); ctx.lineTo(56, 50); ctx.quadraticCurveTo(64, 36, 64, 22); ctx.lineTo(72, 22);
+    ctx.quadraticCurveTo(76, 48, 76, 64); ctx.closePath(); CR.fill(ctx, body, r, [20, 22, 58, 44], 1.2); CR.stroke(ctx, r, 2.6);
+    CR.blob(ctx, 40, 47, 13, 4, r, 0.06); CR.fill(ctx, '#2b2a33', r, null); CR.stroke(ctx, r, 2); // 座墊
+    CR.line(ctx, 62, 20, 78, 16, r, 3); // 龍頭
+    CR.blob(ctx, 72, 32, 6, 6, r, 0.08); CR.fill(ctx, '#fff7c2', r, null); CR.stroke(ctx, r, 2); // 大燈＝眼睛
+    ctx.fillStyle = CR.INK; ctx.beginPath(); ctx.arc(73.5, 32.5, 2.2, 0, Math.PI * 2); ctx.fill();
+    CR.line(ctx, 66, 25, 77, 27, r, 2.2); // 生氣的眉毛
+    // 排氣管冒煙
+    [[14, 62, 5], [8, 56, 4]].forEach(([x, y, s]) => { CR.blob(ctx, x, y, s, s * 0.8, r, 0.12); ctx.fillStyle = 'rgba(154,163,181,0.6)'; ctx.fill(); });
+  });
+  // 停電小怪：一團黑黑的影子，頭上一顆壞掉的燈泡，身邊冒小火花
+  const drawBlackoutMob = () => mobCanvas(104, (ctx, r) => {
+    ctx.fillStyle = 'rgba(19,26,40,0.2)'; ctx.beginPath(); ctx.ellipse(48, 81, 22, 4, 0, 0, Math.PI * 2); ctx.fill();
+    CR.blob(ctx, 48, 58, 24, 22, r, 0.14, 14); CR.fill(ctx, '#2b2a33', r, [24, 36, 48, 44], 1.2); CR.stroke(ctx, r, 2.6);
+    ctx.fillStyle = '#ffd23f'; [[40, 56], [56, 56]].forEach(([x, y]) => { ctx.beginPath(); ctx.ellipse(x, y, 3.6, 2.4, 0, 0, Math.PI * 2); ctx.fill(); });
+    CR.line(ctx, 42, 66, 54, 66, r, 1.6, '#ffd23f', 1.2);
+    // 燈泡：玻璃有裂痕
+    CR.blob(ctx, 48, 24, 11, 12, r, 0.06); CR.fill(ctx, '#e8edf3', r, null); CR.stroke(ctx, r, 2.2);
+    CR.line(ctx, 44, 18, 50, 26, r, 1.2, '#5b6577', 0.6); CR.line(ctx, 50, 26, 47, 30, r, 1.2, '#5b6577', 0.6);
+    CR.rect(ctx, 42, 34, 12, 5, r, 0.4); CR.fill(ctx, '#9aa3b5', r, null); CR.stroke(ctx, r, 1.6);
+    [[22, 36], [74, 44], [70, 24]].forEach(([x, y]) => {
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 5, y + 6); ctx.lineTo(x + 1, y + 6); ctx.lineTo(x + 6, y + 13); CR.stroke(ctx, r, 2.2, '#ffd23f');
+    });
+  });
+  // 小風窩：一團灰藍色的小龍捲風，有一雙眼睛
+  const drawWhirlMob = () => mobCanvas(105, (ctx, r) => {
+    ctx.fillStyle = 'rgba(19,26,40,0.18)'; ctx.beginPath(); ctx.ellipse(48, 81, 18, 4, 0, 0, Math.PI * 2); ctx.fill();
+    [[48, 24, 30, 8], [48, 38, 25, 7.5], [48, 51, 19, 7], [48, 63, 13, 6], [49, 74, 7, 4.5]].forEach(([x, y, w, h], i) => {
+      CR.blob(ctx, x + (i % 2 ? 3 : -3), y, w, h, r, 0.1, 16); CR.fill(ctx, i % 2 ? '#9ab3d0' : '#b9cde3', r, null); CR.stroke(ctx, r, 2.2);
+    });
+    ctx.fillStyle = CR.INK; [[41, 37], [55, 37]].forEach(([x, y]) => { ctx.beginPath(); ctx.ellipse(x, y, 2.2, 2.6, 0, 0, Math.PI * 2); ctx.fill(); });
+    CR.line(ctx, 36, 31, 44, 33, r, 2); CR.line(ctx, 60, 31, 52, 33, r, 2);
+    [[18, 30], [74, 52]].forEach(([x, y]) => { ctx.beginPath(); ctx.arc(x, y, 6, Math.PI * 1.1, Math.PI * 1.9); CR.stroke(ctx, r, 1.8, 'rgba(79,124,194,0.7)'); });
+  });
+  // 天龍王：穿西裝、戴墨鏡和小金冠的都市大亨，騎在一條蠟筆綠龍上（畫布比一般怪大一圈）
+  const drawTianlongMob = () => {
+    const c = document.createElement('canvas');
+    c.width = 120 * 2; c.height = 100 * 2;
+    const ctx = c.getContext('2d'), r = CR.rng(106);
+    ctx.scale(2, 2);
+    ctx.fillStyle = 'rgba(19,26,40,0.2)'; ctx.beginPath(); ctx.ellipse(60, 96, 44, 5, 0, 0, Math.PI * 2); ctx.fill();
+    // 龍尾巴從左邊捲上去
+    ctx.beginPath(); ctx.moveTo(30, 82); ctx.quadraticCurveTo(4, 80, 8, 58); ctx.quadraticCurveTo(12, 44, 22, 48); ctx.quadraticCurveTo(14, 56, 20, 66); ctx.quadraticCurveTo(26, 74, 36, 72); ctx.closePath();
+    CR.fill(ctx, '#5fb37a', r, null); CR.stroke(ctx, r, 2.4);
+    [[10, 54], [14, 47]].forEach(([x, y]) => { ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - 5, y - 4); ctx.lineTo(x + 2, y - 2); ctx.closePath(); CR.fill(ctx, '#ffd23f', r, null); CR.stroke(ctx, r, 1.4); });
+    // 大亨（avatar.js 畫的人，npc: 'tianlong'）
+    ctx.save(); ctx.translate(28, 2);
+    AV.drawAvatar(ctx, { hair: 'short', hairColor: '#2b2a33', skin: AV.SKINS[1], glasses: '0', cls: 'suit', suit: '#1f2b4a', tie: '#ffd23f', npc: 'tianlong' });
+    ctx.restore();
+    // 龍的身體擋住腳：綠色的長身體＋黃色肚子＋背上的鰭
+    CR.blob(ctx, 60, 80, 38, 13, r, 0.05, 22); CR.fill(ctx, '#5fb37a', r, [22, 67, 76, 26], 1.2); CR.stroke(ctx, r, 2.6);
+    CR.blob(ctx, 60, 86, 30, 6, r, 0.06, 18); CR.fill(ctx, '#f2d27a', r, null); CR.stroke(ctx, r, 1.6);
+    [36, 48, 72, 84].forEach(x => { ctx.beginPath(); ctx.moveTo(x - 5, 69); ctx.lineTo(x, 61); ctx.lineTo(x + 5, 69); ctx.closePath(); CR.fill(ctx, '#ffb020', r, null); CR.stroke(ctx, r, 1.6); });
+    [[38, 94], [80, 94]].forEach(([x, y]) => { CR.blob(ctx, x, y, 6, 3.4, r, 0.08); CR.fill(ctx, '#4a9a64', r, null); CR.stroke(ctx, r, 2); });
+    // 龍頭在右邊：大眼睛、兩根金角、鬍鬚
+    CR.blob(ctx, 102, 70, 15, 12, r, 0.06, 16); CR.fill(ctx, '#5fb37a', r, null); CR.stroke(ctx, r, 2.6);
+    CR.blob(ctx, 112, 75, 7, 5, r, 0.08); CR.fill(ctx, '#7fcf96', r, null); CR.stroke(ctx, r, 2);
+    [[96, 59, 92, 48], [104, 58, 106, 47]].forEach(([x1, y1, x2, y2]) => { CR.line(ctx, x1, y1, x2, y2, r, 4.4, CR.INK, 0.3); CR.line(ctx, x1, y1, x2, y2, r, 2.6, '#ffd23f', 0.3); });
+    ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.ellipse(103, 67, 4, 4.4, 0, 0, Math.PI * 2); ctx.fill(); CR.stroke(ctx, r, 1.4);
+    ctx.fillStyle = CR.INK; ctx.beginPath(); ctx.arc(104, 67.5, 2, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(114, 78); ctx.quadraticCurveTo(122, 84, 116, 92); CR.stroke(ctx, r, 1.6, '#c9962a');
+    ctx.beginPath(); ctx.moveTo(110, 79); ctx.quadraticCurveTo(112, 90, 104, 94); CR.stroke(ctx, r, 1.6, '#c9962a');
+    return c;
+  };
+
   // 關卡之間的石門
   const drawGate = () => {
     const c = document.createElement('canvas');
@@ -2682,6 +2809,13 @@
     const inKitchen = (x, y) => x >= kitchen.x1 && x <= kitchen.x2 && y >= kitchen.y1 && y <= kitchen.y2;
     const floorOf = (ch, x, y) => {
       if (ch === ' ') return 'void';
+      if (x >= MAP.TLX) return ch === 'h' || ch === 'O' ? 'lobby101' : ch === 'g' ? 'glass' : 'void';
+      if (x >= MAP.TDX) {
+        if (ch === 'g') return 'glass';
+        if (ch === 'k') return 'sky';
+        if (y < 13 || (y === 13 && ch === 'X')) return 'plaza';
+        return y < 29 || (y === 29 && ch === 'X') ? 'steel' : 'deck';
+      }
       if (x >= MAP.LX) return ch === 'q' || ch === 'O' ? 'temple' : ch === 'Q' ? 'templewall' : 'void';
       if (x >= MAP.MW) return ch === 'Z' ? 'sea' : ch === 'Y' ? 'rock' : 'yE'.includes(ch) ? 'sand' : ch === 'n' ? 'cliff' : 'cave';
       if (y > 30 && ':T~'.includes(ch)) return 'mud';
@@ -2748,6 +2882,36 @@
           CR.stroke(ctx, r, 2, 'rgba(255,255,255,0.7)'); ctx.restore();
         } else if (base === 'rock') {
           ctx.fillStyle = '#b3aca1'; ctx.fillRect(px, py, T, T);
+        } else if (base === 'plaza') {
+          // 信義廣場：米白和淺灰交錯的大地磚
+          ctx.fillStyle = (x + y) % 2 ? '#e9e4da' : '#dcd8d0'; ctx.fillRect(px, py, T, T);
+          CR.rect(ctx, px + 1, py + 1, T - 2, T - 2, r, 0.8); CR.stroke(ctx, r, 1.2, 'rgba(110,104,96,0.35)');
+          CR.dots(ctx, px, py, T, T, 3, 'rgba(255,255,255,0.6)', r, 1.6);
+        } else if (base === 'steel') {
+          // 阻尼球層：深灰色鋼板，四個角有鉚釘
+          ctx.fillStyle = (x + y) % 2 ? '#8e96a3' : '#89919e'; ctx.fillRect(px, py, T, T);
+          CR.rect(ctx, px + 2, py + 2, T - 4, T - 4, r, 0.6); CR.stroke(ctx, r, 1.4, 'rgba(43,42,51,0.45)');
+          [[6, 6], [T - 6, 6], [6, T - 6], [T - 6, T - 6]].forEach(([dx, dy]) => { ctx.fillStyle = 'rgba(255,255,255,0.55)'; ctx.beginPath(); ctx.arc(px + dx, py + dy, 1.8, 0, Math.PI * 2); ctx.fill(); });
+          if (y === 21) { ctx.fillStyle = 'rgba(255,176,32,0.18)'; ctx.fillRect(px, py - 10, T, T + 20); }
+        } else if (base === 'deck') {
+          // 觀景台：暖色木地板
+          ctx.fillStyle = (x * 3 + y) % 4 ? '#d9b98c' : '#d3b284'; ctx.fillRect(px, py, T, T);
+          [12, 24, 36].forEach(dy => CR.line(ctx, px, py + dy, px + T, py + dy, r, 1, 'rgba(120,84,48,0.35)', 0.6));
+          CR.dots(ctx, px, py, T, T, 3, 'rgba(255,255,255,0.4)', r, 1.4);
+        } else if (base === 'sky') {
+          // 觀景台外面的天空：淡藍色，飄著一點雲
+          ctx.fillStyle = '#9cc8ee'; ctx.fillRect(px, py, T, T);
+          if (r() < 0.5) { CR.blob(ctx, px + 10 + r() * 28, py + 14 + r() * 20, 12, 6, r, 0.12); ctx.fillStyle = 'rgba(255,255,255,0.8)'; ctx.fill(); }
+        } else if (base === 'glass') {
+          // 101 的玻璃帷幕：藍綠色玻璃格子
+          ctx.fillStyle = (x + y) % 2 ? '#5f8f8c' : '#5a8986'; ctx.fillRect(px, py, T, T);
+          CR.rect(ctx, px + 3, py + 3, T - 6, T - 6, r, 0.8); CR.fill(ctx, '#7fb3ad', r, null); CR.stroke(ctx, r, 1.6, 'rgba(32,52,50,0.7)');
+          CR.line(ctx, px + 8, py + 30, px + 22, py + 10, r, 2, 'rgba(255,255,255,0.45)', 0.5);
+        } else if (base === 'lobby101') {
+          // 101 大廳：白色大理石，金色的線
+          ctx.fillStyle = (x + y) % 2 ? '#f1ede4' : '#ebe6dc'; ctx.fillRect(px, py, T, T);
+          CR.line(ctx, px + r() * 20, py + r() * T, px + 28 + r() * 20, py + r() * T, r, 1, 'rgba(140,130,118,0.35)', 6);
+          CR.rect(ctx, px + 1, py + 1, T - 2, T - 2, r, 0.6); CR.stroke(ctx, r, 1, 'rgba(201,150,42,0.45)');
         } else if (base === 'temple') {
           // 古城候位區：一塊一塊的米灰色石板，偶爾有裂縫和青苔
           ctx.fillStyle = (x + y) % 2 ? '#c8bea9' : '#c1b6a0'; ctx.fillRect(px, py, T, T);
@@ -2934,6 +3098,33 @@
             CR.blob(ctx, cx + dx, cy + dy, 4.5, 3, r, 0.1, 10); CR.fill(ctx, i % 2 ? '#ffd23f' : '#f2b632', r, null); CR.stroke(ctx, r, 1.2);
           });
           CR.blob(ctx, cx - 14, cy - 8, 7, 2.5, r, 0.15, 10); ctx.fillStyle = 'rgba(255,255,255,0.8)'; ctx.fill();
+        } else if (ch === 'g' && x >= MAP.TDX) {
+          // 玻璃帷幕只描外緣
+          const gl = (dx, dy) => at(x + dx, y + dy) === 'g' || at(x + dx, y + dy) === ' ';
+          if (!gl(0, -1)) CR.line(ctx, px - 1, py, px + T + 1, py, r, 3);
+          if (!gl(0, 1)) CR.line(ctx, px - 1, py + T, px + T + 1, py + T, r, 3);
+          if (!gl(-1, 0)) CR.line(ctx, px, py - 1, px, py + T + 1, r, 3);
+          if (!gl(1, 0)) CR.line(ctx, px + T, py - 1, px + T, py + T + 1, r, 3);
+        } else if (ch === 'k' && at(x - 1, y) !== 'k') {
+          // 觀景台的邊緣：一排玻璃欄杆
+          ctx.save(); ctx.globalAlpha = 0.85;
+          CR.rect(ctx, px - 6, py, 10, T, r, 0.6); CR.fill(ctx, 'rgba(220,240,255,0.8)', r, null); CR.stroke(ctx, r, 2);
+          ctx.restore();
+        } else if (ch === 'c') {
+          // 阻尼球層的控制台：踩上去會亮（亮燈另外畫）
+          CR.rect(ctx, px + 3, py + 6, T - 6, T - 10, r, 1); CR.fill(ctx, '#3b4252', r, null); CR.stroke(ctx, r, 2.6);
+          CR.rect(ctx, px + 9, py + 11, T - 18, 12, r, 0.6); CR.fill(ctx, '#1f2937', r, null); CR.stroke(ctx, r, 1.6);
+          [14, 24, 34].forEach((bx, i) => { ctx.fillStyle = ['#e8384f', '#ffd23f', '#7be08f'][i]; ctx.beginPath(); ctx.arc(px + bx, py + 33, 3, 0, Math.PI * 2); ctx.fill(); });
+        } else if (ch === 'A') {
+          // 觀景台的大柱子
+          ctx.fillStyle = 'rgba(19,26,40,0.2)'; ctx.beginPath(); ctx.ellipse(px + 24, py + 44, 22, 6, 0, 0, Math.PI * 2); ctx.fill();
+          CR.rect(ctx, px + 6, py - 34, T - 12, T + 30, r, 1); CR.fill(ctx, '#e4ddd0', r, [px + 6, py - 34, T - 12, T + 30], 0.6); CR.stroke(ctx, r, 2.6);
+          CR.rect(ctx, px + 2, py - 40, T - 4, 10, r, 0.6); CR.fill(ctx, '#c9962a', r, null); CR.stroke(ctx, r, 2);
+          CR.line(ctx, px + 16, py - 26, px + 16, py + 36, r, 1.4, 'rgba(120,110,96,0.5)');
+        } else if (ch === 'U') {
+          // 101 電梯小姐腳下的金色小台子
+          CR.blob(ctx, px + 24, py + 30, 26, 15, r, 0.06); CR.fill(ctx, '#2f5f5c', r, [px - 2, py + 15, T + 4, 30]); CR.stroke(ctx, r, 2.4);
+          CR.blob(ctx, px + 24, py + 30, 17, 9, r, 0.06); CR.stroke(ctx, r, 1.6, '#ffd23f');
         } else if (ch === 'H') {
           // 古城守門員腳下的石板台座
           CR.blob(ctx, px + 24, py + 30, 26, 15, r, 0.06); CR.fill(ctx, '#9a8f7a', r, [px - 2, py + 15, T + 4, 30]); CR.stroke(ctx, r, 2.4);
@@ -2962,13 +3153,15 @@
       if (art) ctx.drawImage(art, cx - 13, cy - 13, 26, 26);
     });
 
-    // 古城候位區：地上刻一圈金色的框，中間寫「候位區」
-    const L = MAP.LOBBY, lr = CR.rng(77);
-    ctx.save(); ctx.setLineDash([10, 8]);
-    CR.rect(ctx, (L.x1 + 2) * T + 4, (L.y1 + 4) * T + 4, (L.x2 - L.x1 - 3) * T - 8, 6 * T - 8, lr, 2);
-    ctx.fillStyle = 'rgba(224,184,74,0.14)'; ctx.fill(); CR.stroke(ctx, lr, 3, '#c9962a'); ctx.restore();
-    ctx.font = '900 17px ' + FONT; ctx.textAlign = 'center'; ctx.fillStyle = '#5a4630';
-    ctx.fillText('候 位 區', (L.x1 + L.x2 + 1) / 2 * T, (L.y1 + 10) * T - 14);
+    // 候位區：地上畫一圈金色的框，中間寫「候位區」
+    MAP.DG_LIST.forEach((D, i) => {
+      const L = D.lobby, lr = CR.rng(77 + i);
+      ctx.save(); ctx.setLineDash([10, 8]);
+      CR.rect(ctx, (L.x1 + 2) * T + 4, (L.y1 + 4) * T + 4, (L.x2 - L.x1 - 3) * T - 8, 6 * T - 8, lr, 2);
+      ctx.fillStyle = 'rgba(224,184,74,0.14)'; ctx.fill(); CR.stroke(ctx, lr, 3, '#c9962a'); ctx.restore();
+      ctx.font = '900 17px ' + FONT; ctx.textAlign = 'center'; ctx.fillStyle = '#5a4630';
+      ctx.fillText('候 位 區', (L.x1 + L.x2 + 1) / 2 * T, (L.y1 + 10) * T - 14);
+    });
     return c;
   }
 
@@ -3083,6 +3276,12 @@
       this.textures.addCanvas('mob-fu', drawFuMob(false));
       this.textures.addCanvas('mob-fu-fist', drawFuMob(true));
       this.textures.addCanvas('dg-gate', drawGate());
+      this.textures.addCanvas('mob-sign', drawSignMob());
+      this.textures.addCanvas('mob-scooter', drawScooterMob(false));
+      this.textures.addCanvas('mob-bike', drawScooterMob(true));
+      this.textures.addCanvas('mob-blackout', drawBlackoutMob());
+      this.textures.addCanvas('mob-whirl', drawWhirlMob());
+      this.textures.addCanvas('mob-tianlong', drawTianlongMob());
       // 指揮中心的古城守門員：頭盔、石灰色鎧甲、拿著長矛
       this.textures.addCanvas('guard', drawNpc({ hair: 'short', hairColor: '#2b2a33', skin: AV.SKINS[2], glasses: '0',
         cls: 'suit', suit: '#7d7262', tie: '#e0b84a', npc: 'guard' }, 'spear'));
@@ -3104,6 +3303,17 @@
       }).setOrigin(0.5).setDepth(gy);
       const gTalk = this.add.image(gx + 26, gy - 70, 'fx-talk').setDepth(gy + 1);
       this.tweens.add({ targets: gTalk, y: gy - 78, duration: 760, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
+      // 101 電梯小姐：包包頭、墨綠色制服、小圓帽；跟她說話就傳送到 101 大廳候位區
+      this.textures.addCanvas('elevator', drawNpc({ hair: 'bun', hairColor: '#2b2a33', skin: AV.SKINS[0], glasses: '0',
+        cls: 'suit', suit: '#2f5f5c', tie: '#ffd23f', npc: 'elevator' }));
+      const ex = MAP.elevator.x, ey = MAP.elevator.y + 18;
+      this.add.image(ex, ey, 'elevator').setScale(0.55).setOrigin(0.5, 0.95).setDepth(ey);
+      this.add.text(ex, ey - 96, '101 電梯小姐', {
+        fontSize: '10px', fontStyle: 'bold', color: INK, fontFamily: FONT,
+        backgroundColor: PAPER, padding: { x: 10, y: 4 },
+      }).setOrigin(0.5).setDepth(ey);
+      const eTalk = this.add.image(ex + 26, ey - 70, 'fx-talk').setDepth(ey + 1);
+      this.tweens.add({ targets: eTalk, y: ey - 78, duration: 820, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
       // 許願池旁邊的希臘少女：紅棕色長髮、白色單肩長袍、比「噓」；跟她說話會打開許願池
       this.textures.addCanvas('greek', drawNpc({ hair: 'long', hairColor: '#b5532c', skin: AV.SKINS[0], glasses: '0', cls: 'greek', npc: 'greek' }));
       const kx = MAP.greek.x, ky = MAP.greek.y + 18;
@@ -3484,7 +3694,7 @@
       }
       if (who === this.me) {
         if (st.dead && !prev.dead) {
-          toast(this.inDg() ? `你倒下了！${MAP.DUNGEON.respawnMs / 1000} 秒後在這一關的起點復活` : `你被${ST.MONSTER.name}吹倒了！${ST.RESPAWN_MS / 1000} 秒後回到總部`);
+          toast(this.inDg() ? `你倒下了！${MAP.DUNGEONS[this.myDg().id].respawnMs / 1000} 秒後在這一關的起點復活` : `你被${ST.MONSTER.name}吹倒了！${ST.RESPAWN_MS / 1000} 秒後回到總部`);
           this.target = null;
         }
         renderStats(st);
@@ -3784,7 +3994,7 @@
       const M = this.monster.phase === 2 ? ST.MONSTER2 : ST.MONSTER;
       const label = `Lv.${M.level} ${M.name}`;
       if (this.mName.text !== label) this.mName.setText(label);
-      if (this.bossFor !== 'fu') {
+      if (this.bossFor === 'typhoon') {
         document.querySelector('#boss .boss-lv').textContent = 'Lv.' + M.level;
         document.querySelector('#boss .boss-lv').nextSibling.textContent = ' ' + M.name + ' ';
         $('boss').classList.toggle('phase2', this.monster.phase === 2);
@@ -3817,7 +4027,7 @@
     // 楓之谷的頭目血條放在畫面上方（DOM），怪物頭上再留一條細的
     drawMonsterBar() {
       const ratio = this.mState.maxHp ? this.mState.hp / this.mState.maxHp : 0;
-      if (this.bossFor !== 'fu') {
+      if (this.bossFor === 'typhoon') {
         $('boss-fill').style.width = (ratio * 100) + '%';
         $('boss-pct').textContent = Math.ceil(ratio * 100) + '%';
       }
@@ -4094,6 +4304,61 @@
           this.floatText(cx, cy - 60, '轟！', '#ffffff', 26);
           this.cameras.main.shake(140, 0.007);
         });
+      } else if (fx.skill === 'cardFlick') {
+        // 捷運悠遊卡：卡片轉著飛過去，打中再彈到旁邊的怪
+        const sx = who.x + (mx < who.x ? -22 : 22), sy = who.y - 36;
+        const c = this.add.image(sx, sy, 'fx-card').setDepth(2050).setScale(0.8);
+        this.tweens.add({ targets: c, x: mx, y: my, angle: 720, duration: 250, ease: 'Linear', onComplete: () => {
+          this.burst(mx, my, 6, 0x4f9fd8, 40);
+          let px = mx, py = my;
+          (fx.chain || []).forEach((id, i) => {
+            const t = this.foePos(id);
+            const fromX = px, fromY = py;
+            px = t.x; py = t.mid;
+            this.time.delayedCall(i * 140, () => {
+              const cc = this.add.image(fromX, fromY, 'fx-card').setDepth(2050).setScale(0.6);
+              this.tweens.add({ targets: cc, x: t.x, y: t.mid, angle: 540, duration: 140, onComplete: () => { cc.destroy(); this.burst(t.x, t.mid, 5, 0x4f9fd8, 35); } });
+            });
+          });
+          c.destroy();
+        } });
+      } else if (fx.skill === 'damperSwing') {
+        // 阻尼球流星錘：金球劃一道弧砸過去，砸到的地方一圈金光
+        const sx = who.x + (mx < who.x ? -20 : 20), sy = who.y - 50;
+        const b = this.add.image(sx, sy, 'fx-goldball').setDepth(2050).setScale(0.9);
+        const chain = this.add.graphics().setDepth(2049);
+        const t0 = { k: 0 };
+        this.tweens.add({ targets: t0, k: 1, duration: 320, ease: 'Quad.in', onUpdate: () => {
+          const k = t0.k, x = sx + (mx - sx) * k, y = sy + (my - sy) * k - Math.sin(k * Math.PI) * 70;
+          b.setPosition(x, y);
+          chain.clear().lineStyle(2, 0x5b6577, 0.9).lineBetween(who.x + (mx < who.x ? -12 : 12), who.y - 40, x, y);
+        }, onComplete: () => {
+          b.destroy(); chain.destroy();
+          const g = this.add.graphics({ x: mx, y: my + 30 }).setDepth(-4);
+          g.fillStyle(0xffc93c, 0.3); g.fillEllipse(0, 0, 200, 120); g.lineStyle(4, 0xc9962a, 0.8); g.strokeEllipse(0, 0, 200, 120);
+          this.tweens.add({ targets: g, scale: { from: 0.3, to: 1 }, alpha: { from: 1, to: 0 }, duration: 500, onComplete: () => g.destroy() });
+          this.burst(mx, my, 10, 0xffc93c, 70);
+          this.floatText(mx, my - 50, '咚！', '#ffd23f', 22);
+        } });
+      } else if (fx.skill === 'spireThrust') {
+        // 101 避雷針長槍：往前刺；引雷的時候天上劈下一道閃電，跳到旁邊的怪
+        const dir = mx < who.x ? -1 : 1;
+        who.body_.setFlipX(dir === -1);
+        this.tweens.add({ targets: who.body_, x: dir * 10, duration: 80, yoyo: true });
+        const ln = this.add.graphics().setDepth(2050);
+        ln.lineStyle(6, 0x5f8f8c, 0.9); ln.lineBetween(who.x + dir * 20, who.y - 40, mx, my);
+        ln.lineStyle(2, 0xffffff, 0.9); ln.lineBetween(who.x + dir * 20, who.y - 40, mx, my);
+        this.tweens.add({ targets: ln, alpha: 0, duration: 220, onComplete: () => ln.destroy() });
+        if (fx.bolt) {
+          const strike = (x, y, d) => this.time.delayedCall(d, () => {
+            const b = this.add.image(x, y + 30, 'bolt-big').setOrigin(0.5, 1).setDepth(y + 200).setScale(0.6);
+            this.tweens.add({ targets: b, alpha: 0, duration: 350, delay: 100, onComplete: () => b.destroy() });
+            this.burst(x, y, 8, 0xffd23f, 60);
+          });
+          strike(mx, my, 60);
+          (fx.chain || []).forEach((id, i) => { const t = this.foePos(id); strike(t.x, t.mid, 160 + i * 90); });
+          this.floatText(mx, my - 80, '引雷！', '#ffe08a', 22);
+        }
       } else if (fx.skill === 'orb') {
         fly('fx-crystal', 260, 0x9b7be8, { scale: 0.32 });
       } else if (fx.skill === 'ray') {
@@ -4562,6 +4827,7 @@
       if (MAP.tiles[ty] && MAP.tiles[ty][tx] === 'G' && MAP.nearStove(this.me.x, this.me.y, 1.8 * T)) return { type: 'cook' };
       if (Math.hypot(x - MAP.mentor.x, y - (MAP.mentor.y - 20)) < 50 && MAP.nearMentor(this.me.x, this.me.y)) return { type: 'mentor' };
       if (Math.hypot(x - MAP.guard.x, y - (MAP.guard.y - 20)) < 50 && MAP.nearGuard(this.me.x, this.me.y)) return { type: 'guard' };
+      if (Math.hypot(x - MAP.elevator.x, y - (MAP.elevator.y - 20)) < 50 && MAP.nearElevator(this.me.x, this.me.y)) return { type: 'elevator' };
       if (Math.hypot(x - MAP.greek.x, y - (MAP.greek.y - 20)) < 50 && MAP.nearGreek(this.me.x, this.me.y)) return { type: 'greek' };
       if (Math.hypot(x - MAP.fridge.x, y - (MAP.fridge.y - 10)) < 40 && MAP.nearFridge(this.me.x, this.me.y)) return { type: 'fridge' };
       if (MAP.tiles[ty] && MAP.tiles[ty][tx] === 'J' && MAP.nearDj(this.me.x, this.me.y)) return { type: 'dj' };
@@ -4573,9 +4839,9 @@
 
     // 提示紙條掛在哪裡（世界座標）：top＝放上面時尖角的位置，y／half＝放旁邊時的高度和東西的半寬
     hintAnchor(act) {
-      if (act.type === 'mentor' || act.type === 'guard') {
+      if (act.type === 'mentor' || act.type === 'guard' || act.type === 'elevator') {
         const n = MAP[act.type], ny = n.y + 18;
-        return { x: n.x, top: ny - (act.type === 'guard' ? 110 : 106), y: ny - 38, half: 30 };
+        return { x: n.x, top: ny - (act.type === 'mentor' ? 106 : 110), y: ny - 38, half: 30 };
       }
       if (act.type === 'dj') return { x: MAP.dj.x, top: MAP.dj.y - 52, y: MAP.dj.y - 4, half: 50 };
       // 電視牆很長，紙條掛在自己正上方的那一段
@@ -4661,6 +4927,7 @@
       if (!best && MAP.nearStove(this.me.x, this.me.y, 1.8 * T)) return { type: 'cook' };
       if (!best && MAP.nearMentor(this.me.x, this.me.y)) return { type: 'mentor' };
       if (!best && MAP.nearGuard(this.me.x, this.me.y)) return { type: 'guard' };
+      if (!best && MAP.nearElevator(this.me.x, this.me.y)) return { type: 'elevator' };
       if (!best && MAP.nearDj(this.me.x, this.me.y)) return { type: 'dj' };
       if (!best && MAP.nearTv(this.me.x, this.me.y)) return { type: 'tv' };
       if (!best && MAP.nearGreek(this.me.x, this.me.y)) return { type: 'greek' };
@@ -4684,9 +4951,9 @@
         this.tryPush(act.dx, act.dy);
       } else if (act.type === 'mentor') {
         openMentor();
-      } else if (act.type === 'guard') {
+      } else if (act.type === 'guard' || act.type === 'elevator') {
         socket.emit('dgGo', (res) => {
-          if (res && res.ok) toast('守門員：「去吧！到候位區按出發。」');
+          if (res && res.ok) toast(act.type === 'guard' ? '守門員：「去吧！到候位區按出發。」' : '電梯小姐：「直達觀景台，請到候位區按出發。」');
           else if (res && res.error) toast(res.error);
         });
       } else if (act.type === 'fridge') {
@@ -4938,6 +5205,7 @@
       else if (now < (m.shockUntil || 0)) m.body_.setTint(0xfff07a);
       else if (now < m.weakUntil) m.body_.setTint(0xd9c4ff);
       else if (m.state.kind === 'fu' && m.state.phase === 2) m.body_.setTint(0xb8a4e8); // 黑化：整個人偏紫
+      else if (m.state.kind === 'tianlong' && m.state.phase >= 2) m.body_.setTint(m.state.phase >= 3 ? 0xffb0a8 : 0xc4dcff); // 狂風偏藍、暴走偏紅
       else m.body_.clearTint();
     }
 
@@ -4963,7 +5231,7 @@
       const was = m.state;
       m.state = st;
       const now = performance.now();
-      if (st.kind === 'fu') this.updateFuLook(m, was);
+      if (def.boss) this.updateFuLook(m, was);
       m.frozenUntil = now + (st.frozen || 0);
       m.weakUntil = now + (st.weak || 0);
       if (st.alive && (!was || !was.alive)) {
@@ -4979,18 +5247,18 @@
     }
 
     drawMobBar(m) {
-      const w = 54 * Math.sqrt(m.k || 1), ratio = m.state.maxHp ? m.state.hp / m.state.maxHp : 0, y = -104 * (m.k || 1);
+      const w = 54 * Math.sqrt(m.k || 1), ratio = m.state.maxHp ? m.state.hp / m.state.maxHp : 0, y = ST.MOBS[m.state.kind].barY || -104 * (m.k || 1);
       m.bar.clear();
       m.bar.fillStyle(0x131a28, 0.9); m.bar.fillRoundedRect(-w / 2 - 2, y, w + 4, 8, 4);
       m.bar.fillStyle(0xff3b3b, 1); m.bar.fillRoundedRect(-w / 2, y + 2, Math.max(3, w * ratio), 4, 2);
-      if (m.state.kind === 'fu' && this.bossFor === 'fu') this.drawFuBar(m);
+      if (ST.MOBS[m.state.kind].boss && this.bossFor === m.state.kind) this.drawFuBar(m);
     }
 
     moveMobs(list) {
       list.forEach(([id, x, y]) => {
         const m = this.mobs.get(id);
         if (!m) return;
-        if (x !== m.tx) m.body_.setFlipX(x < m.tx);
+        if (x !== m.tx && !(m.state && ST.MOBS[m.state.kind].noFlip)) m.body_.setFlipX(x < m.tx);
         m.tx = x; m.ty = y;
       });
     }
@@ -5167,14 +5435,16 @@
 
     // ---------- 副本 ----------
     initDungeon() {
-      const D = MAP.DUNGEON;
-      this.dg = null;
+      const D = MAP.DUNGEONS.hualien, TP = MAP.DUNGEONS.taipei;
+      this.dgs = {};
       this.bossFor = 'typhoon';
       // 副本入口的漩渦（一直轉）＋招牌
-      const pt = MAP.portal;
-      this.portal = this.add.image(pt.x, pt.y + 6, 'typhoon').setScale(0.34, 0.14).setTint(0xffb020).setDepth(pt.y - 20);
-      this.add.text(pt.x, pt.y - 58, '古城門・花蓮副本', { fontSize: '11px', fontStyle: '900', color: '#8a5a10', fontFamily: FONT,
-        backgroundColor: PAPER, padding: { x: 11, y: 5 } }).setOrigin(0.5).setDepth(pt.y + 60);
+      this.portals = MAP.DG_LIST.map(d => {
+        const pt = d.portal;
+        this.add.text(pt.x, pt.y - 58, d.portalName, { fontSize: '11px', fontStyle: '900', color: '#8a5a10', fontFamily: FONT,
+          backgroundColor: PAPER, padding: { x: 11, y: 5 } }).setOrigin(0.5).setDepth(pt.y + 60);
+        return this.add.image(pt.x, pt.y + 6, 'typhoon').setScale(0.34, 0.14).setTint(d.id === 'taipei' ? 0x7fd1c8 : 0xffb020).setDepth(pt.y - 20);
+      });
       // 七星潭的石頭：每顆一個顏色，踩對會亮起來
       this.stoneImgs = D.stones.map((st, i) => {
         const g = this.add.graphics({ x: st.x, y: st.y }).setDepth(-7);
@@ -5188,13 +5458,22 @@
         return { g, glow };
       });
       this.steleG = this.add.graphics().setDepth(D.stele.y + 20);
-      // 關卡之間的石門、九曲洞的大理石
-      this.gateImgs = D.gates.map(cells => cells.map(([x, y]) =>
-        Object.assign(this.add.image((x + 0.5) * T, (y + 1) * T + 4, 'dg-gate').setOrigin(0.5, 1).setScale(0.5).setDepth((y + 1) * T), { baseY: (y + 1) * T + 4 })));
+      // 關卡之間的門（花蓮是石門、台北是電梯門）、九曲洞的大理石
+      this.gateImgs = {};
+      MAP.DG_LIST.forEach(d => {
+        this.gateImgs[d.id] = d.gates.map(cells => cells.map(([x, y]) =>
+          Object.assign(this.add.image((x + 0.5) * T, (y + 1) * T + 4, d.id === 'taipei' ? 'fx-tpgate' : 'dg-gate').setOrigin(0.5, 1).setScale(0.5).setDepth((y + 1) * T), { baseY: (y + 1) * T + 4 })));
+        d.gates.forEach((g, i) => MAP.setGate(d, i, false));
+      });
       this.blockImgs = D.blocks.map(([x, y]) => this.add.image((x + 0.5) * T, (y + 1) * T + 2, 'fx-marble').setOrigin(0.5, 1).setDepth((y + 1) * T));
       this.blockPos = D.blocks.map(b => b.slice());
       this.blockPos.forEach(([x, y]) => MAP.dyn.add(x + ',' + y));
-      D.gates.forEach((g, i) => MAP.setGate(i, false));
+      // 87 樓：四個控制台的燈、盪來盪去的阻尼球（球的鋼索每一格重畫）
+      this.consoleG = TP.consoles.map(c => this.add.graphics({ x: c.x, y: c.y }).setDepth(c.y - 30));
+      this.ballCable = this.add.graphics().setDepth(TP.ball.y - 60);
+      this.ball = this.add.image((TP.ball.x1 + TP.ball.x2) / 2, TP.ball.y + 64, 'fx-damper').setOrigin(0.5, 0.95).setDepth(TP.ball.y + 64);
+      this.ballPh = 0;
+      this.drawConsoles();
       // 副本的面板按鈕
       $('dg-panel').addEventListener('click', (e) => {
         const b = e.target.closest('button');
@@ -5205,14 +5484,24 @@
         if (b.dataset.act === 'reset') socket.emit('dgReset', (res) => { if (res && !res.ok && res.error) toast(res.error); });
       });
     }
-    inDg() { return !!(this.dg && me && this.dg.members.includes(me.id) && this.dg.phase !== 'idle'); }
+    // 自己參加中的副本（沒有就是 null）
+    myDg() {
+      if (!me) return null;
+      for (const d of Object.values(this.dgs)) if (d.phase !== 'idle' && d.members.includes(me.id)) return d;
+      return null;
+    }
+    inDg() { return !!this.myDg(); }
+    // 自己現在站在哪個副本的區域（副本區或候位區）
+    hereDg() { const D = this.me && MAP.dungeonAt(this.me.x); return D ? this.dgs[D.id] || null : null; }
 
     setDungeon(d) {
-      const first = !this.dg;
-      this.dg = d;
+      if (Array.isArray(d)) { d.forEach(x => this.setDungeon(x)); return; }
+      const first = !this.dgs[d.id], D = MAP.DUNGEONS[d.id];
+      this.dgs[d.id] = d;
+      d.at = performance.now();
       d.gates.forEach((open, i) => {
-        MAP.setGate(i, open);
-        this.gateImgs[i].forEach(img => {
+        MAP.setGate(D, i, open);
+        this.gateImgs[d.id][i].forEach(img => {
           if (open && img.visible && !img.opening) {
             img.opening = true;
             if (first) { img.setVisible(false); return; }
@@ -5225,9 +5514,11 @@
           }
         });
       });
-      d.blocks.forEach(([x, y], i) => this.placeBlock(i, x, y, true));
-      this.drawStele();
-      this.renderDgPanel(true);
+      if (d.id === 'hualien') {
+        d.blocks.forEach(([x, y], i) => this.placeBlock(i, x, y, true));
+        this.drawStele();
+      } else this.drawConsoles();
+      if (this.hereDg() === d || this.myDg() === d) this.renderDgPanel(true);
     }
 
     placeBlock(i, x, y, instant) {
@@ -5252,13 +5543,13 @@
 
     // 石碑上畫出要踩的顏色順序，已經踩對的打勾
     drawStele() {
-      const g = this.steleG, d = this.dg, S = MAP.DUNGEON.stele;
+      const g = this.steleG, d = this.dgs.hualien, D = MAP.DUNGEONS.hualien, S = D.stele;
       g.clear();
       this.stoneImgs.forEach(s => s.glow.setVisible(false));
       if (!d || !d.seq || !d.seq.length || d.phase === 'idle') return;
       const n = d.seq.length, gap = 15, x0 = S.x - (n - 1) * gap / 2, y = S.y;
       d.seq.forEach((si, k) => {
-        const col = Phaser.Display.Color.HexStringToColor(MAP.DUNGEON.stones[si].color).color, done = k < d.progress;
+        const col = Phaser.Display.Color.HexStringToColor(D.stones[si].color).color, done = k < d.progress;
         g.fillStyle(col, 1); g.fillCircle(x0 + k * gap, y, 6);
         g.lineStyle(2, done ? 0xffd23f : 0x2b2a33, 1); g.strokeCircle(x0 + k * gap, y, done ? 7.5 : 6);
         if (done) this.stoneImgs[si].glow.setVisible(true);
@@ -5266,8 +5557,8 @@
       if (d.stage > 0) { g.lineStyle(3, 0xffd23f, 1); g.strokeRoundedRect(S.x - n * gap / 2 - 6, y - 12, n * gap + 12, 24, 8); }
     }
     onStone(e) {
-      const st = MAP.DUNGEON.stones[e.i];
-      if (this.dg) this.dg.progress = e.progress;
+      const st = MAP.DUNGEONS.hualien.stones[e.i];
+      if (this.dgs.hualien) this.dgs.hualien.progress = e.progress;
       this.drawStele();
       if (e.ok) {
         this.burst(st.x, st.y - 10, 10, Phaser.Display.Color.HexStringToColor(st.color).color, 60);
@@ -5286,64 +5577,113 @@
       this.floatText(st.x, st.y - 60, '踩錯了！', '#bfe6ff', 22);
       if (me && e.id === me.id) toast('踩錯顏色，被浪打回起點了！要從石碑上的第一顆重新踩');
     }
+
+    // 87 樓的控制台：亮著的冒黃光，旁邊一圈倒數
+    drawConsoles() {
+      const d = this.dgs.taipei, now = performance.now();
+      this.consoleG.forEach((g, i) => {
+        g.clear();
+        const left = !d || d.phase === 'idle' ? 0 : d.phase === 'run' && d.stage === 1 ? d.lit[i] - (now - d.at) : d.stage > 1 ? 1 : 0;
+        if (left <= 0) { g.lineStyle(3, 0xe8384f, 0.7); g.strokeEllipse(0, 6, 56, 30); return; }
+        g.fillStyle(0xffd23f, 0.35); g.fillEllipse(0, 6, 70, 38);
+        g.lineStyle(4, 0xffd23f, 1); g.strokeEllipse(0, 6, 56, 30);
+        if (d.stage === 1) {
+          const k = Math.min(1, left / (d.litMs || 5000));
+          g.lineStyle(5, 0x7be08f, 1); g.beginPath(); g.arc(0, -46, 12, -Math.PI / 2, -Math.PI / 2 + k * Math.PI * 2); g.strokePath();
+        }
+      });
+    }
+    // 阻尼球：伺服器給現在盪到哪裡，這邊自己接著算；過關後停在中間
+    tickDamper(dt) {
+      const d = this.dgs.taipei, B = MAP.DUNGEONS.taipei.ball, cx = (B.x1 + B.x2) / 2, A = (B.x2 - B.x1) / 2;
+      let x = cx;
+      if (d && d.ballPh != null && d.phase === 'run' && d.stage === 1) {
+        const ph = d.ballPh + (performance.now() - d.at) / B.period;
+        x = cx + A * Math.sin(ph * Math.PI * 2);
+      }
+      this.ball.setPosition(x, B.y + 64);
+      const top = 14 * T + 4;
+      this.ballCable.clear().lineStyle(3, 0x2b2a33, 0.8);
+      [-30, 0, 30].forEach(k => this.ballCable.lineBetween(cx + k * 2, top, x + k, B.y - 50));
+      if (d && d.phase === 'run' && d.stage === 1) this.drawConsoles();
+    }
+    onBallHit(e) {
+      this.burst(e.x, e.y - 40, 14, 0xffc93c, 90);
+      this.floatText(e.x, e.y - 100, '咚！', '#ffd23f', 26);
+      if (me && e.id === me.id) { this.cameras.main.shake(300, 0.012); toast('被阻尼球撞飛了！看準球盪開的時候再過去'); }
+    }
+
     onDgStage(e) {
-      if (!this.inDg()) return;
+      const d = this.myDg();
+      if (!d || d.id !== e.id) return;
       this.cameras.main.shake(500, 0.006);
-      toast(e.stage === 1 ? '石門打開了！往下走到太魯閣九曲洞' : '石門打開了！往下走到清水斷崖……小心');
+      const msg = {
+        hualien: ['石門打開了！往下走到太魯閣九曲洞', '石門打開了！往下走到清水斷崖……小心'],
+        taipei: ['電梯門開了！往下走到 87 樓，小心阻尼球', '阻尼球停了！電梯直達觀景台……天龍王就在上面'],
+      }[e.id];
+      toast(msg[Math.min(e.stage, 2) - 1]);
     }
     onDgClear(c) {
-      if (!this.inDg()) return;
-      const mine = c.drops.find(d => me && d.id === me.id);
+      const d = this.myDg();
+      if (!d || d.id !== c.id) return;
+      const mine = c.drops.find(x => me && x.id === me.id);
       for (let i = 0; i < 4; i++) this.time.delayedCall(i * 300, () => this.burst(this.me.x + (Math.random() - 0.5) * 200, this.me.y - 120 - Math.random() * 80, 16, [0xffd23f, 0xff8fab, 0x7fd1ff, 0x7be08f][i], 120));
       this.floatText(this.me.x, this.me.y - 150, '副本通關！', '#ffd23f', 30);
       if (!mine) return;
       const g = mine.item && GR.GEAR[mine.item];
       if (!g) toast('這次什麼都沒掉……下次再來挑戰！');
-      else if (mine.dup) toast(`又是【${g.rarity}】${g.name}，換成 600 經驗`, 'gear-' + mine.item);
+      else if (mine.dup) toast(`又是【${g.rarity}】${g.name}，換成 ${mine.exp || 600} 經驗`, 'gear-' + mine.item);
       else toast(`獲得武器【${g.rarity}】${g.name}！`, 'gear-' + mine.item);
-      toast(`${Math.round(c.ms / 1000)} 秒後送回古城候位區`);
+      toast(`${Math.round(c.ms / 1000)} 秒後送回${MAP.DUNGEONS[c.id].lobbyName}`);
     }
 
-    // 副本的面板：候場區按出發、副本裡看關卡和時間、離開
+    // 副本的面板：候位區按出發、副本裡看關卡和時間、離開
     renderDgPanel(force) {
-      const d = this.dg, box = $('dg-panel');
-      if (!d || !this.me) { box.hidden = true; return; }
+      const box = $('dg-panel');
+      const mine = this.myDg(), d = mine || (this.me && MAP.zoneOf(this.me.x) === 'lobby' ? this.hereDg() : null);
+      if (!d || !this.me) { box.hidden = true; this.dgKey = null; return; }
       const sec = (ms) => { const t = Math.ceil(ms / 1000); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`; };
-      const D = MAP.DUNGEON;
+      const D = MAP.DUNGEONS[d.id], ago = performance.now() - d.at, last = D.stages.length - 1;
       let key, html;
-      if (this.inDg()) {
-        const st = D.stages[Math.min(d.stage, 2)];
-        const left = d.phase === 'clear' ? d.clearLeft - (performance.now() - this.dgAt) : d.timeLeft - (performance.now() - this.dgAt);
-        const what = d.phase === 'clear' ? `通關！${sec(Math.max(0, left))} 後回入口` : `第 ${Math.min(d.stage, 2) + 1} 關 ${st.name} · ${sec(Math.max(0, left))}`;
+      if (mine) {
+        const st = D.stages[Math.min(d.stage, last)];
+        const left = d.phase === 'clear' ? d.clearLeft - ago : d.timeLeft - ago;
+        const what = d.phase === 'clear' ? `通關！${sec(Math.max(0, left))} 後回入口` : `第 ${Math.min(d.stage, last) + 1} 關 ${st.name} · ${sec(Math.max(0, left))}`;
+        let extra = '';
         // 七星潭：面板上也畫出石碑的顏色順序（手機上石碑常常被上面的條擋住）
-        const seq = d.stage === 0 && d.phase === 'run' ? '<span class="dg-seq">' + d.seq.map((si, k) =>
-          `<i style="background:${D.stones[si].color}" class="${k < d.progress ? 'on' : ''}"></i>`).join('') + '</span>' : '';
+        if (d.id === 'hualien' && d.stage === 0 && d.phase === 'run') extra = '<span class="dg-seq">' + d.seq.map((si, k) =>
+          `<i style="background:${D.stones[si].color}" class="${k < d.progress ? 'on' : ''}"></i>`).join('') + '</span>';
+        // 信義廣場：第幾波；87 樓：四個控制台亮了幾個
+        if (d.id === 'taipei' && d.phase === 'run' && d.stage === 0) extra = `<span class="dg-note">第 ${Math.max(1, d.wave)}／${d.waves} 波</span>`;
+        if (d.id === 'taipei' && d.phase === 'run' && d.stage === 1) extra = '<span class="dg-seq">' + d.lit.map(t =>
+          `<i style="background:${t > 0 ? '#ffd23f' : '#5b6577'}" class="${t > 0 ? 'on' : ''}"></i>`).join('') + '</span>';
         // 手機上縮成一顆計時膠囊（只有關卡和時間），點一下才展開按鈕
-        const short = d.phase === 'clear' ? `通關 ${sec(Math.max(0, left))}` : `第 ${Math.min(d.stage, 2) + 1} 關 ${sec(Math.max(0, left))}`;
-        key = 'in|' + what + d.stage + '|' + d.progress;
-        html = `<span class="dg-full">${D.name}副本 · ${what}</span><span class="dg-short">${short}</span>` + seq + '<span class="dg-btns">' +
-          (d.stage === 1 && d.phase === 'run' ? '<button class="hud-btn tiny" data-act="reset" type="button">重排大理石</button>' : '') +
+        const short = d.phase === 'clear' ? `通關 ${sec(Math.max(0, left))}` : `第 ${Math.min(d.stage, last) + 1} 關 ${sec(Math.max(0, left))}`;
+        key = 'in|' + d.id + what + d.stage + '|' + d.progress + '|' + d.wave + '|' + (d.lit || []).map(t => t > 0 ? 1 : 0).join('');
+        html = `<span class="dg-full">${D.name}副本 · ${what}</span><span class="dg-short">${short}</span>` + extra + '<span class="dg-btns">' +
+          (d.id === 'hualien' && d.stage === 1 && d.phase === 'run' ? '<button class="hud-btn tiny" data-act="reset" type="button">重排大理石</button>' : '') +
           '<button class="hud-btn tiny" data-act="leave" type="button">離開</button></span>';
-      } else if (this.roomId === 'lobby') {
+      } else {
         const homeBtn = '<button class="hud-btn tiny" data-act="home" type="button">回總部</button>';
-        if (d.phase === 'idle') { key = 'idle'; html = `<span>${D.title} · 1～${d.max} 人 · 限時 ${D.timeLimitMs / 60000} 分</span><button class="primary" data-act="start" type="button">出發</button>` + homeBtn; }
+        const lv = D.minLevel ? ` · Lv.${D.minLevel} 以上` : '';
+        if (d.phase === 'idle') { key = 'idle' + d.id; html = `<span>${D.title} · 1～${d.max} 人 · 限時 ${D.timeLimitMs / 60000} 分${lv}</span><button class="primary" data-act="start" type="button">出發</button>` + homeBtn; }
         else if (d.phase === 'countdown') {
-          const left = d.countdown - (performance.now() - this.dgAt);
-          key = 'cd' + Math.ceil(left / 1000);
+          const left = d.countdown - ago;
+          key = 'cd' + d.id + Math.ceil(left / 1000);
           html = `<span>${Math.max(0, Math.ceil(left / 1000))} 秒後出發！站在候位區就會一起去</span>` + homeBtn;
-        } else { key = 'busy' + d.members.length + d.stage; html = `<span>副本進行中：${d.members.length} 人，打到第 ${Math.min(d.stage, 2) + 1} 關，等他們出來</span>` + homeBtn; }
-      } else { box.hidden = true; this.dgKey = null; return; }
-      if (force) this.dgAt = performance.now();
+        } else { key = 'busy' + d.id + d.members.length + d.stage; html = `<span>副本進行中：${d.members.length} 人，打到第 ${Math.min(d.stage, last) + 1} 關，等他們出來</span>` + homeBtn; }
+      }
       box.hidden = false;
-      box.classList.toggle('in', this.inDg());
-      if (key === this.dgKey) return;
+      box.classList.toggle('in', !!mine);
+      if (key === this.dgKey && !force) return;
       this.dgKey = key;
       box.innerHTML = html;
     }
 
     // 九曲洞：往大理石的方向走（或點石頭）就會推
     tryPush(dx, dy) {
-      if (!this.dg || this.dg.stage !== 1 || !this.inDg() || MAP.stageAt(this.me.x, this.me.y) !== 1) return;
+      const d = this.myDg();
+      if (!d || d.id !== 'hualien' || d.stage !== 1 || MAP.stageAt(this.me.x, this.me.y) !== 1) return;
       const fx = Math.floor((this.me.x + dx * 26) / T), fy = Math.floor((this.me.y - 4 + dy * 26) / T);
       const i = this.blockPos.findIndex(([x, y]) => x === fx && y === fy);
       if (i < 0) return;
@@ -5354,38 +5694,49 @@
       socket.emit('dgPush', { i, dx, dy });
     }
     blockAt(x, y) {
+      const d = this.myDg();
+      if (!d || d.id !== 'hualien') return -1;
       const tx = Math.floor(x / T), ty = Math.floor(y / T);
       return this.blockPos.findIndex(([bx, by]) => bx === tx && (by === ty || by === ty + 1));
     }
 
-    // ---------- 花蓮王 ----------
-    fuMob() { for (const m of this.mobs.values()) if (m.state.kind === 'fu' && m.state.alive) return m; return null; }
+    // ---------- 副本頭目（花蓮王、天龍王） ----------
+    bossMob(kind) { for (const m of this.mobs.values()) if (m.state.kind === kind && m.state.alive) return m; return null; }
+    fuMob() { return this.bossMob('fu'); }
+    // 頭目現在是哪一個階段的名字
+    bossLook(m) {
+      const def = ST.MOBS[m.state.kind], ph = m.state.phase || 1;
+      return ph >= 3 && def.phase3 ? def.phase3 : ph >= 2 && def.phase2 ? def.phase2 : def;
+    }
     updateFuLook(m, was) {
-      const def = ST.MOBS.fu, p2 = m.state.phase === 2, M = p2 ? def.phase2 : def;
-      m.tag.setText(`Lv.${M.level} ${M.name}`).setColor(p2 ? '#5b3fa0' : '#b84300');
+      const kind = m.state.kind, ph = m.state.phase || 1, M = this.bossLook(m);
+      const COL = kind === 'tianlong' ? [0, 0xffd23f, 0x7fb2e5, 0xff5a5a] : [0, 0x5b3f8f, 0x5b3f8f];
+      m.tag.setText(`Lv.${M.level} ${M.name}`).setColor(ph >= 2 ? (kind === 'tianlong' ? (ph >= 3 ? '#b8282f' : '#2f5fa8') : '#5b3fa0') : '#b84300');
       if (!m.aura) {
         m.aura = this.add.graphics();
-        m.aura.fillStyle(0x5b3f8f, 0.35); m.aura.fillEllipse(0, 0, 150, 46);
         m.addAt(m.aura, 0);
         this.tweens.add({ targets: m.aura, scaleX: 1.15, scaleY: 1.15, alpha: 0.6, duration: 800, yoyo: true, repeat: -1 });
       }
-      m.aura.setVisible(p2);
-      if (p2 && was && was.phase !== 2 && m.visible) {
+      m.aura.clear().fillStyle(COL[ph] || COL[1], 0.35).fillEllipse(0, 0, kind === 'tianlong' ? 190 : 150, 50);
+      m.aura.setVisible(ph >= 2 || kind === 'tianlong');
+      if (ph >= 2 && was && (was.phase || 1) < ph && m.visible) {
+        const c1 = COL[ph] || 0x8a5cd6;
         this.cameras.main.shake(900, 0.008);
-        for (let i = 0; i < 3; i++) this.time.delayedCall(i * 350, () => this.burst(m.x, m.y - 80, 16, i % 2 ? 0x8a5cd6 : 0x2b2a33, 160));
-        this.floatText(m.x, m.y - 190, `黑化成「${def.phase2.name}」了！`, '#d9c4ff', 26);
+        for (let i = 0; i < 3; i++) this.time.delayedCall(i * 350, () => this.burst(m.x, m.y - 80, 16, i % 2 ? c1 : 0x2b2a33, 160));
+        this.floatText(m.x, m.y - 190, kind === 'fu' ? `黑化成「${M.name}」了！` : `變成「${M.name}」了！`, kind === 'fu' ? '#d9c4ff' : '#ffe08a', 26);
         this.tweens.add({ targets: m.body_, angle: 360, duration: 1200, ease: 'Cubic.inOut', onComplete: () => m.body_.setAngle(0) });
       }
-      if (this.bossFor === 'fu') this.refreshBossLabel();
+      if (this.bossFor === kind) this.refreshBossLabel();
     }
     refreshBossLabel() {
-      if (this.bossFor === 'fu') {
-        const m = this.fuMob(), def = ST.MOBS.fu, p2 = m && m.state.phase === 2, M = p2 ? def.phase2 : def;
+      const m = this.bossFor !== 'typhoon' ? this.bossMob(this.bossFor) : null;
+      if (m) {
+        const M = this.bossLook(m);
         document.querySelector('#boss .boss-lv').textContent = 'Lv.' + M.level;
         document.querySelector('#boss .boss-lv').nextSibling.textContent = ' ' + M.name + ' ';
-        $('boss').classList.toggle('phase2', !!p2);
-        if (m) this.drawFuBar(m);
-      } else {
+        $('boss').classList.toggle('phase2', (m.state.phase || 1) >= 2);
+        this.drawFuBar(m);
+      } else if (this.bossFor === 'typhoon') {
         this.applyMonsterLook();
         this.drawMonsterBar();
       }
@@ -5403,16 +5754,28 @@
         this.tweens.add({ targets: g, alpha: { from: 1, to: 0.55 }, duration: 160, yoyo: true, repeat: -1 });
         this.time.delayedCall(a.delay + 60, () => { this.tweens.killTweensOf(g); g.destroy(); });
       };
-      const mine = (hit) => { if (this.me && !this.isDead() && this.inDg() && hit(this.me)) toast('快離開紅色範圍！'); };
-      if (a.type === 'slash' || a.type === 'wave') {
+      const mine = (hit, msg) => { if (this.me && !this.isDead() && this.inDg() && hit(this.me)) toast(msg || '快離開紅色範圍！'); };
+      const say = (text, col) => { if (m) this.floatText(m.x, m.y - (m.state.kind === 'fu' ? 200 : 230), text, col, 22); };
+      const ellipse = (sp, r, fillCol) => {
+        tele(this.add.graphics({ x: sp.x, y: sp.y }).setDepth(-5), (g, c, al, w) => { g.fillStyle(c, al); g.fillEllipse(0, 0, r * 2, r * 1.4); g.lineStyle(w, c, 0.9); g.strokeEllipse(0, 0, r * 2, r * 1.4); });
+        const fill = this.add.graphics({ x: sp.x, y: sp.y }).setDepth(-5).setScale(0);
+        fill.fillStyle(fillCol, 0.35); fill.fillEllipse(0, 0, r * 2, r * 1.4);
+        this.tweens.add({ targets: fill, scale: 1, duration: a.delay, onComplete: () => fill.destroy() });
+      };
+      if (a.type === 'slash' || a.type === 'wave' || a.type === 'sweep' || a.type === 'bolt' || a.type === 'drop') {
         const spots = a.type === 'slash' ? [{ x: a.x, y: a.y }] : a.spots;
-        spots.forEach(sp => {
-          tele(this.add.graphics({ x: sp.x, y: sp.y }).setDepth(-5), (g, c, al, w) => { g.fillStyle(c, al); g.fillEllipse(0, 0, a.r * 2, a.r * 1.4); g.lineStyle(w, c, 0.9); g.strokeEllipse(0, 0, a.r * 2, a.r * 1.4); });
-          const fill = this.add.graphics({ x: sp.x, y: sp.y }).setDepth(-5).setScale(0);
-          fill.fillStyle(0x8a5cd6, 0.35); fill.fillEllipse(0, 0, a.r * 2, a.r * 1.4);
-          this.tweens.add({ targets: fill, scale: 1, duration: a.delay, onComplete: () => fill.destroy() });
+        const col = a.type === 'bolt' ? 0xffd23f : a.type === 'drop' ? 0xff8a3d : a.type === 'sweep' ? 0x5fb37a : 0x8a5cd6;
+        spots.forEach(sp => ellipse(sp, a.r, col));
+        if (a.type === 'drop') spots.forEach(sp => {
+          // 招牌從天上掉下來
+          const sign = this.add.image(sp.x, sp.y - 360, 'mob-sign').setScale(0.4).setOrigin(0.5, 0.95).setDepth(sp.y + 100).setAngle(-20);
+          this.tweens.add({ targets: sign, y: sp.y, angle: 10, duration: a.delay, ease: 'Quad.in', onComplete: () => {
+            this.burst(sp.x, sp.y - 20, 10, 0xe8384f, 70);
+            this.tweens.add({ targets: sign, alpha: 0, duration: 300, delay: 200, onComplete: () => sign.destroy() });
+          } });
         });
-        if (m) this.floatText(m.x, m.y - 200, a.type === 'slash' ? '黑暗劍氣！' : '劍氣波！', '#d9c4ff', 22);
+        else say(a.label || (a.type === 'slash' ? '黑暗劍氣！' : '劍氣波！'), a.type === 'bolt' ? '#ffe08a' : a.type === 'sweep' ? '#bfe6c8' : '#d9c4ff');
+        if (a.type === 'drop' && a.label && spots.some(sp => this.me && Math.hypot(this.me.x - sp.x, this.me.y - sp.y) < 500)) this.floatText(spots[0].x, spots[0].y - 120, a.label, '#ffb020', 20);
         mine(p => spots.some(sp => Math.hypot(p.x - sp.x, p.y - sp.y) <= a.r));
       } else if (a.type === 'charge') {
         const ang = Math.atan2(a.y2 - a.y1, a.x2 - a.x1), len = Math.max(40, Math.hypot(a.x2 - a.x1, a.y2 - a.y1));
@@ -5422,11 +5785,11 @@
         fill.fillStyle(0xff8a3d, 0.35); fill.fillRect(0, -a.w / 2, len, a.w);
         this.tweens.add({ targets: fill, scaleX: 1, duration: a.delay, onComplete: () => fill.destroy() });
         if (m) {
-          // 舉起拳頭：衝鋒前的預告
-          m.body_.setTexture('mob-fu-fist');
+          // 花蓮王舉起拳頭：衝鋒前的預告
+          if (m.state.kind === 'fu') m.body_.setTexture('mob-fu-fist');
           m.body_.setFlipX(a.x2 < a.x1);
           this.tweens.add({ targets: m.body_, y: -8, duration: 200, yoyo: true, repeat: 1 });
-          this.floatText(m.x, m.y - 200, '衝鋒！', '#ffb020', 24);
+          this.floatText(m.x, m.y - (m.state.kind === 'fu' ? 200 : 130), a.label || '衝鋒！', '#ffb020', 24);
         }
         const segD = (p) => {
           const dx = a.x2 - a.x1, dy = a.y2 - a.y1, l2 = dx * dx + dy * dy || 1;
@@ -5434,6 +5797,58 @@
           return Math.hypot(p.x - (a.x1 + dx * k), p.y - (a.y1 + dy * k));
         };
         mine(p => segD(p) <= a.w / 2);
+      } else if (a.type === 'gust') {
+        // 強風：一半的觀景台畫上紅色＋風的箭頭
+        const R = a.rect, w = R.x2 - R.x1, h = R.y2 - R.y1;
+        const g = this.add.graphics({ x: R.x1, y: R.y1 }).setDepth(-5);
+        tele(g, (gg, c, al, lw) => { gg.fillStyle(c, al); gg.fillRect(0, 0, w, h); gg.lineStyle(lw, c, 0.9); gg.strokeRect(0, 0, w, h); });
+        for (let i = 0; i < 6; i++) {
+          const y = R.y1 + 60 + i * (h - 120) / 5, x0 = a.dir > 0 ? R.x1 + 40 : R.x2 - 40;
+          const arrow = this.add.graphics({ x: x0, y }).setDepth(y + 50);
+          arrow.lineStyle(6, 0xffffff, 0.85); arrow.lineBetween(0, 0, a.dir * 70, 0);
+          arrow.lineBetween(a.dir * 70, 0, a.dir * 52, -14); arrow.lineBetween(a.dir * 70, 0, a.dir * 52, 14);
+          this.tweens.add({ targets: arrow, x: x0 + a.dir * (w - 150), alpha: { from: 1, to: 0.2 }, duration: 900, repeat: Math.ceil(a.delay / 900), delay: i * 120, onComplete: () => arrow.destroy() });
+        }
+        say(a.label || '強風！', '#bfe6ff');
+        mine(p => p.x >= R.x1 && p.x < R.x2 && p.y >= R.y1 && p.y < R.y2, a.dir > 0 ? '強風要把你吹下觀景台了！快跑到另一半！' : '強風要把你吹去撞牆！快跑到另一半！');
+      } else if (a.type === 'share') {
+        // 分攤：紅圈跟著那個人走
+        const who = a.target === (me && me.id) ? this.me : this.remotes.get(a.target);
+        if (!who) return;
+        const g = this.add.graphics().setDepth(-5);
+        const born = performance.now();
+        const draw = () => {
+          if (!g.active) return;
+          const k = Math.min(1, (performance.now() - born) / a.delay);
+          g.clear().setPosition(who.x, who.y);
+          g.fillStyle(0xff3b3b, 0.14 + k * 0.18); g.fillEllipse(0, 0, a.r * 2, a.r * 1.4);
+          g.lineStyle(4, 0xffd23f, 0.95); g.strokeEllipse(0, 0, a.r * 2, a.r * 1.4);
+          g.lineStyle(6, 0xffd23f, 1); g.beginPath(); g.arc(0, -150, 16, -Math.PI / 2, -Math.PI / 2 + k * Math.PI * 2); g.strokePath();
+        };
+        const ev = this.time.addEvent({ delay: 30, loop: true, callback: draw });
+        draw();
+        this.time.delayedCall(a.delay + 60, () => { ev.remove(); g.destroy(); });
+        say(a.label || '分攤！', '#ffe08a');
+        if (who === this.me) toast(`你頭上有分攤圈！${a.total} 點傷害由圈裡的人平分，叫大家靠過來`);
+        else if (this.inDg()) toast('有人頭上出現分攤圈！靠過去一起分擔傷害');
+      } else if (a.type === 'storm') {
+        // 天龍暴風：整個觀景台都是紅的，柱子後面畫出安全的影子
+        const B = a.box, w = B.x2 - B.x1, h = B.y2 - B.y1;
+        const g = this.add.graphics({ x: B.x1, y: B.y1 }).setDepth(-5);
+        tele(g, (gg, c, al, lw) => { gg.fillStyle(c, al + 0.06); gg.fillRect(0, 0, w, h); gg.lineStyle(lw, c, 0.9); gg.strokeRect(0, 0, w, h); });
+        const safe = this.add.graphics().setDepth(-4.5);
+        a.pillars.forEach(c => {
+          const py = c.y + 10, d = Math.max(1, Math.hypot(c.x - a.x, py - a.y)), ux = (c.x - a.x) / d, uy = (py - a.y) / d;
+          safe.fillStyle(0x7be08f, 0.45); safe.lineStyle(3, 0x3f9f5a, 0.9);
+          // 從柱子往外延伸一段的安全影子（跟伺服器判斷一樣：柱子後面 230 以內）
+          const len = 220, half = 36, nx = -uy, ny = ux;
+          const pts = [[c.x + nx * half, py + ny * half], [c.x + ux * len + nx * half, py + uy * len + ny * half],
+            [c.x + ux * len - nx * half, py + uy * len - ny * half], [c.x - nx * half, py - ny * half]];
+          safe.beginPath(); safe.moveTo(pts[0][0], pts[0][1]); pts.slice(1).forEach(([x, y]) => safe.lineTo(x, y)); safe.closePath(); safe.fillPath(); safe.strokePath();
+        });
+        this.time.delayedCall(a.delay + 60, () => safe.destroy());
+        say(a.label || '天龍暴風！', '#ff8f8f');
+        if (this.inDg() && this.roomId === 't3') toast(`天龍暴風要來了！${Math.round(a.delay / 1000)} 秒內躲到柱子後面的綠色影子裡`);
       }
     }
     onFuAttackHit(a) {
@@ -5441,20 +5856,39 @@
       const near = this.me && this.inDg();
       if (a.type === 'charge') {
         if (m) {
-          m.body_.setTexture('mob-fu');
+          if (m.state.kind === 'fu') m.body_.setTexture('mob-fu');
           this.tweens.add({ targets: m, x: a.x2, y: a.y2, duration: 220, ease: 'Quad.in' });
           m.tx = a.x2; m.ty = a.y2;
           for (let i = 0; i < 5; i++) this.time.delayedCall(i * 40, () => this.burst(a.x1 + (a.x2 - a.x1) * i / 4, a.y1 + (a.y2 - a.y1) * i / 4, 4, 0x9aa3b5, 40));
         }
         if (near) this.cameras.main.shake(260, 0.01);
+      } else if (a.type === 'gust') {
+        const R = a.rect;
+        for (let i = 0; i < 8; i++) this.burst(R.x1 + Math.random() * (R.x2 - R.x1), R.y1 + Math.random() * (R.y2 - R.y1), 6, 0xffffff, 90);
+        if (near) this.cameras.main.shake(400, 0.012);
+      } else if (a.type === 'share') {
+        const who = a.target === (me && me.id) ? this.me : this.remotes.get(a.target);
+        if (who) { this.burst(who.x, who.y - 30, 18, 0xffd23f, a.r); this.floatText(who.x, who.y - 140, '分攤！', '#ffd23f', 24); }
+        if (near) this.cameras.main.shake(250, 0.008);
+      } else if (a.type === 'storm') {
+        const B = a.box;
+        for (let i = 0; i < 14; i++) this.time.delayedCall(i * 40, () => this.burst(B.x1 + Math.random() * (B.x2 - B.x1), B.y1 + Math.random() * (B.y2 - B.y1), 8, i % 2 ? 0x7fb2e5 : 0xffffff, 120));
+        if (near) { this.cameras.main.shake(700, 0.016); this.flash.setSize(this.scale.width, this.scale.height); this.tweens.add({ targets: this.flash, alpha: { from: 0.5, to: 0 }, duration: 500 }); }
       } else {
         const spots = a.type === 'slash' ? [{ x: a.x, y: a.y }] : a.spots;
+        const [c1, c2] = a.type === 'bolt' ? [0xffb020, 0xfff07a] : a.type === 'sweep' ? [0x3f8f5a, 0xbfe6c8] : a.type === 'drop' ? [0xe8384f, 0xffd23f] : [0x5b3f8f, 0xd9c4ff];
         spots.forEach(sp => {
-          const g = this.add.graphics({ x: sp.x, y: sp.y - 30 }).setDepth(sp.y + 100);
-          g.lineStyle(10, 0x5b3f8f, 0.85); g.beginPath(); g.arc(0, 0, a.r * 0.8, -2.6, 0.5); g.strokePath();
-          g.lineStyle(4, 0xd9c4ff, 1); g.beginPath(); g.arc(0, 0, a.r * 0.8, -2.6, 0.5); g.strokePath();
-          this.tweens.add({ targets: g, scale: 1.3, alpha: 0, angle: 120, duration: 450, onComplete: () => g.destroy() });
-          this.burst(sp.x, sp.y - 20, 10, 0x8a5cd6, a.r);
+          if (a.type === 'bolt') {
+            // 落雷：一道閃電從天上劈下來
+            const b = this.add.image(sp.x, sp.y, 'bolt-big').setOrigin(0.5, 1).setDepth(sp.y + 100).setScale(0.8);
+            this.tweens.add({ targets: b, alpha: 0, duration: 400, delay: 120, onComplete: () => b.destroy() });
+          } else if (a.type !== 'drop') {
+            const g = this.add.graphics({ x: sp.x, y: sp.y - 30 }).setDepth(sp.y + 100);
+            g.lineStyle(10, c1, 0.85); g.beginPath(); g.arc(0, 0, a.r * 0.8, -2.6, 0.5); g.strokePath();
+            g.lineStyle(4, c2, 1); g.beginPath(); g.arc(0, 0, a.r * 0.8, -2.6, 0.5); g.strokePath();
+            this.tweens.add({ targets: g, scale: 1.3, alpha: 0, angle: 120, duration: 450, onComplete: () => g.destroy() });
+          }
+          this.burst(sp.x, sp.y - 20, 10, c1, a.r);
         });
         if (near) this.cameras.main.shake(200, 0.007);
       }
@@ -5503,7 +5937,8 @@
         if (this.canStand(this.me.x, ny)) this.me.y = ny;
         moving = this.me.x !== ox || this.me.y !== oy;
         // 九曲洞：往大理石走過去就是推
-        if (this.dg && this.dg.stage === 1) {
+        const md = this.myDg();
+        if (md && md.id === 'hualien' && md.stage === 1) {
           const hz = Math.abs(dx) >= Math.abs(dy), pdx = hz ? Math.sign(dx) : 0, pdy = hz ? 0 : Math.sign(dy);
           if (!this.canStand(this.me.x + pdx * 4, this.me.y + pdy * 4)) this.tryPush(pdx, pdy);
         }
@@ -5588,13 +6023,13 @@
         this.monster.setDepth(this.monster.y);
       }
       // 總部、副本、候位區分開設鏡頭範圍，才不會看到中間的空地；比螢幕窄的區域放在畫面正中間
-      const zone = MAP.zoneOf(this.me.x), inD = zone === 'dungeon';
+      const zone = MAP.zoneOf(this.me.x), inD = zone === 'dungeon', zd = MAP.dungeonAt(this.me.x);
       const cam = this.cameras.main, vw = cam.width / cam.zoom, vh = cam.height / cam.zoom;
-      const camKey = zone + '|' + Math.round(vw) + 'x' + Math.round(vh);
+      const camKey = MAP.areaOf(this.me.x) + '|' + Math.round(vw) + 'x' + Math.round(vh);
       if (camKey !== this.camKey) {
         this.camKey = camKey;
-        const [x1, x2, y1, y2] = zone === 'dungeon' ? [MAP.DX, MAP.DX + 22, 0, MAP.H]
-          : zone === 'lobby' ? [MAP.LX, MAP.W, 0, 18] : [0, MAP.MW, 0, MAP.H];
+        const [x1, x2, y1, y2] = zone === 'dungeon' ? [zd.dx, zd.dx + 22, 0, MAP.H]
+          : zone === 'lobby' ? [zd.lx, zd.lx + 12, 0, 18] : [0, MAP.MW, 0, MAP.H];
         const w = (x2 - x1) * T, h = (y2 - y1) * T;
         const bw = Math.max(w, vw), bh = Math.max(h, vh), bx = x1 * T - (bw - w) / 2, by = y1 * T - (bh - h) / 2;
         cam.setBounds(bx, by, bw, bh);
@@ -5604,11 +6039,14 @@
         if (bw > w) { m.fillRect(bx, by, x1 * T - bx, bh); m.fillRect(x2 * T, by, bx + bw - x2 * T, bh); }
         if (bh > h) { m.fillRect(bx, by, bw, y1 * T - by); m.fillRect(bx, y2 * T, bw, by + bh - y2 * T); }
       }
-      this.portal.rotation -= dt * 3;
+      this.portals.forEach(pt => { pt.rotation -= dt * 3; });
+      this.tickDamper(dt);
       this.renderDgPanel();
-      // 頭目血條：在前線或看得到颱風的時候才顯示；在清水斷崖就顯示花蓮王的
-      const fu = this.inDg() && this.roomId === 'd3' ? this.fuMob() : null;
-      if ((fu ? 'fu' : 'typhoon') !== this.bossFor) { this.bossFor = fu ? 'fu' : 'typhoon'; this.refreshBossLabel(); }
+      // 頭目血條：在前線或看得到颱風的時候才顯示；在副本最後一關就顯示那個副本頭目的
+      const rm = MAP.roomAt(this.me.x, this.me.y);
+      const fu = this.inDg() && rm && rm.boss ? this.bossMob(this.myDg().id === 'taipei' ? 'tianlong' : 'fu') : null;
+      const bf = fu ? fu.state.kind : 'typhoon';
+      if (bf !== this.bossFor) { this.bossFor = bf; this.refreshBossLabel(); }
       const showBoss = !!fu || (!inD && this.mState.alive && (this.roomId === 'front' ||
         Math.hypot(this.me.x - this.monster.x, this.me.y - this.monster.y) < 700));
       if (showBoss !== this.showBoss) { this.showBoss = showBoss; $('boss').hidden = !showBoss; document.body.classList.toggle('boss-on', showBoss); }
@@ -5689,6 +6127,9 @@
           d1: '照石碑上的顏色順序踩石頭',
           d2: '把三顆大理石推進地上的凹槽',
           d3: '紅色範圍快閃開，他舉拳就是要衝鋒',
+          t1: '撐過三波怪，地上的紅圈是招牌要掉下來了',
+          t2: '阻尼球掃到很痛！四個角落的控制台要同時亮',
+          t3: '黃圈是分攤要靠過去，暴風來時躲到柱子後面',
         };
         if (tips[rid] && !this.told[rid]) { this.told[rid] = true; toast(tips[rid]); }
       }

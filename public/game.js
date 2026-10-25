@@ -1883,7 +1883,6 @@
     $('toasts').appendChild(t);
     setTimeout(() => t.remove(), 2600);
   }
-  $('action-btn').addEventListener('click', () => scene && scene.doAction());
   $('basic-btn').addEventListener('click', () => {
     if (!scene || !scene.me) return;
     const a = scene.nearbyAction();
@@ -2043,6 +2042,52 @@
     return c;
   }
   // 小閃電
+  // 靠近 NPC／物件時，頭上冒出的提示紙條：手繪 icon＋動作名稱＋「空白鍵」（手機是「點我」），底下有小尖角指著它
+  const HINTS = {
+    crate: ['act-crate', '敲箱子'], cook: ['act-cook', '煮泡麵'], mentor: ['act-mentor', '轉職'],
+    guard: ['act-guard', '前往副本'], dj: ['btn-song', '點歌'], well: ['wish-coin', '許個願'], greek: ['act-greek', '說話'],
+  };
+  // tail：尖角朝哪邊（down＝紙條在東西上面；left／right＝紙條在旁邊，上面被介面擋住的時候用）
+  function drawHint(type, touch, tail) {
+    const [iconKey, label] = HINTS[type];
+    const RES = 2, ICON = 22, PH = 30, TL = 7;
+    const cv = document.createElement('canvas'), ctx = cv.getContext('2d');
+    const font = `bold 13px ${FONT}`, capFont = `bold 10px ${FONT}`;
+    const cap = touch ? '點我' : '空白鍵';
+    ctx.font = font; const tw = ctx.measureText(label).width;
+    ctx.font = capFont; const cw = ctx.measureText(cap).width + 10;
+    const bw = Math.ceil(7 + ICON + 5 + tw + 7 + cw + 7);
+    // 紙條本體的左上角（尖角在左邊就整張往右挪）
+    const ox = 2 + (tail === 'left' ? TL : 0), oy = 1.5;
+    const w = bw + 5 + (tail === 'down' ? 0 : TL), h = PH + 4 + (tail === 'down' ? TL : 0);
+    cv.width = w * RES; cv.height = h * RES;
+    ctx.scale(RES, RES);
+    const CR = window.HQ_CRAYON, r = CR.rng(label.length * 97 + (touch ? 1 : 0));
+    const tri = (dx, dy) => {
+      ctx.beginPath();
+      if (tail === 'down') { const m = ox + bw / 2; ctx.moveTo(m - 7 + dx, oy + PH - 1 + dy); ctx.lineTo(m + dx, oy + PH + TL + dy); ctx.lineTo(m + 7 + dx, oy + PH - 1 + dy); }
+      else if (tail === 'left') { const m = oy + PH / 2; ctx.moveTo(ox + 1 + dx, m - 7 + dy); ctx.lineTo(ox - TL + dx, m + dy); ctx.lineTo(ox + 1 + dx, m + 7 + dy); }
+      else { const m = oy + PH / 2, e = ox + bw; ctx.moveTo(e - 1 + dx, m - 7 + dy); ctx.lineTo(e + TL + dx, m + dy); ctx.lineTo(e - 1 + dx, m + 7 + dy); }
+    };
+    // 影子 → 紙 → 描邊 → 尖角
+    ctx.fillStyle = 'rgba(43,42,51,0.28)';
+    CR.rect(ctx, ox + 2, oy + 2, bw, PH, r, 0.6); ctx.fill(); tri(2, 2); ctx.closePath(); ctx.fill();
+    CR.rect(ctx, ox, oy, bw, PH, r, 1.1); ctx.fillStyle = PAPER; ctx.fill(); CR.stroke(ctx, r, 1.6, INK);
+    tri(0, 0); ctx.closePath(); ctx.fillStyle = PAPER; ctx.fill();
+    tri(0, 0); CR.stroke(ctx, r, 1.6, INK);
+    const icon = HQ_ICONS.canvas(iconKey);
+    if (icon) ctx.drawImage(icon, ox + 7, oy + (PH - ICON) / 2, ICON, ICON);
+    ctx.font = font; ctx.fillStyle = INK; ctx.textBaseline = 'middle';
+    ctx.fillText(label, ox + 7 + ICON + 5, oy + PH / 2 + 0.5);
+    // 小鍵帽／點我
+    const cx = ox + 7 + ICON + 5 + tw + 7, cy = oy + (PH - 17) / 2;
+    CR.rect(ctx, cx, cy + 1.5, cw, 17, r, 0.4); ctx.fillStyle = touch ? '#c9562a' : '#b9b2a2'; ctx.fill();
+    CR.rect(ctx, cx, cy, cw, 15.5, r, 0.4); ctx.fillStyle = touch ? '#ff6a13' : '#ffffff'; ctx.fill(); CR.stroke(ctx, r, 1.3, INK);
+    ctx.font = capFont; ctx.fillStyle = touch ? '#ffffff' : INK; ctx.textAlign = 'center';
+    ctx.fillText(cap, cx + cw / 2, cy + 8.5);
+    return cv;
+  }
+
   function drawBolt() {
     const c = document.createElement('canvas');
     c.width = 40; c.height = 60;
@@ -2785,6 +2830,11 @@
         if (p.rightButtonDown()) { if (who) showMenu(who, p.event.clientX, p.event.clientY); return; }
         if (who && p.wasTouch) {
           this.pressTimer = this.time.delayedCall(550, () => { this.target = null; showMenu(who, p.event.clientX || p.x, p.event.clientY || p.y); });
+        }
+        // 點到頭上的提示紙條就直接互動（手機上的主要用法，範圍放大一點比較好按）
+        if (this.hint && this.hintAct) {
+          const b = this.hint.getBounds(), pad = 12;
+          if (p.worldX > b.x - pad && p.worldX < b.right + pad && p.worldY > b.y - pad && p.worldY < b.bottom + pad) { this.doAction(this.hintAct); return; }
         }
         // 點到颱風或箱子、而且夠近，就直接打；否則走過去
         const act = this.actionAt(p.worldX, p.worldY);
@@ -4241,7 +4291,78 @@
 
     isDead() { return !!(myStats && myStats.dead); }
 
-    // 自己身邊可以互動的東西（給按鈕和空白鍵用）
+    // 提示紙條掛在哪裡（世界座標）：top＝放上面時尖角的位置，y／half＝放旁邊時的高度和東西的半寬
+    hintAnchor(act) {
+      if (act.type === 'mentor' || act.type === 'guard') {
+        const n = MAP[act.type], ny = n.y + 18;
+        return { x: n.x, top: ny - (act.type === 'guard' ? 110 : 106), y: ny - 38, half: 30 };
+      }
+      if (act.type === 'dj') return { x: MAP.dj.x, top: MAP.dj.y - 52, y: MAP.dj.y - 4, half: 50 };
+      if (act.type === 'greek') { const ny = MAP.greek.y + 18; return { x: MAP.greek.x, top: ny - 110, y: ny - 38, half: 30 }; }
+      if (act.type === 'well') return { x: MAP.well.x, top: MAP.well.y - 60, y: MAP.well.y, half: 44 };
+      let tx = act.tx, ty = act.ty;
+      if (act.type === 'cook') {
+        const cx = Math.floor(this.me.x / T), cy = Math.floor(this.me.y / T);
+        let bd = Infinity;
+        for (let y = cy - 2; y <= cy + 2; y++) for (let x = cx - 2; x <= cx + 2; x++) {
+          if (!MAP.tiles[y] || MAP.tiles[y][x] !== 'G') continue;
+          const d = Math.hypot(this.me.x - (x + 0.5) * T, this.me.y - (y + 0.5) * T);
+          if (d < bd) { bd = d; tx = x; ty = y; }
+        }
+      }
+      return { x: (tx + 0.5) * T, top: ty * T - 2, y: (ty + 0.5) * T, half: T / 2 };
+    }
+
+    // 上面、右邊、左邊依序試，挑第一個不會被畫面邊緣或介面（狀態欄、背包按鈕…）擋住的位置
+    placeHint(a, touch) {
+      const cam = this.cameras.main, rect = this.game.canvas.getBoundingClientRect();
+      const blocks = ['banner', 'stats', 'inventory', 'boss', 'notice-bar', 'dg-panel', 'video-prompt']
+        .map(id => $(id) && $(id).getBoundingClientRect()).filter(k => k && k.width > 0);
+      const sc = 0.5 / cam.zoom;
+      const tries = [['down', a.x, a.top, 0.5, 1], ['left', a.x + a.half, a.y, 0, 0.5], ['right', a.x - a.half, a.y, 1, 0.5]];
+      for (let i = 0; i < tries.length; i++) {
+        const [tail, x, y, ox, oy] = tries[i], tex = 'hint-' + this.hintAct.type + (touch ? '-t' : '') + '-' + tail;
+        if (!this.textures.exists(tex)) this.textures.addCanvas(tex, drawHint(this.hintAct.type, touch, tail));
+        const src = this.textures.get(tex).getSourceImage(), w = src.width * sc, h = src.height * sc;
+        // 換成螢幕座標，上下多留一點給飄動
+        const l = rect.left + (x - w * ox - cam.worldView.x) * cam.zoom, t = rect.top + (y - h * oy - 6 - cam.worldView.y) * cam.zoom;
+        const r = l + w * cam.zoom, b = t + (h + 8) * cam.zoom;
+        const ok = l >= rect.left + 4 && r <= rect.right - 4 && t >= rect.top + 4 && b <= rect.bottom - 4 &&
+          !blocks.some(k => l < k.right && r > k.left && t < k.bottom && b > k.top);
+        if (ok || i === tries.length - 1) return { tail, tex, x, y, ox, oy };
+      }
+    }
+
+    updateHint(act, time) {
+      const key = act ? act.type + (act.tx != null ? act.tx + ',' + act.ty : '') : '';
+      const touch = matchMedia('(pointer: coarse)').matches;
+      if (key !== this.hintKey) {
+        this.hintKey = key;
+        this.hintAct = act;
+        this.hintAt = act ? this.hintAnchor(act) : null;
+        this.hintPlace = null;
+        this.hintBorn = time;
+      }
+      if (!act) { if (this.hint) { this.hint.destroy(); this.hint = null; } return; }
+      // 鏡頭會動、介面會開關，所以每 0.3 秒重新挑一次位置
+      if (!this.hintPlace || time - (this.hintCheck || 0) > 300) {
+        this.hintCheck = time;
+        const pl = this.placeHint(this.hintAt, touch);
+        if (!this.hint || !this.hintPlace || pl.tex !== this.hintPlace.tex) {
+          if (this.hint) this.hint.destroy();
+          this.hint = this.add.image(pl.x, pl.y, pl.tex).setOrigin(pl.ox, pl.oy).setDepth(1e6);
+        }
+        this.hintPlace = pl;
+      }
+      // 跟著鏡頭縮放維持一樣大；剛出現時從小彈出來，之後輕輕飄
+      const z = 0.5 / this.cameras.main.zoom, k = Math.min(1, (time - this.hintBorn) / 160);
+      const pl = this.hintPlace, wob = Math.sin(time / 320) * 3;
+      this.hint.setScale(z * (0.6 + 0.4 * Phaser.Math.Easing.Back.Out(k)));
+      if (pl.tail === 'down') this.hint.setPosition(pl.x, pl.y - 3 - wob);
+      else this.hint.setPosition(pl.x + (pl.tail === 'left' ? 4 + wob : -4 - wob), pl.y);
+    }
+
+    // 自己身邊可以互動的東西（給頭上的提示紙條和空白鍵用）
     nearbyAction() {
       if (!this.me) return null;
       const foe = this.nearestFoe(Math.max(130, ST.SKILLS[basic()].range));
@@ -5185,18 +5306,11 @@
         this.mDead.setText(`颱風${ST.MONSTER.name}被擊退了！\n${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')} 後重新生成`);
       }
 
-      // 互動按鈕
+      // 互動提示：攻擊用技能列的普攻鍵，其他互動（敲箱子、點歌…）在那個東西頭上冒紙條
       const all0 = [this.me, ...this.remotes.values()];
       const near = this.nearbyAction();
-      const LABELS = { crate: '🔨 敲箱子', cook: '🍜 煮泡麵', mentor: '💬 找沈理員轉職', guard: '🏯 前往副本候位區', dj: '🎧 點歌', well: '許個願', greek: '和希臘少女說話' };
-      // 攻擊用技能列的普攻鍵，這顆只放其他互動（敲箱子、點歌…）
       const canHit = !!near && !this.isDead() && near.type === 'attack';
-      const label = !near || this.isDead() || canHit ? '' : LABELS[near.type];
-      if (label !== this.actionLabel) {
-        this.actionLabel = label;
-        $('action-btn').hidden = !label;
-        $('action-btn').textContent = label;
-      }
+      this.updateHint(!near || this.isDead() || canHit || !HINTS[near.type] || !$('games').hidden ? null : near, time);
       if (canHit !== this.canHit) { this.canHit = canHit; $('basic-btn').classList.toggle('ready', canHit); }
       // 技能的冷卻遮罩（從下往上退），魔力不夠就變暗
       this.cdPct = this.cdPct || {};

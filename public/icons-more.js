@@ -597,6 +597,17 @@
         dot(x, cx, cy, 1.3, '#ffd23f');
       }
     },
+    'gear-bouquet'(x, r) {
+      [[-1, '#ff8fb8'], [1, '#ffc2da']].forEach(([k, col]) => {
+        x.beginPath(); x.moveTo(24, 30); x.bezierCurveTo(24 + k * 14, 36, 24 - k * 6, 40, 24 + k * 14, 46); x.lineTo(24 + k * 17, 44);
+        x.bezierCurveTo(24 - k * 2, 38, 24 + k * 18, 34, 24 + k * 3, 29); x.closePath(); C.fill(x, col, r, null); C.stroke(x, r, 1.4);
+      });
+      poly(x, [[19, 22], [29, 22], [26, 34], [22, 34]]); C.fill(x, '#7fd1a8', r, null); C.stroke(x, r, 1.6);
+      [[12, 18], [36, 18]].forEach(([a, b]) => { C.blob(x, a, b, 5, 2.6, r, 0.1, 10); C.fill(x, '#6baf7b', r, null); C.stroke(x, r, 1.2); });
+      [[24, 12, '#ffffff'], [16, 16, '#ffd0e2'], [32, 16, '#fff4c9'], [19, 7, '#ff8fb8'], [29, 7, '#ffffff'], [24, 20, '#ffb3c8']].forEach(([a, b, col]) => {
+        C.blob(x, a, b, 5.4, 5.4, r, 0.14, 10); C.fill(x, col, r, null); C.stroke(x, r, 1.4); dot(x, a, b, 1.6, '#ffd23f');
+      });
+    },
     'gear-maidBand'(x, r) {
       catBand(x, r, '#2b2a33');
       for (let i = 0; i <= 8; i++) { const a = Math.PI * (1.1 + i * 0.1); C.blob(x, 24 + Math.cos(a) * 22, 46 + Math.sin(a) * 14, 3, 3, r, 0.12, 10); C.fill(x, '#ffffff', r, null); C.stroke(x, r, 1.2); }

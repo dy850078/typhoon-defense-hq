@@ -82,6 +82,12 @@ td.wish p { white-space: pre-wrap; margin: 6px 0 0; color: var(--muted); }
       <div class="preview" id="a-state">目前沒有預告</div>
     </form>
 
+    <section class="card">
+      <h2>小樹屋語音中繼</h2>
+      <p class="note" style="margin: 0 0 12px">接不通的人會透過中繼伺服器（TURN）通話。這個月用到上限就不再走中繼，只剩直連，不會超過免費額度。</p>
+      <div class="preview" id="t-state">讀取中…</div>
+    </section>
+
     <form class="card" id="gift">
       <h2>送禮物</h2>
       <p class="note" style="margin: 0 0 12px">把一件裝備放進對方的衣櫃（不會自動穿上）。人在總部裡馬上收到，不在的話下次進總部就有。只能送給有帳號的人。</p>
@@ -212,6 +218,10 @@ td.wish p { white-space: pre-wrap; margin: 6px 0 0; color: var(--muted); }
       tb.appendChild(tr);
     });
   }
+  function showTurn(t) {
+    if (!t || !t.provider) { $('t-state').textContent = '沒有設定中繼伺服器（只有直連，有些人之間可能接不通）'; return; }
+    $('t-state').textContent = t.provider + '・' + t.month + ' 已用 ' + t.gb.toFixed(2) + ' GB／上限 ' + t.limitGb + ' GB' + (t.over ? '・已到上限，這個月先停用中繼' : '');
+  }
   function load() {
     return api('/api/admin/state').then(function (r) {
       if (!r.ok) { token = ''; $('panel').hidden = true; $('login').hidden = false; return; }
@@ -221,6 +231,7 @@ td.wish p { white-space: pre-wrap; margin: 6px 0 0; color: var(--muted); }
       giftUsers(r.accounts);
       showNotice(r.notice);
       renderWishes(r.wishes || []);
+      showTurn(r.turn);
     });
   }
   $('login').addEventListener('submit', function (e) {

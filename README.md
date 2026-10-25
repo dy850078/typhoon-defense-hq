@@ -101,8 +101,9 @@ npm start
 | `MAX_PLAYERS` | `40` | 最多同時上線人數 |
 | `JITSI_ROOM` | 每次啟動隨機產生 | 視訊房間名稱，想固定的話自己設一個不好猜的名字 |
 | `JITSI_DOMAIN` | `meet.jit.si` | 如果有自架 Jitsi 可以換掉 |
-| `TURN_API_URL` | 不設 | 小樹屋語音用 Metered 的 TURN 中繼（免綁卡），設定方法見下面「小樹屋語音」 |
-| `CF_TURN_KEY_ID` / `CF_TURN_KEY_TOKEN` | 不設 | 或改用 Cloudflare 的 TURN 中繼（要綁卡、免費額度較大） |
+| `CF_TURN_KEY_ID` / `CF_TURN_KEY_TOKEN` | 不設 | 小樹屋語音用 Cloudflare 的 TURN 中繼，設定方法見下面「小樹屋語音」 |
+| `TURN_LIMIT_GB` | `800` | 中繼每個月最多用多少 GB，到了就停用中繼（Cloudflare 免費額度 1000GB） |
+| `TURN_API_URL` | 不設 | 或改用 Metered 的 TURN 中繼（免綁卡） |
 | `TURN_URL` / `TURN_USER` / `TURN_PASS` | 不設 | 小樹屋語音的中繼伺服器（例如 `turn:example.com:3478`）；有人在公司、學校網路連不上語音時再加 |
 | `MONSTER_HP` | `8000` | 颱風怪物的基本血量 |
 | `MONSTER_HP_PER_PLAYER` | `2000` | 每多一位在線玩家，颱風多幾點血 |
@@ -122,21 +123,23 @@ npm start
 
 同一間小樹屋的人是兩兩直接連線通話（WebRTC），伺服器只幫忙交換連線資訊。手機 4G/5G、公司、學校網路常常不讓外面直接連進來，兩個人都在這種網路時就會互相聽不到（小樹屋卡片上那個人旁邊會顯示「連不上」）。這時要加一台 TURN 中繼伺服器幫忙轉送聲音。只有接不通的那幾對會走中繼，語音一小時大約 36MB，免費額度很夠用。
 
-### 用 Metered（免綁卡，每月免費 20GB）
+### 用 Cloudflare（每月免費 1000GB，要綁信用卡）
 
-1. 到 [metered.ca](https://www.metered.ca/tools/openrelay/) 註冊免費帳號，建一個 app（app 名稱會變成網址的一部分，例如 `typhoonhq.metered.live`）。
-2. 在後台的 TURN Server 頁面找到 **API Key**。
-3. 啟動時帶上這個網址（把 app 名稱和 API Key 換成你的）：
+1. 登入 [Cloudflare 後台](https://dash.cloudflare.com/)，左邊選單找 **Realtime**（舊名 Calls）→ **TURN Server** → **Create**，隨便取個名字。
+2. 建好後會看到 **Turn Token ID** 和 **API Token**（API Token 只會顯示一次，先複製起來）。
+3. 啟動時帶上這兩個值：
 
    ```bash
-   TURN_API_URL="https://typhoonhq.metered.live/api/v1/turn/credentials?apiKey=你的APIKey" npm start
+   CF_TURN_KEY_ID=你的TurnTokenID CF_TURN_KEY_TOKEN=你的APIToken npm start
    ```
 
-   啟動訊息出現「小樹屋語音：使用 Metered TURN 中繼」就成功了，大家重新整理、重新進小樹屋即可。
+   啟動訊息出現「小樹屋語音：使用 Cloudflare TURN 中繼」就成功了，大家重新整理、重新進小樹屋即可。
 
-### 或用 Cloudflare（要綁信用卡，每月免費 1000GB）
+**不會超過免費額度**：大家的瀏覽器會回報走中繼的流量，伺服器記在 `data/turn-usage.json`，這個月用到 `TURN_LIMIT_GB`（預設 800GB）就停發中繼通行證，只剩直連。管理員頁面的「小樹屋語音中繼」可以看到這個月用了多少。Cloudflare 本身沒有自動停用的開關，建議另外到 **Manage Account → Billing → Billable Usage → Create budget alert** 設一個 1 美元的預算提醒，有任何收費就會寄信給你。
 
-在 [Cloudflare 後台](https://dash.cloudflare.com/) 的 **Realtime**（舊名 Calls）→ **TURN Server** → **Create**，拿到 **Turn Token ID** 和 **API Token**，啟動時設 `CF_TURN_KEY_ID` 和 `CF_TURN_KEY_TOKEN`。兩個都設的話用 Cloudflare。
+### 或用 Metered（免綁卡，每月免費 20GB）
+
+到 [metered.ca](https://www.metered.ca/tools/openrelay/) 註冊、建一個 app，在 TURN Server 頁面拿 API Key，啟動時設 `TURN_API_URL="https://你的app.metered.live/api/v1/turn/credentials?apiKey=你的APIKey"`。兩種都設的話用 Cloudflare。
 
 伺服器會自己去換臨時通行證給玩家，API Key / Token 不會傳到瀏覽器。這些值是密碼，不要 commit 進 repo。
 

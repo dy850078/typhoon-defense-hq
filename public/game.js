@@ -631,6 +631,28 @@
       peers.set(id, pr);
       return pr;
     }
+    // 每 30 秒算一次有多少聲音是走中繼伺服器的，回報給伺服器統計用量（到上限伺服器就不再發中繼通行證）
+    async function relayBytes(pr) {
+      try {
+        const st = await pr.pc.getStats();
+        let pair = null;
+        st.forEach(r => { if (r.type === 'transport' && r.selectedCandidatePairId) pair = st.get(r.selectedCandidatePairId); });
+        if (!pair) st.forEach(r => { if (r.type === 'candidate-pair' && r.nominated && r.state === 'succeeded') pair = r; });
+        if (!pair) return 0;
+        const lc = st.get(pair.localCandidateId), rc = st.get(pair.remoteCandidateId);
+        const total = (pair.bytesSent || 0) + (pair.bytesReceived || 0);
+        const relay = (lc && lc.candidateType === 'relay') || (rc && rc.candidateType === 'relay');
+        const delta = relay ? Math.max(0, total - (pr.relayBytes || 0)) : 0;
+        pr.relayBytes = total;
+        return delta;
+      } catch (e) { return 0; }
+    }
+    setInterval(async () => {
+      if (!myTree || !peers.size) return;
+      let n = 0;
+      for (const pr of peers.values()) n += await relayBytes(pr);
+      if (n > 0) socket.emit('turnUsage', n);
+    }, 30000);
     function drop(id) {
       const pr = peers.get(id);
       if (!pr) return;

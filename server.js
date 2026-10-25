@@ -99,6 +99,26 @@ app.get('/config', (req, res) => res.json({ jitsiDomain: JITSI_DOMAIN, jitsiRoom
 const CF_TURN_ID = process.env.CF_TURN_KEY_ID, CF_TURN_TOKEN = process.env.CF_TURN_KEY_TOKEN, TURN_API_URL = process.env.TURN_API_URL;
 const TURN_PROVIDER = CF_TURN_ID && CF_TURN_TOKEN ? 'Cloudflare' : TURN_API_URL ? 'Metered' : null;
 let turnIce = null, turnIceUntil = 0, turnIceP = null;
+// 中繼用量上限：瀏覽器每 30 秒回報走中繼的流量，伺服器記在 data/turn-usage.json（每個月重算）
+// 到了上限（TURN_LIMIT_GB，預設 800GB，Cloudflare 免費額度是 1000GB）就不再發中繼通行證，只剩直連，保證不會超過免費額度
+const TURN_LIMIT = (Number(process.env.TURN_LIMIT_GB) || 800) * 1e9;
+const TURN_USAGE_FILE = path.join(DATA_DIR, 'turn-usage.json');
+const monthNow = () => new Date().toISOString().slice(0, 7);
+let turnUsage = { month: monthNow(), bytes: 0 };
+try { const u = JSON.parse(fs.readFileSync(TURN_USAGE_FILE, 'utf8')); if (u && u.month && Number.isFinite(u.bytes)) turnUsage = u; } catch (e) { /* 還沒有用量紀錄 */ }
+let turnSaveTimer = null;
+function addTurnUsage(bytes) {
+  if (turnUsage.month !== monthNow()) turnUsage = { month: monthNow(), bytes: 0 };
+  const was = turnUsage.bytes >= TURN_LIMIT;
+  turnUsage.bytes += bytes;
+  if (!was && turnUsage.bytes >= TURN_LIMIT) console.warn(`🌳 小樹屋中繼這個月已經用了 ${(turnUsage.bytes / 1e9).toFixed(2)}GB，到上限了，先停發中繼通行證`);
+  turnSaveTimer = turnSaveTimer || setTimeout(() => {
+    turnSaveTimer = null;
+    try { fs.mkdirSync(DATA_DIR, { recursive: true }); fs.writeFileSync(TURN_USAGE_FILE, JSON.stringify(turnUsage)); } catch (e) { console.warn('中繼用量存不了', e.message); }
+  }, 60000);
+}
+const turnOver = () => turnUsage.month === monthNow() && turnUsage.bytes >= TURN_LIMIT;
+const turnState = () => ({ provider: TURN_PROVIDER, month: monthNow(), gb: turnUsage.month === monthNow() ? turnUsage.bytes / 1e9 : 0, limitGb: TURN_LIMIT / 1e9, over: turnOver() });
 async function fetchTurn() {
   if (TURN_PROVIDER === 'Cloudflare') {
     const r = await fetch(`https://rtc.live.cloudflare.com/v1/turn/keys/${CF_TURN_ID}/credentials/generate-ice-servers`, {
@@ -114,7 +134,7 @@ async function fetchTurn() {
   return { list: Array.isArray(j) ? j : j.iceServers, ms: 12 * 3600e3 };
 }
 async function iceServers() {
-  if (!TURN_PROVIDER) return ICE_SERVERS;
+  if (!TURN_PROVIDER || turnOver()) return ICE_SERVERS;
   if (turnIce && Date.now() < turnIceUntil - 2 * 3600e3) return turnIce;
   turnIceP = turnIceP || (async () => {
     try {
@@ -234,7 +254,7 @@ app.post('/api/admin/login', (req, res) => {
 app.get('/api/admin/state', (req, res) => {
   if (!isAdmin(req)) return res.status(401).json({ ok: false });
   const online = new Set([...players.values()].map(p => p.account && p.account.username));
-  res.json({ ok: true, party: partyInfo(), notice: noticeState(), wishes: wishes.all(), accounts: accounts.list().map(a => Object.assign(a, { online: online.has(a.username) })) });
+  res.json({ ok: true, party: partyInfo(), notice: noticeState(), wishes: wishes.all(), turn: turnState(), accounts: accounts.list().map(a => Object.assign(a, { online: online.has(a.username) })) });
 });
 app.post('/api/admin/settings', (req, res) => {
   if (!isAdmin(req)) return res.status(401).json({ ok: false });
@@ -1954,6 +1974,13 @@ io.on('connection', (socket) => {
     p.tree = t.id; p.treeMuted = false;
     emitTrees();
     ack({ ok: true, id: t.id, peers, ice });
+  });
+  // 瀏覽器回報這 30 秒走中繼的流量（位元組）；一次最多算 50MB，避免亂報
+  socket.on('turnUsage', (n) => {
+    const p = players.get(socket.id);
+    n = Math.floor(Number(n));
+    if (!p || !p.tree || !TURN_PROVIDER || !(n > 0)) return;
+    addTurnUsage(Math.min(n, 50e6));
   });
   socket.on('treeLeave', () => { const p = players.get(socket.id); if (leaveTree(p)) emitTrees(); });
   socket.on('treeMute', (m) => {

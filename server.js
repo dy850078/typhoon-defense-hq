@@ -91,30 +91,45 @@ app.use('/vendor', express.static(path.join(__dirname, 'node_modules/phaser/dist
 const ICE_SERVERS = [{ urls: 'stun:stun.l.google.com:19302' }].concat(process.env.TURN_URL
   ? [{ urls: process.env.TURN_URL.split(','), username: process.env.TURN_USER || '', credential: process.env.TURN_PASS || '' }] : []);
 app.get('/config', (req, res) => res.json({ jitsiDomain: JITSI_DOMAIN, jitsiRoom: JITSI_ROOM, party: partyInfo(), iceServers: ICE_SERVERS }));
-// 有設 Cloudflare TURN 金鑰的話，跟 Cloudflare 拿臨時通行證（24 小時有效，剩不到 2 小時就換新的）
-// 手機網路、公司網路常常不讓兩個人直接連線，這時聲音改由 Cloudflare 的中繼伺服器轉送
-const CF_TURN_ID = process.env.CF_TURN_KEY_ID, CF_TURN_TOKEN = process.env.CF_TURN_KEY_TOKEN;
-let cfIce = null, cfIceUntil = 0, cfIceP = null;
+// 小樹屋的 TURN 中繼：手機網路、公司網路常常不讓兩個人直接連線，這時聲音改由中繼伺服器轉送
+// 兩種都可以（擇一）：
+//   Metered（免綁卡，每月免費 20GB）：TURN_API_URL=https://你的app.metered.live/api/v1/turn/credentials?apiKey=你的金鑰
+//   Cloudflare（每月免費 1000GB）：CF_TURN_KEY_ID + CF_TURN_KEY_TOKEN
+// 伺服器自己去拿臨時通行證、快過期就換新，金鑰不會傳到瀏覽器
+const CF_TURN_ID = process.env.CF_TURN_KEY_ID, CF_TURN_TOKEN = process.env.CF_TURN_KEY_TOKEN, TURN_API_URL = process.env.TURN_API_URL;
+const TURN_PROVIDER = CF_TURN_ID && CF_TURN_TOKEN ? 'Cloudflare' : TURN_API_URL ? 'Metered' : null;
+let turnIce = null, turnIceUntil = 0, turnIceP = null;
+async function fetchTurn() {
+  if (TURN_PROVIDER === 'Cloudflare') {
+    const r = await fetch(`https://rtc.live.cloudflare.com/v1/turn/keys/${CF_TURN_ID}/credentials/generate-ice-servers`, {
+      method: 'POST', headers: { Authorization: `Bearer ${CF_TURN_TOKEN}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ttl: 86400 }), signal: AbortSignal.timeout(5000),
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return { list: (await r.json()).iceServers, ms: 86400e3 };
+  }
+  const r = await fetch(TURN_API_URL, { signal: AbortSignal.timeout(5000) });
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  const j = await r.json();
+  return { list: Array.isArray(j) ? j : j.iceServers, ms: 12 * 3600e3 };
+}
 async function iceServers() {
-  if (!CF_TURN_ID || !CF_TURN_TOKEN) return ICE_SERVERS;
-  if (cfIce && Date.now() < cfIceUntil - 2 * 3600e3) return cfIce;
-  cfIceP = cfIceP || (async () => {
+  if (!TURN_PROVIDER) return ICE_SERVERS;
+  if (turnIce && Date.now() < turnIceUntil - 2 * 3600e3) return turnIce;
+  turnIceP = turnIceP || (async () => {
     try {
-      const r = await fetch(`https://rtc.live.cloudflare.com/v1/turn/keys/${CF_TURN_ID}/credentials/generate-ice-servers`, {
-        method: 'POST', headers: { Authorization: `Bearer ${CF_TURN_TOKEN}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ttl: 86400 }), signal: AbortSignal.timeout(5000),
-      });
-      if (!r.ok) throw new Error('HTTP ' + r.status);
-      const list = [].concat((await r.json()).iceServers || []);
+      const { list, ms } = await fetchTurn();
+      const servers = [].concat(list || []).map(sv => Object.assign({}, sv));
       // 瀏覽器會擋 53 port，留著只會讓連線多等一段逾時
-      list.forEach(sv => { if (Array.isArray(sv.urls)) sv.urls = sv.urls.filter(u => !/:53(\?|$)/.test(u)); });
-      cfIce = ICE_SERVERS.concat(list); cfIceUntil = Date.now() + 86400e3;
+      servers.forEach(sv => { if (Array.isArray(sv.urls)) sv.urls = sv.urls.filter(u => !/:53(\?|$)/.test(u)); });
+      if (!servers.length) throw new Error('沒有拿到伺服器清單');
+      turnIce = ICE_SERVERS.concat(servers); turnIceUntil = Date.now() + ms;
     } catch (e) {
-      console.warn('Cloudflare TURN 通行證拿不到，先只用 STUN：', e.message);
-    } finally { cfIceP = null; }
+      console.warn(`${TURN_PROVIDER} TURN 通行證拿不到，先只用 STUN：`, e.message);
+    } finally { turnIceP = null; }
   })();
-  await cfIceP;
-  return cfIce || ICE_SERVERS;
+  await turnIceP;
+  return turnIce || ICE_SERVERS;
 }
 
 // ---------------- 帳號 API ----------------
@@ -2143,7 +2158,7 @@ server.listen(PORT, () => {
   console.log(`🌀 颱風天防衛總部已啟動：http://localhost:${PORT}`);
   console.log(`🔑 管理員介面：http://localhost:${PORT}/admin.html  密碼：${process.env.ADMIN_PASSWORD ? '（用 ADMIN_PASSWORD 設定的）' : settings.adminPassword}`);
   console.log(`📹 視訊房間：https://${JITSI_DOMAIN}/${JITSI_ROOM}`);
-  console.log(CF_TURN_ID && CF_TURN_TOKEN ? '🌳 小樹屋語音：使用 Cloudflare TURN 中繼' : process.env.TURN_URL ? '🌳 小樹屋語音：使用 TURN_URL 中繼' : '🌳 小樹屋語音：只有 STUN（手機網路之間可能接不通，見 README 的 Cloudflare TURN 設定）');
+  console.log(TURN_PROVIDER ? `🌳 小樹屋語音：使用 ${TURN_PROVIDER} TURN 中繼` : process.env.TURN_URL ? '🌳 小樹屋語音：使用 TURN_URL 中繼' : '🌳 小樹屋語音：只有 STUN（手機網路之間可能接不通，見 README 的「小樹屋語音」）');
 });
 
 // 關掉伺服器（Ctrl+C）前先把大家的角色存好

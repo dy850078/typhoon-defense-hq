@@ -3819,47 +3819,49 @@
       if (!this.cameras.main.worldView.contains(c.x, c.y)) return;
       const tick = ++c.setTick;
       const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
-      const x = c.x + (Math.random() - 0.5) * 54, y = c.y - 30 - Math.random() * 40;
-      const sway = (Math.random() - 0.5) * 30;
+      // 從身體兩側冒出來（中間身體那段留空），高度在腳邊到肩膀之間，才不會一直往頭上撒
+      const side = Math.random() < 0.5 ? -1 : 1;
+      const x = c.x + side * (28 + Math.random() * 32), y = c.y - 4 - Math.random() * 46;
+      const sway = side * Math.random() * 18;
       const fade = (objs, dur) => this.tweens.add({ targets: objs, alpha: 0, duration: dur, onComplete: () => objs.forEach(o => { this.tweens.killTweensOf(o); o.destroy(); }) });
       if (fx.kind === 'heart') {
         // 會發光的愛心，有大有小，往上飄
         const sc = 0.32 + Math.random() * 0.34;
         const objs = this.setGlowItem(x, y, 'fx-heart', sc, pick(fx.tint), 0xff7ab0, sc * 1.45);
-        this.tweens.add({ targets: objs, y: y - 40 - Math.random() * 20, x: x + sway, duration: 1700, ease: 'Sine.easeOut' });
+        this.tweens.add({ targets: objs, y: y - 30 - Math.random() * 16, x: x + sway, duration: 1700, ease: 'Sine.easeOut' });
         this.time.delayedCall(1000, () => fade(objs, 700));
-        if (Math.random() < 0.45) this.setTwinkle(c.x + (Math.random() - 0.5) * 60, c.y - 20 - Math.random() * 60, pick([0xffffff, 0xffd0e8]));
+        if (Math.random() < 0.45) this.setTwinkle(c.x + (Math.random() - 0.5) * 130, c.y - Math.random() * 60, pick([0xffffff, 0xffd0e8]));
       } else if (fx.kind === 'redPacket') {
         // 紅包往上飄、後面拖著金粉；每隔幾次噴出一把金幣
         const objs = this.setGlowItem(x, y, 'fx-redpacket', 0.45 + Math.random() * 0.15, null, 0xffc040, 0.9);
-        this.tweens.add({ targets: objs, y: y - 44, x: x + sway, duration: 1600, ease: 'Sine.easeOut',
+        this.tweens.add({ targets: objs, y: y - 34, x: x + sway, duration: 1600, ease: 'Sine.easeOut',
           onUpdate: (tw) => { if (Math.random() < 0.18) this.setTwinkle(objs[1].x + (Math.random() - 0.5) * 10, objs[1].y + 10, 0xffd23f, 0.35); } });
         this.time.delayedCall(1000, () => fade(objs, 600));
         if (tick % 4 === 0) for (let i = 0; i < 6; i++) {
-          const coin = this.add.image(c.x, c.y - 50, 'fx-coin').setDepth(2041).setScale(0.4);
-          const dx = (Math.random() - 0.5) * 90;
+          const coin = this.add.image(c.x, c.y - 40, 'fx-coin').setDepth(2041).setScale(0.4);
+          const dx = (Math.random() < 0.5 ? -1 : 1) * (30 + Math.random() * 45);
           this.tweens.add({ targets: coin, x: c.x + dx, duration: 700, ease: 'Linear' });
-          this.tweens.add({ targets: coin, y: c.y - 80 - Math.random() * 20, duration: 300, ease: 'Quad.easeOut', yoyo: true, hold: 0,
+          this.tweens.add({ targets: coin, y: c.y - 62 - Math.random() * 16, duration: 300, ease: 'Quad.easeOut', yoyo: true, hold: 0,
             onComplete: () => { this.setTwinkle(coin.x, coin.y, 0xffd23f, 0.4); coin.destroy(); } });
         }
       } else if (fx.kind === 'petal') {
         // 花瓣：粉白相間從頭上慢慢飄落、邊轉邊晃，中間夾著金色亮點
-        const img = this.add.image(x, c.y - 72 - Math.random() * 20, 'fx-petal').setDepth(2040)
+        const img = this.add.image(x, c.y - 44 - Math.random() * 12, 'fx-petal').setDepth(2040)
           .setScale(0.4 + Math.random() * 0.25).setTint(pick(fx.tint)).setRotation(Math.random() * Math.PI);
-        this.tweens.add({ targets: img, y: c.y - 2, x: x + sway, rotation: img.rotation + (Math.random() < 0.5 ? -2.5 : 2.5),
+        this.tweens.add({ targets: img, y: c.y + 6, x: x + sway, rotation: img.rotation + (Math.random() < 0.5 ? -2.5 : 2.5),
           alpha: { from: 1, to: 0 }, duration: 2000, ease: 'Sine.easeIn', onComplete: () => img.destroy() });
-        if (Math.random() < 0.35) this.setTwinkle(c.x + (Math.random() - 0.5) * 60, c.y - 10 - Math.random() * 70, pick([0xffe27a, 0xffffff]));
+        if (Math.random() < 0.35) this.setTwinkle(c.x + (Math.random() - 0.5) * 130, c.y - Math.random() * 56, pick([0xffe27a, 0xffffff]));
       } else if (fx.kind === 'butterfly') {
         // 蝴蝶：一上一下拍著翅膀往旁邊飛，飛過的地方留下一串發光的小亮點
-        const dir = Math.random() < 0.5 ? -1 : 1;
+        const dir = side; // 往外飛，不會橫越頭頂
         const img = this.add.image(x, y, 'fx-butterfly').setDepth(2040).setScale(0.5).setFlipX(dir < 0).setTint(pick(fx.tint));
-        this.tweens.add({ targets: img, x: x + dir * (50 + Math.random() * 30), duration: 2200, ease: 'Sine.easeOut',
+        this.tweens.add({ targets: img, x: x + dir * (40 + Math.random() * 30), duration: 2200, ease: 'Sine.easeOut',
           onUpdate: () => {
             if (Math.random() > 0.25) return;
             const d = this.add.image(img.x, img.y + 4, 'fx-glow').setDepth(2039).setScale(0.12).setTint(0xbfe8ff).setBlendMode(Phaser.BlendModes.ADD);
             this.tweens.add({ targets: d, alpha: 0, scale: 0.04, y: d.y + 8, duration: 700, onComplete: () => d.destroy() });
           } });
-        this.tweens.add({ targets: img, y: y - 36, duration: 2200, ease: 'Sine.easeInOut' });
+        this.tweens.add({ targets: img, y: y - 24, duration: 2200, ease: 'Sine.easeInOut' });
         this.tweens.add({ targets: img, scaleY: 0.18, duration: 140, yoyo: true, repeat: 7 });
         this.tweens.add({ targets: img, alpha: 0, delay: 1600, duration: 600, onComplete: () => { this.tweens.killTweensOf(img); img.destroy(); } });
       }

@@ -299,17 +299,21 @@
       C.stroke(ctx, r, 1.3);
     });
     ctx.fillStyle = '#e0607a'; ctx.beginPath(); ctx.ellipse(32, 40.4, 3.3, 1.7, 0, 0, Math.PI * 2); ctx.fill();
-    // 右手從胸口抬到嘴邊
-    ctx.beginPath(); ctx.moveTo(48, 55); ctx.quadraticCurveTo(46.5, 49, 38, 47.5);
+    // 右手從胸口抬到下巴：握拳，只伸出食指貼在嘴唇正中間
+    ctx.beginPath(); ctx.moveTo(48, 56); ctx.quadraticCurveTo(46, 50.5, 38.5, 49);
     C.stroke(ctx, r, 8, C.INK); C.stroke(ctx, r, 5, skin);
-    C.line(ctx, 42.5, 51, 44, 47.2, r, 3, '#cfd6e2', 0.2); // 手環
-    [[41.6, 49.4], [44.8, 50.6]].forEach(([x, y]) => { ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(x, y, 0.8, 0, Math.PI * 2); ctx.fill(); });
-    C.blob(ctx, 36, 46.5, 3.8, 3.2, r, 0.1, 12); C.fill(ctx, skin, r, null); C.stroke(ctx, r, 1.8);
-    // 豎起來的食指貼在嘴唇前面（在鼻子下面）
-    ctx.beginPath(); ctx.moveTo(34.4, 45); ctx.lineTo(34, 38.2);
-    C.stroke(ctx, r, 3.6, C.INK); C.stroke(ctx, r, 2, skin);
-    C.blob(ctx, 35.2, 45.8, 1.3, 1.1, r, 0.1, 8); C.fill(ctx, '#e0b84a', r, null); C.stroke(ctx, r, 0.8); // 戒指
-    C.blob(ctx, 37.4, 47.9, 1.3, 1.1, r, 0.1, 8); C.fill(ctx, '#e8edf3', r, null); C.stroke(ctx, r, 0.8);
+    C.line(ctx, 42.6, 52.6, 43.8, 48.6, r, 3, '#cfd6e2', 0.2); // 手環
+    [[42, 51], [44.6, 52]].forEach(([x, y]) => { ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(x, y, 0.8, 0, Math.PI * 2); ctx.fill(); });
+    // 食指：圓頭的長條，指尖有一點指甲
+    ctx.beginPath();
+    ctx.moveTo(30.6, 45.5); ctx.lineTo(30.8, 38.6); ctx.quadraticCurveTo(32, 36.6, 33.2, 38.6); ctx.lineTo(33.4, 45.5); ctx.closePath();
+    C.fill(ctx, skin, r, null); C.stroke(ctx, r, 1.4);
+    ctx.fillStyle = '#f6d3d8'; ctx.beginPath(); ctx.ellipse(32, 38.9, 0.8, 1.1, 0, 0, Math.PI * 2); ctx.fill();
+    // 握起來的拳頭，三個指節
+    C.blob(ctx, 34.5, 47.8, 5, 3.6, r, 0.06, 14); C.fill(ctx, skin, r, null); C.stroke(ctx, r, 1.6);
+    [33.6, 36.2, 38.4].forEach(x => C.line(ctx, x, 45.2, x - 0.2, 47.4, r, 0.9, 'rgba(43,42,51,0.55)', 0.1));
+    C.blob(ctx, 34.9, 45.4, 1.2, 0.9, r, 0.1, 8); C.fill(ctx, '#e0b84a', r, null); C.stroke(ctx, r, 0.7); // 戒指
+    C.blob(ctx, 37.3, 45.5, 1.2, 0.9, r, 0.1, 8); C.fill(ctx, '#e8edf3', r, null); C.stroke(ctx, r, 0.7);
   }
 
   function drawCostume(ctx, C, r, cos, hem, p) {

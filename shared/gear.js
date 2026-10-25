@@ -611,8 +611,7 @@
     [1, -1].forEach(k => {
       ctx.save();
       if (k < 0) { ctx.translate(64, 0); ctx.scale(-1, 1); }
-      ctx.translate(-5, 9); // 往下移到背後；外緣的圓羽會往外鼓，往內收一點才不會被人物框切掉
-      ctx.translate(44, 49); ctx.scale(0.86, 0.86); ctx.translate(-44, -49); // 以翅膀根部為中心縮小一點
+      ctx.translate(-4, 8); // 往下移到背後，上緣從頭的兩側露出來；往內收一點，外緣的圓羽才不會被人物框切掉
       angelWingPath(ctx); C.fill(ctx, '#fbfdff', r, [41, 6, 38, 48]);
       // 陰影：靠身體那側漸漸變暗；每一球圓羽沿著邊緣內側一道淡淡的灰藍，看起來比較立體
       ctx.save(); angelWingPath(ctx); ctx.clip();

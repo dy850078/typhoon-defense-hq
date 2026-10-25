@@ -1917,7 +1917,7 @@ io.on('connection', (socket) => {
     if (!MAP.nearWell(p.x, p.y)) return { error: '走到許願池旁邊才能許願' };
     const r = wishes.add(userOf(p), p.name, m);
     if (r.error) return r;
-    pushChat({ system: true, text: `${p.name} 在休息區的許願池許了一個願：【${WISH_CAT[r.wish.cat]}】${r.wish.title}`, t: Date.now() });
+    pushChat({ system: true, text: `${p.name} 在許願池許了一個願：【${WISH_CAT[r.wish.cat]}】${r.wish.title}`, t: Date.now() });
     io.emit('wishes', { coin: p.id });
     return { id: r.wish.id };
   });

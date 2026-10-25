@@ -1857,6 +1857,14 @@
     });
   }
 
+  // 希臘少女的台詞：說完就幫你打開許願池
+  const GREEK_LINES = [
+    '噓…願望說出來就不靈了，寫下來吧',
+    '把硬幣丟進池子裡，再把願望寫清楚一點',
+    '遇到 Bug 也可以來這裡說，我會偷偷轉告管理員',
+    '先看看有沒有人許過一樣的願，幫他按個讚吧',
+    '颱風天也要記得許願喔',
+  ];
   function toast(text) {
     const t = el('div', 'toast', text);
     $('toasts').appendChild(t);
@@ -2437,7 +2445,7 @@
       if (x >= MAP.LX) return ch === 'q' || ch === 'O' ? 'temple' : ch === 'Q' ? 'templewall' : 'void';
       if (x >= MAP.MW) return ch === 'Z' ? 'sea' : ch === 'Y' ? 'rock' : 'yE'.includes(ch) ? 'sand' : ch === 'n' ? 'cliff' : 'cave';
       if (y > 30 && ':T~'.includes(ch)) return 'mud';
-      if (',T~BFO'.includes(ch)) return 'grass';
+      if (',T~BFOLI'.includes(ch)) return 'grass';
       if (ch === '#') return 'wall';
       if (inKitchen(x, y)) return 'tile';
       return inVideo(x, y) ? 'carpet' : 'wood';
@@ -2850,6 +2858,16 @@
       }).setOrigin(0.5).setDepth(gy);
       const gTalk = this.add.image(gx + 26, gy - 70, 'fx-talk').setDepth(gy + 1);
       this.tweens.add({ targets: gTalk, y: gy - 78, duration: 760, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
+      // 許願池旁邊的希臘少女：紅棕色長髮、白色單肩長袍、比「噓」；跟她說話會打開許願池
+      this.textures.addCanvas('greek', drawNpc({ hair: 'long', hairColor: '#b5532c', skin: AV.SKINS[0], glasses: '0', cls: 'greek', npc: 'greek' }));
+      const kx = MAP.greek.x, ky = MAP.greek.y + 18;
+      this.add.image(kx, ky, 'greek').setScale(0.55).setOrigin(0.5, 0.95).setDepth(ky);
+      this.add.text(kx, ky - 96, '希臘少女', {
+        fontSize: '10px', fontStyle: 'bold', color: INK, fontFamily: FONT,
+        backgroundColor: PAPER, padding: { x: 10, y: 4 },
+      }).setOrigin(0.5).setDepth(ky);
+      const kTalk = this.add.image(kx + 26, ky - 70, 'fx-talk').setDepth(ky + 1);
+      this.tweens.add({ targets: kTalk, y: ky - 78, duration: 820, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
 
       // 煙火的火花統一畫在一張 graphics 上
       // 煙火的火花：先把每個顏色的發光小點畫成一張貼圖，再用 Blitter 大量貼上去
@@ -4201,6 +4219,7 @@
       if (MAP.tiles[ty] && MAP.tiles[ty][tx] === 'G' && MAP.nearStove(this.me.x, this.me.y, 1.8 * T)) return { type: 'cook' };
       if (Math.hypot(x - MAP.mentor.x, y - (MAP.mentor.y - 20)) < 50 && MAP.nearMentor(this.me.x, this.me.y)) return { type: 'mentor' };
       if (Math.hypot(x - MAP.guard.x, y - (MAP.guard.y - 20)) < 50 && MAP.nearGuard(this.me.x, this.me.y)) return { type: 'guard' };
+      if (Math.hypot(x - MAP.greek.x, y - (MAP.greek.y - 20)) < 50 && MAP.nearGreek(this.me.x, this.me.y)) return { type: 'greek' };
       if (Math.hypot(x - MAP.fridge.x, y - (MAP.fridge.y - 10)) < 40 && MAP.nearFridge(this.me.x, this.me.y)) return { type: 'fridge' };
       if (MAP.tiles[ty] && MAP.tiles[ty][tx] === 'J' && MAP.nearDj(this.me.x, this.me.y)) return { type: 'dj' };
       if (MAP.tiles[ty] && MAP.tiles[ty][tx] === 'L' && MAP.nearWell(this.me.x, this.me.y)) return { type: 'well' };
@@ -4227,6 +4246,7 @@
       if (!best && MAP.nearMentor(this.me.x, this.me.y)) return { type: 'mentor' };
       if (!best && MAP.nearGuard(this.me.x, this.me.y)) return { type: 'guard' };
       if (!best && MAP.nearDj(this.me.x, this.me.y)) return { type: 'dj' };
+      if (!best && MAP.nearGreek(this.me.x, this.me.y)) return { type: 'greek' };
       if (!best && MAP.nearWell(this.me.x, this.me.y)) return { type: 'well' };
       return best;
     }
@@ -4257,6 +4277,9 @@
       } else if (act.type === 'dj') {
         MUSIC.open();
       } else if (act.type === 'well') {
+        WISH.open();
+      } else if (act.type === 'greek') {
+        toast(`希臘少女：「${GREEK_LINES[Math.floor(Math.random() * GREEK_LINES.length)]}」`);
         WISH.open();
       } else if (act.type === 'cook') {
         socket.emit('cook', (res) => {
@@ -5152,7 +5175,7 @@
       // 互動按鈕
       const all0 = [this.me, ...this.remotes.values()];
       const near = this.nearbyAction();
-      const LABELS = { crate: '🔨 敲箱子', cook: '🍜 煮泡麵', mentor: '💬 找沈理員轉職', guard: '🏯 前往副本候位區', dj: '🎧 點歌', well: '許個願' };
+      const LABELS = { crate: '🔨 敲箱子', cook: '🍜 煮泡麵', mentor: '💬 找沈理員轉職', guard: '🏯 前往副本候位區', dj: '🎧 點歌', well: '許個願', greek: '和希臘少女說話' };
       // 攻擊用技能列的普攻鍵，這顆只放其他互動（敲箱子、點歌…）
       const canHit = !!near && !this.isDead() && near.type === 'attack';
       const label = !near || this.isDead() || canHit ? '' : LABELS[near.type];
@@ -5226,7 +5249,6 @@
           command: '找右上角的 📂 轉職資料沈理員，可以換職業',
           storage: '走到箱子旁按空白鍵（或點箱子）敲三下',
           kitchen: '站在爐台旁按空白鍵煮泡麵補血，有蔬菜會自動加進去',
-          lounge: '右上角有許願池，想要總部多什麼功能，走過去許個願',
           lobby: `站在古城候位區按「出發」，${MAP.DUNGEON.countdownMs / 1000} 秒後一起傳送到花蓮副本（最多 ${MAP.DUNGEON.maxPlayers} 人），打倒最終頭目會掉武器；按「回總部」回到指揮中心`,
           d1: '照石碑上的顏色順序踩石頭，踩錯會被浪打回起點',
           d2: '往大理石走過去就能推（手機點石頭也可以），三顆都推進地上有 ⬇️ 的凹槽，石門就會開；卡住可以按「重排大理石」',

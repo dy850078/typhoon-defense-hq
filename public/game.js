@@ -776,6 +776,206 @@
     };
   })();
   socket.on('music', (s) => MUSIC.set(s));
+
+  // ---------------- 許願池：大家想要的功能、遇到的 Bug 登記在這裡 ----------------
+  // 第一層是一橫條一則的清單（可以搜尋主題、篩類別、排序、分頁），點進去看內文、按讚；作者可以修改或收回
+  // 有帳號才能許願；處理狀態由管理員在管理頁改
+  const WISH = (() => {
+    // 沒登入的人按讚用這台裝置的代號
+    let wid = saved('hq-wid');
+    if (!wid || !/^[a-z0-9]{8,24}$/.test(wid)) { wid = Math.random().toString(36).slice(2, 12) + Date.now().toString(36); store('hq-wid', wid); }
+    const CATS = { bug: 'Bug 回報', feature: '新功能', improve: '功能優化', other: '其他' };
+    const STATUS = { new: '待處理', review: '評估中', doing: '處理中', done: '已完成', no: '不處理' };
+    const SORTS = { updated: '最近更新', likes: '最多讚', new: '最新許願' };
+    const query = { q: '', cat: '', sort: saved('hq-wish-sort') in SORTS ? saved('hq-wish-sort') : 'updated', page: 1 };
+    let view = 'list'; // list、detail、form
+    let detailId = 0, editing = null; // editing：{ id（新許願是 0）, title, cat, body }
+    let info = { login: false, left: 0, titleLen: 40, bodyLen: 2000 };
+    let results = null, searchTimer = 0;
+    const ago = (t) => {
+      const m = Math.round((Date.now() - t) / 60000);
+      return m < 1 ? '剛剛' : m < 60 ? `${m} 分鐘前` : m < 1440 ? `${Math.round(m / 60)} 小時前` : `${Math.round(m / 1440)} 天前`;
+    };
+    const isOpen = () => modalKind === 'wish' && !$('modal').hidden;
+    const catTag = (c) => el('span', 'wish-cat c-' + c, CATS[c] || '其他');
+    const statusTag = (s) => el('span', 'wish-st s-' + s, STATUS[s] || STATUS.new);
+    const send = (ev, data, cb) => socket.emit(ev, Object.assign({ wid }, data), (r) => {
+      if (!r || !r.ok) { toast((r && r.error) || '沒成功，再試一次'); return; }
+      cb(r);
+    });
+    function show(box) {
+      const card = $('modal').querySelector('.modal-card'), top = isOpen() && card ? card.scrollTop : 0;
+      openModal('wish', '許願池', box);
+      $('modal').classList.add('wide');
+      if (card) card.scrollTop = top;
+    }
+
+    // ---------- 第一層：清單 ----------
+    let shell = null; // 清單畫面（工具列 + 結果），重新整理時只換結果，搜尋框的游標才不會跑掉
+    function loadList() {
+      send('wishList', query, (r) => {
+        info = r; results = r;
+        if (view !== 'list') return;
+        if (!shell || !isOpen() || !$('modal-body').contains(shell.box)) buildList();
+        fillList();
+      });
+    }
+    function buildList() {
+      const box = el('div', 'modal-list wish-modal');
+      const head = el('div', 'wish-head');
+      const hint = el('p', 'modal-hint');
+      const add = el('button', 'primary small', '許個願'); add.type = 'button';
+      add.prepend(icon('wish-coin', ''));
+      add.onclick = () => openForm(null);
+      head.append(hint, add);
+      // 工具列：搜尋主題、類別、排序
+      const bar = el('div', 'wish-bar');
+      const search = el('input'); search.type = 'search'; search.placeholder = '搜尋主題'; search.value = query.q; search.maxLength = 40;
+      search.oninput = () => {
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(() => { query.q = search.value.trim(); query.page = 1; loadList(); }, 250);
+      };
+      const sort = el('select');
+      Object.entries(SORTS).forEach(([k, v]) => { const o = el('option', null, v); o.value = k; sort.appendChild(o); });
+      sort.value = query.sort;
+      sort.onchange = () => { query.sort = sort.value; query.page = 1; store('hq-wish-sort', sort.value); loadList(); };
+      bar.append(search, sort);
+      const cats = el('div', 'wish-cats');
+      [['', '全部']].concat(Object.entries(CATS)).forEach(([k, v]) => {
+        const b = el('button', 'wish-tab' + (query.cat === k ? ' on' : ''), v); b.type = 'button';
+        b.onclick = () => {
+          query.cat = k; query.page = 1;
+          cats.querySelectorAll('.wish-tab').forEach(x => x.classList.toggle('on', x === b));
+          loadList();
+        };
+        cats.appendChild(b);
+      });
+      const rows = el('ul', 'wish-rows');
+      const pager = el('div', 'wish-pager');
+      box.append(head, bar, cats, rows, pager);
+      shell = { box, hint, add, rows, pager };
+      show(box);
+    }
+    function fillList() {
+      const r = results, s = shell;
+      s.hint.textContent = !r.login ? '登入帳號才能許願，沒帳號也可以幫喜歡的願望按讚。'
+        : r.left ? `想要什麼功能、遇到什麼 Bug，都可以來這裡許願（今天還可以許 ${r.left} 個）`
+        : `今天的 ${r.perDay} 個願都許完了，明天再來。`;
+      s.add.hidden = !r.login || !r.left;
+      s.rows.innerHTML = '';
+      if (!r.items.length) s.rows.appendChild(el('li', 'wish-empty', r.all ? '找不到符合的願望，換個關鍵字或類別試試' : '池子裡還沒有願望，來當第一個許願的人吧！'));
+      r.items.forEach((w) => {
+        const li = el('li', 'wish-row' + (w.status === 'no' ? ' no' : ''));
+        li.tabIndex = 0;
+        const main = el('div', 'wish-row-main');
+        const top = el('div', 'wish-row-top');
+        top.append(catTag(w.cat), el('b', 'wish-title', w.title));
+        main.append(top, el('small', null, `${w.name}・${query.sort === 'new' ? ago(w.at) : '更新於 ' + ago(w.updated)}${w.mine ? '・我許的' : ''}`));
+        const likes = el('span', 'wish-likes' + (w.liked ? ' on' : ''));
+        likes.append(icon(w.liked ? 'wish-heart' : 'wish-heart-off', ''), el('b', null, String(w.likes)));
+        li.append(main, statusTag(w.status), likes);
+        li.onclick = () => openDetail(w.id);
+        li.onkeydown = (e) => { if (e.key === 'Enter') openDetail(w.id); };
+        s.rows.appendChild(li);
+      });
+      s.pager.innerHTML = '';
+      s.pager.hidden = r.pages <= 1;
+      const go = (n) => { query.page = n; loadList(); };
+      const prev = el('button', 'hud-btn tiny', '上一頁'); prev.type = 'button'; prev.disabled = r.page <= 1; prev.onclick = () => go(r.page - 1);
+      const next = el('button', 'hud-btn tiny', '下一頁'); next.type = 'button'; next.disabled = r.page >= r.pages; next.onclick = () => go(r.page + 1);
+      s.pager.append(prev, el('span', null, `第 ${r.page} / ${r.pages} 頁・共 ${r.total} 則`), next);
+    }
+
+    // ---------- 內頁 ----------
+    function openDetail(id) {
+      send('wishGet', { id }, (r) => {
+        view = 'detail'; detailId = id; shell = null;
+        const w = r.wish, box = el('div', 'modal-list wish-modal');
+        const back = el('button', 'wish-back', '← 回清單'); back.type = 'button';
+        back.onclick = backToList;
+        const tags = el('div', 'wish-row-top');
+        tags.append(catTag(w.cat), statusTag(w.status));
+        const paper = el('div', 'wish-paper' + (w.status === 'done' ? ' done' : ''));
+        paper.append(tags, el('h3', 'wish-h', w.title),
+          el('small', 'wish-by', `${w.name} 許願・${ago(w.at)}${w.updated > w.at + 1000 ? `・更新於 ${ago(w.updated)}` : ''}`),
+          w.body ? el('p', 'wish-body', w.body) : el('p', 'wish-body empty', '（沒有寫內文）'));
+        if (w.status === 'done') {
+          const st = el('div', 'wish-stamp');
+          st.append(icon('wish-stamp', ''), el('span', null, STATUS.done));
+          paper.appendChild(st);
+        }
+        const acts = el('div', 'wish-acts');
+        const like = el('button', 'wish-like' + (w.liked ? ' on' : '')); like.type = 'button';
+        like.append(icon(w.liked ? 'wish-heart' : 'wish-heart-off', ''), el('b', null, w.liked ? `已按讚 ${w.likes}` : `我也想要 ${w.likes}`));
+        like.onclick = () => { like.disabled = true; send('wishLike', { id }, () => openDetail(id)); };
+        acts.appendChild(like);
+        if (w.mine) {
+          const edit = el('button', 'hud-btn tiny', '修改'); edit.type = 'button';
+          edit.onclick = () => openForm({ id, title: w.title, cat: w.cat, body: w.body });
+          const del = el('button', 'hud-btn tiny', '收回'); del.type = 'button';
+          del.onclick = () => { if (confirm('要把這個願望收回來嗎？')) send('wishWithdraw', { id }, () => { toast('願望收回來了'); backToList(); }); };
+          acts.append(edit, del);
+        }
+        box.append(back, paper, acts);
+        show(box);
+      });
+    }
+    function backToList() { view = 'list'; shell = null; loadList(); }
+
+    // ---------- 許願／修改 ----------
+    function openForm(w) {
+      view = 'form'; shell = null;
+      editing = editing && !w && !editing.id ? editing : Object.assign({ id: 0, title: '', cat: '', body: '' }, w || {});
+      const e = editing, box = el('div', 'modal-list wish-modal');
+      const back = el('button', 'wish-back', e.id ? '← 回願望' : '← 回清單'); back.type = 'button';
+      back.onclick = () => { const id = e.id; if (id) editing = null; if (id) openDetail(id); else backToList(); };
+      const form = el('form', 'wish-form');
+      form.appendChild(el('div', 'label', '類別'));
+      const cats = el('div', 'wish-cats');
+      Object.entries(CATS).forEach(([k, v]) => {
+        const b = el('button', 'wish-tab c-' + k + (e.cat === k ? ' on' : ''), v); b.type = 'button';
+        b.onclick = () => { e.cat = k; cats.querySelectorAll('.wish-tab').forEach(x => x.classList.toggle('on', x === b)); };
+        cats.appendChild(b);
+      });
+      const count = (input, max) => { const c = el('small', 'wish-count', `${input.value.length}/${max}`); input.addEventListener('input', () => { c.textContent = `${input.value.length}/${max}`; }); return c; };
+      const title = el('input'); title.maxLength = info.titleLen; title.value = e.title; title.placeholder = '一句話說你想要什麼，例如：可以養寵物';
+      title.oninput = () => { e.title = title.value; };
+      const body = el('textarea'); body.maxLength = info.bodyLen; body.rows = 7; body.value = e.body;
+      body.placeholder = '想寫多詳細都可以：怎麼玩、為什麼想要；回報 Bug 的話寫一下在哪裡、做了什麼、發生什麼事（可以不寫）';
+      body.oninput = () => { e.body = body.value; };
+      const tRow = el('div', 'wish-label'); tRow.append(el('span', 'label', '主題'), count(title, info.titleLen));
+      const bRow = el('div', 'wish-label'); bRow.append(el('span', 'label', '內文'), count(body, info.bodyLen));
+      const submit = el('button', 'primary small', e.id ? '儲存修改' : '丟硬幣許願'); submit.type = 'submit';
+      if (!e.id) submit.prepend(icon('wish-coin', ''));
+      const foot = el('div', 'wish-foot'); foot.appendChild(submit);
+      form.append(cats, tRow, title, bRow, body, foot);
+      form.onsubmit = (ev) => {
+        ev.preventDefault();
+        if (!e.cat) { toast('先選一個類別'); return; }
+        if (e.title.trim().length < 2) { toast('主題寫多一點點吧'); title.focus(); return; }
+        submit.disabled = true;
+        socket.emit(e.id ? 'wishEdit' : 'wishAdd', { wid, id: e.id, title: e.title, cat: e.cat, body: e.body }, (r) => {
+          submit.disabled = false;
+          if (!r || !r.ok) { toast((r && r.error) || '沒成功，再試一次'); return; }
+          toast(e.id ? '改好了' : '願望丟進許願池了');
+          editing = null;
+          openDetail(r.id);
+        });
+      };
+      box.append(back, form);
+      show(box);
+      setTimeout(() => { if (isOpen()) (e.title ? body : title).focus(); }, 50);
+    }
+
+    // 有人許願、按讚，或管理員改了狀態：開著許願池的人重新拿一次（正在寫願望的不打擾）
+    socket.on('wishes', (m) => {
+      if (m && m.coin && scene && scene.wishCoin) scene.wishCoin(m.coin);
+      if (!isOpen()) return;
+      if (view === 'list') loadList();
+      else if (view === 'detail') socket.emit('wishGet', { wid, id: detailId }, (r) => { if (r && r.ok) openDetail(detailId); else backToList(); });
+    });
+    return { open() { view = 'list'; shell = null; loadList(); } };
+  })();
   socket.on('toastArea', (t) => { if (joined && t.area === MUSIC.area()) toast(t.text); });
 
   function openBag() {
@@ -1670,6 +1870,14 @@
     });
   }
 
+  // 希臘少女的台詞：說完就幫你打開許願池
+  const GREEK_LINES = [
+    '噓…願望說出來就不靈了，寫下來吧',
+    '把硬幣丟進池子裡，再把願望寫清楚一點',
+    '遇到 Bug 也可以來這裡說，我會偷偷轉告管理員',
+    '先看看有沒有人許過一樣的願，幫他按個讚吧',
+    '颱風天也要記得許願喔',
+  ];
   function toast(text) {
     const t = el('div', 'toast', text);
     $('toasts').appendChild(t);
@@ -2250,7 +2458,7 @@
       if (x >= MAP.LX) return ch === 'q' || ch === 'O' ? 'temple' : ch === 'Q' ? 'templewall' : 'void';
       if (x >= MAP.MW) return ch === 'Z' ? 'sea' : ch === 'Y' ? 'rock' : 'yE'.includes(ch) ? 'sand' : ch === 'n' ? 'cliff' : 'cave';
       if (y > 30 && ':T~'.includes(ch)) return 'mud';
-      if (',T~BFO'.includes(ch)) return 'grass';
+      if (',T~BFOLI'.includes(ch)) return 'grass';
       if (ch === '#') return 'wall';
       if (inKitchen(x, y)) return 'tile';
       return inVideo(x, y) ? 'carpet' : 'wood';
@@ -2479,6 +2687,24 @@
           if (L) CR.line(ctx, px + 2, py + 8, px + 2, py + T - 4, r, 2.6);
           if (Rr) CR.line(ctx, px + T - 2, py + 8, px + T - 2, py + T - 4, r, 2.6);
           ctx.fillStyle = '#ff6a13'; ctx.fillRect(px + (L ? 6 : 0), py + T - 12, T - (L ? 6 : 0) - (Rr ? 6 : 0), 3);
+        } else if (ch === 'L') {
+          // 許願池：2x2 格，在左上那格一次畫完；石頭圍一圈，水裡沉著幾枚硬幣
+          if (at(x - 1, y) === 'L' || at(x, y - 1) === 'L') continue;
+          const cx = px + T, cy = py + T + 6;
+          ctx.fillStyle = 'rgba(19,26,40,0.16)'; ctx.beginPath(); ctx.ellipse(cx, cy + 22, 40, 9, 0, 0, Math.PI * 2); ctx.fill();
+          CR.blob(ctx, cx, cy + 6, 40, 28, r, 0.05, 26); CR.fill(ctx, '#b9b2a4', r, [cx - 42, cy - 24, 84, 60]); CR.stroke(ctx, r, 2.6);
+          CR.blob(ctx, cx, cy, 40, 26, r, 0.05, 26); CR.fill(ctx, '#d6d0c2', r, [cx - 42, cy - 28, 84, 56]); CR.stroke(ctx, r, 2.6);
+          // 石頭的縫
+          for (let i = 0; i < 12; i++) {
+            const a = i / 12 * Math.PI * 2, k = 0.8 + r() * 0.12;
+            CR.line(ctx, cx + Math.cos(a) * 31, cy + Math.sin(a) * 19, cx + Math.cos(a) * 40 * k / 0.86, cy + Math.sin(a) * 26 * k / 0.86, r, 1.4, 'rgba(43,42,51,0.45)');
+          }
+          CR.blob(ctx, cx, cy - 1, 30, 18, r, 0.05, 24); CR.fill(ctx, '#6fb4e0', r, [cx - 32, cy - 20, 64, 38]); CR.stroke(ctx, r, 2.2);
+          CR.plaid(ctx, cx - 30, cy - 19, 60, 36, 9, 'rgba(255,255,255,0.35)', r, 1);
+          [[-12, 4], [6, -5], [14, 6], [-2, 9]].forEach(([dx, dy], i) => {
+            CR.blob(ctx, cx + dx, cy + dy, 4.5, 3, r, 0.1, 10); CR.fill(ctx, i % 2 ? '#ffd23f' : '#f2b632', r, null); CR.stroke(ctx, r, 1.2);
+          });
+          CR.blob(ctx, cx - 14, cy - 8, 7, 2.5, r, 0.15, 10); ctx.fillStyle = 'rgba(255,255,255,0.8)'; ctx.fill();
         } else if (ch === 'H') {
           // 古城守門員腳下的石板台座
           CR.blob(ctx, px + 24, py + 30, 26, 15, r, 0.06); CR.fill(ctx, '#9a8f7a', r, [px - 2, py + 15, T + 4, 30]); CR.stroke(ctx, r, 2.4);
@@ -2645,6 +2871,16 @@
       }).setOrigin(0.5).setDepth(gy);
       const gTalk = this.add.image(gx + 26, gy - 70, 'fx-talk').setDepth(gy + 1);
       this.tweens.add({ targets: gTalk, y: gy - 78, duration: 760, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
+      // 許願池旁邊的希臘少女：紅棕色長髮、白色單肩長袍、比「噓」；跟她說話會打開許願池
+      this.textures.addCanvas('greek', drawNpc({ hair: 'long', hairColor: '#b5532c', skin: AV.SKINS[0], glasses: '0', cls: 'greek', npc: 'greek' }));
+      const kx = MAP.greek.x, ky = MAP.greek.y + 18;
+      this.add.image(kx, ky, 'greek').setScale(0.55).setOrigin(0.5, 0.95).setDepth(ky);
+      this.add.text(kx, ky - 96, '希臘少女', {
+        fontSize: '10px', fontStyle: 'bold', color: INK, fontFamily: FONT,
+        backgroundColor: PAPER, padding: { x: 10, y: 4 },
+      }).setOrigin(0.5).setDepth(ky);
+      const kTalk = this.add.image(kx + 26, ky - 70, 'fx-talk').setDepth(ky + 1);
+      this.tweens.add({ targets: kTalk, y: ky - 78, duration: 820, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
 
       // 煙火的火花統一畫在一張 graphics 上
       // 煙火的火花：先把每個顏色的發光小點畫成一張貼圖，再用 Blitter 大量貼上去
@@ -3003,6 +3239,39 @@
       }
     }
 
+    // 許願池的名牌；有人許願時，從他身上丟一枚硬幣劃進池子，濺起水花
+    makeWell() {
+      if (this.wellSign) return;
+      const { x, y } = MAP.well;
+      this.wellSign = this.add.text(x, y - 46, '許願池', {
+        fontSize: '10px', fontStyle: 'bold', color: INK, fontFamily: FONT,
+        backgroundColor: PAPER, padding: { x: 10, y: 4 },
+      }).setOrigin(0.5).setDepth(y + T);
+      if (window.HQ_ICONS && !this.textures.exists('wish-coin')) this.textures.addBase64('wish-coin', HQ_ICONS.url('wish-coin'));
+    }
+    wishCoin(id) {
+      const who = id === (me && me.id) ? this.me : this.remotes.get(id);
+      const { x, y } = MAP.well;
+      const sx = who ? who.x : x - 60, sy = who ? who.y - 40 : y - 60;
+      if (Math.hypot(sx - this.cameras.main.midPoint.x, sy - this.cameras.main.midPoint.y) > 900) return;
+      const coin = this.textures.exists('wish-coin') ? this.add.image(sx, sy, 'wish-coin').setDisplaySize(22, 22)
+        : this.add.circle(sx, sy, 8, 0xffd23f).setStrokeStyle(2, 0x2b2a33);
+      coin.setDepth(y + 2 * T);
+      const peak = Math.min(sy, y) - 70;
+      this.tweens.addCounter({ from: 0, to: 1, duration: 700, ease: 'Sine.in', onUpdate: (tw) => {
+        const k = tw.getValue();
+        coin.x = sx + (x - sx) * k;
+        coin.y = (1 - k) * (1 - k) * sy + 2 * (1 - k) * k * peak + k * k * (y + 4);
+        coin.rotation = k * 9;
+      }, onComplete: () => {
+        coin.destroy();
+        [0, 160].forEach((delay) => {
+          const ring = this.add.ellipse(x, y + 4, 10, 6).setStrokeStyle(2, 0xffffff, 0.9).setDepth(y + T);
+          this.tweens.add({ targets: ring, scaleX: 5, scaleY: 5, alpha: 0, delay, duration: 700, onComplete: () => ring.destroy() });
+        });
+      } });
+    }
+
     setupWorld(res) {
       this.remotes.forEach(r => r.destroy());
       this.remotes.clear();
@@ -3024,6 +3293,7 @@
       this.decor.clear();
       (res.decor || []).forEach(d => this.setDecor(d));
       this.makeDj();
+      this.makeWell();
       MUSIC.set(res.music);
       this.walls.forEach((w, id) => this.onWallGone(id, true));
       (res.walls || []).forEach(w => this.onWall(w));
@@ -3962,8 +4232,10 @@
       if (MAP.tiles[ty] && MAP.tiles[ty][tx] === 'G' && MAP.nearStove(this.me.x, this.me.y, 1.8 * T)) return { type: 'cook' };
       if (Math.hypot(x - MAP.mentor.x, y - (MAP.mentor.y - 20)) < 50 && MAP.nearMentor(this.me.x, this.me.y)) return { type: 'mentor' };
       if (Math.hypot(x - MAP.guard.x, y - (MAP.guard.y - 20)) < 50 && MAP.nearGuard(this.me.x, this.me.y)) return { type: 'guard' };
+      if (Math.hypot(x - MAP.greek.x, y - (MAP.greek.y - 20)) < 50 && MAP.nearGreek(this.me.x, this.me.y)) return { type: 'greek' };
       if (Math.hypot(x - MAP.fridge.x, y - (MAP.fridge.y - 10)) < 40 && MAP.nearFridge(this.me.x, this.me.y)) return { type: 'fridge' };
       if (MAP.tiles[ty] && MAP.tiles[ty][tx] === 'J' && MAP.nearDj(this.me.x, this.me.y)) return { type: 'dj' };
+      if (MAP.tiles[ty] && MAP.tiles[ty][tx] === 'L' && MAP.nearWell(this.me.x, this.me.y)) return { type: 'well' };
       return null;
     }
 
@@ -3987,6 +4259,8 @@
       if (!best && MAP.nearMentor(this.me.x, this.me.y)) return { type: 'mentor' };
       if (!best && MAP.nearGuard(this.me.x, this.me.y)) return { type: 'guard' };
       if (!best && MAP.nearDj(this.me.x, this.me.y)) return { type: 'dj' };
+      if (!best && MAP.nearGreek(this.me.x, this.me.y)) return { type: 'greek' };
+      if (!best && MAP.nearWell(this.me.x, this.me.y)) return { type: 'well' };
       return best;
     }
 
@@ -4015,6 +4289,11 @@
         openFridge();
       } else if (act.type === 'dj') {
         MUSIC.open();
+      } else if (act.type === 'well') {
+        WISH.open();
+      } else if (act.type === 'greek') {
+        toast(`希臘少女：「${GREEK_LINES[Math.floor(Math.random() * GREEK_LINES.length)]}」`);
+        WISH.open();
       } else if (act.type === 'cook') {
         socket.emit('cook', (res) => {
           if (!res || !res.ok) { if (res && res.error) toast(res.error); return; }
@@ -4909,7 +5188,7 @@
       // 互動按鈕
       const all0 = [this.me, ...this.remotes.values()];
       const near = this.nearbyAction();
-      const LABELS = { crate: '🔨 敲箱子', cook: '🍜 煮泡麵', mentor: '💬 找沈理員轉職', guard: '🏯 前往副本候位區', dj: '🎧 點歌' };
+      const LABELS = { crate: '🔨 敲箱子', cook: '🍜 煮泡麵', mentor: '💬 找沈理員轉職', guard: '🏯 前往副本候位區', dj: '🎧 點歌', well: '許個願', greek: '和希臘少女說話' };
       // 攻擊用技能列的普攻鍵，這顆只放其他互動（敲箱子、點歌…）
       const canHit = !!near && !this.isDead() && near.type === 'attack';
       const label = !near || this.isDead() || canHit ? '' : LABELS[near.type];

@@ -584,29 +584,34 @@
       if (stripe) C.line(ctx, x - 5, 8, x - 1, 5, r, 1.6, stripe, 0.2);
     });
   }
-  // 天使翅膀：從肩膀往斜上方張開，上緣一片圓圓的覆羽，下緣兩排往下垂的長羽毛；頭上一圈光環
+  // 天使翅膀：胖胖的雲朵形狀，上面一大片圓弧、外緣一球一球的圓羽毛，裡面幾道彎彎的羽毛線；頭上一圈光環
   function featherWings(ctx, C, r) {
-    [-1, 1].forEach(k => {
-      // 兩排飛羽：後排長、偏灰；前排短、純白。越靠翅尖越長
-      [[24, '#e6ebf3', 0], [16, '#ffffff', -3]].forEach(([len, col, lift]) => {
-        for (let i = 6; i >= 0; i--) {
-          const t = i / 6;
-          const px = 32 + k * (11 + t * 31), py = 44 - t * 28 - Math.sin(t * Math.PI) * 4 + lift;
-          const dx = k * (0.15 + t * 0.55), dy = 1, d = Math.hypot(dx, dy);
-          const fl = len * (0.7 + t * 0.45);
-          ctx.save(); ctx.translate(px + dx / d * fl * 0.45, py + dy / d * fl * 0.45); ctx.rotate(Math.atan2(dy, dx));
-          C.blob(ctx, 0, 0, fl * 0.55, 4.2, r, 0.06, 14); C.fill(ctx, col, r, null); C.stroke(ctx, r, 1.6);
-          C.line(ctx, -fl * 0.35, 0, fl * 0.35, 0, r, 0.9, '#c3c9d3', 0.2);
-          ctx.restore();
-        }
+    [1, -1].forEach(k => {
+      ctx.save();
+      if (k < 0) { ctx.translate(64, 0); ctx.scale(-1, 1); } // 左邊的翅膀用右邊的鏡像
+      ctx.translate(3, -3); // 往外推（人物框左右各只多 16，再外面會被切掉），翅膀才不會整片躲在大頭後面
+      // 外緣一路往下的幾個點，每段往外鼓成一球
+      const edge = [[67, 13], [70, 25], [67, 37], [61, 47], [51, 54]];
+      const cx = 50, cy = 32;
+      ctx.beginPath(); ctx.moveTo(41, 52);
+      ctx.quadraticCurveTo(37, 30, 48, 15);
+      ctx.quadraticCurveTo(58, 1, edge[0][0], edge[0][1]);
+      for (let i = 1; i < edge.length; i++) {
+        const [x0, y0] = edge[i - 1], [x1, y1] = edge[i];
+        const mx = (x0 + x1) / 2, my = (y0 + y1) / 2, nx = mx - cx, ny = my - cy, d = Math.hypot(nx, ny);
+        ctx.quadraticCurveTo(mx + nx / d * 7, my + ny / d * 7, x1, y1);
+      }
+      ctx.quadraticCurveTo(45, 57, 41, 52); ctx.closePath();
+      C.fill(ctx, '#fbfdff', r, [36, 1, 40, 56]); C.stroke(ctx, r, W);
+      // 下半部淡淡的藍色陰影
+      ctx.save(); ctx.clip(); ctx.globalAlpha = 0.35;
+      C.blob(ctx, 58, 50, 16, 9, r, 0.08); ctx.fillStyle = '#bfe0f5'; ctx.fill(); ctx.restore();
+      // 裡面彎彎的羽毛線
+      [[58, 24, 5.5], [59, 34, 6], [56, 44, 5]].forEach(([x, y, rad]) => {
+        ctx.beginPath(); ctx.arc(x, y, rad, Math.PI * 0.95, Math.PI * 1.75); ctx.quadraticCurveTo(x + rad * 1.1, y + rad * 0.2, x + rad * 0.2, y + rad * 0.6);
+        C.stroke(ctx, r, 1.6, '#8fb8d8');
       });
-      // 上緣的覆羽：一整片圓弧蓋住羽毛根部
-      ctx.beginPath(); ctx.moveTo(32 + k * 8, 50);
-      ctx.quadraticCurveTo(32 + k * 12, 18, 32 + k * 44, 12);
-      ctx.quadraticCurveTo(32 + k * 47, 18, 32 + k * 40, 24);
-      ctx.quadraticCurveTo(32 + k * 22, 28, 32 + k * 16, 52); ctx.closePath();
-      C.fill(ctx, '#ffffff', r, null); C.stroke(ctx, r, W);
-      [[20, 30], [28, 22], [36, 18]].forEach(([dx, y]) => { ctx.beginPath(); ctx.arc(32 + k * dx, y + 4, 4, 0, Math.PI); C.stroke(ctx, r, 1.2, '#c3c9d3'); });
+      ctx.restore();
     });
     ctx.save(); ctx.beginPath(); ctx.ellipse(32, -2, 12, 3.5, 0, 0, Math.PI * 2); C.stroke(ctx, r, 4.5, C.INK); C.stroke(ctx, r, 2.6, '#ffd23f'); ctx.restore();
   }

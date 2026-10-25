@@ -539,6 +539,221 @@
   }
   socket.on('videoRooms', (rooms) => { videoRooms = rooms; if (modalKind === 'video' && !$('modal').hidden) renderVideo(); });
 
+  // ---------------- 小樹屋：同一間的人語音通話（WebRTC，聲音在玩家之間直接傳） ----------------
+  // 伺服器只負責記誰在哪間、轉送連線資訊；新進屋的人負責跟屋裡每個人各連一條
+  const TREE = (() => {
+    let trees = [], myTree = null, stream = null, muted = false, actx = null;
+    const peers = new Map(); // id -> { pc, audio, meter }
+    const talking = new Set(); // 正在講話的人（只看得到同一間的）
+    let meTalk = null, meterTimer = null;
+    const isOpen = () => modalKind === 'tree' && !$('modal').hidden;
+    const mine = () => trees.find(t => t.id === myTree);
+    const ice = () => ({ iceServers: config.iceServers || [{ urls: 'stun:stun.l.google.com:19302' }] });
+
+    // 音量計：每 150ms 看一次，超過門檻就算在講話
+    function meter(ms) {
+      try {
+        actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+        if (actx.state === 'suspended') actx.resume();
+        const an = actx.createAnalyser(); an.fftSize = 512;
+        actx.createMediaStreamSource(ms).connect(an);
+        const buf = new Uint8Array(an.fftSize);
+        return () => { an.getByteTimeDomainData(buf); let s = 0; for (const v of buf) s += (v - 128) * (v - 128); return Math.sqrt(s / buf.length); };
+      } catch (e) { return () => 0; }
+    }
+    function tick() {
+      const now = new Set();
+      if (meTalk && !muted && meTalk() > 6) now.add(me.id);
+      peers.forEach((pr, id) => { if (pr.meter && pr.meter() > 6) now.add(id); });
+      const changed = now.size !== talking.size || [...now].some(id => !talking.has(id));
+      if (!changed) return;
+      talking.clear(); now.forEach(id => talking.add(id));
+      if (scene) scene.treeMarks(members(), talking);
+      document.querySelectorAll('.tree-mem[data-id]').forEach(li => li.classList.toggle('talk', talking.has(li.dataset.id)));
+    }
+
+    function peer(id) {
+      if (peers.has(id)) return peers.get(id);
+      const pc = new RTCPeerConnection(ice());
+      const pr = { pc, audio: new Audio(), meter: null };
+      pr.audio.autoplay = true; pr.audio.playsInline = true;
+      stream.getTracks().forEach(tr => pc.addTrack(tr, stream));
+      pc.onicecandidate = (e) => { if (e.candidate) socket.emit('rtc', { to: id, data: { ice: e.candidate } }); };
+      pc.ontrack = (e) => {
+        const ms = e.streams[0] || new MediaStream([e.track]);
+        pr.audio.srcObject = ms;
+        pr.audio.play().catch(() => {});
+        pr.meter = meter(ms);
+      };
+      pc.onconnectionstatechange = () => {
+        if (pc.connectionState === 'failed') toast(`跟 ${nameOf(id)} 的語音連不上，可能是網路環境擋住了`);
+      };
+      peers.set(id, pr);
+      return pr;
+    }
+    function drop(id) {
+      const pr = peers.get(id);
+      if (!pr) return;
+      pr.pc.close(); pr.audio.srcObject = null;
+      peers.delete(id); talking.delete(id);
+    }
+    async function call(id) {
+      const { pc } = peer(id);
+      await pc.setLocalDescription(await pc.createOffer());
+      socket.emit('rtc', { to: id, data: { sdp: pc.localDescription } });
+    }
+    // 同一個人的連線資訊要照順序處理（ice 可能比 offer 先處理完），所以每個人排一條隊
+    socket.on('rtc', ({ from, data }) => {
+      if (!myTree || !stream || !data) return;
+      if (!data.sdp && !peers.has(from)) return;
+      const pr = peer(from);
+      pr.chain = (pr.chain || Promise.resolve()).then(async () => {
+        const { pc } = pr;
+        if (data.sdp) {
+          await pc.setRemoteDescription(data.sdp);
+          if (data.sdp.type === 'offer') {
+            await pc.setLocalDescription(await pc.createAnswer());
+            socket.emit('rtc', { to: from, data: { sdp: pc.localDescription } });
+          }
+        } else if (data.ice) await pc.addIceCandidate(data.ice);
+      }).catch(e => console.warn('rtc', e));
+    });
+
+    const nameOf = (id) => { for (const t of trees) for (const m of t.members) if (m.id === id) return m.name; return '對方'; };
+    const members = () => { const s = new Set(); trees.forEach(t => t.members.forEach(m => s.add(m.id))); return s; };
+
+    // 麥克風一定要在按下去的當下要，不然手機會擋
+    async function mic() {
+      if (stream) return true;
+      if (!navigator.mediaDevices || !window.RTCPeerConnection) { toast('這個瀏覽器不支援語音通話'); return false; }
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+      } catch (e) {
+        toast('沒有拿到麥克風權限，到瀏覽器網址列旁邊打開麥克風再試一次');
+        return false;
+      }
+      muted = false;
+      meTalk = meter(stream);
+      clearInterval(meterTimer); meterTimer = setInterval(tick, 150);
+      return true;
+    }
+    function hangUp() {
+      [...peers.keys()].forEach(drop);
+      if (stream) stream.getTracks().forEach(tr => tr.stop());
+      stream = null; meTalk = null; myTree = null; muted = false;
+      clearInterval(meterTimer); talking.clear();
+      renderBtn();
+    }
+    function enter(res) {
+      if (!res || !res.ok) { toast((res && res.error) || '進不去'); if (!myTree) hangUp(); return; }
+      [...peers.keys()].forEach(drop); // 換屋：先跟舊屋的人斷線
+      myTree = res.id;
+      res.peers.forEach(id => call(id).catch(e => console.warn('call', e)));
+      renderBtn();
+    }
+    async function create(name) { if (await mic()) socket.emit('treeCreate', { name }, enter); }
+    async function join(id) { if (await mic()) socket.emit('treeJoin', id, enter); }
+    function leave() { socket.emit('treeLeave'); hangUp(); if (scene) scene.treeMarks(members(), talking); }
+    function toggleMute() {
+      if (!stream) return;
+      muted = !muted;
+      stream.getAudioTracks().forEach(tr => { tr.enabled = !muted; });
+      socket.emit('treeMute', muted);
+      renderBtn();
+    }
+
+    function set(list) {
+      trees = list || [];
+      const t = mine();
+      // 伺服器那邊已經不在屋裡了（斷線太久被請出去），這邊也掛掉
+      if (myTree && (!t || !t.members.some(m => m.id === me.id))) { hangUp(); toast('你離開小樹屋了'); }
+      else if (t) [...peers.keys()].forEach(id => { if (!t.members.some(m => m.id === id)) drop(id); });
+      if (scene) scene.treeMarks(members(), talking);
+      renderBtn();
+      if (isOpen()) render();
+    }
+    socket.on('trees', set);
+    const refresh = () => socket.emit('treeList', (r) => set(r && r.trees));
+
+    // 工具列上的按鈕：在屋裡的時候多一顆麥克風開關
+    function renderBtn() {
+      const box = $('inventory');
+      if (!box) return;
+      box.querySelectorAll('.tree-btn, .tree-mic').forEach(b => b.remove());
+      const b = el('button', 'inv-item bag-btn tree-btn' + (myTree ? ' on' : ''));
+      b.append(icon('btn-tree', ''), myTree ? ' 小樹屋中' : ' 小樹屋');
+      b.onclick = open;
+      const kit = box.querySelector('.kit-btn');
+      box.insertBefore(b, kit);
+      if (myTree) {
+        const m = el('button', 'inv-item tree-mic' + (muted ? ' off' : ''));
+        m.append(icon(muted ? 'btn-mic-off' : 'btn-mic', ''));
+        m.title = muted ? '麥克風關著，點一下打開' : '麥克風開著，點一下靜音';
+        m.onclick = toggleMute;
+        box.insertBefore(m, kit);
+      }
+    }
+
+    const mins = (ms) => { const m = Math.floor(ms / 60000); return m < 1 ? '剛蓋好' : m < 60 ? `蓋了 ${m} 分鐘` : `蓋了 ${Math.floor(m / 60)} 小時`; };
+    function face(m) {
+      const f = el('span', 'tree-face');
+      const u = faceOf(m.id);
+      if (u) { const i = document.createElement('img'); i.src = u; i.alt = ''; f.appendChild(i); }
+      else f.appendChild(icon('cls-' + (m.cls || 'staff'), ''));
+      if (m.muted) f.appendChild(icon('btn-mic-off', '', 'tree-muted'));
+      return f;
+    }
+    function render() {
+      const box = el('div', 'tree-list');
+      if (!trees.length) box.appendChild(el('p', 'tree-empty', '現在還沒有小樹屋，蓋一間邀大家進來聊天吧！'));
+      trees.forEach(t => {
+        const here = t.id === myTree;
+        const card = el('div', 'tree-card' + (here ? ' here' : ''));
+        const head = el('div', 'tree-head');
+        head.appendChild(icon('btn-tree', '', 'tree-ic'));
+        const inf = el('div', 'tree-inf');
+        inf.appendChild(el('b', null, t.name));
+        inf.appendChild(el('small', null, `屋主 ${t.ownerName} · ${mins(t.ago)} · ${t.members.length}/${t.cap} 人`));
+        head.appendChild(inf);
+        if (here) {
+          const lv = el('button', 'hud-btn tiny', '離開'); lv.type = 'button';
+          lv.onclick = () => { leave(); render(); };
+          head.appendChild(lv);
+        } else {
+          const full = t.members.length >= t.cap;
+          const go = el('button', 'primary small', full ? '客滿' : '進去'); go.type = 'button';
+          go.disabled = full;
+          go.onclick = () => join(t.id);
+          head.appendChild(go);
+        }
+        card.appendChild(head);
+        const ul = el('ul', 'tree-mems');
+        t.members.forEach(m => {
+          const li = el('li', 'tree-mem' + (talking.has(m.id) ? ' talk' : '') + (m.id === (me && me.id) ? ' me' : ''));
+          li.dataset.id = m.id;
+          li.appendChild(face(m));
+          const who = el('div', 'tree-who');
+          who.appendChild(el('b', null, m.name));
+          const c = ST.CLASSES[m.cls] || ST.CLASSES.staff;
+          who.appendChild(el('small', 'mono', `${m.user ? '@' + m.user : '訪客'} · ${plain(c.name)} Lv.${m.level || 1}`));
+          li.appendChild(who);
+          ul.appendChild(li);
+        });
+        card.appendChild(ul);
+        box.appendChild(card);
+      });
+      const mk = el('form', 'video-form');
+      const nm = el('input'); nm.maxLength = 12; nm.placeholder = '小樹屋名字（可以不填）'; nm.autocomplete = 'off';
+      mk.appendChild(nm); mk.appendChild(el('button', 'primary small', myTree ? '蓋一間搬過去' : '蓋一間'));
+      mk.onsubmit = (e) => { e.preventDefault(); create(nm.value.trim()); };
+      box.appendChild(mk);
+      box.appendChild(el('p', 'modal-hint', '同一間小樹屋的人可以直接講話，走到哪都聽得到。一間最多 8 人，第一次進去瀏覽器會問你能不能用麥克風。'));
+      openModal('tree', '小樹屋', box);
+    }
+    function open() { render(); refresh(); }
+    return { open, refresh, renderBtn, hangUp, inTree: () => !!myTree };
+  })();
+
   // ---------------- 彈出視窗 ----------------
   const el = (tag, cls, text) => {
     const e = document.createElement(tag);
@@ -609,6 +824,7 @@
     kit.title = '工具包';
     kit.onclick = () => { kitFolded = !kitFolded; store('hq-fold-kit', kitFolded ? '1' : '0'); box.classList.toggle('folded', kitFolded); };
     box.appendChild(kit);
+    TREE.renderBtn();
     box.classList.toggle('folded', kitFolded);
     if (modalKind === 'bag') openBag();
   }
@@ -3228,7 +3444,31 @@
       cont.moving = !!p.moving;
       cont.tx = p.x; cont.ty = p.y;
       body.setFlipX(cont.dir === -1);
+      this.treeMark(cont);
       return cont;
+    }
+
+    // 小樹屋語音中的人：名牌右邊掛一個小樹屋，講話的時候會跳動
+    treeMarks(inTree, talking) {
+      this.treeIn = inTree; this.treeTalk = talking;
+      if (this.me) this.treeMark(this.me);
+      this.remotes.forEach(r => this.treeMark(r));
+    }
+    treeMark(c) {
+      const on = !!(this.treeIn && this.treeIn.has(c.pid)), talk = on && this.treeTalk.has(c.pid);
+      if (!on) { if (c.treeIc) { c.treeIc.destroy(); c.treeIc = null; } return; }
+      if (!this.textures.exists('tree-mark')) {
+        const cv = window.HQ_ICONS && HQ_ICONS.canvas('btn-tree');
+        if (!cv) return;
+        this.textures.addCanvas('tree-mark', cv);
+      }
+      if (!c.treeIc) { c.treeIc = this.add.image(0, 0, 'tree-mark').setOrigin(0.5); c.add(c.treeIc); }
+      c.treeIc.setPosition(c.tag.width / 2 + 13, 6 + c.tag.height / 2);
+      if (talk === !!c.treeIc.talk) return;
+      c.treeIc.talk = talk;
+      if (c.treeIc.tw) { c.treeIc.tw.stop(); c.treeIc.tw = null; }
+      c.treeIc.setScale(0.2).setAngle(0);
+      if (talk) c.treeIc.tw = this.tweens.add({ targets: c.treeIc, scale: 0.25, angle: { from: -8, to: 8 }, duration: 220, yoyo: true, repeat: -1 });
     }
 
     // 外觀＋職業服裝的貼圖，第一次用到才畫
@@ -3624,6 +3864,7 @@
       (res.decor || []).forEach(d => this.setDecor(d));
       this.makeDj();
       this.makeWell();
+      TREE.refresh();
       MUSIC.set(res.music);
       this.walls.forEach((w, id) => this.onWallGone(id, true));
       (res.walls || []).forEach(w => this.onWall(w));

@@ -195,6 +195,31 @@ button.inv-item:hover { border-color: var(--accent); }
 .modal-row.on { border-color: var(--accent); }
 .video-form { display: flex; gap: 8px; align-items: center; }
 .video-form input { flex: 1; min-width: 0; margin: 0; }
+/* 小樹屋語音 */
+.tree-btn.on { border-color: #3c8a66; background: #e6f6ee; }
+.tree-mic { padding: 1px 6px; line-height: 0; }
+.tree-mic .hq-icon { width: 22px; height: 22px; }
+.tree-mic.off { background: #fde8ea; border-color: #ef4b5c; }
+.tree-list { display: flex; flex-direction: column; gap: 10px; }
+.tree-empty { margin: 0; padding: 14px; text-align: center; color: var(--muted); background: var(--note); border-radius: var(--note-radius); }
+.tree-card { background: var(--paper); border: 2px solid var(--line); border-radius: 14px; padding: 10px 12px; }
+.tree-card.here { border-color: #3c8a66; background: #f3fbf6; }
+.tree-head { display: flex; gap: 10px; align-items: center; }
+.tree-ic.hq-icon { width: 36px; height: 36px; flex-shrink: 0; }
+.tree-inf { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.tree-inf b { font-size: 16px; }
+.tree-inf small { font-size: 12px; color: var(--muted); }
+.tree-mems { list-style: none; margin: 8px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; }
+.tree-mem { display: flex; gap: 8px; align-items: center; min-width: 0; }
+.tree-mem.me .tree-who b::after { content: '（你）'; font-weight: 400; color: var(--muted); }
+.tree-face { position: relative; width: 38px; height: 38px; flex-shrink: 0; border-radius: 50%; border: 2px solid var(--ink);
+  background: var(--note); overflow: visible; transition: box-shadow .15s; }
+.tree-face > img:first-child { width: 100%; height: 100%; border-radius: 50%; display: block; }
+.tree-face .tree-muted { position: absolute; right: -7px; bottom: -7px; width: 22px; height: 22px; background: var(--paper); border-radius: 50%; border: 1.5px solid var(--ink); }
+.tree-mem.talk .tree-face { box-shadow: 0 0 0 3px #7fd1a8, 0 0 10px 3px rgba(127,209,168,.8); }
+.tree-who { min-width: 0; display: flex; flex-direction: column; }
+.tree-who b { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tree-who small { font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .modal-row.cls-head { background: var(--navy); color: var(--navy-fg); border-color: var(--navy); }
 .modal-row.cls-head p { color: var(--navy-dim); }
 .modal-icon { font-size: 30px; width: 44px; text-align: center; flex-shrink: 0; }
@@ -699,7 +724,7 @@ button.inv-item:hover { border-color: var(--accent); }
 /* 工具包：背包、裝備、家具、點歌收在一顆按鈕裡；桌機一排、往左展開，手機往下展開 */
 .kit-btn { order: 9; display: inline-flex; align-items: center; }
 .kit-btn .kit-label { display: none; }
-#inventory.folded > :not(.kit-btn) { display: none; }
+#inventory.folded > :not(.kit-btn):not(.tree-mic) { display: none; }
 #inventory.folded .kit-btn .kit-label { display: inline; margin-left: 2px; }
 #inventory:not(.folded) .kit-btn .bag-n { display: none; }
 @media (max-width: 600px) {

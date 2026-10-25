@@ -559,7 +559,18 @@
     }
     const isOpen = () => modalKind === 'tree' && !$('modal').hidden;
     const mine = () => trees.find(t => t.id === myTree);
-    const ice = () => ({ iceServers: config.iceServers || [{ urls: 'stun:stun.l.google.com:19302' }] });
+    // 進屋時伺服器會給一份 ICE 伺服器清單（有設 Cloudflare TURN 的話含中繼通行證）
+    let iceList = null;
+    const ice = () => ({ iceServers: iceList || config.iceServers || [{ urls: 'stun:stun.l.google.com:19302' }] });
+    const retried = new Set(); // 已經重連過一次的人
+    const STATE = { connected: ['已接通', 'ok'], failed: ['連不上', 'bad'], closed: ['連不上', 'bad'] };
+    const stateOf = (id) => { const pr = peers.get(id); return STATE[pr ? (pr.stuck ? 'failed' : pr.pc.connectionState) : 'new'] || ['連線中…', 'wait']; };
+    function showState(id) {
+      const chip = document.querySelector(`.tree-mem[data-id="${id}"] .tree-st`);
+      if (!chip) return;
+      const [t, c] = stateOf(id);
+      chip.textContent = t; chip.className = 'tree-st ' + c;
+    }
 
     // 音量計：每 150ms 看一次，超過門檻就算在講話
     // pr 有給的話（別人的聲音）順便接一個音量旋鈕再送到喇叭，才能調到 200%
@@ -600,16 +611,52 @@
         pr.meter = meter(ms, pr);
         applyVol(id);
       };
+      // 連不上：重來一次（由 id 比較小的那邊重新打過去，避免兩邊同時打）；還是不行才說
+      const fail = () => {
+        if (peers.get(id) !== pr || pr.failed) return;
+        pr.failed = true;
+        showState(id);
+        if (!retried.has(id)) {
+          retried.add(id);
+          if (me && me.id < id) setTimeout(() => { if (peers.get(id) === pr && myTree) { drop(id); call(id).catch(e => console.warn('call', e)); } }, 800);
+        } else toast(`跟 ${nameOf(id)} 的語音連不上，可能是網路環境擋住了`);
+      };
+      // 有些網路連「失敗」都不會回報，一直卡在連線中：15 秒還沒接通就當作連不上
+      pr.watch = setTimeout(() => { if (pc.connectionState !== 'connected') { pr.stuck = true; fail(); } }, 15000);
       pc.onconnectionstatechange = () => {
-        if (pc.connectionState === 'failed') toast(`跟 ${nameOf(id)} 的語音連不上，可能是網路環境擋住了`);
+        if (pc.connectionState === 'connected') { retried.delete(id); clearTimeout(pr.watch); pr.stuck = false; }
+        showState(id);
+        if (pc.connectionState === 'failed') fail();
       };
       peers.set(id, pr);
       return pr;
     }
+    // 每 30 秒算一次有多少聲音是走中繼伺服器的，回報給伺服器統計用量（到上限伺服器就不再發中繼通行證）
+    async function relayBytes(pr) {
+      try {
+        const st = await pr.pc.getStats();
+        let pair = null;
+        st.forEach(r => { if (r.type === 'transport' && r.selectedCandidatePairId) pair = st.get(r.selectedCandidatePairId); });
+        if (!pair) st.forEach(r => { if (r.type === 'candidate-pair' && r.nominated && r.state === 'succeeded') pair = r; });
+        if (!pair) return 0;
+        const lc = st.get(pair.localCandidateId), rc = st.get(pair.remoteCandidateId);
+        const total = (pair.bytesSent || 0) + (pair.bytesReceived || 0);
+        const relay = (lc && lc.candidateType === 'relay') || (rc && rc.candidateType === 'relay');
+        const delta = relay ? Math.max(0, total - (pr.relayBytes || 0)) : 0;
+        pr.relayBytes = total;
+        return delta;
+      } catch (e) { return 0; }
+    }
+    setInterval(async () => {
+      if (!myTree || !peers.size) return;
+      let n = 0;
+      for (const pr of peers.values()) n += await relayBytes(pr);
+      if (n > 0) socket.emit('turnUsage', n);
+    }, 30000);
     function drop(id) {
       const pr = peers.get(id);
       if (!pr) return;
-      pr.pc.close(); pr.audio.srcObject = null;
+      pr.pc.close(); pr.audio.srcObject = null; clearTimeout(pr.watch);
       if (pr.gain) pr.gain.disconnect();
       peers.delete(id); talking.delete(id);
     }
@@ -622,6 +669,8 @@
     socket.on('rtc', ({ from, data }) => {
       if (!myTree || !stream || !data) return;
       if (!data.sdp && !peers.has(from)) return;
+      // 已經連過的人又送 offer 來，代表對方在重連：丟掉舊的重新接
+      if (data.sdp && data.sdp.type === 'offer' && peers.has(from) && peers.get(from).pc.remoteDescription) drop(from);
       const pr = peer(from);
       pr.chain = (pr.chain || Promise.resolve()).then(async () => {
         const { pc } = pr;
@@ -647,10 +696,22 @@
       // 瀏覽器在等你回答麥克風權限時會一直卡著，先說一聲，等太久再提醒去看網址列
       toast('正在打開麥克風…');
       const slow = setTimeout(() => toast('麥克風還沒打開，看一下網址列旁邊是不是在問你能不能用麥克風'), 6000);
+      // 第一次用回音消除、降噪；打不開（例如藍牙耳機正在切換成可以講話的模式）就等半秒用最基本的設定再試一次
+      const get = (audio) => navigator.mediaDevices.getUserMedia({ audio });
       try {
-        stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+        try { stream = await get({ echoCancellation: true, noiseSuppression: true, autoGainControl: true }); } catch (e) {
+          if (e.name === 'NotAllowedError' || e.name === 'SecurityError') throw e;
+          await new Promise(r => setTimeout(r, 500));
+          stream = await get(true);
+        }
       } catch (e) {
-        toast('沒有拿到麥克風權限，到瀏覽器網址列旁邊打開麥克風再試一次');
+        console.warn('mic', e.name, e.message);
+        toast({
+          NotAllowedError: '沒有拿到麥克風權限，到瀏覽器網址列旁邊打開麥克風再試一次',
+          SecurityError: '沒有拿到麥克風權限，到瀏覽器網址列旁邊打開麥克風再試一次',
+          NotFoundError: '找不到麥克風，確認耳機或麥克風有接好',
+          NotReadableError: '麥克風打不開，可能被別的程式占用（Discord、LINE、會議軟體），或藍牙耳機正在切換，關掉再試一次',
+        }[e.name] || `麥克風打不開（${e.name}），再試一次看看`);
         return false;
       } finally { clearTimeout(slow); }
       muted = false;
@@ -669,17 +730,19 @@
       if (!res || !res.ok) { toast((res && res.error) || '進不去'); if (!myTree) hangUp(); return; }
       [...peers.keys()].forEach(drop); // 換屋：先跟舊屋的人斷線
       myTree = res.id;
+      if (res.ice) iceList = res.ice;
+      retried.clear();
       res.peers.forEach(id => call(id).catch(e => console.warn('call', e)));
       renderBtn();
       if (isOpen()) render(); // 名單可能比回應先到，這時卡片還不知道你已經在屋裡
     }
-    // 伺服器 5 秒沒回應（通常是更新後 node 還沒重開，不認得這個指令）就說出來，不要安靜沒反應
+    // 伺服器 8 秒沒回應（通常是更新後 node 還沒重開，不認得這個指令）就說出來，不要安靜沒反應
     let busy = false;
     async function ask(ev, data) {
       if (busy) return;
       busy = true;
       if (!(await mic())) { busy = false; return; }
-      socket.timeout(5000).emit(ev, data, (err, res) => {
+      socket.timeout(8000).emit(ev, data, (err, res) => {
         busy = false;
         enter(err ? { ok: false, error: '伺服器沒回應，可能伺服器還沒重開，重開之後大家重新整理就好' } : res);
       });
@@ -783,7 +846,10 @@
           li.dataset.id = m.id;
           li.appendChild(face(m));
           const who = el('div', 'tree-who');
-          who.appendChild(el('b', null, m.name));
+          const nm = el('b', null, m.name);
+          who.appendChild(nm);
+          // 同屋的別人：顯示你跟他之間的連線狀態
+          if (here && m.id !== (me && me.id)) { const [t2, c2] = stateOf(m.id); nm.appendChild(el('span', 'tree-st ' + c2, t2)); }
           const c = ST.CLASSES[m.cls] || ST.CLASSES.staff;
           who.appendChild(el('small', 'mono', `${m.user ? '@' + m.user : '訪客'} · ${plain(c.name)} Lv.${m.level || 1}`));
           li.appendChild(who);

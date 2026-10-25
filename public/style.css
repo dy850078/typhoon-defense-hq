@@ -828,3 +828,8 @@ button.inv-item:hover { border-color: var(--accent); }
 .tree-mem .tree-vol { flex: 1; }
 .tree-mems:has(.tree-vol) { grid-template-columns: 1fr; }
 .tree-mems:has(.tree-vol) .tree-who { width: 140px; flex-shrink: 0; }
+/* 小樹屋：你跟這個人之間的連線狀態 */
+.tree-st { margin-left: 6px; font: 700 10px var(--mono); padding: 1px 6px; border-radius: 999px; vertical-align: 1px; }
+.tree-st.wait { background: var(--silver); color: var(--muted); }
+.tree-st.ok { background: #dff4e8; color: #23784a; }
+.tree-st.bad { background: #fde3e5; color: #c02a3a; }

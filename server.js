@@ -91,6 +91,66 @@ app.use('/vendor', express.static(path.join(__dirname, 'node_modules/phaser/dist
 const ICE_SERVERS = [{ urls: 'stun:stun.l.google.com:19302' }].concat(process.env.TURN_URL
   ? [{ urls: process.env.TURN_URL.split(','), username: process.env.TURN_USER || '', credential: process.env.TURN_PASS || '' }] : []);
 app.get('/config', (req, res) => res.json({ jitsiDomain: JITSI_DOMAIN, jitsiRoom: JITSI_ROOM, party: partyInfo(), iceServers: ICE_SERVERS }));
+// 小樹屋的 TURN 中繼：手機網路、公司網路常常不讓兩個人直接連線，這時聲音改由中繼伺服器轉送
+// 兩種都可以（擇一）：
+//   Metered（免綁卡，每月免費 20GB）：TURN_API_URL=https://你的app.metered.live/api/v1/turn/credentials?apiKey=你的金鑰
+//   Cloudflare（每月免費 1000GB）：CF_TURN_KEY_ID + CF_TURN_KEY_TOKEN
+// 伺服器自己去拿臨時通行證、快過期就換新，金鑰不會傳到瀏覽器
+const CF_TURN_ID = process.env.CF_TURN_KEY_ID, CF_TURN_TOKEN = process.env.CF_TURN_KEY_TOKEN, TURN_API_URL = process.env.TURN_API_URL;
+const TURN_PROVIDER = CF_TURN_ID && CF_TURN_TOKEN ? 'Cloudflare' : TURN_API_URL ? 'Metered' : null;
+let turnIce = null, turnIceUntil = 0, turnIceP = null;
+// 中繼用量上限：瀏覽器每 30 秒回報走中繼的流量，伺服器記在 data/turn-usage.json（每個月重算）
+// 到了上限（TURN_LIMIT_GB，預設 800GB，Cloudflare 免費額度是 1000GB）就不再發中繼通行證，只剩直連，保證不會超過免費額度
+const TURN_LIMIT = (Number(process.env.TURN_LIMIT_GB) || 800) * 1e9;
+const TURN_USAGE_FILE = path.join(DATA_DIR, 'turn-usage.json');
+const monthNow = () => new Date().toISOString().slice(0, 7);
+let turnUsage = { month: monthNow(), bytes: 0 };
+try { const u = JSON.parse(fs.readFileSync(TURN_USAGE_FILE, 'utf8')); if (u && u.month && Number.isFinite(u.bytes)) turnUsage = u; } catch (e) { /* 還沒有用量紀錄 */ }
+let turnSaveTimer = null;
+function addTurnUsage(bytes) {
+  if (turnUsage.month !== monthNow()) turnUsage = { month: monthNow(), bytes: 0 };
+  const was = turnUsage.bytes >= TURN_LIMIT;
+  turnUsage.bytes += bytes;
+  if (!was && turnUsage.bytes >= TURN_LIMIT) console.warn(`🌳 小樹屋中繼這個月已經用了 ${(turnUsage.bytes / 1e9).toFixed(2)}GB，到上限了，先停發中繼通行證`);
+  turnSaveTimer = turnSaveTimer || setTimeout(() => {
+    turnSaveTimer = null;
+    try { fs.mkdirSync(DATA_DIR, { recursive: true }); fs.writeFileSync(TURN_USAGE_FILE, JSON.stringify(turnUsage)); } catch (e) { console.warn('中繼用量存不了', e.message); }
+  }, 60000);
+}
+const turnOver = () => turnUsage.month === monthNow() && turnUsage.bytes >= TURN_LIMIT;
+const turnState = () => ({ provider: TURN_PROVIDER, month: monthNow(), gb: turnUsage.month === monthNow() ? turnUsage.bytes / 1e9 : 0, limitGb: TURN_LIMIT / 1e9, over: turnOver() });
+async function fetchTurn() {
+  if (TURN_PROVIDER === 'Cloudflare') {
+    const r = await fetch(`https://rtc.live.cloudflare.com/v1/turn/keys/${CF_TURN_ID}/credentials/generate-ice-servers`, {
+      method: 'POST', headers: { Authorization: `Bearer ${CF_TURN_TOKEN}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ttl: 86400 }), signal: AbortSignal.timeout(5000),
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return { list: (await r.json()).iceServers, ms: 86400e3 };
+  }
+  const r = await fetch(TURN_API_URL, { signal: AbortSignal.timeout(5000) });
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  const j = await r.json();
+  return { list: Array.isArray(j) ? j : j.iceServers, ms: 12 * 3600e3 };
+}
+async function iceServers() {
+  if (!TURN_PROVIDER || turnOver()) return ICE_SERVERS;
+  if (turnIce && Date.now() < turnIceUntil - 2 * 3600e3) return turnIce;
+  turnIceP = turnIceP || (async () => {
+    try {
+      const { list, ms } = await fetchTurn();
+      const servers = [].concat(list || []).map(sv => Object.assign({}, sv));
+      // 瀏覽器會擋 53 port，留著只會讓連線多等一段逾時
+      servers.forEach(sv => { if (Array.isArray(sv.urls)) sv.urls = sv.urls.filter(u => !/:53(\?|$)/.test(u)); });
+      if (!servers.length) throw new Error('沒有拿到伺服器清單');
+      turnIce = ICE_SERVERS.concat(servers); turnIceUntil = Date.now() + ms;
+    } catch (e) {
+      console.warn(`${TURN_PROVIDER} TURN 通行證拿不到，先只用 STUN：`, e.message);
+    } finally { turnIceP = null; }
+  })();
+  await turnIceP;
+  return turnIce || ICE_SERVERS;
+}
 
 // ---------------- 帳號 API ----------------
 // 登入失敗太多次就暫停一下，避免有人一直猜密碼
@@ -194,7 +254,7 @@ app.post('/api/admin/login', (req, res) => {
 app.get('/api/admin/state', (req, res) => {
   if (!isAdmin(req)) return res.status(401).json({ ok: false });
   const online = new Set([...players.values()].map(p => p.account && p.account.username));
-  res.json({ ok: true, party: partyInfo(), notice: noticeState(), wishes: wishes.all(), accounts: accounts.list().map(a => Object.assign(a, { online: online.has(a.username) })) });
+  res.json({ ok: true, party: partyInfo(), notice: noticeState(), wishes: wishes.all(), turn: turnState(), accounts: accounts.list().map(a => Object.assign(a, { online: online.has(a.username) })) });
 });
 app.post('/api/admin/settings', (req, res) => {
   if (!isAdmin(req)) return res.status(401).json({ ok: false });
@@ -1885,31 +1945,42 @@ io.on('connection', (socket) => {
   // ----- 小樹屋語音 -----
   socket.on('treeList', (ack) => { if (typeof ack === 'function') ack({ trees: treeList() }); });
   // 蓋一間新的小樹屋，自己直接住進去
-  socket.on('treeCreate', (data, ack) => {
+  socket.on('treeCreate', async (data, ack) => {
+    if (typeof ack !== 'function') return;
+    const ice = await iceServers(); // 先拿好通行證再改狀態（等的時候人可能已經走了）
     const p = players.get(socket.id);
-    if (typeof ack !== 'function' || !p) return;
+    if (!p) return;
     if (trees.size >= TREE_MAX) return ack({ ok: false, error: `小樹屋已經有 ${TREE_MAX} 間了，先去別人的坐坐吧` });
     leaveTree(p);
     const t = { id: 't' + (++treeSeq), name: clean(data && data.name, 12) || `${p.name}的小樹屋`, owner: p.id, ownerName: p.name, at: Date.now(), members: [p.id] };
     trees.set(t.id, t);
     p.tree = t.id; p.treeMuted = false;
     emitTrees();
-    ack({ ok: true, id: t.id, peers: [] });
+    ack({ ok: true, id: t.id, peers: [], ice });
   });
   // 進別人的小樹屋：回傳屋裡其他人，由新進來的人負責跟每個人打招呼（送 offer）
-  socket.on('treeJoin', (id, ack) => {
+  socket.on('treeJoin', async (id, ack) => {
+    if (typeof ack !== 'function') return;
+    const ice = await iceServers();
     const p = players.get(socket.id);
-    if (typeof ack !== 'function' || !p) return;
+    if (!p) return;
     const t = trees.get(String(id || ''));
     if (!t) return ack({ ok: false, error: '這間小樹屋已經拆掉了' });
-    if (p.tree === t.id) return ack({ ok: true, id: t.id, peers: t.members.filter(m => m !== p.id) });
+    if (p.tree === t.id) return ack({ ok: true, id: t.id, peers: t.members.filter(m => m !== p.id), ice });
     if (t.members.length >= TREE_CAP) return ack({ ok: false, error: `這間已經擠了 ${TREE_CAP} 個人，換一間吧` });
     leaveTree(p);
     const peers = t.members.slice();
     t.members.push(p.id);
     p.tree = t.id; p.treeMuted = false;
     emitTrees();
-    ack({ ok: true, id: t.id, peers });
+    ack({ ok: true, id: t.id, peers, ice });
+  });
+  // 瀏覽器回報這 30 秒走中繼的流量（位元組）；一次最多算 50MB，避免亂報
+  socket.on('turnUsage', (n) => {
+    const p = players.get(socket.id);
+    n = Math.floor(Number(n));
+    if (!p || !p.tree || !TURN_PROVIDER || !(n > 0)) return;
+    addTurnUsage(Math.min(n, 50e6));
   });
   socket.on('treeLeave', () => { const p = players.get(socket.id); if (leaveTree(p)) emitTrees(); });
   socket.on('treeMute', (m) => {
@@ -2110,9 +2181,11 @@ function removePlayer(id) {
 }
 
 server.listen(PORT, () => {
+  iceServers(); // 先拿一次 TURN 通行證，第一個進小樹屋的人就不用等
   console.log(`🌀 颱風天防衛總部已啟動：http://localhost:${PORT}`);
   console.log(`🔑 管理員介面：http://localhost:${PORT}/admin.html  密碼：${process.env.ADMIN_PASSWORD ? '（用 ADMIN_PASSWORD 設定的）' : settings.adminPassword}`);
   console.log(`📹 視訊房間：https://${JITSI_DOMAIN}/${JITSI_ROOM}`);
+  console.log(TURN_PROVIDER ? `🌳 小樹屋語音：使用 ${TURN_PROVIDER} TURN 中繼` : process.env.TURN_URL ? '🌳 小樹屋語音：使用 TURN_URL 中繼' : '🌳 小樹屋語音：只有 STUN（手機網路之間可能接不通，見 README 的「小樹屋語音」）');
 });
 
 // 關掉伺服器（Ctrl+C）前先把大家的角色存好

@@ -587,6 +587,7 @@
   // 天使翅膀：上緣一道平順的大圓弧，外下緣一球一球的大圓羽毛往內收成尖角，裡面幾道跟著圓羽走的弧線；頭上一圈光環
   // 右邊的翅膀畫好，左邊用鏡像；人物框左右各只多 16，最外面不要超過 x=79
   const ANGEL_LOBES = [[78, 17], [74, 30], [67, 37.5], [59.5, 43], [51.5, 47.5], [44, 49]];
+  const ANGEL_BULGE = [0, 8, 5, 5, 5, 6]; // 每一球圓羽往外鼓多少（第 i 段，從上面數下來）
   function angelWingPath(ctx) {
     ctx.beginPath(); ctx.moveTo(44, 49); ctx.quadraticCurveTo(39, 40, 42, 30);
     ctx.quadraticCurveTo(50, 11, 69, 9);
@@ -597,7 +598,7 @@
       const [x0, y0] = lobes[i - 1], [x1, y1] = lobes[i];
       const mx = (x0 + x1) / 2, my = (y0 + y1) / 2, dx = x1 - x0, dy = y1 - y0, d = Math.hypot(dx, dy);
       // 往外（線段的左手邊）鼓起來
-      ctx.bezierCurveTo(x0 + dy / d * 8, y0 - dx / d * 8, x1 + dy / d * 8, y1 - dx / d * 8, x1, y1); // 兩個控制點都往外推，每一球比較圓、接縫比較深
+      const b = ANGEL_BULGE[i]; ctx.bezierCurveTo(x0 + dy / d * b, y0 - dx / d * b, x1 + dy / d * b, y1 - dx / d * b, x1, y1); // 兩個控制點都往外推，每一球比較圓、接縫比較深
     }
     ctx.closePath();
   }
@@ -617,7 +618,7 @@
         const [x1, y1] = ANGEL_LOBES[i], [px, py] = ANGEL_LOBES[i - 1];
         const dx = x1 - px, dy = y1 - py, d = Math.hypot(dx, dy), nx = dy / d, ny = -dx / d;
         ctx.beginPath(); ctx.moveTo(px - nx * 1.5, py - ny * 1.5);
-        ctx.bezierCurveTo(px + nx * 5.5, py + ny * 5.5, x1 + nx * 5.5, y1 + ny * 5.5, x1 - nx * 1.5, y1 - ny * 1.5);
+        const b = ANGEL_BULGE[i] - 2.5; ctx.bezierCurveTo(px + nx * b, py + ny * b, x1 + nx * b, y1 + ny * b, x1 - nx * 1.5, y1 - ny * 1.5);
         ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(190,207,226,0.8)'; ctx.lineCap = 'round'; ctx.stroke();
       });
       ctx.restore();

@@ -551,7 +551,7 @@
         for (let i = 1; i < lobes.length; i++) {
           const [x0, y0] = lobes[i - 1], [x1, y1] = lobes[i];
           const mx = (x0 + x1) / 2, my = (y0 + y1) / 2, dx = x1 - x0, dy = y1 - y0, d = Math.hypot(dx, dy);
-          x.bezierCurveTo(x0 + dy / d * 8, y0 - dx / d * 8, x1 + dy / d * 8, y1 - dx / d * 8, x1, y1); // 兩個控制點都往外推，每一球比較圓、接縫比較深
+          const b = [0, 8, 5, 5, 5, 6][i]; x.bezierCurveTo(x0 + dy / d * b, y0 - dx / d * b, x1 + dy / d * b, y1 - dx / d * b, x1, y1); // 兩個控制點都往外推，每一球比較圓、接縫比較深
         }
         x.closePath();
       };

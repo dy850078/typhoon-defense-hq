@@ -15,12 +15,12 @@
   // M  會議桌    P  螢幕牆     S  沙發       V  視訊室地板
   // F  圍欄      :  前線泥地   G  爐台       N  轉職導師
   // W  戰情室電視牆（擋路）     C  會議椅（不擋路）   R  冰箱
-  // J  DJ 台（點唱機）     O  副本傳送門（不擋路）
+  // J  DJ 台（點唱機）     O  副本傳送門（不擋路）     L  許願池（2x2）   I  希臘少女
   // 副本區：(空白) 虛空    Y  峽谷岩壁    Z  深海       y  七星潭礫石灘
   //         u  洞穴地板    x  大理石要推到的凹槽         n  斷崖上的草地
   //         X  關卡之間的石門（關著的時候擋路）          E  七星潭石碑
   // 候位區：Q  古城石牆    q  古城石板地    H  古城守門員（站在指揮中心）
-  const BLOCKING = new Set(['#', 'T', 'B', 'K', 'M', 'P', 'S', 'F', 'G', 'N', 'W', 'R', 'J', ' ', 'Y', 'Z', 'E', 'Q', 'H']);
+  const BLOCKING = new Set(['#', 'T', 'B', 'K', 'M', 'P', 'S', 'F', 'G', 'N', 'W', 'R', 'J', 'L', 'I', ' ', 'Y', 'Z', 'E', 'Q', 'H']);
 
   const g = [];
   for (let y = 0; y < H; y++) g.push(new Array(W).fill(','));
@@ -74,6 +74,10 @@
 
   // 戶外：沙包、樹、水窪
   rect(24, 26, 25, 26, 'B'); rect(30, 26, 31, 26, 'B');
+  // 總部門口和前線圍欄中間的草地：許願池，旁邊站著希臘少女
+  rect(20, 26, 21, 27, 'L');
+  const GREEK_TILE = { x: 22, y: 26 };
+  set(GREEK_TILE.x, GREEK_TILE.y, 'I');
   [[2, 2], [37, 2], [1, 12], [38, 10], [2, 26], [37, 27], [12, 27], [18, 28], [36, 18], [1, 19]]
     .forEach(([x, y]) => set(x, y, 'T'));
   [[8, 26], [9, 26], [9, 27], [15, 26], [33, 28], [34, 28], [38, 23], [1, 6], [2, 6]]
@@ -269,6 +273,14 @@
     dj: { x: 22 * TILE, y: 15.5 * TILE },
     nearDj(px, py) {
       return Math.hypot(px - this.dj.x, py - this.dj.y) < 2 * TILE;
+    },
+    well: { x: 21 * TILE, y: 27 * TILE },
+    greek: { x: (GREEK_TILE.x + 0.5) * TILE, y: (GREEK_TILE.y + 0.5) * TILE },
+    nearGreek(px, py) {
+      return Math.hypot(px - this.greek.x, py - this.greek.y) < 2 * TILE;
+    },
+    nearWell(px, py) {
+      return Math.hypot(px - this.well.x, py - this.well.y) < 2.4 * TILE;
     },
     nearMentor(px, py) {
       return Math.hypot(px - this.mentor.x, py - this.mentor.y) < 2 * TILE;

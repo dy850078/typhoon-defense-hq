@@ -188,6 +188,40 @@
       C.line(x, 24, 22, 24, 41, r, 1.2, '#2b2a33');
       C.line(x, 9, 20, 13, 20, r, 1.2, '#6f675b'); C.line(x, 35, 34, 39, 34, r, 1.2, '#6f675b');
     },
+
+    // 跟希臘少女說話：金色橄欖葉冠
+    'act-greek'(x, r) {
+      x.beginPath(); x.arc(24, 26, 15, Math.PI * 0.75, Math.PI * 2.25); C.stroke(x, r, 2, '#a07a20');
+      for (let i = 0; i <= 10; i++) {
+        const a = Math.PI * (0.8 + i * 0.145), px = 24 + Math.cos(a) * 15, py = 26 + Math.sin(a) * 15;
+        x.save(); x.translate(px, py); x.rotate(a + Math.PI / 2 + (i % 2 ? 0.7 : -0.7));
+        C.blob(x, 0, -4, 2.6, 5, r, 0.08, 10); C.fill(x, '#e8c04a', r, null); C.stroke(x, r, 1.4);
+        x.restore();
+      }
+    },
+    // 許願池：愛心（按讚）
+    'wish-heart'(x, r) {
+      C.smooth(x, [[24, 42], [8, 28], [6, 16], [12, 9], [20, 9], [24, 15], [28, 9], [36, 9], [42, 16], [40, 28]]);
+      C.fill(x, '#ef4b5c', r, [6, 9, 36, 33]); C.stroke(x, r, 2.4);
+      C.blob(x, 15, 17, 3.5, 2.5, r, 0.1); x.fillStyle = 'rgba(255,255,255,.75)'; x.fill();
+    },
+    // 許願池：沒按過的空心愛心
+    'wish-heart-off'(x, r) {
+      C.smooth(x, [[24, 42], [8, 28], [6, 16], [12, 9], [20, 9], [24, 15], [28, 9], [36, 9], [42, 16], [40, 28]]);
+      C.fill(x, '#fbf6e9', r, null); C.stroke(x, r, 2.4);
+    },
+    // 許願池：丟進去的金幣
+    'wish-coin'(x, r) {
+      C.blob(x, 24, 24, 17, 17, r, 0.04); C.fill(x, '#ffd23f', r, [7, 7, 34, 34]); C.stroke(x, r, 2.6);
+      C.blob(x, 24, 24, 11, 11, r, 0.05); C.stroke(x, r, 1.6, '#c9962a');
+      C.line(x, 24, 17, 24, 31, r, 2.2, '#c9962a');
+      C.blob(x, 17, 15, 3, 2, r, 0.1); x.fillStyle = 'rgba(255,255,255,.85)'; x.fill();
+    },
+    // 許願池：「做好了」的紅色印章（字另外疊上去）
+    'wish-stamp'(x, r) {
+      C.blob(x, 24, 24, 21, 21, r, 0.05, 28); C.stroke(x, r, 3, '#d8323f');
+      C.blob(x, 24, 24, 16.5, 16.5, r, 0.06, 26); C.stroke(x, r, 1.4, '#d8323f');
+    },
   };
 
   const cache = {};

@@ -11,53 +11,75 @@
   };
   const SLOTS = { outfit: '服裝', head: '頭飾', cape: '披風', weapon: '武器' };
   const LOOK_SLOTS = ['outfit', 'head', 'cape']; // 「穿著Prada的惡魔」只看這三格
+  // 系列：裝備欄照系列分組；頭飾、服裝、披風三格都穿同一個系列（而且系列有 fx）就會發動套裝特效，特效只有外觀
+  // 排列順序就是裝備欄裡的順序
+  const SERIES = {
+    zodiac: { name: '生肖', fx: 'redPacket', desc: '穿齊：身邊飄出小紅包和金粉' },
+    maid: { name: '女僕咖啡廳', fx: 'heart', desc: '穿齊：站著或走路都會飄出粉色愛心' },
+    wedding: { name: '婚禮', fx: 'petal', desc: '穿齊：走到哪裡都飄著花瓣' },
+    forest: { name: '森林布偶', fx: 'butterfly', desc: '穿齊：身邊飛出小蝴蝶' },
+    typhoon: { name: '防颱', desc: '這個系列沒有披風，純收藏' },
+    hualien: { name: '花蓮副本', desc: '打倒花蓮王才會掉的武器' },
+    single: { name: '單品', desc: '不成套，隨你搭' },
+  };
 
   const GEAR = {
     // 服裝 10 件：R 4、SR 4、SSR 2
-    pajamas: { slot: 'outfit', name: '條紋睡衣', rarity: 'R', icon: '🛌' },
-    overalls: { slot: 'outfit', name: '格子吊帶褲', rarity: 'R', icon: '👖' },
-    sailor: { slot: 'outfit', name: '水手服', rarity: 'R', icon: '⚓' },
-    courier: { slot: 'outfit', name: '外送員雨衣', rarity: 'R', icon: '🛵' },
-    bear: { slot: 'outfit', name: '熊熊布偶裝', rarity: 'SR', icon: '🐻' },
-    croc: { slot: 'outfit', name: '鱷魚布偶裝', rarity: 'SR', icon: '🐊' },
-    astronaut: { slot: 'outfit', name: '太空人裝', rarity: 'SR', icon: '🧑‍🚀' },
-    bubbletea: { slot: 'outfit', name: '珍珠奶茶裝', rarity: 'SR', icon: '🧋' },
-    tuxedo: { slot: 'outfit', name: '婚禮燕尾服', rarity: 'SSR', icon: '🤵' },
-    gown: { slot: 'outfit', name: '婚禮白紗', rarity: 'SSR', icon: '👰' },
+    pajamas: { slot: 'outfit', name: '條紋睡衣', rarity: 'R', series: 'single', icon: '🛌' },
+    overalls: { slot: 'outfit', name: '格子吊帶褲', rarity: 'R', series: 'single', icon: '👖' },
+    sailor: { slot: 'outfit', name: '水手服', rarity: 'R', series: 'single', icon: '⚓' },
+    courier: { slot: 'outfit', name: '外送員雨衣', rarity: 'R', series: 'typhoon', icon: '🛵' },
+    bear: { slot: 'outfit', name: '熊熊布偶裝', rarity: 'SR', series: 'forest', icon: '🐻' },
+    croc: { slot: 'outfit', name: '鱷魚布偶裝', rarity: 'SR', series: 'forest', icon: '🐊' },
+    astronaut: { slot: 'outfit', name: '太空人裝', rarity: 'SR', series: 'single', icon: '🧑‍🚀' },
+    bubbletea: { slot: 'outfit', name: '珍珠奶茶裝', rarity: 'SR', series: 'single', icon: '🧋' },
+    tuxedo: { slot: 'outfit', name: '婚禮燕尾服', rarity: 'SSR', series: 'wedding', icon: '🤵' },
+    gown: { slot: 'outfit', name: '婚禮白紗', rarity: 'SSR', series: 'wedding', icon: '👰' },
     // 頭飾 5 件：R 2、SR 2、SSR 1
-    catGray: { slot: 'head', name: '灰色貓咪頭飾', rarity: 'R', icon: '🐱' },
-    catOrange: { slot: 'head', name: '橘色貓咪頭飾', rarity: 'R', icon: '🐈' },
-    apple: { slot: 'head', name: '蘋果帽', rarity: 'SR', icon: '🍎' },
-    umbrella: { slot: 'head', name: '小雨傘帽', rarity: 'SR', icon: '☂️' },
-    crown: { slot: 'head', name: '星星皇冠', rarity: 'SSR', icon: '👑' },
+    catGray: { slot: 'head', name: '灰色貓咪頭飾', rarity: 'R', series: 'forest', icon: '🐱' },
+    catOrange: { slot: 'head', name: '橘色貓咪頭飾', rarity: 'R', series: 'forest', icon: '🐈' },
+    apple: { slot: 'head', name: '蘋果帽', rarity: 'SR', series: 'single', icon: '🍎' },
+    umbrella: { slot: 'head', name: '小雨傘帽', rarity: 'SR', series: 'typhoon', icon: '☂️' },
+    crown: { slot: 'head', name: '星星皇冠', rarity: 'SSR', series: 'wedding', icon: '👑' },
     // 披風 5 件：R 2、SR 2、SSR 1
-    heroCape: { slot: 'cape', name: '英雄紅披風', rarity: 'R', icon: '🦸' },
-    blanket: { slot: 'cape', name: '格紋毛毯披風', rarity: 'R', icon: '🧣' },
-    devil: { slot: 'cape', name: '惡魔翅膀', rarity: 'SR', icon: '😈' },
-    pigBalloon: { slot: 'cape', name: '佩佩豬氣球', rarity: 'SR', icon: '🎈' },
-    angel: { slot: 'cape', name: '天使翅膀', rarity: 'SSR', icon: '😇' },
+    heroCape: { slot: 'cape', name: '英雄紅披風', rarity: 'R', series: 'single', icon: '🦸' },
+    blanket: { slot: 'cape', name: '格紋毛毯披風', rarity: 'R', series: 'single', icon: '🧣' },
+    devil: { slot: 'cape', name: '惡魔翅膀', rarity: 'SR', series: 'single', icon: '😈' },
+    pigBalloon: { slot: 'cape', name: '佩佩豬氣球', rarity: 'SR', series: 'single', icon: '🎈' },
+    angel: { slot: 'cape', name: '天使翅膀', rarity: 'SSR', series: 'single', icon: '😇' },
     // 第二批：服裝 4、頭飾 3、披風 3
-    raincoat: { slot: 'outfit', name: '黃色小雨衣', rarity: 'R', icon: '🧥' },
-    chef: { slot: 'outfit', name: '泡麵廚師服', rarity: 'R', icon: '👨‍🍳' },
-    tiger: { slot: 'outfit', name: '老虎布偶裝', rarity: 'SR', icon: '🐯' },
-    typhoonSuit: { slot: 'outfit', name: '薔琵布偶裝', rarity: 'SSR', icon: '🌀' },
-    hardhat: { slot: 'head', name: '防颱安全帽', rarity: 'R', icon: '⛑️' },
-    bunny: { slot: 'head', name: '兔兔耳朵', rarity: 'SR', icon: '🐰' },
-    unicorn: { slot: 'head', name: '獨角獸角', rarity: 'SSR', icon: '🦄' },
-    rainbowCape: { slot: 'cape', name: '彩虹披風', rarity: 'R', icon: '🌈' },
-    butterfly: { slot: 'cape', name: '蝴蝶翅膀', rarity: 'SR', icon: '🦋' },
-    phoenix: { slot: 'cape', name: '鳳凰火焰翅膀', rarity: 'SSR', icon: '🔥' },
+    raincoat: { slot: 'outfit', name: '黃色小雨衣', rarity: 'R', series: 'typhoon', icon: '🧥' },
+    chef: { slot: 'outfit', name: '泡麵廚師服', rarity: 'R', series: 'single', icon: '👨‍🍳' },
+    tiger: { slot: 'outfit', name: '老虎布偶裝', rarity: 'SR', series: 'zodiac', icon: '🐯' },
+    typhoonSuit: { slot: 'outfit', name: '薔琵布偶裝', rarity: 'SSR', series: 'typhoon', icon: '🌀' },
+    hardhat: { slot: 'head', name: '防颱安全帽', rarity: 'R', series: 'typhoon', icon: '⛑️' },
+    bunny: { slot: 'head', name: '兔兔耳朵', rarity: 'SR', series: 'zodiac', icon: '🐰' },
+    unicorn: { slot: 'head', name: '獨角獸角', rarity: 'SSR', series: 'single', icon: '🦄' },
+    rainbowCape: { slot: 'cape', name: '彩虹披風', rarity: 'R', series: 'single', icon: '🌈' },
+    butterfly: { slot: 'cape', name: '蝴蝶翅膀', rarity: 'SR', series: 'forest', icon: '🦋' },
+    phoenix: { slot: 'cape', name: '鳳凰火焰翅膀', rarity: 'SSR', series: 'single', icon: '🔥' },
+    bouquet: { slot: 'cape', name: '捧花彩帶', rarity: 'SR', series: 'wedding', icon: '💐' },
+    veil: { slot: 'head', name: '新娘頭紗', rarity: 'SR', series: 'wedding', icon: '👰' },
+    // 第三批：生肖、女僕咖啡廳（女僕咖啡廳只在廚房煮泡麵時掉，src: 'cook'）
+    horse: { slot: 'outfit', name: '小馬布偶裝', rarity: 'SR', series: 'zodiac', icon: '🐴' },
+    dragonCape: { slot: 'cape', name: '舞龍披風', rarity: 'SSR', series: 'zodiac', icon: '🐉' },
+    maidBand: { slot: 'head', name: '貓耳女僕髮箍', rarity: 'R', series: 'maid', icon: '🎀', src: 'cook' },
+    maid: { slot: 'outfit', name: '女僕裝', rarity: 'SR', series: 'maid', icon: '👗', src: 'cook' },
+    butler: { slot: 'outfit', name: '執事服', rarity: 'SR', series: 'maid', icon: '🤵', src: 'cook' },
+    heartBow: { slot: 'cape', name: '愛心大蝴蝶結', rarity: 'R', series: 'maid', icon: '💗', src: 'cook' },
     // 武器：花蓮副本（打倒花蓮王才會掉）
-    lilyDart: { slot: 'weapon', name: '金針花標', rarity: 'R', icon: '🌼', basic: 'lilyDart', dungeon: 'hualien' },
-    qixingStaff: { slot: 'weapon', name: '七星潭法杖', rarity: 'SR', icon: '🔮', basic: 'pebbleOrb', dungeon: 'hualien' },
-    tarokoHammer: { slot: 'weapon', name: '太魯閣戰錘', rarity: 'SSR', icon: '🔨', basic: 'marbleSmash', dungeon: 'hualien' },
+    lilyDart: { slot: 'weapon', name: '金針花標', rarity: 'R', series: 'hualien', icon: '🌼', basic: 'lilyDart', dungeon: 'hualien' },
+    qixingStaff: { slot: 'weapon', name: '七星潭法杖', rarity: 'SR', series: 'hualien', icon: '🔮', basic: 'pebbleOrb', dungeon: 'hualien' },
+    tarokoHammer: { slot: 'weapon', name: '太魯閣戰錘', rarity: 'SSR', series: 'hualien', icon: '🔨', basic: 'marbleSmash', dungeon: 'hualien' },
   };
 
   // 依稀有度抽一件，盡量抽還沒有的；rare 為 true 時只抽 SR、SSR（打倒颱風的獎勵）
-  function roll(owned, rare) {
+  // src 指定來源（例如 'cook' 只抽廚房掉的）；沒指定就只抽一般獎勵池
+  function roll(owned, rare, src) {
     const have = new Set(owned || []);
     // 武器只從副本掉，不會從這裡抽到
-    const pool = Object.keys(GEAR).filter(id => !have.has(id) && !GEAR[id].dungeon && (!rare || GEAR[id].rarity !== 'R'));
+    const pool = Object.keys(GEAR).filter(id => !have.has(id) && !GEAR[id].dungeon && (GEAR[id].src || null) === (src || null)
+      && (!rare || GEAR[id].rarity !== 'R'));
     if (!pool.length) return null;
     const total = pool.reduce((s, id) => s + RARITY[GEAR[id].rarity].weight, 0);
     let x = Math.random() * total;
@@ -202,12 +224,7 @@
       C.blob(ctx, 23, 51, 2.6, 2.6, r, 0.15, 10); C.fill(ctx, '#e8384f', r, null); C.stroke(ctx, r, 1);
     } },
     gown: {
-      back(ctx, C, r) {
-        // 頭紗從頭後面垂下來
-        ctx.save(); ctx.globalAlpha = 0.85;
-        ctx.beginPath(); ctx.moveTo(14, 18); ctx.quadraticCurveTo(32, 2, 50, 18); ctx.lineTo(58, 64); ctx.quadraticCurveTo(32, 70, 6, 64); ctx.closePath();
-        C.fill(ctx, '#f6f8fc', r, null); ctx.restore(); C.stroke(ctx, r, 1.8, '#9aa3b5');
-      },
+      // 頭紗另外做成「新娘頭紗」頭飾（veil），白紗本身不帶頭紗
       front(ctx, C, r, p) {
         [[13, -0.5], [51, 0.5]].forEach(([x, tilt]) => {
           C.blob(ctx, x, 54, 5, 9, r, 0.08); C.fill(ctx, '#fbfbf8', r, null); C.stroke(ctx, r, W);
@@ -278,7 +295,7 @@
       },
     },
     devil: { cape(ctx, C, r) { wings(ctx, C, r, '#5b3a7a', true); } },
-    angel: { cape(ctx, C, r) { wings(ctx, C, r, '#ffffff', false); } },
+    angel: { cape(ctx, C, r) { featherWings(ctx, C, r); } },
     pigBalloon: { cape(ctx, C, r) {
       ctx.beginPath(); ctx.moveTo(54, 60); ctx.quadraticCurveTo(62, 30, 58, 2); C.stroke(ctx, r, 1.4);
       // 粉紅色小豬氣球
@@ -403,20 +420,217 @@
     } },
   };
 
+  // ---------- 第三批：生肖、女僕咖啡廳 ----------
+  Object.assign(DRAW, {
+    horse: {
+      back(ctx, C, r) {
+        // 尖尖的馬耳朵
+        [[19, -1], [45, 1]].forEach(([x, k]) => {
+          ctx.beginPath(); ctx.moveTo(x - 6, 10); ctx.quadraticCurveTo(x - k, -8, x + k * 3, -9); ctx.quadraticCurveTo(x + k * 7, 0, x + 6, 10); ctx.closePath();
+          C.fill(ctx, '#c98a52', r, null); C.stroke(ctx, r, W);
+        });
+        hood(ctx, C, r, '#c98a52');
+        // 鬃毛：從頭頂一路垂到後腦
+        [[25, 4], [30, 2], [35, 2], [40, 4], [45, 8], [49, 13]].forEach(([x, y]) => {
+          C.blob(ctx, x, y, 4.5, 5.5, r, 0.1, 12); C.fill(ctx, '#6b4a32', r, null); C.stroke(ctx, r, 1.6);
+        });
+        // 一把馬尾巴
+        ctx.beginPath(); ctx.moveTo(44, 62); ctx.quadraticCurveTo(64, 58, 63, 77); ctx.quadraticCurveTo(56, 70, 44, 68); ctx.closePath();
+        C.fill(ctx, '#6b4a32', r, null); C.stroke(ctx, r, W);
+      },
+      front(ctx, C, r, p) {
+        suit(ctx, C, r, p, { body: '#c98a52', hands: '#6b4a32', legs: '#c98a52', shoes: '#6b4a32' });
+        C.blob(ctx, 32, 58, 9, 8, r, 0.06); C.fill(ctx, '#f0d2a8', r, null); C.stroke(ctx, r, 1.8);
+        // 胸前一個小小的金色馬蹄鐵
+        ctx.beginPath(); ctx.arc(32, 51, 3.2, Math.PI * 0.15, Math.PI * 0.85, true); C.stroke(ctx, r, 2.2, '#ffd23f');
+      },
+    },
+    dragonCape: {
+      cape(ctx, C, r) {
+        // 舞龍的龍身：紅色披風、金色鱗片、下襬一圈金色流蘇
+        const path = () => { ctx.beginPath(); ctx.moveTo(14, 44); ctx.lineTo(50, 44); ctx.quadraticCurveTo(64, 60, 66, 76); ctx.quadraticCurveTo(32, 82, -2, 76); ctx.quadraticCurveTo(0, 60, 14, 44); ctx.closePath(); };
+        path(); C.fill(ctx, '#e8384f', r, [-2, 44, 68, 36]);
+        ctx.save(); path(); ctx.clip();
+        for (let y = 50; y < 80; y += 6) for (let x = -4 + ((y / 6) % 2) * 4; x < 70; x += 8) {
+          ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI); C.stroke(ctx, r, 1.4, '#ffd23f');
+        }
+        ctx.restore();
+        path(); C.stroke(ctx, r, W);
+        for (let x = 0; x < 66; x += 3.5) C.line(ctx, x, 77 + Math.sin(x) * 0.6, x, 81, r, 1.6, '#ffb020', 0.3);
+        // 肩膀後面探出來的小龍頭
+        C.blob(ctx, 2, 42, 9, 7, r, 0.06); C.fill(ctx, '#e8384f', r, null); C.stroke(ctx, r, W);
+        [[-1, 35], [5, 34]].forEach(([x, y]) => { ctx.beginPath(); ctx.moveTo(x - 2, y + 3); ctx.lineTo(x, y - 4); ctx.lineTo(x + 2, y + 3); ctx.closePath(); C.fill(ctx, '#ffd23f', r, null); C.stroke(ctx, r, 1.4); });
+        dot(ctx, 0, 41, 2.2, '#ffffff'); dot(ctx, 0, 41, 1.1, C.INK);
+        C.line(ctx, -6, 45, -12, 48, r, 1.4, '#ffd23f', 0.3); C.line(ctx, -6, 43, -12, 41, r, 1.4, '#ffd23f', 0.3);
+      },
+      clasp(ctx, C, r) {
+        // 脖子前面一顆龍珠
+        C.blob(ctx, 32, 48.5, 3.6, 3.6, r, 0.1, 12); C.fill(ctx, '#ffd23f', r, null); C.stroke(ctx, r, 1.6);
+        dot(ctx, 31, 47.5, 1, '#ffffff');
+      },
+    },
+    veil: {
+      back(ctx, C, r) {
+        // 頭紗從頭後面垂下來，半透明
+        ctx.save(); ctx.globalAlpha = 0.85;
+        ctx.beginPath(); ctx.moveTo(14, 18); ctx.quadraticCurveTo(32, 2, 50, 18); ctx.lineTo(58, 64); ctx.quadraticCurveTo(32, 70, 6, 64); ctx.closePath();
+        C.fill(ctx, '#f6f8fc', r, null); ctx.restore(); C.stroke(ctx, r, 1.8, '#9aa3b5');
+        for (let x = 10; x < 56; x += 6) dot(ctx, x, 63 + Math.sin(x) * 1.5, 1, '#d6dae1');
+      },
+      head(ctx, C, r) {
+        // 頭頂一圈小白花和粉紅花苞
+        for (let i = 0; i <= 6; i++) {
+          const a = Math.PI * (1.18 + i * 0.107), x = 32 + Math.cos(a) * 18.5, y = 26 + Math.sin(a) * 18.5;
+          const col = i % 2 ? '#ffd0e2' : '#ffffff';
+          for (let k = 0; k < 5; k++) { const b = k * Math.PI * 2 / 5; C.blob(ctx, x + Math.cos(b) * 2.4, y + Math.sin(b) * 2.4, 2.2, 2.2, r, 0.12, 8); C.fill(ctx, col, r, null); }
+          C.blob(ctx, x, y, 3.6, 3.6, r, 0.12, 10); C.stroke(ctx, r, 1);
+          dot(ctx, x, y, 1.3, '#ffd23f');
+        }
+        [[17, 15], [47, 15]].forEach(([x, y]) => { C.blob(ctx, x, y, 3.4, 2, r, 0.12, 10); C.fill(ctx, '#7fd1a8', r, null); C.stroke(ctx, r, 1); });
+      },
+    },
+    bouquet: { cape(ctx, C, r) {
+      // 背後斜背著一束捧花，從肩膀上探出來；兩條粉色緞帶從後面飄下來
+      [[-1, '#ff8fb8'], [1, '#ffc2da']].forEach(([k, col]) => {
+        // 緞帶從背後往兩邊飄出去，在身體兩側露出一截波浪
+        ctx.beginPath(); ctx.moveTo(32 + k * 6, 46);
+        ctx.bezierCurveTo(32 + k * 30, 50, 32 + k * 16, 64, 32 + k * 34, 76);
+        ctx.lineTo(32 + k * 30, 80);
+        ctx.bezierCurveTo(32 + k * 10, 66, 32 + k * 24, 54, 32 + k * 2, 50); ctx.closePath();
+        C.fill(ctx, col, r, null); C.stroke(ctx, r, 1.6);
+      });
+      ctx.save(); ctx.translate(55, 26); ctx.rotate(0.65); ctx.scale(1.2, 1.2);
+      // 花莖和綁花的蝴蝶結
+      C.rect(ctx, -3, 6, 6, 16, r, 0.4); C.fill(ctx, '#7fd1a8', r, null); C.stroke(ctx, r, 1.6);
+      [-1, 1].forEach(k => { ctx.beginPath(); ctx.moveTo(0, 10); ctx.lineTo(k * 7, 6); ctx.lineTo(k * 7, 14); ctx.closePath(); C.fill(ctx, '#ff8fb8', r, null); C.stroke(ctx, r, 1.2); });
+      // 一團花：白、粉、淡黃的小花，夾幾片葉子
+      [[-8, -2], [8, -2]].forEach(([x, y]) => { C.blob(ctx, x, y + 3, 4.5, 2.4, r, 0.1, 10); C.fill(ctx, '#6baf7b', r, null); C.stroke(ctx, r, 1.2); });
+      [[0, -4, '#ffffff'], [-6, 0, '#ffd0e2'], [6, 0, '#fff4c9'], [-3, -10, '#ff8fb8'], [4, -9, '#ffffff'], [0, 2, '#ffb3c8']].forEach(([x, y, c]) => {
+        C.blob(ctx, x, y, 5, 5, r, 0.14, 10); C.fill(ctx, c, r, null); C.stroke(ctx, r, 1.4);
+        dot(ctx, x, y, 1.4, '#ffd23f');
+      });
+      ctx.restore();
+    } },
+    maidBand: { head(ctx, C, r) {
+      catEars(ctx, C, r, '#2b2a33', null);
+      // 白色蕾絲髮箍沿著頭頂一圈
+      for (let i = 0; i <= 8; i++) {
+        const a = Math.PI * (1.15 + i * 0.0875);
+        C.blob(ctx, 32 + Math.cos(a) * 18, 28 + Math.sin(a) * 18, 3, 3, r, 0.12, 10); C.fill(ctx, '#ffffff', r, null); C.stroke(ctx, r, 1.2);
+      }
+      // 側邊一個粉紅小蝴蝶結
+      [[-1], [1]].forEach(([k]) => { ctx.beginPath(); ctx.moveTo(47, 16); ctx.lineTo(47 + k * 5, 12); ctx.lineTo(47 + k * 5, 20); ctx.closePath(); C.fill(ctx, '#ff8fb8', r, null); C.stroke(ctx, r, 1.2); });
+      dot(ctx, 47, 16, 1.6, '#ff6b9a');
+    } },
+    maid: { front(ctx, C, r, p) {
+      suit(ctx, C, r, p, { body: '#2b2a33', sleeve: '#2b2a33', legs: '#fbfbf8', shoes: '#2b2a33', hem: 69 });
+      // 裙襬下面一圈白色荷葉邊
+      for (let x = 17; x <= 47; x += 5) { C.blob(ctx, x, 70, 3, 2.2, r, 0.12, 10); C.fill(ctx, '#ffffff', r, null); C.stroke(ctx, r, 1); }
+      // 白色袖口
+      [[13, 61], [51, 61]].forEach(([x, y]) => { C.blob(ctx, x, y, 4.6, 1.8, r, 0.1, 10); C.fill(ctx, '#ffffff', r, null); C.stroke(ctx, r, 1); });
+      // 白圍裙，邊上一圈小荷葉
+      ctx.beginPath(); ctx.moveTo(25, 50); ctx.lineTo(39, 50); ctx.lineTo(41, 66); ctx.quadraticCurveTo(32, 69, 23, 66); ctx.closePath();
+      C.fill(ctx, '#ffffff', r, null); C.stroke(ctx, r, 1.6);
+      for (let x = 24; x <= 40; x += 4) dot(ctx, x, 67, 1, '#d6dae1');
+      C.line(ctx, 22, 55, 42, 55, r, 1.4, '#ffffff', 0.2);
+      // 圓圓的白領子和粉紅蝴蝶結
+      [[27.5, 47.5], [36.5, 47.5]].forEach(([x, y]) => { C.blob(ctx, x, y, 4.4, 2.8, r, 0.1, 10); C.fill(ctx, '#ffffff', r, null); C.stroke(ctx, r, 1.2); });
+      [-1, 1].forEach(k => { ctx.beginPath(); ctx.moveTo(32, 49.5); ctx.lineTo(32 + k * 4, 47.5); ctx.lineTo(32 + k * 4, 51.5); ctx.closePath(); C.fill(ctx, '#ff8fb8', r, null); C.stroke(ctx, r, 1); });
+      dot(ctx, 32, 49.5, 1.4, '#ff6b9a');
+    } },
+    butler: { front(ctx, C, r, p) {
+      suit(ctx, C, r, p, { body: '#2b2a33', legs: '#2b2a33', shoes: '#131a28', hands: '#ffffff' });
+      // 灰背心、白襯衫、黑領結
+      ctx.beginPath(); ctx.moveTo(25, 47); ctx.lineTo(39, 47); ctx.lineTo(38, 63); ctx.lineTo(32, 65); ctx.lineTo(26, 63); ctx.closePath();
+      C.fill(ctx, '#7a8296', r, null); C.stroke(ctx, r, 1.6);
+      ctx.beginPath(); ctx.moveTo(28, 46); ctx.lineTo(36, 46); ctx.lineTo(32, 54); ctx.closePath(); C.fill(ctx, '#ffffff', r, null); C.stroke(ctx, r, 1.2);
+      ctx.beginPath(); ctx.moveTo(28, 46.5); ctx.lineTo(32, 48.5); ctx.lineTo(28, 50.5); ctx.closePath(); ctx.moveTo(36, 46.5); ctx.lineTo(32, 48.5); ctx.lineTo(36, 50.5); ctx.closePath();
+      C.fill(ctx, '#2b2a33', r, null);
+      [56, 60].forEach(y => dot(ctx, 32, y, 1.1, '#2b2a33'));
+      // 懷錶的金鍊子
+      ctx.beginPath(); ctx.moveTo(32, 58); ctx.quadraticCurveTo(35, 61, 38, 58); C.stroke(ctx, r, 1.2, '#ffd23f');
+      // 外套翻領
+      C.line(ctx, 24, 47, 27, 58, r, 1.6, '#4f5d78', 0.3); C.line(ctx, 40, 47, 37, 58, r, 1.6, '#4f5d78', 0.3);
+    } },
+    heartBow: { cape(ctx, C, r) {
+      // 背後一個超大的粉紅蝴蝶結，兩條緞帶垂下來
+      [[-1, 0.15], [1, -0.15]].forEach(([k, t]) => {
+        ctx.beginPath(); ctx.moveTo(32 + k * 4, 60); ctx.quadraticCurveTo(32 + k * 14, 70, 32 + k * 12 + t * 20, 80);
+        ctx.lineTo(32 + k * 6 + t * 20, 78); ctx.quadraticCurveTo(32 + k * 6, 70, 32, 60); ctx.closePath();
+        C.fill(ctx, '#ff8fb8', r, null); C.stroke(ctx, r, 1.8);
+        // 蝴蝶結的兩個圈，做成愛心的樣子
+        ctx.save(); ctx.translate(32 + k * 20, 50); ctx.rotate(k * 0.5);
+        ctx.beginPath(); ctx.moveTo(0, 10); ctx.bezierCurveTo(-16, 0, -10, -13, 0, -5); ctx.bezierCurveTo(10, -13, 16, 0, 0, 10); ctx.closePath();
+        C.fill(ctx, '#ff8fb8', r, null); C.stroke(ctx, r, W);
+        ctx.beginPath(); ctx.moveTo(0, 5); ctx.bezierCurveTo(-7, 0, -5, -7, 0, -3); ctx.bezierCurveTo(5, -7, 7, 0, 0, 5); ctx.closePath();
+        ctx.fillStyle = '#ffd0e2'; ctx.fill();
+        ctx.restore();
+      });
+    } },
+  });
+
   function star(ctx, C, r, x, y, rr, color) {
     ctx.save(); ctx.translate(x, y); ctx.beginPath();
     for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + (i * Math.PI) / 5, k = i % 2 ? rr * 0.45 : rr; ctx.lineTo(Math.cos(a) * k, Math.sin(a) * k); }
     ctx.closePath(); C.fill(ctx, color, r, null); C.stroke(ctx, r, 1.2); ctx.restore();
   }
+  // 貓耳髮箍：耳朵底部貼在頭頂的弧線上（頭的中心 (32, 28)、半徑約 17.5），往外斜
   function catEars(ctx, C, r, color, stripe) {
-    ctx.beginPath(); ctx.arc(32, 26, 19, Math.PI * 1.1, Math.PI * 1.9); C.stroke(ctx, r, 3.4, C.INK);
-    [[18, -1], [46, 1]].forEach(([x, k]) => {
-      ctx.beginPath(); ctx.moveTo(x - 7, 12); ctx.lineTo(x + k * 2, -2); ctx.lineTo(x + 7, 12); ctx.closePath();
+    ctx.beginPath(); ctx.arc(32, 28, 17.5, Math.PI * 1.12, Math.PI * 1.88); C.stroke(ctx, r, 3.4, C.INK);
+    [-1, 1].forEach(k => {
+      const t = k * 0.78; // 從正上方往兩邊轉的角度
+      ctx.save(); ctx.translate(32 + Math.sin(t) * 16.5, 28 - Math.cos(t) * 16.5); ctx.rotate(t);
+      ctx.beginPath(); ctx.moveTo(-7.5, 3); ctx.lineTo(k * 1.5, -13); ctx.lineTo(7.5, 3); ctx.closePath();
       C.fill(ctx, color, r, null); C.stroke(ctx, r, W);
-      ctx.beginPath(); ctx.moveTo(x - 3.5, 10.5); ctx.lineTo(x + k * 1.2, 3); ctx.lineTo(x + 3.5, 10.5); ctx.closePath();
+      ctx.beginPath(); ctx.moveTo(-4, 1.5); ctx.lineTo(k * 1, -8); ctx.lineTo(4, 1.5); ctx.closePath();
       ctx.fillStyle = '#f4a3a0'; ctx.fill();
-      if (stripe) C.line(ctx, x - 5, 8, x - 1, 5, r, 1.6, stripe, 0.2);
+      if (stripe) C.line(ctx, -k * 5, -1, -k * 2, -5, r, 1.6, stripe, 0.2);
+      ctx.restore();
     });
+  }
+  // 天使翅膀：上緣一道平順的大圓弧，外下緣一球一球的大圓羽毛往內收成尖角，裡面幾道跟著圓羽走的弧線；頭上一圈光環
+  // 右邊的翅膀畫好，左邊用鏡像；人物框左右各只多 16，最外面不要超過 x=79
+  // 翅尖到第一球圓羽是一條順的大圓弧（不要凹口），從 (73, 28.5) 開始才是一球一球的圓羽
+  const ANGEL_LOBES = [[73, 28.5], [65.5, 35.5], [57.5, 41], [50, 45.5], [44, 49]];
+  const ANGEL_BULGE = [0, 7.5, 6, 6, 6]; // 每一球圓羽往外鼓多少（第 i 段，從上面數下來）
+  function angelWingPath(ctx) {
+    ctx.beginPath(); ctx.moveTo(44, 49); ctx.quadraticCurveTo(39, 40, 42, 30);
+    ctx.quadraticCurveTo(50, 11, 69, 9);
+    ctx.bezierCurveTo(82, 8, 83, 23, 73, 28.5);
+    // 圓羽之間的接點往翅膀裡面縮，凹口才會深
+    const lobes = ANGEL_LOBES;
+    for (let i = 1; i < lobes.length; i++) {
+      const [x0, y0] = lobes[i - 1], [x1, y1] = lobes[i];
+      const mx = (x0 + x1) / 2, my = (y0 + y1) / 2, dx = x1 - x0, dy = y1 - y0, d = Math.hypot(dx, dy);
+      // 往外（線段的左手邊）鼓起來
+      const b = ANGEL_BULGE[i]; ctx.bezierCurveTo(x0 + dy / d * b, y0 - dx / d * b, x1 + dy / d * b, y1 - dx / d * b, x1, y1); // 兩個控制點都往外推，每一球比較圓、接縫比較深
+    }
+    ctx.closePath();
+  }
+  function featherWings(ctx, C, r) {
+    [1, -1].forEach(k => {
+      ctx.save();
+      if (k < 0) { ctx.translate(64, 0); ctx.scale(-1, 1); }
+      ctx.translate(-4, 18); // 往下移到背後，最高點在耳朵旁邊；往內收一點，外緣的圓羽才不會被人物框切掉
+      angelWingPath(ctx); C.fill(ctx, '#fbfdff', r, [41, 6, 38, 48]);
+      // 陰影：靠身體那側漸漸變暗；每一球圓羽沿著邊緣內側一道淡淡的灰藍，看起來比較立體
+      ctx.save(); angelWingPath(ctx); ctx.clip();
+      const g = ctx.createLinearGradient(40, 0, 58, 0);
+      g.addColorStop(0, 'rgba(196,212,230,0.75)'); g.addColorStop(1, 'rgba(196,212,230,0)');
+      ctx.fillStyle = g; ctx.fillRect(36, 0, 24, 60);
+      ANGEL_LOBES.forEach(([x0, y0], i) => {
+        if (!i) return;
+        const [x1, y1] = ANGEL_LOBES[i], [px, py] = ANGEL_LOBES[i - 1];
+        const dx = x1 - px, dy = y1 - py, d = Math.hypot(dx, dy), nx = dy / d, ny = -dx / d;
+        ctx.beginPath(); ctx.moveTo(px - nx * 1.5, py - ny * 1.5);
+        const b = ANGEL_BULGE[i] - 2.5; ctx.bezierCurveTo(px + nx * b, py + ny * b, x1 + nx * b, y1 + ny * b, x1 - nx * 1.5, y1 - ny * 1.5);
+        ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(190,207,226,0.8)'; ctx.lineCap = 'round'; ctx.stroke();
+      });
+      ctx.restore();
+      angelWingPath(ctx); C.stroke(ctx, r, W);
+      ctx.restore();
+    });
+    ctx.save(); ctx.beginPath(); ctx.ellipse(32, -2, 12, 3.5, 0, 0, Math.PI * 2); C.stroke(ctx, r, 4.5, C.INK); C.stroke(ctx, r, 2.6, '#ffd23f'); ctx.restore();
   }
   function wings(ctx, C, r, color, bat) {
     [-1, 1].forEach(k => {
@@ -508,7 +722,15 @@
     return pool.length ? pool[Math.floor(Math.random() * pool.length)] : null;
   }
 
-  const gear = { RARITY, SLOTS, LOOK_SLOTS, GEAR, DROP, roll, rollWeapon, hasLayer, drawLayer, LAYERS: ['cape', 'back', 'front', 'head', 'over', 'hand'] };
+  // 身上穿齊哪個系列（三格同系列、系列有特效），沒有就是 null
+  function setOf(equip) {
+    const ids = LOOK_SLOTS.map(s => equip && equip[s]);
+    if (!ids.every(id => GEAR[id])) return null;
+    const sid = GEAR[ids[0]].series;
+    return SERIES[sid] && SERIES[sid].fx && ids.every(id => GEAR[id].series === sid) ? sid : null;
+  }
+
+  const gear = { RARITY, SLOTS, LOOK_SLOTS, SERIES, GEAR, setOf, DROP, roll, rollWeapon, hasLayer, drawLayer, LAYERS: ['cape', 'back', 'front', 'head', 'over', 'hand'] };
   if (typeof module !== 'undefined' && module.exports) module.exports = gear;
   else root.HQ_GEAR = gear;
 })(this);

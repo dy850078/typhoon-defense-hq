@@ -959,6 +959,16 @@ function tickSummon(sm, now) {
   // 整個前線都找得到，離最近的那隻走過去打
   let foe = null, isBoss = false, fd = 1600;
   const box = DG.boxAt(sm.x, sm.y); // 在副本裡：只找同一關的怪，也不會走出這一關
+  if (box) {
+    // 主人離開副本（通關、失敗、自己離開）就收回；主人走到別關就瞬移到主人身邊
+    const obox = DG.boxAt(owner.x, owner.y);
+    if (MAP.areaOf(owner.x) !== MAP.areaOf(sm.x)) return removeSummon(sm);
+    if (obox && obox !== box) {
+      sm.x = clamp(owner.x + 50, obox.x1 + 20, obox.x2 - 20);
+      sm.y = clamp(owner.y + 10, obox.y1 + 30, obox.y2 - 10);
+      return;
+    }
+  }
   (box ? DG.foes().filter(m => m.x >= box.x1 && m.x < box.x2 && m.y >= box.y1 && m.y < box.y2) : mobs).forEach(m => {
     if (!m.alive) return; const d = dist(m.x, m.y, sm.x, sm.y); if (d < fd) { fd = d; foe = m; isBoss = false; }
   });

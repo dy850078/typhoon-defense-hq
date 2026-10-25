@@ -593,12 +593,13 @@
     else { ctx.moveTo(44, 49); ctx.quadraticCurveTo(39, 40, 42, 30); }
     ctx.quadraticCurveTo(50, 11, 69, 9);
     ctx.quadraticCurveTo(80, 8, 78, 18);
-    const lobes = [[78, 18], [76, 28], [70, 36], [62, 42], [53, 47], [44, 49]];
+    // 圓羽之間的接點往翅膀裡面縮，凹口才會深
+    const lobes = [[78, 18], [74, 27.5], [68, 34.5], [60.5, 40], [52, 45.5], [44, 49]];
     for (let i = 1; i < lobes.length; i++) {
       const [x0, y0] = lobes[i - 1], [x1, y1] = lobes[i];
       const mx = (x0 + x1) / 2, my = (y0 + y1) / 2, dx = x1 - x0, dy = y1 - y0, d = Math.hypot(dx, dy);
       // 往外（線段的左手邊）鼓起來
-      ctx.quadraticCurveTo(mx + dy / d * 8, my - dx / d * 8, x1, y1);
+      ctx.bezierCurveTo(x0 + dy / d * 8, y0 - dx / d * 8, x1 + dy / d * 8, y1 - dx / d * 8, x1, y1); // 兩個控制點都往外推，每一球比較圓、接縫比較深
     }
     if (!open) ctx.closePath();
   }

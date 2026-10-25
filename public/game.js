@@ -1121,17 +1121,35 @@
       if (it) { const off = el('button', 'hud-btn tiny', '脫下'); off.onclick = () => equipGear(slot, null); row.appendChild(off); }
       slots.appendChild(row);
     });
-    slots.appendChild(el('p', 'modal-hint', `收集 ${myOwned.length} / ${Object.keys(GR.GEAR).length} 件。到 戰情室玩 你畫我猜，猜對就會拿到新裝備！武器要找指揮中心的 古城守門員進副本，打倒最終頭目才會掉。`));
+    const setId = GR.setOf(myEquip);
+    if (setId) slots.appendChild(el('p', 'gear-set-on', `套裝效果發動中：${GR.SERIES[setId].name}`));
+    slots.appendChild(el('p', 'modal-hint', `收集 ${myOwned.length} / ${Object.keys(GR.GEAR).length} 件。頭飾、服裝、披風都穿同一個系列，就會發動套裝特效。到 戰情室玩 你畫我猜，猜對就會拿到新裝備；女僕咖啡廳系列要在廚房煮泡麵才會掉。武器要找指揮中心的 古城守門員進副本，打倒最終頭目才會掉。`));
     top.appendChild(slots);
     box.appendChild(top);
-    Object.entries(GR.SLOTS).forEach(([slot, label]) => {
-      box.appendChild(el('h3', 'gear-h', label));
+    // 依系列分組，每組可以收合；沒點過的話，只展開身上有穿的系列
+    const folds = (() => { try { return JSON.parse(localStorage.getItem('hq-gear-folds')) || {}; } catch (e) { return {}; } })();
+    const worn = new Set(Object.values(myEquip).map(id => GR.GEAR[id] && GR.GEAR[id].series));
+    Object.entries(GR.SERIES).forEach(([sid, S]) => {
+      const items = Object.entries(GR.GEAR).filter(([, g]) => g.series === sid);
+      if (!items.length) return;
+      const got = items.filter(([id]) => myOwned.includes(id)).length;
+      const sec = el('details', 'gear-series' + (sid === setId ? ' set-on' : ''));
+      sec.open = sid in folds ? folds[sid] : worn.has(sid);
+      const sum = el('summary', 'gear-h');
+      sum.appendChild(el('span', 'gear-h-name', S.name));
+      sum.appendChild(el('span', 'gear-h-count', `${got} / ${items.length}`));
+      if (sid === setId) sum.appendChild(el('span', 'gear-h-on', '發動中'));
+      sec.appendChild(sum);
+      sec.appendChild(el('p', 'gear-h-desc', S.desc));
+      sec.ontoggle = () => { folds[sid] = sec.open; store('hq-gear-folds', folds); };
       const grid = el('div', 'gear-grid');
-      Object.entries(GR.GEAR).filter(([, g]) => g.slot === slot).forEach(([id, g]) => {
+      items.forEach(([id, g]) => {
+        const slot = g.slot;
         const have = myOwned.includes(id), on = myEquip[slot] === id;
         const cell = el('button', `gear-item r-${g.rarity}${have ? '' : ' locked'}${on ? ' on' : ''}`);
         cell.type = 'button';
         cell.appendChild(el('span', 'gear-rar', g.rarity));
+        cell.appendChild(el('span', 'gear-part', GR.SLOTS[slot]));
         if (have) {
           const thumb = gearPortrait({ [slot]: id }, 1);
           thumb.className = 'gear-thumb';
@@ -1146,7 +1164,8 @@
         }
         grid.appendChild(cell);
       });
-      box.appendChild(grid);
+      sec.appendChild(grid);
+      box.appendChild(sec);
     });
     openModal('gear', '裝備', box);
     $('modal').classList.add('wide');
@@ -2201,6 +2220,13 @@
     draw(c.getContext('2d'), CR.rng(seed));
     return c;
   }
+  // 套裝特效用哪張圖、多久飄一個（key 對應 shared/gear.js 的 SERIES[].fx）
+  const SET_FX = {
+    heart: { tex: 'fx-heart', every: 650, scale: 0.5, tint: [0xff8fb8, 0xffb3d1, 0xff6b9a] },
+    redPacket: { tex: 'fx-redpacket', every: 800, scale: 0.5 },
+    petal: { tex: 'fx-petal', every: 420, scale: 0.5, fall: true, tint: [0xffffff, 0xffd0e2, 0xffb3c8] },
+    butterfly: { tex: 'fx-butterfly', every: 1500, scale: 0.5, flutter: true },
+  };
   const FX = {
     // NPC 頭上的對話泡泡（自己畫，不用系統 emoji）
     talk: () => fxCanvas(34, 30, 91, (ctx, r) => {
@@ -2288,6 +2314,25 @@
       ctx.beginPath(); ctx.moveTo(0, 11); ctx.bezierCurveTo(-14, 2, -10, -11, 0, -5); ctx.bezierCurveTo(10, -11, 14, 2, 0, 11); ctx.closePath();
       CR.fill(ctx, '#ff6b9a', r, null); CR.stroke(ctx, r, 2.2); ctx.restore();
       ctx.fillStyle = 'rgba(255,255,255,0.8)'; ctx.beginPath(); ctx.arc(96, 12, 2, 0, Math.PI * 2); ctx.fill();
+    }),
+    // 套裝特效：小紅包（生肖）、花瓣（婚禮，白色用的時候再染色）、小蝴蝶（森林布偶）
+    redpacket: () => fxCanvas(30, 38, 52, (ctx, r) => {
+      CR.rect(ctx, 4, 4, 22, 30, r, 0.8); CR.fill(ctx, '#e8384f', r, null); CR.stroke(ctx, r, 2);
+      ctx.beginPath(); ctx.moveTo(4, 10); ctx.quadraticCurveTo(15, 18, 26, 10); CR.stroke(ctx, r, 1.6);
+      CR.blob(ctx, 15, 15, 3.4, 3.4, r, 0.1, 10); CR.fill(ctx, '#ffd23f', r, null); CR.stroke(ctx, r, 1.2);
+      [[9, 26], [21, 28], [14, 30]].forEach(([x, y]) => { ctx.fillStyle = '#ffd23f'; ctx.beginPath(); ctx.arc(x, y, 1.2, 0, Math.PI * 2); ctx.fill(); });
+    }),
+    petal: () => fxCanvas(26, 20, 53, (ctx, r) => {
+      ctx.beginPath(); ctx.moveTo(3, 10); ctx.quadraticCurveTo(12, -1, 23, 8); ctx.quadraticCurveTo(14, 21, 3, 10); ctx.closePath();
+      CR.fill(ctx, '#ffffff', r, null); CR.stroke(ctx, r, 1.4);
+    }),
+    butterfly: () => fxCanvas(36, 30, 54, (ctx, r) => {
+      [-1, 1].forEach(k => {
+        CR.blob(ctx, 18 + k * 8, 11, 7.5, 7, r, 0.08, 12); CR.fill(ctx, '#8fd3ff', r, null); CR.stroke(ctx, r, 1.6);
+        CR.blob(ctx, 18 + k * 6, 21, 5, 4.6, r, 0.08, 12); CR.fill(ctx, '#b39cff', r, null); CR.stroke(ctx, r, 1.6);
+        ctx.fillStyle = '#ffd23f'; ctx.beginPath(); ctx.arc(18 + k * 9, 10, 2, 0, Math.PI * 2); ctx.fill();
+      });
+      CR.blob(ctx, 18, 16, 1.8, 8, r, 0.06, 10); CR.fill(ctx, '#2b2a33', r, null);
     }),
     // 小愛心（白底黑框，用的時候再染色）
     heart: () => fxCanvas(36, 34, 48, (ctx, r) => {
@@ -3166,8 +3211,13 @@
       who.look.equip = g.equip || {};
       who.texKey = this.avatarKey(Object.assign({}, who.look, { cls: who.stats ? who.stats.cls : 'staff' }));
       who.body_.setTexture(who.texKey);
-      const was = who.prada;
+      const was = who.prada, wasSet = who.setId;
       this.applyGlow(who);
+      if (who.setId && who.setId !== wasSet) {
+        const S = GR.SERIES[who.setId];
+        this.floatText(who.x, who.y - 90, `${S.name}套裝`, '#ff6b9a', 18);
+        if (who === this.me) toast(`湊齊${S.name}系列，套裝特效發動！`);
+      }
       if (who.prada && !was) {
         this.floatText(who.x, who.y - 110, '穿著Prada的惡魔', '#ffd23f', 22);
         this.burst(who.x, who.y - 40, 16, 0xffd23f);
@@ -3179,6 +3229,7 @@
     // SR：一閃一閃的金光；SSR：顏色慢慢流轉的彩虹光，加上一道玻璃般的反光
     applyGlow(c) {
       this.applyPrada(c);
+      this.applySet(c);
       const img = c.body_;
       if (c.glowTween) { c.glowTween.stop(); c.glowTween = null; }
       c.glowFx = null;
@@ -3230,6 +3281,45 @@
         });
       } });
       c.once('destroy', () => { if (c.pradaTween) c.pradaTween.stop(); });
+    }
+
+    // 套裝特效：頭飾、服裝、披風穿同一個系列，身邊就會一直飄出那個系列的小東西（只有外觀）
+    applySet(c) {
+      const sid = GR.setOf(c.look.equip);
+      if (sid === c.setId) return;
+      if (c.setTimer) { c.setTimer.remove(); c.setTimer = null; }
+      c.setId = sid;
+      const fx = sid && SET_FX[GR.SERIES[sid].fx];
+      if (!fx) return;
+      c.setTimer = this.time.addEvent({ delay: fx.every, loop: true, callback: () => this.setPuff(c, fx) });
+      c.once('destroy', () => { if (c.setTimer) c.setTimer.remove(); });
+    }
+    setPuff(c, fx) {
+      // 不在畫面裡、隱身中就不飄，省一點效能
+      if (!c.active || !c.visible || c.alpha < 0.5) return;
+      if (!this.cameras.main.worldView.contains(c.x, c.y)) return;
+      const x = c.x + (Math.random() - 0.5) * 50, y = c.y - 30 - Math.random() * 40;
+      const img = this.add.image(x, y, fx.tex).setDepth(2040).setScale(fx.scale * (0.8 + Math.random() * 0.4)).setAlpha(0.95);
+      if (fx.tint) img.setTint(Phaser.Utils.Array.GetRandom(fx.tint));
+      const sway = (Math.random() - 0.5) * 30;
+      if (fx.fall) {
+        // 花瓣：從頭上慢慢飄落、邊轉邊晃
+        img.setY(c.y - 70 - Math.random() * 20).setRotation(Math.random() * Math.PI);
+        this.tweens.add({ targets: img, y: c.y - 4, x: x + sway, rotation: img.rotation + (Math.random() < 0.5 ? -2 : 2),
+          alpha: { from: 0.95, to: 0 }, duration: 1800, ease: 'Sine.easeIn', onComplete: () => img.destroy() });
+      } else if (fx.flutter) {
+        // 蝴蝶：一上一下拍著翅膀往旁邊飛走
+        const dir = Math.random() < 0.5 ? -1 : 1;
+        img.setFlipX(dir < 0);
+        this.tweens.add({ targets: img, x: x + dir * (40 + Math.random() * 30), duration: 2000, ease: 'Sine.easeOut' });
+        this.tweens.add({ targets: img, y: y - 34, duration: 2000, ease: 'Sine.easeInOut' });
+        this.tweens.add({ targets: img, scaleY: img.scaleY * 0.35, duration: 140, yoyo: true, repeat: 6 });
+        this.tweens.add({ targets: img, alpha: 0, delay: 1400, duration: 600, onComplete: () => img.destroy() });
+      } else {
+        // 愛心、紅包：往上飄、左右晃一下、慢慢變淡
+        this.tweens.add({ targets: img, y: y - 36 - Math.random() * 16, x: x + sway, alpha: { from: 0.95, to: 0 },
+          scale: img.scale * 1.15, duration: 1500, ease: 'Sine.easeOut', onComplete: () => img.destroy() });
+      }
     }
 
     // 拿蛋糕：手上捧著蛋糕，ms 是 0 就是放下

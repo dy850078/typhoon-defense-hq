@@ -571,6 +571,58 @@
       flame(x, r, 24, 30, 10, 18, '#ef4b5c', '#ffd23f');
     },
 
+    // ================= 裝備：生肖、女僕咖啡廳 =================
+    'gear-horse'(x, r) {
+      [[13, -1], [35, 1]].forEach(([a, k]) => { poly(x, [[a - 5, 16], [a + k * 2, 1], [a + 6, 14]]); C.fill(x, '#c98a52', r, null); C.stroke(x, r, 2.2); });
+      C.blob(x, 24, 25, 16, 15, r, 0.04); C.fill(x, '#c98a52', r, [8, 10, 32, 30]); C.stroke(x, r, 2.4);
+      [[18, 8], [23, 6], [28, 7], [32, 10]].forEach(([a, b]) => { C.blob(x, a, b, 4, 4.6, r, 0.1, 12); C.fill(x, '#6b4a32', r, null); C.stroke(x, r, 1.4); });
+      C.blob(x, 24, 35, 10, 7, r, 0.06); C.fill(x, '#f0d2a8', r, null); C.stroke(x, r, 1.8);
+      dot(x, 20, 35, 1.6, '#2b2a33'); dot(x, 28, 35, 1.6, '#2b2a33');
+      dot(x, 17, 23, 2, '#2b2a33'); dot(x, 31, 23, 2, '#2b2a33');
+      dot(x, 11, 29, 2.4, 'rgba(244,120,120,.45)'); dot(x, 37, 29, 2.4, 'rgba(244,120,120,.45)');
+    },
+    'gear-dragonCape'(x, r) {
+      capePath(x); C.fill(x, '#ef4b5c', r, [4, 6, 40, 39]);
+      x.save(); capePath(x); x.clip();
+      for (let yy = 14; yy < 46; yy += 6) for (let xx = 2 + ((yy / 6) % 2) * 4; xx < 46; xx += 8) { x.beginPath(); x.arc(xx, yy, 3.4, 0, Math.PI); C.stroke(x, r, 1.3, '#ffd23f'); }
+      x.restore();
+      capePath(x); C.stroke(x, r, 2.4);
+      C.blob(x, 24, 7, 4, 4, r, 0.1, 12); C.fill(x, '#ffd23f', r, null); C.stroke(x, r, 1.6);
+      [6, 12, 18, 24, 30, 36, 42].forEach(xx => C.line(x, xx, 42, xx, 47, r, 1.4, '#ffb020'));
+    },
+    'gear-maidBand'(x, r) {
+      catBand(x, r, '#2b2a33');
+      for (let i = 0; i <= 8; i++) { const a = Math.PI * (1.1 + i * 0.1); C.blob(x, 24 + Math.cos(a) * 22, 46 + Math.sin(a) * 14, 3, 3, r, 0.12, 10); C.fill(x, '#ffffff', r, null); C.stroke(x, r, 1.2); }
+      heart(x, 40, 30, 4); C.fill(x, '#ff8fb8', r, null); C.stroke(x, r, 1.2);
+    },
+    'gear-maid'(x, r) {
+      poly(x, [[16, 5], [32, 5], [42, 14], [38, 20], [35, 17], [42, 44], [6, 44], [13, 17], [10, 20], [6, 14]]);
+      C.fill(x, '#2b2a33', r, [6, 5, 36, 39]); C.stroke(x, r, 2.4);
+      poly(x, [[17, 16], [31, 16], [34, 40], [14, 40]]); C.fill(x, '#ffffff', r, null); C.stroke(x, r, 1.6);
+      for (let xx = 9; xx <= 39; xx += 5) { C.blob(x, xx, 44, 3, 2, r, 0.12, 10); C.fill(x, '#ffffff', r, null); C.stroke(x, r, 1); }
+      [[19, 8], [29, 8]].forEach(([a, b]) => { C.blob(x, a, b, 5, 3.2, r, 0.1, 10); C.fill(x, '#ffffff', r, null); C.stroke(x, r, 1.2); });
+      heart(x, 24, 10, 3.4); C.fill(x, '#ff8fb8', r, null); C.stroke(x, r, 1.2);
+    },
+    'gear-butler'(x, r) {
+      shirt(x, r, '#2b2a33');
+      poly(x, [[17, 7], [31, 7], [30, 34], [24, 37], [18, 34]]); C.fill(x, '#7a8296', r, null); C.stroke(x, r, 1.6);
+      poly(x, [[20, 6], [28, 6], [24, 16]]); C.fill(x, '#fbfbf8', r, null); C.stroke(x, r, 1.4);
+      poly(x, [[18, 7], [24, 10], [30, 7], [30, 13], [24, 10], [18, 13]]); C.fill(x, '#2b2a33', r, null); C.stroke(x, r, 1.2);
+      [21, 27].forEach(yy => dot(x, 24, yy, 1.3, '#2b2a33'));
+      x.beginPath(); x.moveTo(24, 24); x.quadraticCurveTo(28, 29, 31, 25); C.stroke(x, r, 1.3, '#ffd23f');
+      [[8, 40], [40, 40]].forEach(([a, b]) => { C.blob(x, a, b, 3.6, 3.2, r, 0.1, 10); C.fill(x, '#ffffff', r, null); C.stroke(x, r, 1.4); });
+    },
+    'gear-heartBow'(x, r) {
+      [[-1, 0.2], [1, -0.2]].forEach(([k, t]) => {
+        poly(x, [[24 + k * 2, 26], [24 + k * 10 + t * 10, 46], [24 + k * 4 + t * 10, 46]]); C.fill(x, '#ff8fb8', r, null); C.stroke(x, r, 1.6);
+        x.save(); x.translate(24 + k * 12, 20); x.rotate(k * 0.5);
+        heart(x, 0, 0, 11); C.fill(x, '#ff8fb8', r, null); C.stroke(x, r, 2.2);
+        heart(x, 0, 0, 5); C.fill(x, '#ffd0e2', r, null);
+        x.restore();
+      });
+      C.blob(x, 24, 22, 4.5, 5, r, 0.1, 12); C.fill(x, '#ff6b9a', r, null); C.stroke(x, r, 1.8);
+    },
+
     // ================= 裝備：武器 =================
     'gear-lilyDart'(x, r) {
       C.line(x, 8, 44, 24, 26, r, 2.6, '#5fb37a');

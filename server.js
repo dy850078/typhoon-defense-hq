@@ -24,6 +24,7 @@ const MONSTER_HP_PER_PLAYER = Number(process.env.MONSTER_HP_PER_PLAYER) || 2000;
 const RESPAWN_MS = (Number(process.env.RESPAWN_MINUTES) || 5) * 60 * 1000;
 const CRATE_RESTOCK_MS = (Number(process.env.CRATE_RESTOCK_SECONDS) || 60) * 1000;
 const COOK_MS = 2500;
+const COOK_GEAR_RATE = 0.15; // 煮一次泡麵掉女僕咖啡廳裝備的機率
 // 颱風的三種攻擊：先在地上預警，delay 毫秒後打下來
 const ATTACKS = {
   gust: { r: 240, delay: 1200, dmg: [16, 24] }, // 強風：以颱風為中心吹一圈，會把人吹開
@@ -1093,8 +1094,8 @@ function publicPlayer(p) {
 
 // ---------------- 裝備 ----------------
 // 抽一件還沒有的裝備送給玩家，全部都有了就回傳 null
-function giveGear(p, rare) {
-  const id = GEAR.roll(p.owned, rare);
+function giveGear(p, rare, src) {
+  const id = GEAR.roll(p.owned, rare, src);
   if (!id) return null;
   p.owned.push(id);
   const g = GEAR.GEAR[id];
@@ -1497,6 +1498,8 @@ io.on('connection', (socket) => {
       p.hp = Math.min(p.maxHp, p.hp + food.hp);
       sendStats(p);
       socket.emit('ate', { food: food.name, hp: food.hp });
+      // 女僕咖啡廳系列只有在廚房煮東西才會掉
+      if (Math.random() < COOK_GEAR_RATE) giveGear(p, false, 'cook');
     }, COOK_MS);
   });
 

@@ -974,7 +974,12 @@
     function onState(e) {
       // 真的有聲音在播的時候，唱片才會轉、唱臂才會放下
       $('music').classList.toggle('playing', e.data === YT.PlayerState.PLAYING);
-      if (e.data === YT.PlayerState.PLAYING) $('music-start').hidden = true;
+      if (e.data === YT.PlayerState.PLAYING) {
+        $('music-start').hidden = true;
+        // 告訴伺服器這首多長，它才能自己倒數換歌
+        const n = cur(), d = player.getDuration && player.getDuration();
+        if (n && n.vid === playing && !n.len && d > 0) socket.emit('musicLen', playing, d);
+      }
       if (e.data === YT.PlayerState.ENDED && playing) socket.emit('musicEnded', playing);
     }
     function onError() {

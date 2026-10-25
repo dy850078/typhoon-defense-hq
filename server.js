@@ -1044,6 +1044,8 @@ function sanitizeSave(data) {
     if (!vip.name || (!vip.song && !vip.drink && !vip.photo)) vip = null;
   }
   const owned = [...new Set((Array.isArray(data.owned) ? data.owned : []).filter(id => GEAR.GEAR[id]))];
+  // 白紗原本自帶頭紗，後來拆成「新娘頭紗」頭飾：有白紗的人直接送一件
+  if (owned.includes('gown') && !owned.includes('veil')) owned.push('veil');
   const equip = {};
   if (data.equip && typeof data.equip === 'object') Object.keys(GEAR.SLOTS).forEach(slot => {
     const id = data.equip[slot];

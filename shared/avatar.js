@@ -59,6 +59,7 @@
       C.fill(ctx, hairColor, r, [10, 6, 44, 52]); C.stroke(ctx, r, W);
     }
     gear('outfit', 'back');
+    gear('head', 'back'); // 頭飾在頭後面的部分，例如新娘頭紗
     if (dressed) gear('outfit', 'front');
     else {
     // 腿 + 雨鞋

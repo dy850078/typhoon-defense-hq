@@ -2222,10 +2222,10 @@
   }
   // 套裝特效用哪張圖、多久飄一個（key 對應 shared/gear.js 的 SERIES[].fx）
   const SET_FX = {
-    heart: { tex: 'fx-heart', every: 650, scale: 0.5, tint: [0xff8fb8, 0xffb3d1, 0xff6b9a] },
-    redPacket: { tex: 'fx-redpacket', every: 800, scale: 0.5 },
-    petal: { tex: 'fx-petal', every: 420, scale: 0.5, fall: true, tint: [0xffffff, 0xffd0e2, 0xffb3c8] },
-    butterfly: { tex: 'fx-butterfly', every: 1500, scale: 0.5, flutter: true },
+    heart: { kind: 'heart', every: 420, ring: 0xff7ab0, tint: [0xff8fb8, 0xffb3d1, 0xff6b9a] },
+    redPacket: { kind: 'redPacket', every: 700, ring: 0xffb020 },
+    petal: { kind: 'petal', every: 260, ring: 0xffd0e2, tint: [0xffffff, 0xffd0e2, 0xffb3c8, 0xfff4f8] },
+    butterfly: { kind: 'butterfly', every: 1100, ring: 0x9be7c4, tint: [0xffffff, 0xffe0f0, 0xd8ffe9] },
   };
   const FX = {
     // NPC 頭上的對話泡泡（自己畫，不用系統 emoji）
@@ -2314,6 +2314,24 @@
       ctx.beginPath(); ctx.moveTo(0, 11); ctx.bezierCurveTo(-14, 2, -10, -11, 0, -5); ctx.bezierCurveTo(10, -11, 14, 2, 0, 11); ctx.closePath();
       CR.fill(ctx, '#ff6b9a', r, null); CR.stroke(ctx, r, 2.2); ctx.restore();
       ctx.fillStyle = 'rgba(255,255,255,0.8)'; ctx.beginPath(); ctx.arc(96, 12, 2, 0, Math.PI * 2); ctx.fill();
+    }),
+    // 柔柔的一團光（白色，用的時候再染色，配 ADD 混色看起來會發光）
+    glow: () => fxCanvas(64, 64, 55, (ctx) => {
+      const g = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+      g.addColorStop(0, 'rgba(255,255,255,0.95)'); g.addColorStop(0.35, 'rgba(255,255,255,0.45)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = g; ctx.fillRect(0, 0, 64, 64);
+    }),
+    // 四角的小星光
+    sparkle: () => fxCanvas(32, 32, 56, (ctx) => {
+      ctx.fillStyle = '#ffffff'; ctx.beginPath();
+      ctx.moveTo(16, 0); ctx.quadraticCurveTo(18, 14, 32, 16); ctx.quadraticCurveTo(18, 18, 16, 32); ctx.quadraticCurveTo(14, 18, 0, 16); ctx.quadraticCurveTo(14, 14, 16, 0);
+      ctx.fill();
+    }),
+    // 金幣
+    coin: () => fxCanvas(26, 26, 57, (ctx, r) => {
+      CR.blob(ctx, 13, 13, 10, 10, r, 0.06, 14); CR.fill(ctx, '#ffd23f', r, null); CR.stroke(ctx, r, 1.8);
+      CR.blob(ctx, 13, 13, 5.5, 5.5, r, 0.08, 12); CR.stroke(ctx, r, 1.4, '#e0a400');
+      ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.fillRect(8, 8, 3, 2);
     }),
     // 套裝特效：小紅包（生肖）、花瓣（婚禮，白色用的時候再染色）、小蝴蝶（森林布偶）
     redpacket: () => fxCanvas(30, 38, 52, (ctx, r) => {
@@ -3283,42 +3301,94 @@
       c.once('destroy', () => { if (c.pradaTween) c.pradaTween.stop(); });
     }
 
-    // 套裝特效：頭飾、服裝、披風穿同一個系列，身邊就會一直飄出那個系列的小東西（只有外觀）
+    // 套裝特效：頭飾、服裝、披風穿同一個系列，腳下一圈系列色的光，身邊一直飄出那個系列的小東西（只有外觀）
     applySet(c) {
       const sid = GR.setOf(c.look.equip);
-      if (sid === c.setId) return;
-      if (c.setTimer) { c.setTimer.remove(); c.setTimer = null; }
-      c.setId = sid;
-      const fx = sid && SET_FX[GR.SERIES[sid].fx];
-      if (!fx) return;
-      c.setTimer = this.time.addEvent({ delay: fx.every, loop: true, callback: () => this.setPuff(c, fx) });
-      c.once('destroy', () => { if (c.setTimer) c.setTimer.remove(); });
+      if (sid !== c.setId) {
+        if (c.setTimer) { c.setTimer.remove(); c.setTimer = null; }
+        if (c.setRingTween) { c.setRingTween.stop(); c.setRingTween = null; }
+        if (c.setRing) { c.setRing.destroy(); c.setRing = null; }
+        c.setId = sid;
+        c.setTick = 0;
+        const fx = sid && SET_FX[GR.SERIES[sid].fx];
+        if (fx) {
+          c.setTimer = this.time.addEvent({ delay: fx.every, loop: true, callback: () => this.setPuff(c, fx) });
+          // 腳下的光圈：一張柔光圖壓扁成橢圓，慢慢一明一暗
+          c.setRing = this.add.image(0, -2, 'fx-glow').setScale(1.5, 0.5).setTint(fx.ring).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.5);
+          c.addAt(c.setRing, 0);
+          c.setRingTween = this.tweens.add({ targets: c.setRing, alpha: 0.95, scaleX: 1.7, scaleY: 0.56, duration: 1100, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+          if (!c.setHooked) {
+            c.setHooked = true;
+            c.once('destroy', () => { if (c.setTimer) c.setTimer.remove(); if (c.setRingTween) c.setRingTween.stop(); });
+          }
+        }
+      }
+      // 全身 SSR 已經有彩虹光圈，就不再疊一圈
+      if (c.setRing) c.setRing.setVisible(!c.prada);
+    }
+    // 一個會發光的小東西：後面墊一圈柔光（一明一暗），前面是圖，兩個一起移動、一起淡掉
+    setGlowItem(x, y, tex, scale, tint, glowTint, glowScale) {
+      const halo = this.add.image(x, y, 'fx-glow').setDepth(2039).setTint(glowTint).setBlendMode(Phaser.BlendModes.ADD)
+        .setScale(glowScale).setAlpha(0.7);
+      const img = this.add.image(x, y, tex).setDepth(2040).setScale(scale);
+      if (tint) img.setTint(tint);
+      this.tweens.add({ targets: halo, scale: glowScale * 1.35, alpha: 0.35, duration: 380, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      return [halo, img];
+    }
+    // 一閃即逝的小星光
+    setTwinkle(x, y, tint, size = 0.5) {
+      const st = this.add.image(x, y, 'fx-sparkle').setDepth(2041).setTint(tint).setScale(0.05).setBlendMode(Phaser.BlendModes.ADD);
+      this.tweens.add({ targets: st, scale: size, angle: 90, duration: 260, yoyo: true, ease: 'Sine.easeOut', onComplete: () => st.destroy() });
     }
     setPuff(c, fx) {
       // 不在畫面裡、隱身中就不飄，省一點效能
       if (!c.active || !c.visible || c.alpha < 0.5) return;
       if (!this.cameras.main.worldView.contains(c.x, c.y)) return;
-      const x = c.x + (Math.random() - 0.5) * 50, y = c.y - 30 - Math.random() * 40;
-      const img = this.add.image(x, y, fx.tex).setDepth(2040).setScale(fx.scale * (0.8 + Math.random() * 0.4)).setAlpha(0.95);
-      if (fx.tint) img.setTint(Phaser.Utils.Array.GetRandom(fx.tint));
+      const tick = ++c.setTick;
+      const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+      const x = c.x + (Math.random() - 0.5) * 54, y = c.y - 30 - Math.random() * 40;
       const sway = (Math.random() - 0.5) * 30;
-      if (fx.fall) {
-        // 花瓣：從頭上慢慢飄落、邊轉邊晃
-        img.setY(c.y - 70 - Math.random() * 20).setRotation(Math.random() * Math.PI);
-        this.tweens.add({ targets: img, y: c.y - 4, x: x + sway, rotation: img.rotation + (Math.random() < 0.5 ? -2 : 2),
-          alpha: { from: 0.95, to: 0 }, duration: 1800, ease: 'Sine.easeIn', onComplete: () => img.destroy() });
-      } else if (fx.flutter) {
-        // 蝴蝶：一上一下拍著翅膀往旁邊飛走
+      const fade = (objs, dur) => this.tweens.add({ targets: objs, alpha: 0, duration: dur, onComplete: () => objs.forEach(o => { this.tweens.killTweensOf(o); o.destroy(); }) });
+      if (fx.kind === 'heart') {
+        // 會發光的愛心，有大有小，往上飄
+        const sc = 0.32 + Math.random() * 0.34;
+        const objs = this.setGlowItem(x, y, 'fx-heart', sc, pick(fx.tint), 0xff7ab0, sc * 1.45);
+        this.tweens.add({ targets: objs, y: y - 40 - Math.random() * 20, x: x + sway, duration: 1700, ease: 'Sine.easeOut' });
+        this.time.delayedCall(1000, () => fade(objs, 700));
+        if (Math.random() < 0.45) this.setTwinkle(c.x + (Math.random() - 0.5) * 60, c.y - 20 - Math.random() * 60, pick([0xffffff, 0xffd0e8]));
+      } else if (fx.kind === 'redPacket') {
+        // 紅包往上飄、後面拖著金粉；每隔幾次噴出一把金幣
+        const objs = this.setGlowItem(x, y, 'fx-redpacket', 0.45 + Math.random() * 0.15, null, 0xffc040, 0.9);
+        this.tweens.add({ targets: objs, y: y - 44, x: x + sway, duration: 1600, ease: 'Sine.easeOut',
+          onUpdate: (tw) => { if (Math.random() < 0.18) this.setTwinkle(objs[1].x + (Math.random() - 0.5) * 10, objs[1].y + 10, 0xffd23f, 0.35); } });
+        this.time.delayedCall(1000, () => fade(objs, 600));
+        if (tick % 4 === 0) for (let i = 0; i < 6; i++) {
+          const coin = this.add.image(c.x, c.y - 50, 'fx-coin').setDepth(2041).setScale(0.4);
+          const dx = (Math.random() - 0.5) * 90;
+          this.tweens.add({ targets: coin, x: c.x + dx, duration: 700, ease: 'Linear' });
+          this.tweens.add({ targets: coin, y: c.y - 80 - Math.random() * 20, duration: 300, ease: 'Quad.easeOut', yoyo: true, hold: 0,
+            onComplete: () => { this.setTwinkle(coin.x, coin.y, 0xffd23f, 0.4); coin.destroy(); } });
+        }
+      } else if (fx.kind === 'petal') {
+        // 花瓣：粉白相間從頭上慢慢飄落、邊轉邊晃，中間夾著金色亮點
+        const img = this.add.image(x, c.y - 72 - Math.random() * 20, 'fx-petal').setDepth(2040)
+          .setScale(0.4 + Math.random() * 0.25).setTint(pick(fx.tint)).setRotation(Math.random() * Math.PI);
+        this.tweens.add({ targets: img, y: c.y - 2, x: x + sway, rotation: img.rotation + (Math.random() < 0.5 ? -2.5 : 2.5),
+          alpha: { from: 1, to: 0 }, duration: 2000, ease: 'Sine.easeIn', onComplete: () => img.destroy() });
+        if (Math.random() < 0.35) this.setTwinkle(c.x + (Math.random() - 0.5) * 60, c.y - 10 - Math.random() * 70, pick([0xffe27a, 0xffffff]));
+      } else if (fx.kind === 'butterfly') {
+        // 蝴蝶：一上一下拍著翅膀往旁邊飛，飛過的地方留下一串發光的小亮點
         const dir = Math.random() < 0.5 ? -1 : 1;
-        img.setFlipX(dir < 0);
-        this.tweens.add({ targets: img, x: x + dir * (40 + Math.random() * 30), duration: 2000, ease: 'Sine.easeOut' });
-        this.tweens.add({ targets: img, y: y - 34, duration: 2000, ease: 'Sine.easeInOut' });
-        this.tweens.add({ targets: img, scaleY: img.scaleY * 0.35, duration: 140, yoyo: true, repeat: 6 });
-        this.tweens.add({ targets: img, alpha: 0, delay: 1400, duration: 600, onComplete: () => img.destroy() });
-      } else {
-        // 愛心、紅包：往上飄、左右晃一下、慢慢變淡
-        this.tweens.add({ targets: img, y: y - 36 - Math.random() * 16, x: x + sway, alpha: { from: 0.95, to: 0 },
-          scale: img.scale * 1.15, duration: 1500, ease: 'Sine.easeOut', onComplete: () => img.destroy() });
+        const img = this.add.image(x, y, 'fx-butterfly').setDepth(2040).setScale(0.5).setFlipX(dir < 0).setTint(pick(fx.tint));
+        this.tweens.add({ targets: img, x: x + dir * (50 + Math.random() * 30), duration: 2200, ease: 'Sine.easeOut',
+          onUpdate: () => {
+            if (Math.random() > 0.25) return;
+            const d = this.add.image(img.x, img.y + 4, 'fx-glow').setDepth(2039).setScale(0.12).setTint(0xbfe8ff).setBlendMode(Phaser.BlendModes.ADD);
+            this.tweens.add({ targets: d, alpha: 0, scale: 0.04, y: d.y + 8, duration: 700, onComplete: () => d.destroy() });
+          } });
+        this.tweens.add({ targets: img, y: y - 36, duration: 2200, ease: 'Sine.easeInOut' });
+        this.tweens.add({ targets: img, scaleY: 0.18, duration: 140, yoyo: true, repeat: 7 });
+        this.tweens.add({ targets: img, alpha: 0, delay: 1600, duration: 600, onComplete: () => { this.tweens.killTweensOf(img); img.destroy(); } });
       }
     }
 

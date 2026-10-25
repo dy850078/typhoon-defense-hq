@@ -430,8 +430,6 @@
       heart(x, 37, 23, 3); C.fill(x, '#ef4b5c', r, null);
     },
     'gear-gown'(x, r) {
-      C.smooth(x, [[24, 2], [34, 6], [40, 20], [44, 44], [4, 44], [8, 20], [14, 6]]);
-      x.save(); x.globalAlpha = 0.5; x.fillStyle = '#eef4f8'; x.fill(); x.restore(); C.stroke(x, r, 1.4, '#9aa3b5');
       poly(x, [[18, 8], [30, 8], [29, 20], [38, 44], [10, 44], [19, 20]]); C.fill(x, '#fbfbf8', r, [10, 8, 28, 36]); C.stroke(x, r, 2.4);
       C.line(x, 19, 20, 29, 20, r, 1.8, '#ff8fab');
       [[14, 38], [24, 40], [33, 37], [19, 31], [29, 30]].forEach(([a, b]) => { C.blob(x, a, b, 1.8, 1.8, r, 0.2, 8); C.stroke(x, r, 1, '#ff8fab'); });
@@ -589,6 +587,15 @@
       capePath(x); C.stroke(x, r, 2.4);
       C.blob(x, 24, 7, 4, 4, r, 0.1, 12); C.fill(x, '#ffd23f', r, null); C.stroke(x, r, 1.6);
       [6, 12, 18, 24, 30, 36, 42].forEach(xx => C.line(x, xx, 42, xx, 47, r, 1.4, '#ffb020'));
+    },
+    'gear-veil'(x, r) {
+      C.smooth(x, [[24, 6], [36, 10], [42, 26], [45, 44], [3, 44], [6, 26], [12, 10]]);
+      x.save(); x.globalAlpha = 0.6; x.fillStyle = '#eef4f8'; x.fill(); x.restore(); C.stroke(x, r, 1.6, '#9aa3b5');
+      for (let i = 0; i < 7; i++) {
+        const a = Math.PI * (1.1 + i * 0.133), cx = 24 + Math.cos(a) * 15, cy = 20 + Math.sin(a) * 11;
+        C.blob(x, cx, cy, 3.6, 3.6, r, 0.12, 10); C.fill(x, i % 2 ? '#ffd0e2' : '#ffffff', r, null); C.stroke(x, r, 1.2);
+        dot(x, cx, cy, 1.3, '#ffd23f');
+      }
     },
     'gear-maidBand'(x, r) {
       catBand(x, r, '#2b2a33');

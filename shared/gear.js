@@ -58,6 +58,7 @@
     rainbowCape: { slot: 'cape', name: '彩虹披風', rarity: 'R', series: 'single', icon: '🌈' },
     butterfly: { slot: 'cape', name: '蝴蝶翅膀', rarity: 'SR', series: 'forest', icon: '🦋' },
     phoenix: { slot: 'cape', name: '鳳凰火焰翅膀', rarity: 'SSR', series: 'single', icon: '🔥' },
+    veil: { slot: 'head', name: '新娘頭紗', rarity: 'SR', series: 'wedding', icon: '👰' },
     // 第三批：生肖、女僕咖啡廳（女僕咖啡廳只在廚房煮泡麵時掉，src: 'cook'）
     horse: { slot: 'outfit', name: '小馬布偶裝', rarity: 'SR', series: 'zodiac', icon: '🐴' },
     dragonCape: { slot: 'cape', name: '舞龍披風', rarity: 'SSR', series: 'zodiac', icon: '🐉' },
@@ -222,12 +223,7 @@
       C.blob(ctx, 23, 51, 2.6, 2.6, r, 0.15, 10); C.fill(ctx, '#e8384f', r, null); C.stroke(ctx, r, 1);
     } },
     gown: {
-      back(ctx, C, r) {
-        // 頭紗從頭後面垂下來
-        ctx.save(); ctx.globalAlpha = 0.85;
-        ctx.beginPath(); ctx.moveTo(14, 18); ctx.quadraticCurveTo(32, 2, 50, 18); ctx.lineTo(58, 64); ctx.quadraticCurveTo(32, 70, 6, 64); ctx.closePath();
-        C.fill(ctx, '#f6f8fc', r, null); ctx.restore(); C.stroke(ctx, r, 1.8, '#9aa3b5');
-      },
+      // 頭紗另外做成「新娘頭紗」頭飾（veil），白紗本身不帶頭紗
       front(ctx, C, r, p) {
         [[13, -0.5], [51, 0.5]].forEach(([x, tilt]) => {
           C.blob(ctx, x, 54, 5, 9, r, 0.08); C.fill(ctx, '#fbfbf8', r, null); C.stroke(ctx, r, W);
@@ -470,6 +466,26 @@
         // 脖子前面一顆龍珠
         C.blob(ctx, 32, 48.5, 3.6, 3.6, r, 0.1, 12); C.fill(ctx, '#ffd23f', r, null); C.stroke(ctx, r, 1.6);
         dot(ctx, 31, 47.5, 1, '#ffffff');
+      },
+    },
+    veil: {
+      back(ctx, C, r) {
+        // 頭紗從頭後面垂下來，半透明
+        ctx.save(); ctx.globalAlpha = 0.85;
+        ctx.beginPath(); ctx.moveTo(14, 18); ctx.quadraticCurveTo(32, 2, 50, 18); ctx.lineTo(58, 64); ctx.quadraticCurveTo(32, 70, 6, 64); ctx.closePath();
+        C.fill(ctx, '#f6f8fc', r, null); ctx.restore(); C.stroke(ctx, r, 1.8, '#9aa3b5');
+        for (let x = 10; x < 56; x += 6) dot(ctx, x, 63 + Math.sin(x) * 1.5, 1, '#d6dae1');
+      },
+      head(ctx, C, r) {
+        // 頭頂一圈小白花和粉紅花苞
+        for (let i = 0; i <= 6; i++) {
+          const a = Math.PI * (1.18 + i * 0.107), x = 32 + Math.cos(a) * 18.5, y = 26 + Math.sin(a) * 18.5;
+          const col = i % 2 ? '#ffd0e2' : '#ffffff';
+          for (let k = 0; k < 5; k++) { const b = k * Math.PI * 2 / 5; C.blob(ctx, x + Math.cos(b) * 2.4, y + Math.sin(b) * 2.4, 2.2, 2.2, r, 0.12, 8); C.fill(ctx, col, r, null); }
+          C.blob(ctx, x, y, 3.6, 3.6, r, 0.12, 10); C.stroke(ctx, r, 1);
+          dot(ctx, x, y, 1.3, '#ffd23f');
+        }
+        [[17, 15], [47, 15]].forEach(([x, y]) => { C.blob(ctx, x, y, 3.4, 2, r, 0.12, 10); C.fill(ctx, '#7fd1a8', r, null); C.stroke(ctx, r, 1); });
       },
     },
     maidBand: { head(ctx, C, r) {

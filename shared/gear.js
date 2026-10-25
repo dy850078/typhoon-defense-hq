@@ -586,9 +586,11 @@
   }
   // 天使翅膀：上緣一道平順的大圓弧，外下緣一球一球的大圓羽毛往內收成尖角，裡面幾道跟著圓羽走的弧線；頭上一圈光環
   // 右邊的翅膀畫好，左邊用鏡像；人物框左右各只多 16，最外面不要超過 x=79
-  function angelWingPath(ctx) {
-    ctx.beginPath(); ctx.moveTo(44, 49);
-    ctx.quadraticCurveTo(39, 40, 42, 30);
+  // open 為 true 時不畫靠身體那一邊（裡面的小翅膀線只要上緣和圓羽）
+  function angelWingPath(ctx, open) {
+    ctx.beginPath();
+    if (open) ctx.moveTo(42, 30);
+    else { ctx.moveTo(44, 49); ctx.quadraticCurveTo(39, 40, 42, 30); }
     ctx.quadraticCurveTo(50, 11, 69, 9);
     ctx.quadraticCurveTo(80, 8, 78, 18);
     const lobes = [[78, 18], [76, 28], [70, 36], [62, 42], [53, 47], [44, 49]];
@@ -598,20 +600,22 @@
       // 往外（線段的左手邊）鼓起來
       ctx.quadraticCurveTo(mx + dy / d * 8, my - dx / d * 8, x1, y1);
     }
-    ctx.closePath();
+    if (!open) ctx.closePath();
   }
   function featherWings(ctx, C, r) {
     [1, -1].forEach(k => {
       ctx.save();
       if (k < 0) { ctx.translate(64, 0); ctx.scale(-1, 1); }
-      ctx.translate(-5, 0); // 外緣的圓羽會往外鼓，往內收一點才不會被人物框切掉
+      ctx.translate(-5, 9); // 往下移到背後；外緣的圓羽會往外鼓，往內收一點才不會被人物框切掉
       angelWingPath(ctx); C.fill(ctx, '#fbfdff', r, [41, 6, 38, 48]);
       ctx.save(); angelWingPath(ctx); ctx.clip(); ctx.globalAlpha = 0.4;
       C.blob(ctx, 64, 44, 16, 9, r, 0.08); ctx.fillStyle = '#c4e2f6'; ctx.fill(); ctx.restore();
       angelWingPath(ctx); C.stroke(ctx, r, W);
-      // 裡面的羽毛弧線
-      [[[47, 23], [67, 20], [70, 29]], [[45, 30], [62, 29], [63, 37]], [[45, 37], [55, 37], [55, 43]]].forEach(([p0, c, p1]) => {
-        ctx.beginPath(); ctx.moveTo(p0[0], p0[1]); ctx.quadraticCurveTo(c[0], c[1], p1[0], p1[1]); C.stroke(ctx, r, 1.6, '#8fb8d8');
+      // 裡面一個縮小的翅膀輪廓（淡藍線），像一層小羽毛
+      [[0.6, 2.8]].forEach(([k2, w]) => {
+        ctx.save(); ctx.translate(50, 46); ctx.scale(k2, k2); ctx.translate(-46, -47);
+        angelWingPath(ctx, true); C.stroke(ctx, r, w, '#8fb8d8');
+        ctx.restore();
       });
       ctx.restore();
     });

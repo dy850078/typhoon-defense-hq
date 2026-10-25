@@ -544,23 +544,24 @@
     },
     'gear-angel'(x, r) {
       // 跟穿在身上的一樣（shared/gear.js 的 angelWingPath），縮小放進 48x48
-      const path = () => {
-        x.beginPath(); x.moveTo(44, 49); x.quadraticCurveTo(39, 40, 42, 30); x.quadraticCurveTo(50, 11, 69, 9); x.quadraticCurveTo(80, 8, 78, 18);
+      const path = (open) => {
+        x.beginPath();
+        if (open) x.moveTo(42, 30); else { x.moveTo(44, 49); x.quadraticCurveTo(39, 40, 42, 30); }
+        x.quadraticCurveTo(50, 11, 69, 9); x.quadraticCurveTo(80, 8, 78, 18);
         const lobes = [[78, 18], [76, 28], [70, 36], [62, 42], [53, 47], [44, 49]];
         for (let i = 1; i < lobes.length; i++) {
           const [x0, y0] = lobes[i - 1], [x1, y1] = lobes[i];
           const mx = (x0 + x1) / 2, my = (y0 + y1) / 2, dx = x1 - x0, dy = y1 - y0, d = Math.hypot(dx, dy);
           x.quadraticCurveTo(mx + dy / d * 8, my - dx / d * 8, x1, y1);
         }
-        x.closePath();
+        if (!open) x.closePath();
       };
       [1, -1].forEach(k => {
         x.save(); if (k < 0) { x.translate(48, 0); x.scale(-1, 1); }
         x.translate(4, 6); x.scale(0.52, 0.52);
         path(); C.fill(x, '#fbfdff', r, null); C.stroke(x, r, 4.2);
-        [[[47, 23], [67, 20], [70, 29]], [[45, 30], [62, 29], [63, 37]]].forEach(([p0, c, p1]) => {
-          x.beginPath(); x.moveTo(p0[0], p0[1]); x.quadraticCurveTo(c[0], c[1], p1[0], p1[1]); C.stroke(x, r, 2.6, '#8fb8d8');
-        });
+        // 裡面一個縮小的翅膀輪廓
+        x.save(); x.translate(50, 46); x.scale(0.6, 0.6); x.translate(-46, -47); path(true); C.stroke(x, r, 4.4, '#8fb8d8'); x.restore();
         x.restore();
       });
       x.beginPath(); x.ellipse(24, 7, 8, 3, 0, 0, Math.PI * 2); C.stroke(x, r, 2.6, '#ffd23f');

@@ -65,6 +65,7 @@ function partyInfo() {
 
 const accounts = ACCOUNTS.create(DATA_DIR);
 const wishes = WISHES.create(DATA_DIR);
+const WISH_CAT = { bug: 'Bug 回報', feature: '新功能', improve: '功能優化', other: '其他' };
 
 const app = express();
 app.use(express.json({ limit: '400kb' }));
@@ -280,13 +281,13 @@ app.post('/api/admin/delete', (req, res) => {
   res.json({ ok: accounts.remove(name) });
 });
 
-// 許願池：標狀態（考慮中／做好了／不做）或刪掉，總部裡開著許願板的人會馬上看到
+// 許願池：改處理狀態（待處理／評估中／處理中／已完成／不處理）或刪掉，總部裡開著許願板的人會馬上看到
 app.post('/api/admin/wish', (req, res) => {
   if (!isAdmin(req)) return res.status(401).json({ ok: false });
   const b = req.body || {}, id = Number(b.id);
   const r = b.delete ? wishes.remove(id) : wishes.setStatus(id, b.status);
   if (r.error) return res.status(400).json({ ok: false, error: r.error });
-  if (r.wish && r.wish.status === 'done' && r.was !== 'done') pushChat({ system: true, text: `許願池：「${r.wish.text.slice(0, 30)}」實現了！謝謝 ${r.wish.name} 的願望`, t: Date.now() });
+  if (r.wish && r.wish.status === 'done' && r.was !== 'done') pushChat({ system: true, text: `許願池：「${r.wish.title}」完成了！謝謝 ${r.wish.name} 的願望`, t: Date.now() });
   io.emit('wishes');
   res.json({ ok: true, wishes: wishes.all() });
 });
@@ -1898,38 +1899,45 @@ io.on('connection', (socket) => {
   // 按讚用帳號算；沒登入的用瀏覽器存的裝置代號（wid）
   const voterOf = (p, wid) => p.account ? 'u:' + p.account.username.toLowerCase()
     : (typeof wid === 'string' && /^[a-z0-9]{8,24}$/.test(wid) ? 'g:' + wid : '');
-  const wishView = (p, wid) => ({ ok: true, list: wishes.view(voterOf(p, wid), p.account && p.account.username),
-    login: !!p.account, left: wishes.left(p.account && p.account.username), perDay: wishes.PER_DAY, maxLen: wishes.MAX_LEN });
-  socket.on('wishList', (wid, ack) => {
+  const userOf = (p) => p.account && p.account.username;
+  // 每個許願池的事件都是 (m, ack)：m 裡面有 wid，回傳 { ok, ... }
+  const onWish = (ev, fn) => socket.on(ev, (m, ack) => {
     const p = players.get(socket.id);
-    if (!p || typeof ack !== 'function') return;
-    ack(wishView(p, wid));
+    if (!p || typeof ack !== 'function' || !m || typeof m !== 'object') return;
+    const r = fn(p, m);
+    ack(r.error ? { ok: false, error: r.error } : Object.assign({ ok: true }, r));
   });
-  socket.on('wishAdd', (m, ack) => {
-    const p = players.get(socket.id);
-    if (!p || typeof ack !== 'function' || !m) return;
-    if (!MAP.nearWell(p.x, p.y)) return ack({ ok: false, error: '走到許願池旁邊才能許願' });
-    const r = wishes.add(p.account && p.account.username, p.name, m.text);
-    if (r.error) return ack({ ok: false, error: r.error });
-    pushChat({ system: true, text: `${p.name} 在休息區的許願池許了一個願：「${r.wish.text.slice(0, 30)}${r.wish.text.length > 30 ? '…' : ''}」`, t: Date.now() });
+  onWish('wishList', (p, m) => Object.assign(wishes.query(m, voterOf(p, m.wid), userOf(p)),
+    { login: !!p.account, left: wishes.left(userOf(p)), perDay: wishes.PER_DAY, titleLen: wishes.TITLE_LEN, bodyLen: wishes.BODY_LEN }));
+  onWish('wishGet', (p, m) => {
+    const w = wishes.get(Number(m.id), voterOf(p, m.wid), userOf(p));
+    return w ? { wish: w } : { error: '這個願望已經不在了' };
+  });
+  onWish('wishAdd', (p, m) => {
+    if (!MAP.nearWell(p.x, p.y)) return { error: '走到許願池旁邊才能許願' };
+    const r = wishes.add(userOf(p), p.name, m);
+    if (r.error) return r;
+    pushChat({ system: true, text: `${p.name} 在休息區的許願池許了一個願：【${WISH_CAT[r.wish.cat]}】${r.wish.title}`, t: Date.now() });
     io.emit('wishes', { coin: p.id });
-    ack(wishView(p, m.wid));
+    return { id: r.wish.id };
   });
-  socket.on('wishLike', (m, ack) => {
-    const p = players.get(socket.id);
-    if (!p || typeof ack !== 'function' || !m) return;
+  onWish('wishEdit', (p, m) => {
+    const r = wishes.edit(Number(m.id), userOf(p), m);
+    if (r.error) return r;
+    io.emit('wishes');
+    return { id: r.wish.id };
+  });
+  onWish('wishLike', (p, m) => {
     const r = wishes.like(Number(m.id), voterOf(p, m.wid));
-    if (r.error) return ack({ ok: false, error: r.error });
+    if (r.error) return r;
     io.emit('wishes');
-    ack(wishView(p, m.wid));
+    return r;
   });
-  socket.on('wishWithdraw', (m, ack) => {
-    const p = players.get(socket.id);
-    if (!p || typeof ack !== 'function' || !m) return;
-    const r = wishes.withdraw(Number(m.id), p.account && p.account.username);
-    if (r.error) return ack({ ok: false, error: r.error });
+  onWish('wishWithdraw', (p, m) => {
+    const r = wishes.withdraw(Number(m.id), userOf(p));
+    if (r.error) return r;
     io.emit('wishes');
-    ack(wishView(p, m.wid));
+    return {};
   });
 
   socket.on('chat', (text) => {

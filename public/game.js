@@ -765,108 +765,204 @@
   })();
   socket.on('music', (s) => MUSIC.set(s));
 
-  // ---------------- 許願池：大家想要的新功能登記在這裡 ----------------
-  // 有帳號才能許願，大家都能按讚；狀態（考慮中／做好了／不做）由管理員在管理頁改
+  // ---------------- 許願池：大家想要的功能、遇到的 Bug 登記在這裡 ----------------
+  // 第一層是一橫條一則的清單（可以搜尋主題、篩類別、排序、分頁），點進去看內文、按讚；作者可以修改或收回
+  // 有帳號才能許願；處理狀態由管理員在管理頁改
   const WISH = (() => {
     // 沒登入的人按讚用這台裝置的代號
     let wid = saved('hq-wid');
     if (!wid || !/^[a-z0-9]{8,24}$/.test(wid)) { wid = Math.random().toString(36).slice(2, 12) + Date.now().toString(36); store('hq-wid', wid); }
-    let sort = saved('hq-wish-sort') === 'new' ? 'new' : 'hot';
-    let draft = '';
-    let last = null;
-    const STATUS = { thinking: '考慮中', done: '做好了', no: '先不做' };
+    const CATS = { bug: 'Bug 回報', feature: '新功能', improve: '功能優化', other: '其他' };
+    const STATUS = { new: '待處理', review: '評估中', doing: '處理中', done: '已完成', no: '不處理' };
+    const SORTS = { updated: '最近更新', likes: '最多讚', new: '最新許願' };
+    const query = { q: '', cat: '', sort: saved('hq-wish-sort') in SORTS ? saved('hq-wish-sort') : 'updated', page: 1 };
+    let view = 'list'; // list、detail、form
+    let detailId = 0, editing = null; // editing：{ id（新許願是 0）, title, cat, body }
+    let info = { login: false, left: 0, titleLen: 40, bodyLen: 2000 };
+    let results = null, searchTimer = 0;
     const ago = (t) => {
       const m = Math.round((Date.now() - t) / 60000);
       return m < 1 ? '剛剛' : m < 60 ? `${m} 分鐘前` : m < 1440 ? `${Math.round(m / 60)} 小時前` : `${Math.round(m / 1440)} 天前`;
     };
     const isOpen = () => modalKind === 'wish' && !$('modal').hidden;
-    function load() { socket.emit('wishList', wid, (r) => { if (r && r.ok) render(r); }); }
-    let fresh = false; // 剛打開許願板：游標直接放進輸入框
-    function act(ev, data, btn) {
-      if (btn) btn.disabled = true;
-      socket.emit(ev, Object.assign({ wid }, data), (r) => {
-        if (btn) btn.disabled = false;
-        if (!r || !r.ok) { toast((r && r.error) || '沒成功，再試一次'); return; }
-        if (ev === 'wishAdd') { draft = ''; toast('願望丟進許願池了'); }
-        render(r);
-      });
-    }
-    function render(r) {
-      last = r;
-      // 別人按讚或許願時會重畫，正在打字的話游標要留在輸入框
-      const typing = !!(document.activeElement && document.activeElement.closest && document.activeElement.closest('.wish-form'));
-      const box = el('div', 'modal-list wish-modal');
-      // 許願的地方
-      const form = el('form', 'wish-form');
-      if (r.login && !r.left) {
-        form.appendChild(el('p', 'modal-hint', `今天的 ${r.perDay} 個願都許完了，明天再來。還是可以幫別人的願望按讚。`));
-      } else if (r.login) {
-        const input = el('textarea'); input.maxLength = r.maxLen; input.rows = 2; input.value = draft;
-        input.placeholder = '想要總部多什麼功能？例如：可以養寵物、加一張新地圖…';
-        const count = el('small', 'wish-count', `${draft.length}/${r.maxLen}`);
-        input.oninput = () => { draft = input.value; count.textContent = `${draft.length}/${r.maxLen}`; };
-        const btn = el('button', 'primary small', '丟硬幣許願'); btn.type = 'submit';
-        btn.prepend(icon('wish-coin', ''));
-        const foot = el('div', 'wish-foot');
-        foot.append(el('small', null, `今天還可以許 ${r.left} 個願`), count, btn);
-        form.append(input, foot);
-        form.onsubmit = (e) => { e.preventDefault(); if (input.value.trim()) act('wishAdd', { text: input.value }, btn); };
-        if (fresh || typing) setTimeout(() => { if (isOpen()) { input.focus(); input.setSelectionRange(draft.length, draft.length); } }, 50);
-      } else {
-        form.appendChild(el('p', 'modal-hint', '登入帳號才能許願。沒帳號也可以幫喜歡的願望按讚。'));
-      }
-      box.appendChild(form);
-      // 排序
-      const tabs = el('div', 'wish-tabs');
-      [['hot', '最多讚'], ['new', '最新']].forEach(([k, label]) => {
-        const b = el('button', 'wish-tab' + (sort === k ? ' on' : ''), label); b.type = 'button';
-        b.onclick = () => { sort = k; store('hq-wish-sort', k); render(last); };
-        tabs.appendChild(b);
-      });
-      tabs.appendChild(el('small', null, `共 ${r.list.length} 個願望`));
-      box.appendChild(tabs);
-      // 一張張小紙條
-      const list = r.list.slice().sort((a, b) => sort === 'new' ? b.at - a.at : (b.likes - a.likes) || (b.at - a.at));
-      if (!list.length) box.appendChild(el('p', 'modal-hint', '池子裡還沒有願望，來當第一個許願的人吧！'));
-      const board = el('div', 'wish-board');
-      list.forEach((w) => {
-        const note = el('div', 'wish-note' + (w.status === 'done' ? ' done' : w.status === 'no' ? ' no' : ''));
-        note.style.setProperty('--tilt', `${((w.id * 37) % 5 - 2) * 0.6}deg`);
-        note.appendChild(el('p', 'wish-text', w.text));
-        const meta = el('div', 'wish-meta');
-        meta.appendChild(el('small', null, `${w.name}・${ago(w.at)}`));
-        if (w.status === 'thinking' || w.status === 'no') meta.appendChild(el('span', 'wish-status', STATUS[w.status]));
-        if (w.mine) {
-          const x = el('button', 'wish-x', '收回'); x.type = 'button';
-          x.onclick = () => { if (confirm('要把這個願望收回來嗎？')) act('wishWithdraw', { id: w.id }, x); };
-          meta.appendChild(x);
-        }
-        const like = el('button', 'wish-like' + (w.liked ? ' on' : '')); like.type = 'button';
-        like.title = w.liked ? '收回讚' : '我也想要';
-        like.append(icon(w.liked ? 'wish-heart' : 'wish-heart-off', ''), el('b', null, String(w.likes)));
-        like.onclick = () => act('wishLike', { id: w.id }, like);
-        meta.appendChild(like);
-        note.appendChild(meta);
-        if (w.status === 'done') {
-          const st = el('div', 'wish-stamp');
-          st.append(icon('wish-stamp', ''), el('span', null, STATUS.done));
-          note.appendChild(st);
-        }
-        board.appendChild(note);
-      });
-      box.appendChild(board);
+    const catTag = (c) => el('span', 'wish-cat c-' + c, CATS[c] || '其他');
+    const statusTag = (s) => el('span', 'wish-st s-' + s, STATUS[s] || STATUS.new);
+    const send = (ev, data, cb) => socket.emit(ev, Object.assign({ wid }, data), (r) => {
+      if (!r || !r.ok) { toast((r && r.error) || '沒成功，再試一次'); return; }
+      cb(r);
+    });
+    function show(box) {
       const card = $('modal').querySelector('.modal-card'), top = isOpen() && card ? card.scrollTop : 0;
       openModal('wish', '許願池', box);
       $('modal').classList.add('wide');
       if (card) card.scrollTop = top;
-      fresh = false;
     }
-    // 有人許願、按讚，或管理員改了狀態：開著許願板的人重新拿一次
+
+    // ---------- 第一層：清單 ----------
+    let shell = null; // 清單畫面（工具列 + 結果），重新整理時只換結果，搜尋框的游標才不會跑掉
+    function loadList() {
+      send('wishList', query, (r) => {
+        info = r; results = r;
+        if (view !== 'list') return;
+        if (!shell || !isOpen() || !$('modal-body').contains(shell.box)) buildList();
+        fillList();
+      });
+    }
+    function buildList() {
+      const box = el('div', 'modal-list wish-modal');
+      const head = el('div', 'wish-head');
+      const hint = el('p', 'modal-hint');
+      const add = el('button', 'primary small', '許個願'); add.type = 'button';
+      add.prepend(icon('wish-coin', ''));
+      add.onclick = () => openForm(null);
+      head.append(hint, add);
+      // 工具列：搜尋主題、類別、排序
+      const bar = el('div', 'wish-bar');
+      const search = el('input'); search.type = 'search'; search.placeholder = '搜尋主題'; search.value = query.q; search.maxLength = 40;
+      search.oninput = () => {
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(() => { query.q = search.value.trim(); query.page = 1; loadList(); }, 250);
+      };
+      const sort = el('select');
+      Object.entries(SORTS).forEach(([k, v]) => { const o = el('option', null, v); o.value = k; sort.appendChild(o); });
+      sort.value = query.sort;
+      sort.onchange = () => { query.sort = sort.value; query.page = 1; store('hq-wish-sort', sort.value); loadList(); };
+      bar.append(search, sort);
+      const cats = el('div', 'wish-cats');
+      [['', '全部']].concat(Object.entries(CATS)).forEach(([k, v]) => {
+        const b = el('button', 'wish-tab' + (query.cat === k ? ' on' : ''), v); b.type = 'button';
+        b.onclick = () => {
+          query.cat = k; query.page = 1;
+          cats.querySelectorAll('.wish-tab').forEach(x => x.classList.toggle('on', x === b));
+          loadList();
+        };
+        cats.appendChild(b);
+      });
+      const rows = el('ul', 'wish-rows');
+      const pager = el('div', 'wish-pager');
+      box.append(head, bar, cats, rows, pager);
+      shell = { box, hint, add, rows, pager };
+      show(box);
+    }
+    function fillList() {
+      const r = results, s = shell;
+      s.hint.textContent = !r.login ? '登入帳號才能許願，沒帳號也可以幫喜歡的願望按讚。'
+        : r.left ? `想要什麼功能、遇到什麼 Bug，都可以來這裡許願（今天還可以許 ${r.left} 個）`
+        : `今天的 ${r.perDay} 個願都許完了，明天再來。`;
+      s.add.hidden = !r.login || !r.left;
+      s.rows.innerHTML = '';
+      if (!r.items.length) s.rows.appendChild(el('li', 'wish-empty', r.all ? '找不到符合的願望，換個關鍵字或類別試試' : '池子裡還沒有願望，來當第一個許願的人吧！'));
+      r.items.forEach((w) => {
+        const li = el('li', 'wish-row' + (w.status === 'no' ? ' no' : ''));
+        li.tabIndex = 0;
+        const main = el('div', 'wish-row-main');
+        const top = el('div', 'wish-row-top');
+        top.append(catTag(w.cat), el('b', 'wish-title', w.title));
+        main.append(top, el('small', null, `${w.name}・${query.sort === 'new' ? ago(w.at) : '更新於 ' + ago(w.updated)}${w.mine ? '・我許的' : ''}`));
+        const likes = el('span', 'wish-likes' + (w.liked ? ' on' : ''));
+        likes.append(icon(w.liked ? 'wish-heart' : 'wish-heart-off', ''), el('b', null, String(w.likes)));
+        li.append(main, statusTag(w.status), likes);
+        li.onclick = () => openDetail(w.id);
+        li.onkeydown = (e) => { if (e.key === 'Enter') openDetail(w.id); };
+        s.rows.appendChild(li);
+      });
+      s.pager.innerHTML = '';
+      s.pager.hidden = r.pages <= 1;
+      const go = (n) => { query.page = n; loadList(); };
+      const prev = el('button', 'hud-btn tiny', '上一頁'); prev.type = 'button'; prev.disabled = r.page <= 1; prev.onclick = () => go(r.page - 1);
+      const next = el('button', 'hud-btn tiny', '下一頁'); next.type = 'button'; next.disabled = r.page >= r.pages; next.onclick = () => go(r.page + 1);
+      s.pager.append(prev, el('span', null, `第 ${r.page} / ${r.pages} 頁・共 ${r.total} 則`), next);
+    }
+
+    // ---------- 內頁 ----------
+    function openDetail(id) {
+      send('wishGet', { id }, (r) => {
+        view = 'detail'; detailId = id; shell = null;
+        const w = r.wish, box = el('div', 'modal-list wish-modal');
+        const back = el('button', 'wish-back', '← 回清單'); back.type = 'button';
+        back.onclick = backToList;
+        const tags = el('div', 'wish-row-top');
+        tags.append(catTag(w.cat), statusTag(w.status));
+        const paper = el('div', 'wish-paper' + (w.status === 'done' ? ' done' : ''));
+        paper.append(tags, el('h3', 'wish-h', w.title),
+          el('small', 'wish-by', `${w.name} 許願・${ago(w.at)}${w.updated > w.at + 1000 ? `・更新於 ${ago(w.updated)}` : ''}`),
+          w.body ? el('p', 'wish-body', w.body) : el('p', 'wish-body empty', '（沒有寫內文）'));
+        if (w.status === 'done') {
+          const st = el('div', 'wish-stamp');
+          st.append(icon('wish-stamp', ''), el('span', null, STATUS.done));
+          paper.appendChild(st);
+        }
+        const acts = el('div', 'wish-acts');
+        const like = el('button', 'wish-like' + (w.liked ? ' on' : '')); like.type = 'button';
+        like.append(icon(w.liked ? 'wish-heart' : 'wish-heart-off', ''), el('b', null, w.liked ? `已按讚 ${w.likes}` : `我也想要 ${w.likes}`));
+        like.onclick = () => { like.disabled = true; send('wishLike', { id }, () => openDetail(id)); };
+        acts.appendChild(like);
+        if (w.mine) {
+          const edit = el('button', 'hud-btn tiny', '修改'); edit.type = 'button';
+          edit.onclick = () => openForm({ id, title: w.title, cat: w.cat, body: w.body });
+          const del = el('button', 'hud-btn tiny', '收回'); del.type = 'button';
+          del.onclick = () => { if (confirm('要把這個願望收回來嗎？')) send('wishWithdraw', { id }, () => { toast('願望收回來了'); backToList(); }); };
+          acts.append(edit, del);
+        }
+        box.append(back, paper, acts);
+        show(box);
+      });
+    }
+    function backToList() { view = 'list'; shell = null; loadList(); }
+
+    // ---------- 許願／修改 ----------
+    function openForm(w) {
+      view = 'form'; shell = null;
+      editing = editing && !w && !editing.id ? editing : Object.assign({ id: 0, title: '', cat: '', body: '' }, w || {});
+      const e = editing, box = el('div', 'modal-list wish-modal');
+      const back = el('button', 'wish-back', e.id ? '← 回願望' : '← 回清單'); back.type = 'button';
+      back.onclick = () => { const id = e.id; if (id) editing = null; if (id) openDetail(id); else backToList(); };
+      const form = el('form', 'wish-form');
+      form.appendChild(el('div', 'label', '類別'));
+      const cats = el('div', 'wish-cats');
+      Object.entries(CATS).forEach(([k, v]) => {
+        const b = el('button', 'wish-tab c-' + k + (e.cat === k ? ' on' : ''), v); b.type = 'button';
+        b.onclick = () => { e.cat = k; cats.querySelectorAll('.wish-tab').forEach(x => x.classList.toggle('on', x === b)); };
+        cats.appendChild(b);
+      });
+      const count = (input, max) => { const c = el('small', 'wish-count', `${input.value.length}/${max}`); input.addEventListener('input', () => { c.textContent = `${input.value.length}/${max}`; }); return c; };
+      const title = el('input'); title.maxLength = info.titleLen; title.value = e.title; title.placeholder = '一句話說你想要什麼，例如：可以養寵物';
+      title.oninput = () => { e.title = title.value; };
+      const body = el('textarea'); body.maxLength = info.bodyLen; body.rows = 7; body.value = e.body;
+      body.placeholder = '想寫多詳細都可以：怎麼玩、為什麼想要；回報 Bug 的話寫一下在哪裡、做了什麼、發生什麼事（可以不寫）';
+      body.oninput = () => { e.body = body.value; };
+      const tRow = el('div', 'wish-label'); tRow.append(el('span', 'label', '主題'), count(title, info.titleLen));
+      const bRow = el('div', 'wish-label'); bRow.append(el('span', 'label', '內文'), count(body, info.bodyLen));
+      const submit = el('button', 'primary small', e.id ? '儲存修改' : '丟硬幣許願'); submit.type = 'submit';
+      if (!e.id) submit.prepend(icon('wish-coin', ''));
+      const foot = el('div', 'wish-foot'); foot.appendChild(submit);
+      form.append(cats, tRow, title, bRow, body, foot);
+      form.onsubmit = (ev) => {
+        ev.preventDefault();
+        if (!e.cat) { toast('先選一個類別'); return; }
+        if (e.title.trim().length < 2) { toast('主題寫多一點點吧'); title.focus(); return; }
+        submit.disabled = true;
+        socket.emit(e.id ? 'wishEdit' : 'wishAdd', { wid, id: e.id, title: e.title, cat: e.cat, body: e.body }, (r) => {
+          submit.disabled = false;
+          if (!r || !r.ok) { toast((r && r.error) || '沒成功，再試一次'); return; }
+          toast(e.id ? '改好了' : '願望丟進許願池了');
+          editing = null;
+          openDetail(r.id);
+        });
+      };
+      box.append(back, form);
+      show(box);
+      setTimeout(() => { if (isOpen()) (e.title ? body : title).focus(); }, 50);
+    }
+
+    // 有人許願、按讚，或管理員改了狀態：開著許願池的人重新拿一次（正在寫願望的不打擾）
     socket.on('wishes', (m) => {
       if (m && m.coin && scene && scene.wishCoin) scene.wishCoin(m.coin);
-      if (isOpen()) load();
+      if (!isOpen()) return;
+      if (view === 'list') loadList();
+      else if (view === 'detail') socket.emit('wishGet', { wid, id: detailId }, (r) => { if (r && r.ok) openDetail(detailId); else backToList(); });
     });
-    return { open() { fresh = true; load(); } };
+    return { open() { view = 'list'; shell = null; loadList(); } };
   })();
   socket.on('toastArea', (t) => { if (joined && t.area === MUSIC.area()) toast(t.text); });
 

@@ -584,32 +584,34 @@
       if (stripe) C.line(ctx, x - 5, 8, x - 1, 5, r, 1.6, stripe, 0.2);
     });
   }
-  // 天使翅膀：胖胖的雲朵形狀，上面一大片圓弧、外緣一球一球的圓羽毛，裡面幾道彎彎的羽毛線；頭上一圈光環
+  // 天使翅膀：上緣一道平順的大圓弧，外下緣一球一球的大圓羽毛往內收成尖角，裡面幾道跟著圓羽走的弧線；頭上一圈光環
+  // 右邊的翅膀畫好，左邊用鏡像；人物框左右各只多 16，最外面不要超過 x=79
+  function angelWingPath(ctx) {
+    ctx.beginPath(); ctx.moveTo(44, 49);
+    ctx.quadraticCurveTo(39, 40, 42, 30);
+    ctx.quadraticCurveTo(50, 11, 69, 9);
+    ctx.quadraticCurveTo(80, 8, 78, 18);
+    const lobes = [[78, 18], [76, 28], [70, 36], [62, 42], [53, 47], [44, 49]];
+    for (let i = 1; i < lobes.length; i++) {
+      const [x0, y0] = lobes[i - 1], [x1, y1] = lobes[i];
+      const mx = (x0 + x1) / 2, my = (y0 + y1) / 2, dx = x1 - x0, dy = y1 - y0, d = Math.hypot(dx, dy);
+      // 往外（線段的左手邊）鼓起來
+      ctx.quadraticCurveTo(mx + dy / d * 8, my - dx / d * 8, x1, y1);
+    }
+    ctx.closePath();
+  }
   function featherWings(ctx, C, r) {
     [1, -1].forEach(k => {
       ctx.save();
-      if (k < 0) { ctx.translate(64, 0); ctx.scale(-1, 1); } // 左邊的翅膀用右邊的鏡像
-      ctx.translate(3, -3); // 往外推（人物框左右各只多 16，再外面會被切掉），翅膀才不會整片躲在大頭後面
-      // 外緣一路往下的幾個點，每段往外鼓成一球
-      const edge = [[67, 13], [70, 25], [67, 37], [61, 47], [51, 54]];
-      const cx = 50, cy = 32;
-      ctx.beginPath(); ctx.moveTo(41, 52);
-      ctx.quadraticCurveTo(37, 30, 48, 15);
-      ctx.quadraticCurveTo(58, 1, edge[0][0], edge[0][1]);
-      for (let i = 1; i < edge.length; i++) {
-        const [x0, y0] = edge[i - 1], [x1, y1] = edge[i];
-        const mx = (x0 + x1) / 2, my = (y0 + y1) / 2, nx = mx - cx, ny = my - cy, d = Math.hypot(nx, ny);
-        ctx.quadraticCurveTo(mx + nx / d * 7, my + ny / d * 7, x1, y1);
-      }
-      ctx.quadraticCurveTo(45, 57, 41, 52); ctx.closePath();
-      C.fill(ctx, '#fbfdff', r, [36, 1, 40, 56]); C.stroke(ctx, r, W);
-      // 下半部淡淡的藍色陰影
-      ctx.save(); ctx.clip(); ctx.globalAlpha = 0.35;
-      C.blob(ctx, 58, 50, 16, 9, r, 0.08); ctx.fillStyle = '#bfe0f5'; ctx.fill(); ctx.restore();
-      // 裡面彎彎的羽毛線
-      [[58, 24, 5.5], [59, 34, 6], [56, 44, 5]].forEach(([x, y, rad]) => {
-        ctx.beginPath(); ctx.arc(x, y, rad, Math.PI * 0.95, Math.PI * 1.75); ctx.quadraticCurveTo(x + rad * 1.1, y + rad * 0.2, x + rad * 0.2, y + rad * 0.6);
-        C.stroke(ctx, r, 1.6, '#8fb8d8');
+      if (k < 0) { ctx.translate(64, 0); ctx.scale(-1, 1); }
+      ctx.translate(-5, 0); // 外緣的圓羽會往外鼓，往內收一點才不會被人物框切掉
+      angelWingPath(ctx); C.fill(ctx, '#fbfdff', r, [41, 6, 38, 48]);
+      ctx.save(); angelWingPath(ctx); ctx.clip(); ctx.globalAlpha = 0.4;
+      C.blob(ctx, 64, 44, 16, 9, r, 0.08); ctx.fillStyle = '#c4e2f6'; ctx.fill(); ctx.restore();
+      angelWingPath(ctx); C.stroke(ctx, r, W);
+      // 裡面的羽毛弧線
+      [[[47, 23], [67, 20], [70, 29]], [[45, 30], [62, 29], [63, 37]], [[45, 37], [55, 37], [55, 43]]].forEach(([p0, c, p1]) => {
+        ctx.beginPath(); ctx.moveTo(p0[0], p0[1]); ctx.quadraticCurveTo(c[0], c[1], p1[0], p1[1]); C.stroke(ctx, r, 1.6, '#8fb8d8');
       });
       ctx.restore();
     });

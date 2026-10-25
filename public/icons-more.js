@@ -543,19 +543,24 @@
       shine(x, r, 14, 12, 2.4, 3.4);
     },
     'gear-angel'(x, r) {
-      // 跟穿在身上的一樣：胖胖的雲朵翅膀、外緣一球一球
+      // 跟穿在身上的一樣（shared/gear.js 的 angelWingPath），縮小放進 48x48
+      const path = () => {
+        x.beginPath(); x.moveTo(44, 49); x.quadraticCurveTo(39, 40, 42, 30); x.quadraticCurveTo(50, 11, 69, 9); x.quadraticCurveTo(80, 8, 78, 18);
+        const lobes = [[78, 18], [76, 28], [70, 36], [62, 42], [53, 47], [44, 49]];
+        for (let i = 1; i < lobes.length; i++) {
+          const [x0, y0] = lobes[i - 1], [x1, y1] = lobes[i];
+          const mx = (x0 + x1) / 2, my = (y0 + y1) / 2, dx = x1 - x0, dy = y1 - y0, d = Math.hypot(dx, dy);
+          x.quadraticCurveTo(mx + dy / d * 8, my - dx / d * 8, x1, y1);
+        }
+        x.closePath();
+      };
       [1, -1].forEach(k => {
         x.save(); if (k < 0) { x.translate(48, 0); x.scale(-1, 1); }
-        const edge = [[40, 10], [45, 20], [43, 30], [37, 38], [28, 42]], cx = 32, cy = 26;
-        x.beginPath(); x.moveTo(26, 40); x.quadraticCurveTo(24, 22, 30, 12); x.quadraticCurveTo(35, 3, edge[0][0], edge[0][1]);
-        for (let i = 1; i < edge.length; i++) {
-          const [x0, y0] = edge[i - 1], [x1, y1] = edge[i];
-          const mx = (x0 + x1) / 2, my = (y0 + y1) / 2, nx = mx - cx, ny = my - cy, d = Math.hypot(nx, ny);
-          x.quadraticCurveTo(mx + nx / d * 4.5, my + ny / d * 4.5, x1, y1);
-        }
-        x.quadraticCurveTo(27, 44, 26, 40); x.closePath();
-        C.fill(x, '#fbfdff', r, [22, 3, 26, 41]); C.stroke(x, r, 2.2);
-        [[33, 20, 4], [34, 29, 4.2], [32, 36, 3.6]].forEach(([a, b, rad]) => { x.beginPath(); x.arc(a, b, rad, Math.PI * 0.95, Math.PI * 1.75); C.stroke(x, r, 1.3, '#8fb8d8'); });
+        x.translate(4, 6); x.scale(0.52, 0.52);
+        path(); C.fill(x, '#fbfdff', r, null); C.stroke(x, r, 4.2);
+        [[[47, 23], [67, 20], [70, 29]], [[45, 30], [62, 29], [63, 37]]].forEach(([p0, c, p1]) => {
+          x.beginPath(); x.moveTo(p0[0], p0[1]); x.quadraticCurveTo(c[0], c[1], p1[0], p1[1]); C.stroke(x, r, 2.6, '#8fb8d8');
+        });
         x.restore();
       });
       x.beginPath(); x.ellipse(24, 7, 8, 3, 0, 0, Math.PI * 2); C.stroke(x, r, 2.6, '#ffd23f');

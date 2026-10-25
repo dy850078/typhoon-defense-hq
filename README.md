@@ -101,6 +101,7 @@ npm start
 | `MAX_PLAYERS` | `40` | 最多同時上線人數 |
 | `JITSI_ROOM` | 每次啟動隨機產生 | 視訊房間名稱，想固定的話自己設一個不好猜的名字 |
 | `JITSI_DOMAIN` | `meet.jit.si` | 如果有自架 Jitsi 可以換掉 |
+| `TURN_URL` / `TURN_USER` / `TURN_PASS` | 不設 | 小樹屋語音的中繼伺服器（例如 `turn:example.com:3478`）；有人在公司、學校網路連不上語音時再加 |
 | `MONSTER_HP` | `8000` | 颱風怪物的基本血量 |
 | `MONSTER_HP_PER_PLAYER` | `2000` | 每多一位在線玩家，颱風多幾點血 |
 | `RESPAWN_MINUTES` | `5` | 颱風被打倒後幾分鐘重新生成 |

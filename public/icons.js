@@ -339,6 +339,35 @@
       C.line(x, 24, 17, 24, 31, r, 2.2, '#c9962a');
       C.blob(x, 17, 15, 3, 2, r, 0.1); x.fillStyle = 'rgba(255,255,255,.85)'; x.fill();
     },
+    // 小樹屋：樹冠上蓋一間有紅屋頂的小木屋，下面是樹幹和梯子
+    'btn-tree'(x, r) {
+      C.rect(x, 20, 30, 8, 15, r, 0.6); C.fill(x, '#a0703f', r, [20, 30, 8, 15]); C.stroke(x, r, 2.2);
+      C.line(x, 33, 30, 35, 45, r, 1.6); C.line(x, 38, 30, 40, 45, r, 1.6);
+      [34, 39, 44].forEach(yy => C.line(x, 33.5, yy - 1, 39.5, yy - 1, r, 1.3));
+      C.blob(x, 13, 26, 10, 8, r, 0.08); C.fill(x, '#7fd1a8', r, [3, 18, 20, 16]); C.stroke(x, r, 2.2);
+      C.blob(x, 35, 25, 10, 8, r, 0.08); C.fill(x, '#7fd1a8', r, [25, 17, 20, 16]); C.stroke(x, r, 2.2);
+      C.rect(x, 13, 15, 22, 15, r, 0.6); C.fill(x, '#e8b878', r, [13, 15, 22, 15]); C.stroke(x, r, 2.2);
+      x.beginPath(); x.moveTo(10, 16); x.lineTo(24, 4); x.lineTo(38, 16); x.closePath(); C.fill(x, '#ef4b5c', r, [10, 4, 28, 12]); C.stroke(x, r, 2.4);
+      C.rect(x, 18, 19, 6, 6, r, 0.4); C.fill(x, '#ffe58a', r, null); C.stroke(x, r, 1.4);
+      C.line(x, 18, 22, 24, 22, r, 1); C.line(x, 21, 19, 21, 25, r, 1);
+      C.rect(x, 27, 20, 5, 10, r, 0.4); C.fill(x, '#a0703f', r, null); C.stroke(x, r, 1.4);
+    },
+    // 麥克風開著：圓頭麥克風加聲波
+    'btn-mic'(x, r) {
+      C.rect(x, 17, 6, 14, 22, r, 0.6); C.fill(x, '#7fd1a8', r, [17, 6, 14, 22]); C.stroke(x, r, 2.4);
+      C.line(x, 19, 13, 29, 13, r, 1.2, '#3c8a66'); C.line(x, 19, 19, 29, 19, r, 1.2, '#3c8a66');
+      x.beginPath(); x.moveTo(11, 22); x.quadraticCurveTo(12, 34, 24, 34); x.quadraticCurveTo(36, 34, 37, 22); C.stroke(x, r, 2.2);
+      C.line(x, 24, 34, 24, 42, r, 2.2); C.line(x, 16, 42, 32, 42, r, 2.4);
+      x.beginPath(); x.moveTo(40, 10); x.quadraticCurveTo(44, 16, 40, 22); C.stroke(x, r, 1.8, '#4f7cc2');
+      x.beginPath(); x.moveTo(8, 10); x.quadraticCurveTo(4, 16, 8, 22); C.stroke(x, r, 1.8, '#4f7cc2');
+    },
+    // 麥克風關著：灰色麥克風畫一道紅斜線
+    'btn-mic-off'(x, r) {
+      C.rect(x, 17, 6, 14, 22, r, 0.6); C.fill(x, '#c6cbd6', r, [17, 6, 14, 22]); C.stroke(x, r, 2.4);
+      x.beginPath(); x.moveTo(11, 22); x.quadraticCurveTo(12, 34, 24, 34); x.quadraticCurveTo(36, 34, 37, 22); C.stroke(x, r, 2.2);
+      C.line(x, 24, 34, 24, 42, r, 2.2); C.line(x, 16, 42, 32, 42, r, 2.4);
+      C.line(x, 8, 6, 40, 40, r, 4.4, '#fbf6e9'); C.line(x, 8, 6, 40, 40, r, 2.8, '#ef4b5c');
+    },
     // 許願池：「做好了」的紅色印章（字另外疊上去）
     'wish-stamp'(x, r) {
       C.blob(x, 24, 24, 21, 21, r, 0.05, 28); C.stroke(x, r, 3, '#d8323f');

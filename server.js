@@ -87,7 +87,10 @@ app.get(['/', '/index.html'], (req, res) => {
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/shared', express.static(path.join(__dirname, 'shared')));
 app.use('/vendor', express.static(path.join(__dirname, 'node_modules/phaser/dist')));
-app.get('/config', (req, res) => res.json({ jitsiDomain: JITSI_DOMAIN, jitsiRoom: JITSI_ROOM, party: partyInfo() }));
+// 小樹屋語音用的 ICE 伺服器：預設只有 Google 的 STUN；有些公司、學校網路連不上的話，設 TURN_URL/TURN_USER/TURN_PASS 加一台中繼
+const ICE_SERVERS = [{ urls: 'stun:stun.l.google.com:19302' }].concat(process.env.TURN_URL
+  ? [{ urls: process.env.TURN_URL.split(','), username: process.env.TURN_USER || '', credential: process.env.TURN_PASS || '' }] : []);
+app.get('/config', (req, res) => res.json({ jitsiDomain: JITSI_DOMAIN, jitsiRoom: JITSI_ROOM, party: partyInfo(), iceServers: ICE_SERVERS }));
 
 // ---------------- 帳號 API ----------------
 // 登入失敗太多次就暫停一下，避免有人一直猜密碼
@@ -379,6 +382,29 @@ function musicNext(area) {
   m.now = n ? Object.assign(n, { startedAt: Date.now() + 1500 }) : null; // 留一點時間讓大家載入
   m.skips = new Set();
   emitMusic();
+}
+
+// ---------------- 小樹屋：同一間的人用 WebRTC 直接語音通話 ----------------
+// 伺服器只記誰在哪一間、幫忙轉送連線資訊（offer/answer/ice），聲音是玩家之間直接傳
+// 每個人要跟屋裡每個人各連一條，所以一間最多 8 人；沒人了就自動拆掉
+const TREE_CAP = 8, TREE_MAX = 12;
+const trees = new Map(); // id -> { id, name, owner, ownerName, at, members: [socket id] }
+let treeSeq = 0;
+function treeList() {
+  return [...trees.values()].map(t => ({ id: t.id, name: t.name, ownerName: t.ownerName, ago: Date.now() - t.at, cap: TREE_CAP,
+    members: t.members.map(id => players.get(id)).filter(Boolean).map(p => ({ id: p.id, name: p.name, cls: p.cls, level: p.level,
+      user: p.account ? p.account.username : '', muted: !!p.treeMuted })) }));
+}
+const emitTrees = () => io.emit('trees', treeList());
+// 離開目前的小樹屋（換屋、斷線、離開總部都會走這裡）；回傳有沒有變動
+function leaveTree(p) {
+  const t = p && p.tree && trees.get(p.tree);
+  if (p) p.tree = null;
+  if (!t) return false;
+  t.members = t.members.filter(id => id !== p.id);
+  if (!t.members.length) trees.delete(t.id);
+  else if (t.owner === p.id) { const o = players.get(t.members[0]); t.owner = o.id; t.ownerName = o.name; }
+  return true;
 }
 
 function addVideoRoom(code, name, by) {
@@ -1846,6 +1872,50 @@ io.on('connection', (socket) => {
     ack({ ok: true, code });
   });
 
+  // ----- 小樹屋語音 -----
+  socket.on('treeList', (ack) => { if (typeof ack === 'function') ack({ trees: treeList() }); });
+  // 蓋一間新的小樹屋，自己直接住進去
+  socket.on('treeCreate', (data, ack) => {
+    const p = players.get(socket.id);
+    if (typeof ack !== 'function' || !p) return;
+    if (trees.size >= TREE_MAX) return ack({ ok: false, error: `小樹屋已經有 ${TREE_MAX} 間了，先去別人的坐坐吧` });
+    leaveTree(p);
+    const t = { id: 't' + (++treeSeq), name: clean(data && data.name, 12) || `${p.name}的小樹屋`, owner: p.id, ownerName: p.name, at: Date.now(), members: [p.id] };
+    trees.set(t.id, t);
+    p.tree = t.id; p.treeMuted = false;
+    emitTrees();
+    ack({ ok: true, id: t.id, peers: [] });
+  });
+  // 進別人的小樹屋：回傳屋裡其他人，由新進來的人負責跟每個人打招呼（送 offer）
+  socket.on('treeJoin', (id, ack) => {
+    const p = players.get(socket.id);
+    if (typeof ack !== 'function' || !p) return;
+    const t = trees.get(String(id || ''));
+    if (!t) return ack({ ok: false, error: '這間小樹屋已經拆掉了' });
+    if (p.tree === t.id) return ack({ ok: true, id: t.id, peers: t.members.filter(m => m !== p.id) });
+    if (t.members.length >= TREE_CAP) return ack({ ok: false, error: `這間已經擠了 ${TREE_CAP} 個人，換一間吧` });
+    leaveTree(p);
+    const peers = t.members.slice();
+    t.members.push(p.id);
+    p.tree = t.id; p.treeMuted = false;
+    emitTrees();
+    ack({ ok: true, id: t.id, peers });
+  });
+  socket.on('treeLeave', () => { const p = players.get(socket.id); if (leaveTree(p)) emitTrees(); });
+  socket.on('treeMute', (m) => {
+    const p = players.get(socket.id);
+    if (!p || !p.tree || p.treeMuted === !!m) return;
+    p.treeMuted = !!m;
+    emitTrees();
+  });
+  // 轉送 WebRTC 連線資訊，只有同一間小樹屋的人之間可以傳
+  socket.on('rtc', (msg) => {
+    const p = players.get(socket.id);
+    const to = msg && players.get(msg.to);
+    if (!p || !p.tree || !to || to.tree !== p.tree || !msg.data || typeof msg.data !== 'object') return;
+    io.to(to.id).emit('rtc', { from: p.id, data: msg.data });
+  });
+
   socket.on('musicSearch', async (q, ack) => {
     if (typeof ack !== 'function') return;
     const p = players.get(socket.id);
@@ -1987,6 +2057,7 @@ io.on('connection', (socket) => {
 const AWAY_SHOW_MS = 5000, HOST_WAIT_MS = 30000;
 function goAway(p) {
   p.moving = false;
+  if (leaveTree(p)) emitTrees(); // 斷線了聲音也斷了，先請出小樹屋，回來再自己進去
   io.emit('playerMoved', { id: p.id, x: p.x, y: p.y, dir: p.dir, moving: false });
   awayTimers.set(p.id, [
     setTimeout(() => {
@@ -2021,8 +2092,10 @@ function removePlayer(id) {
   DG.remove(id);
   summons.filter(sm => sm.owner === id).forEach(sm => removeSummon(sm));
   const hadVideo = !!p.video;
+  const hadTree = leaveTree(p);
   players.delete(id);
   if (hadVideo) io.emit('videoRooms', videoList());
+  if (hadTree) emitTrees();
   io.emit('playerLeft', id);
   pushChat({ system: true, text: `${p.name} 離開了總部`, t: Date.now() });
 }

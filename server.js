@@ -453,13 +453,13 @@ let treeSeq = 0;
 function treeList() {
   return [...trees.values()].map(t => ({ id: t.id, name: t.name, ownerName: t.ownerName, ago: Date.now() - t.at, cap: TREE_CAP,
     members: t.members.map(id => players.get(id)).filter(Boolean).map(p => ({ id: p.id, name: p.name, cls: p.cls, level: p.level,
-      user: p.account ? p.account.username : '', muted: !!p.treeMuted })) }));
+      user: p.account ? p.account.username : '', muted: !!p.treeMuted, video: p.treeVideo || '' })) }));
 }
 const emitTrees = () => io.emit('trees', treeList());
 // 離開目前的小樹屋（換屋、斷線、離開總部都會走這裡）；回傳有沒有變動
 function leaveTree(p) {
   const t = p && p.tree && trees.get(p.tree);
-  if (p) p.tree = null;
+  if (p) { p.tree = null; p.treeVideo = ''; }
   if (!t) return false;
   t.members = t.members.filter(id => id !== p.id);
   if (!t.members.length) trees.delete(t.id);
@@ -1954,7 +1954,7 @@ io.on('connection', (socket) => {
     leaveTree(p);
     const t = { id: 't' + (++treeSeq), name: clean(data && data.name, 12) || `${p.name}的小樹屋`, owner: p.id, ownerName: p.name, at: Date.now(), members: [p.id] };
     trees.set(t.id, t);
-    p.tree = t.id; p.treeMuted = false;
+    p.tree = t.id; p.treeMuted = false; p.treeVideo = '';
     emitTrees();
     ack({ ok: true, id: t.id, peers: [], ice });
   });
@@ -1971,7 +1971,7 @@ io.on('connection', (socket) => {
     leaveTree(p);
     const peers = t.members.slice();
     t.members.push(p.id);
-    p.tree = t.id; p.treeMuted = false;
+    p.tree = t.id; p.treeMuted = false; p.treeVideo = '';
     emitTrees();
     ack({ ok: true, id: t.id, peers, ice });
   });
@@ -1987,6 +1987,14 @@ io.on('connection', (socket) => {
     const p = players.get(socket.id);
     if (!p || !p.tree || p.treeMuted === !!m) return;
     p.treeMuted = !!m;
+    emitTrees();
+  });
+  // 開視訊／分享螢幕：'cam'、'screen' 或 ''（關掉），讓同屋的人知道要不要顯示畫面
+  socket.on('treeVideo', (v) => {
+    const p = players.get(socket.id);
+    v = v === 'cam' || v === 'screen' ? v : '';
+    if (!p || !p.tree || (p.treeVideo || '') === v) return;
+    p.treeVideo = v;
     emitTrees();
   });
   // 轉送 WebRTC 連線資訊，只有同一間小樹屋的人之間可以傳

@@ -547,6 +547,8 @@
     const peers = new Map(); // id -> { pc, audio, meter }
     const talking = new Set(); // 正在講話的人（只看得到同一間的）
     let meTalk = null, meterTimer = null;
+    // 視訊：一次只送一個畫面（攝影機或螢幕），vmode 是 'cam'、'screen' 或 ''
+    let vtrack = null, vmode = '';
     // 音量：整體一條＋每個人一條（0～200%），記在這台電腦上；人用帳號（沒登入用名字）認
     let master = Number(saved('hq-tree-master') == null ? 100 : saved('hq-tree-master'));
     const vols = savedJson('hq-tree-vols', {});
@@ -595,6 +597,7 @@
       talking.clear(); now.forEach(id => talking.add(id));
       marks();
       document.querySelectorAll('.tree-mem[data-id]').forEach(li => li.classList.toggle('talk', talking.has(li.dataset.id)));
+      tileEls.forEach((tl, id) => tl.box.classList.toggle('talk', talking.has(id)));
     }
 
     function peer(id) {
@@ -605,6 +608,7 @@
       stream.getTracks().forEach(tr => pc.addTrack(tr, stream));
       pc.onicecandidate = (e) => { if (e.candidate) socket.emit('rtc', { to: id, data: { ice: e.candidate } }); };
       pc.ontrack = (e) => {
+        if (e.track.kind === 'video') { pr.video = new MediaStream([e.track]); tiles(); return; }
         const ms = e.streams[0] || new MediaStream([e.track]);
         pr.audio.srcObject = ms;
         pr.audio.play().catch(() => {});
@@ -659,9 +663,27 @@
       pr.pc.close(); pr.audio.srcObject = null; clearTimeout(pr.watch);
       if (pr.gain) pr.gain.disconnect();
       peers.delete(id); talking.delete(id);
+      tiles();
+    }
+    // 每條連線一開始就留好一個視訊位置，之後開關攝影機、換成螢幕只是換畫面，不用重新連線
+    const vtx = (pc) => pc.getTransceivers().find(t => t.receiver.track && t.receiver.track.kind === 'video');
+    const KBPS = { cam: 250, screen: 900 };
+    async function sendVideo(pr) {
+      const t = vtx(pr.pc);
+      if (!t) return;
+      try {
+        await t.sender.replaceTrack(vtrack);
+        if (!vtrack) return;
+        const prm = t.sender.getParameters();
+        if (!prm.encodings || !prm.encodings.length) return; // 還沒談好，談好之後會再呼叫一次
+        prm.encodings[0].maxBitrate = KBPS[vmode] * 1000;
+        await t.sender.setParameters(prm);
+      } catch (e) { console.warn('video', e); }
     }
     async function call(id) {
-      const { pc } = peer(id);
+      const pr = peer(id), { pc } = pr;
+      if (!vtx(pc)) pc.addTransceiver('video', { direction: 'sendrecv' });
+      await sendVideo(pr);
       await pc.setLocalDescription(await pc.createOffer());
       socket.emit('rtc', { to: id, data: { sdp: pc.localDescription } });
     }
@@ -677,9 +699,13 @@
         if (data.sdp) {
           await pc.setRemoteDescription(data.sdp);
           if (data.sdp.type === 'offer') {
+            const t = vtx(pc);
+            if (t) t.direction = 'sendrecv';
+            await sendVideo(pr);
             await pc.setLocalDescription(await pc.createAnswer());
             socket.emit('rtc', { to: from, data: { sdp: pc.localDescription } });
           }
+          sendVideo(pr); // 談好了才能設畫質上限
         } else if (data.ice) await pc.addIceCandidate(data.ice);
       }).catch(e => console.warn('rtc', e));
     });
@@ -720,6 +746,7 @@
       return true;
     }
     function hangUp() {
+      stopVideo();
       [...peers.keys()].forEach(drop);
       if (stream) stream.getTracks().forEach(tr => tr.stop());
       stream = null; meTalk = null; myTree = null; muted = false;
@@ -729,6 +756,7 @@
     function enter(res) {
       if (!res || !res.ok) { toast((res && res.error) || '進不去'); if (!myTree) hangUp(); return; }
       [...peers.keys()].forEach(drop); // 換屋：先跟舊屋的人斷線
+      stopVideo(); // 伺服器換屋時已經當作關掉視訊了
       myTree = res.id;
       if (res.ice) iceList = res.ice;
       retried.clear();
@@ -758,6 +786,112 @@
       renderBtn();
     }
 
+    // ---- 視訊、分享螢幕 ----
+    const canScreen = !!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia);
+    function stopVideo() {
+      if (vtrack) { vtrack.onended = null; vtrack.stop(); }
+      vtrack = null; vmode = '';
+    }
+    let vbusy = false;
+    // 按同一顆就關掉；開攝影機時在分享螢幕（或反過來）就直接換過去
+    async function setVideo(mode) {
+      if (!myTree || vbusy) return;
+      if (mode === vmode) mode = '';
+      let tr = null;
+      if (mode) {
+        vbusy = true;
+        try {
+          const ms = mode === 'cam'
+            ? await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 320 }, height: { ideal: 240 }, frameRate: { ideal: 15, max: 15 }, facingMode: 'user' } })
+            : await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: { ideal: 8, max: 10 } }, audio: false });
+          tr = ms.getVideoTracks()[0];
+        } catch (e) {
+          console.warn('video', e.name, e.message);
+          if (e.name !== 'NotAllowedError' || mode === 'cam') toast(mode === 'cam' ? {
+            NotAllowedError: '沒有拿到攝影機權限，到瀏覽器網址列旁邊打開攝影機再試一次',
+            NotFoundError: '找不到攝影機',
+            NotReadableError: '攝影機打不開，可能被別的程式占用（會議軟體、相機 app），關掉再試一次',
+          }[e.name] || `攝影機打不開（${e.name}）` : `沒辦法分享螢幕（${e.name}）`);
+        } finally { vbusy = false; }
+        if (!tr) return;
+        if (!myTree) { tr.stop(); return; } // 等權限的時候已經離開了
+        if (mode === 'screen') tr.contentHint = 'detail';
+      }
+      stopVideo();
+      vtrack = tr; vmode = tr ? mode : '';
+      // 瀏覽器上方的「停止分享」也要算關掉
+      if (tr) tr.onended = () => { if (vtrack === tr) setVideo(vmode); };
+      peers.forEach(sendVideo);
+      socket.emit('treeVideo', vmode);
+      renderBtn(); tiles();
+      if (isOpen()) render();
+    }
+
+    // 視訊小窗：可以拖、可以收起來；點一下畫面放大
+    let vbox = null, vfold = false;
+    const vpos = savedJson('hq-tree-vpos', null);
+    function vpanel() {
+      if (vbox) return vbox;
+      vbox = el('div', 'tree-video');
+      const head = el('div', 'tv-head');
+      head.appendChild(el('b', null, '小樹屋視訊'));
+      const fb = el('button', 'tv-fold', '▾'); fb.type = 'button'; fb.title = '收起來';
+      fb.onclick = () => { vfold = !vfold; vbox.classList.toggle('folded', vfold); fb.textContent = vfold ? '▴' : '▾'; };
+      head.appendChild(fb);
+      vbox.append(head, el('div', 'tv-grid'));
+      if (vpos) { vbox.style.left = vpos.x + 'px'; vbox.style.top = vpos.y + 'px'; vbox.style.right = 'auto'; }
+      // 拖標題列移動
+      head.addEventListener('pointerdown', (e) => {
+        if (e.target === fb) return;
+        const r = vbox.getBoundingClientRect(), dx = e.clientX - r.left, dy = e.clientY - r.top;
+        head.setPointerCapture(e.pointerId);
+        const mv = (ev) => {
+          const x = Math.max(0, Math.min(innerWidth - r.width, ev.clientX - dx)), y = Math.max(0, Math.min(innerHeight - 40, ev.clientY - dy));
+          Object.assign(vbox.style, { left: x + 'px', top: y + 'px', right: 'auto' });
+        };
+        const up = () => {
+          head.removeEventListener('pointermove', mv); head.removeEventListener('pointerup', up);
+          store('hq-tree-vpos', { x: parseInt(vbox.style.left, 10) || 0, y: parseInt(vbox.style.top, 10) || 0 });
+        };
+        head.addEventListener('pointermove', mv); head.addEventListener('pointerup', up);
+      });
+      document.body.appendChild(vbox);
+      return vbox;
+    }
+    const tileEls = new Map(); // id -> { box, video }
+    function tiles() {
+      const want = new Map(); // id -> { ms, mode, name }
+      const t = mine();
+      if (myTree && vtrack) want.set(me.id, { ms: new MediaStream([vtrack]), mode: vmode, name: '你', self: true });
+      if (t) t.members.forEach(m => {
+        const pr = peers.get(m.id);
+        if (m.video && pr && pr.video) want.set(m.id, { ms: pr.video, mode: m.video, name: m.name });
+      });
+      tileEls.forEach((tl, id) => { if (!want.has(id)) { tl.video.srcObject = null; tl.box.remove(); tileEls.delete(id); } });
+      if (!want.size) { if (vbox) vbox.hidden = true; return; }
+      const grid = vpanel().querySelector('.tv-grid');
+      vbox.hidden = false;
+      want.forEach((w, id) => {
+        let tl = tileEls.get(id);
+        if (!tl) {
+          const box = el('div', 'tv-tile');
+          const v = document.createElement('video');
+          v.autoplay = true; v.playsInline = true; v.muted = true; // 聲音另外走語音那條
+          box.append(v, el('span', 'tv-name'));
+          box.onclick = () => box.classList.toggle('big');
+          grid.appendChild(box);
+          tl = { box, video: v, track: null };
+          tileEls.set(id, tl);
+        }
+        const tr = w.ms.getVideoTracks()[0];
+        if (tl.track !== tr) { tl.track = tr; tl.video.srcObject = w.ms; tl.video.play().catch(() => {}); }
+        tl.box.classList.toggle('mirror', !!w.self && w.mode === 'cam');
+        tl.box.classList.toggle('screen', w.mode === 'screen');
+        tl.box.classList.toggle('talk', talking.has(id));
+        tl.box.querySelector('.tv-name').textContent = w.mode === 'screen' ? `${w.name} 的螢幕` : w.name;
+      });
+    }
+
     function set(list) {
       trees = list || [];
       const t = mine();
@@ -766,6 +900,7 @@
       else if (t) [...peers.keys()].forEach(id => { if (!t.members.some(m => m.id === id)) drop(id); else applyVol(id); });
       marks();
       renderBtn();
+      tiles();
       if (isOpen() && !(document.activeElement && document.activeElement.closest && document.activeElement.closest('.tree-vol'))) render();
     }
     socket.on('trees', set);
@@ -775,18 +910,30 @@
     function renderBtn() {
       const box = $('inventory');
       if (!box) return;
-      box.querySelectorAll('.tree-btn, .tree-mic').forEach(b => b.remove());
+      box.querySelectorAll('.tree-btn, .tree-tool').forEach(b => b.remove());
       const b = el('button', 'inv-item bag-btn tree-btn' + (myTree ? ' on' : ''));
       b.append(icon('btn-tree', ''), myTree ? ' 小樹屋中' : ' 小樹屋');
       b.onclick = open;
       const kit = box.querySelector('.kit-btn');
       box.insertBefore(b, kit);
       if (myTree) {
-        const m = el('button', 'inv-item tree-mic' + (muted ? ' off' : ''));
+        const m = el('button', 'inv-item tree-tool tree-mic' + (muted ? ' off' : ''));
         m.append(icon(muted ? 'btn-mic-off' : 'btn-mic', ''));
         m.title = muted ? '麥克風關著，點一下打開' : '麥克風開著，點一下靜音';
         m.onclick = toggleMute;
         box.insertBefore(m, kit);
+        const c = el('button', 'inv-item tree-tool' + (vmode === 'cam' ? ' on' : ''));
+        c.append(icon(vmode === 'cam' ? 'btn-cam' : 'btn-cam-off', ''));
+        c.title = vmode === 'cam' ? '視訊開著，點一下關掉' : '開視訊';
+        c.onclick = () => setVideo('cam');
+        box.insertBefore(c, kit);
+        if (canScreen) {
+          const sc = el('button', 'inv-item tree-tool' + (vmode === 'screen' ? ' on' : ''));
+          sc.append(icon('btn-screen', ''));
+          sc.title = vmode === 'screen' ? '正在分享螢幕，點一下停止' : '分享螢幕';
+          sc.onclick = () => setVideo('screen');
+          box.insertBefore(sc, kit);
+        }
       }
     }
 
@@ -797,6 +944,7 @@
       if (u) { const i = document.createElement('img'); i.src = u; i.alt = ''; f.appendChild(i); }
       else f.appendChild(icon('cls-' + (m.cls || 'staff'), ''));
       if (m.muted) f.appendChild(icon('btn-mic-off', '', 'tree-muted'));
+      if (m.video) f.appendChild(icon(m.video === 'screen' ? 'btn-screen' : 'btn-cam', '', 'tree-vid'));
       return f;
     }
     // 音量條：放開就把焦點還給遊戲，不然方向鍵會去調音量、人走不動
@@ -865,7 +1013,7 @@
       mk.appendChild(nm); mk.appendChild(el('button', 'primary small', myTree ? '蓋一間搬過去' : '蓋一間'));
       mk.onsubmit = (e) => { e.preventDefault(); create(nm.value.trim()); };
       box.appendChild(mk);
-      box.appendChild(el('p', 'modal-hint', '同一間小樹屋的人可以直接講話，走到哪都聽得到。一間最多 8 人，第一次進去瀏覽器會問你能不能用麥克風。'));
+      box.appendChild(el('p', 'modal-hint', '同一間小樹屋的人可以直接講話，走到哪都聽得到。一間最多 8 人，第一次進去瀏覽器會問你能不能用麥克風。進去之後工具列上可以開視訊、分享螢幕。'));
       openModal('tree', '小樹屋', box);
     }
     function open() { render(); refresh(); }

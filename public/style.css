@@ -319,14 +319,17 @@ button.inv-item:hover { border-color: var(--accent); }
 .gear-slot-k { font: 700 12px var(--mono); color: var(--muted); width: 32px; }
 .gear-h { margin: 14px 0 8px; font-size: 16px; }
 /* 依系列分組：點標題收合 */
-.gear-series { border-top: 2px dashed var(--line); padding-bottom: 4px; }
-.gear-series > summary { display: flex; align-items: baseline; gap: 10px; cursor: pointer; list-style: none; font-weight: 900; padding: 10px 2px 2px; margin: 0; }
+.gear-series { border-top: 2px dashed var(--line); padding-bottom: 6px; }
+.gear-series[open] { padding-bottom: 16px; }
+.gear > .modal-hint { margin-bottom: 12px; }
+.gear-series:last-child { border-bottom: 2px dashed var(--line); }
+.gear-series > summary { display: flex; align-items: baseline; gap: 10px; cursor: pointer; list-style: none; font-weight: 900; padding: 14px 2px 10px; margin: 0; }
 .gear-series > summary::-webkit-details-marker { display: none; }
 .gear-series > summary::before { content: '▸'; color: var(--muted); font-size: 13px; transition: transform .15s; }
 .gear-series[open] > summary::before { transform: rotate(90deg); }
 .gear-h-count { font: 700 12px var(--mono); color: var(--muted); }
 .gear-h-on { font-size: 12px; font-weight: 900; color: #fff; background: #ff6b9a; border-radius: 999px; padding: 1px 9px; }
-.gear-h-desc { margin: 2px 0 8px 22px; font-size: 13px; color: var(--muted); }
+.gear-h-desc { margin: 0 0 12px 22px; font-size: 13px; color: var(--muted); }
 .gear-series:not([open]) .gear-h-desc { display: none; }
 .gear-set-on { margin: 0; font-weight: 900; font-size: 14px; color: #e0457f; }
 .gear-part { position: absolute; top: 6px; right: 6px; font-size: 11px; color: var(--muted); background: var(--silver); border-radius: 999px; padding: 1px 7px; }

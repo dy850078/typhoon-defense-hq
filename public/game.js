@@ -696,10 +696,22 @@
       // 瀏覽器在等你回答麥克風權限時會一直卡著，先說一聲，等太久再提醒去看網址列
       toast('正在打開麥克風…');
       const slow = setTimeout(() => toast('麥克風還沒打開，看一下網址列旁邊是不是在問你能不能用麥克風'), 6000);
+      // 第一次用回音消除、降噪；打不開（例如藍牙耳機正在切換成可以講話的模式）就等半秒用最基本的設定再試一次
+      const get = (audio) => navigator.mediaDevices.getUserMedia({ audio });
       try {
-        stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+        try { stream = await get({ echoCancellation: true, noiseSuppression: true, autoGainControl: true }); } catch (e) {
+          if (e.name === 'NotAllowedError' || e.name === 'SecurityError') throw e;
+          await new Promise(r => setTimeout(r, 500));
+          stream = await get(true);
+        }
       } catch (e) {
-        toast('沒有拿到麥克風權限，到瀏覽器網址列旁邊打開麥克風再試一次');
+        console.warn('mic', e.name, e.message);
+        toast({
+          NotAllowedError: '沒有拿到麥克風權限，到瀏覽器網址列旁邊打開麥克風再試一次',
+          SecurityError: '沒有拿到麥克風權限，到瀏覽器網址列旁邊打開麥克風再試一次',
+          NotFoundError: '找不到麥克風，確認耳機或麥克風有接好',
+          NotReadableError: '麥克風打不開，可能被別的程式占用（Discord、LINE、會議軟體），或藍牙耳機正在切換，關掉再試一次',
+        }[e.name] || `麥克風打不開（${e.name}），再試一次看看`);
         return false;
       } finally { clearTimeout(slow); }
       muted = false;

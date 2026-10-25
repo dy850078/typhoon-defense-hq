@@ -5570,6 +5570,7 @@
         if (!c) return;
         if (Math.abs(x - c.tx) > 1) c.body_.setFlipX(x > c.tx);
         c.tx = x; c.ty = y;
+        if (Math.hypot(x - c.x, y - c.y) > 300) { c.x = x; c.y = y; } // 跟著主人瞬移到下一關：直接出現，不滑過整張地圖
       });
     }
     onSummonHurt(h) {

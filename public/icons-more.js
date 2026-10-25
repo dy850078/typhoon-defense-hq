@@ -546,12 +546,12 @@
       // 跟穿在身上的一樣（shared/gear.js 的 angelWingPath），縮小放進 48x48
       const path = () => {
         x.beginPath(); x.moveTo(44, 49); x.quadraticCurveTo(39, 40, 42, 30);
-        x.quadraticCurveTo(50, 11, 69, 9); x.bezierCurveTo(82, 8, 83, 24, 74, 30);
-        const lobes = [[74, 30], [67, 37.5], [59.5, 43], [51.5, 47.5], [44, 49]];
+        x.quadraticCurveTo(50, 11, 69, 9); x.bezierCurveTo(82, 8, 83, 23, 73, 28.5);
+        const lobes = [[73, 28.5], [65.5, 35.5], [57.5, 41], [50, 45.5], [44, 49]];
         for (let i = 1; i < lobes.length; i++) {
           const [x0, y0] = lobes[i - 1], [x1, y1] = lobes[i];
           const mx = (x0 + x1) / 2, my = (y0 + y1) / 2, dx = x1 - x0, dy = y1 - y0, d = Math.hypot(dx, dy);
-          const b = [0, 5, 5, 5, 6][i]; x.bezierCurveTo(x0 + dy / d * b, y0 - dx / d * b, x1 + dy / d * b, y1 - dx / d * b, x1, y1); // 兩個控制點都往外推，每一球比較圓、接縫比較深
+          const b = [0, 7.5, 6, 6, 6][i]; x.bezierCurveTo(x0 + dy / d * b, y0 - dx / d * b, x1 + dy / d * b, y1 - dx / d * b, x1, y1); // 兩個控制點都往外推，每一球比較圓、接縫比較深
         }
         x.closePath();
       };

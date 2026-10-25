@@ -1036,7 +1036,7 @@
     // 沒設定過的話，手機預設收起來，免得蓋住畫面
     fold(saved('hq-music-mini') == null ? matchMedia('(max-width: 600px)').matches : saved('hq-music-mini') === '1');
     $('music-fold').onclick = (e) => { e.stopPropagation(); fold(!$('music').classList.contains('mini')); };
-    $('music').addEventListener('click', (e) => { if ($('music').classList.contains('mini') && e.target.id !== 'music-start') fold(false); });
+    $('music').addEventListener('click', (e) => { if ($('music').classList.contains('mini') && !e.target.closest('#music-start')) fold(false); });
     $('music-mute').onclick = () => { muted = !muted; store('hq-mute', muted ? '1' : '0'); applyVol(); };
     // 拉完就放掉焦點，方向鍵才不會跑去調音量
     $('music-vol').onchange = $('music-vol').onpointerup = (e) => e.target.blur();

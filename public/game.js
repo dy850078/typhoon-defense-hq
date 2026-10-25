@@ -1178,7 +1178,7 @@
       s.rows.innerHTML = '';
       if (!r.items.length) s.rows.appendChild(el('li', 'wish-empty', r.all ? '找不到符合的願望，換個關鍵字或類別試試' : '池子裡還沒有願望，來當第一個許願的人吧！'));
       r.items.forEach((w) => {
-        const li = el('li', 'wish-row' + (w.status === 'no' ? ' no' : ''));
+        const li = el('li', 'wish-row' + (w.status === 'no' ? ' no' : w.status === 'done' ? ' done' : ''));
         li.tabIndex = 0;
         const main = el('div', 'wish-row-main');
         const top = el('div', 'wish-row-top');
@@ -1247,7 +1247,7 @@
       const cats = el('div', 'wish-cats');
       Object.entries(CATS).forEach(([k, v]) => {
         const b = el('button', 'wish-tab c-' + k + (e.cat === k ? ' on' : ''), v); b.type = 'button';
-        b.onclick = () => { e.cat = k; cats.querySelectorAll('.wish-tab').forEach(x => x.classList.toggle('on', x === b)); };
+        b.onclick = () => { e.cat = k; cats.querySelectorAll('.wish-tab').forEach(x => x.classList.toggle('on', x === b)); cats.classList.remove('bad'); if (err.dataset.k === 'cat') say(''); };
         cats.appendChild(b);
       });
       const count = (input, max) => { const c = el('small', 'wish-count', `${input.value.length}/${max}`); input.addEventListener('input', () => { c.textContent = `${input.value.length}/${max}`; }); return c; };
@@ -1260,16 +1260,20 @@
       const bRow = el('div', 'wish-label'); bRow.append(el('span', 'label', '內文'), count(body, info.bodyLen));
       const submit = el('button', 'primary small', e.id ? '儲存修改' : '丟硬幣許願'); submit.type = 'submit';
       if (!e.id) submit.prepend(icon('wish-coin', ''));
+      // 沒填好或伺服器擋下來的原因，直接寫在送出按鈕上面（提示紙條會被視窗擋住）
+      const err = el('p', 'wish-err');
+      const say = (text, k) => { err.textContent = text; err.dataset.k = k || ''; };
       const foot = el('div', 'wish-foot'); foot.appendChild(submit);
-      form.append(cats, tRow, title, bRow, body, foot);
+      form.append(cats, tRow, title, bRow, body, err, foot);
       form.onsubmit = (ev) => {
         ev.preventDefault();
-        if (!e.cat) { toast('先選一個類別'); return; }
-        if (e.title.trim().length < 2) { toast('主題寫多一點點吧'); title.focus(); return; }
+        if (!e.cat) { say('先選一個類別', 'cat'); cats.classList.add('bad'); return; }
+        if (e.title.trim().length < 2) { say('主題寫多一點點吧（至少 2 個字）'); title.focus(); return; }
+        say('');
         submit.disabled = true;
         socket.emit(e.id ? 'wishEdit' : 'wishAdd', { wid, id: e.id, title: e.title, cat: e.cat, body: e.body }, (r) => {
           submit.disabled = false;
-          if (!r || !r.ok) { toast((r && r.error) || '沒成功，再試一次'); return; }
+          if (!r || !r.ok) { say((r && r.error) || '沒送出去，網路可能不穩，再按一次試試'); return; }
           toast(e.id ? '改好了' : '願望丟進許願池了');
           editing = null;
           openDetail(r.id);

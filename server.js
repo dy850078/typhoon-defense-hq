@@ -2013,7 +2013,6 @@ io.on('connection', (socket) => {
     return w ? { wish: w } : { error: '這個願望已經不在了' };
   });
   onWish('wishAdd', (p, m) => {
-    if (!MAP.nearWell(p.x, p.y)) return { error: '走到許願池旁邊才能許願' };
     const r = wishes.add(userOf(p), p.name, m);
     if (r.error) return r;
     pushChat({ system: true, text: `${p.name} 在許願池許了一個願：【${WISH_CAT[r.wish.cat]}】${r.wish.title}`, t: Date.now() });

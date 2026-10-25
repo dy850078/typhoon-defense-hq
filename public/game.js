@@ -627,12 +627,15 @@
     async function mic() {
       if (stream) return true;
       if (!navigator.mediaDevices || !window.RTCPeerConnection) { toast('這個瀏覽器不支援語音通話'); return false; }
+      // 瀏覽器在等你回答麥克風權限時會一直卡著，先說一聲，等太久再提醒去看網址列
+      toast('正在打開麥克風…');
+      const slow = setTimeout(() => toast('麥克風還沒打開，看一下網址列旁邊是不是在問你能不能用麥克風'), 6000);
       try {
         stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
       } catch (e) {
         toast('沒有拿到麥克風權限，到瀏覽器網址列旁邊打開麥克風再試一次');
         return false;
-      }
+      } finally { clearTimeout(slow); }
       muted = false;
       meTalk = meter(stream);
       clearInterval(meterTimer); meterTimer = setInterval(tick, 150);
@@ -652,8 +655,19 @@
       res.peers.forEach(id => call(id).catch(e => console.warn('call', e)));
       renderBtn();
     }
-    async function create(name) { if (await mic()) socket.emit('treeCreate', { name }, enter); }
-    async function join(id) { if (await mic()) socket.emit('treeJoin', id, enter); }
+    // 伺服器 5 秒沒回應（通常是更新後 node 還沒重開，不認得這個指令）就說出來，不要安靜沒反應
+    let busy = false;
+    async function ask(ev, data) {
+      if (busy) return;
+      busy = true;
+      if (!(await mic())) { busy = false; return; }
+      socket.timeout(5000).emit(ev, data, (err, res) => {
+        busy = false;
+        enter(err ? { ok: false, error: '伺服器沒回應，可能伺服器還沒重開，重開之後大家重新整理就好' } : res);
+      });
+    }
+    const create = (name) => ask('treeCreate', { name });
+    const join = (id) => ask('treeJoin', id);
     function leave() { socket.emit('treeLeave'); hangUp(); if (scene) scene.treeMarks(members(), talking); }
     function toggleMute() {
       if (!stream) return;
@@ -3672,7 +3686,7 @@
         if (!cv) return;
         this.textures.addCanvas('tree-mark', cv);
       }
-      if (!c.treeIc) { c.treeIc = this.add.image(0, 0, 'tree-mark').setOrigin(0.5); c.add(c.treeIc); }
+      if (!c.treeIc) { c.treeIc = this.add.image(0, 0, 'tree-mark').setOrigin(0.5).setScale(0.2); c.add(c.treeIc); }
       c.treeIc.setPosition(c.tag.width / 2 + 13, 6 + c.tag.height / 2);
       if (talk === !!c.treeIc.talk) return;
       c.treeIc.talk = talk;

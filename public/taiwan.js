@@ -43,6 +43,7 @@
         [121.38, 23.26], [121.24, 23.12], [121.12, 23.30], [121.10, 23.60], [121.17, 23.90], [121.22, 24.15], [121.36, 24.34], [121.56, 24.41]],
       label: [121.40, 23.78],
     },
+    taipei: { name: '台北', color: '#7fd1c8', pts: TAIPEI, label: [121.56, 25.09] },
   };
   const LON0 = 119.85, LON1 = 122.25, LAT0 = 21.75, LAT1 = 25.45, KX = Math.cos(23.7 * Math.PI / 180);
 
@@ -173,7 +174,12 @@
       CR.smooth(pc, pts); CR.stroke(pc, r, 7, 'rgba(255,200,60,0.55)');
       // 太魯閣峽谷的刻痕＋颱風符文
       const [lx, ly] = P(region.label);
-      for (let k = 0; k < 3; k++) CR.line(pc, lx - 18 + k * 8, ly - 4, lx - 6 + k * 10, ly + 40, r, 1.6, 'rgba(120,84,20,0.55)', 3);
+      if (region === REGIONS.taipei) {
+        // 台北：刻一座小小的 101
+        const u = Math.max(2.2, s * 0.012);
+        for (let k = 0; k < 5; k++) { pc.beginPath(); pc.moveTo(lx - u * 2.2, ly + 12 - k * u * 2.6); pc.lineTo(lx - u * 2.8, ly + 12 - (k + 1) * u * 2.6); pc.lineTo(lx + u * 2.8, ly + 12 - (k + 1) * u * 2.6); pc.lineTo(lx + u * 2.2, ly + 12 - k * u * 2.6); CR.stroke(pc, r, 1.4, 'rgba(120,84,20,0.65)'); }
+        CR.line(pc, lx, ly + 12 - 5 * u * 2.6, lx, ly + 12 - 7 * u * 2.6, r, 1.4, 'rgba(120,84,20,0.65)');
+      } else for (let k = 0; k < 3; k++) CR.line(pc, lx - 18 + k * 8, ly - 4, lx - 6 + k * 10, ly + 40, r, 1.6, 'rgba(120,84,20,0.55)', 3);
       const rr = Math.max(9, s * 0.09);
       pc.save(); pc.translate(lx + 2, ly - rr * 1.6);
       for (let k = 0; k < 3; k++) { pc.beginPath(); pc.arc(0, 0, rr * (0.35 + k * 0.32), k * 1.3, k * 1.3 + 4.2); CR.stroke(pc, r, 2, '#b07d10'); }

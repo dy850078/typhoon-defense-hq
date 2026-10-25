@@ -301,6 +301,16 @@
       C.line(x, 9, 20, 13, 20, r, 1.2, '#6f675b'); C.line(x, 35, 34, 39, 34, r, 1.2, '#6f675b');
     },
 
+    // 前往 101：台北101 的剪影（一節一節往上疊）
+    'act-elevator'(x, r) {
+      C.rect(x, 20, 40, 8, 4, r, 0.4); C.fill(x, '#2f5f5c', r, null); C.stroke(x, r, 1.8);
+      [[17, 34, 14, 6], [18, 28, 12, 6], [18, 22, 12, 6], [19, 16, 10, 6], [20, 10, 8, 6]].forEach(([a, b, w, h], i) => {
+        x.beginPath(); x.moveTo(a, b + h); x.lineTo(a - 1.5, b); x.lineTo(a + w + 1.5, b); x.lineTo(a + w, b + h); x.closePath();
+        C.fill(x, i % 2 ? '#7fb3ad' : '#5f8f8c', r, null); C.stroke(x, r, 1.8);
+      });
+      C.line(x, 24, 10, 24, 3, r, 1.8);
+      x.beginPath(); x.moveTo(36, 6); x.lineTo(33, 12); x.lineTo(36, 12); x.lineTo(33, 18); C.stroke(x, r, 1.8, '#ffb020');
+    },
     // 跟希臘少女說話：金色橄欖葉冠
     'act-greek'(x, r) {
       x.beginPath(); x.arc(24, 26, 15, Math.PI * 0.75, Math.PI * 2.25); C.stroke(x, r, 2, '#a07a20');

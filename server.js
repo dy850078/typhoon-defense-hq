@@ -10,7 +10,7 @@ const GEAR = require('./shared/gear');
 const DECOR = require('./shared/decor');
 const ACCOUNTS = require('./accounts');
 const WISHES = require('./wishes');
-const createDungeon = require('./dungeon');
+const createDungeons = require('./dungeon');
 
 const PORT = Number(process.env.PORT) || 3000;
 const MAX_PLAYERS = Number(process.env.MAX_PLAYERS) || 40;
@@ -272,7 +272,7 @@ app.post('/api/admin/gift', (req, res) => {
     });
     sent++;
   });
-  if (sent) pushChat({ system: true, text: `🎁 管理員送出了【${g.rarity}】${g.icon} ${g.name}${all ? '給大家' : `給 ${users[0].save.name || users[0].username}`}！`, t: Date.now() });
+  if (sent) pushChat({ system: true, text: `🎁 管理員送出了【${g.rarity}】${g.icon ? g.icon + ' ' : ''}${g.name}${all ? '給大家' : `給 ${users[0].save.name || users[0].username}`}！`, t: Date.now() });
   res.json({ ok: true, sent, had });
 });
 app.post('/api/admin/delete', (req, res) => {
@@ -818,7 +818,7 @@ function tickStorms(now) {
       t.x += Math.cos(t.dir) * STORM.twisterSpeed; t.y += Math.sin(t.dir) * STORM.twisterSpeed;
       // 碰到的小怪被往圈中間捲（颱風和副本魔王太重捲不動）
       foes.forEach(([f, b]) => {
-        if (b || f.kind === 'fu' || dist(f.x, f.y, t.x, t.y) > STORM.twisterR) return;
+        if (b || STATS.MOBS[f.kind].boss || dist(f.x, f.y, t.x, t.y) > STORM.twisterR) return;
         const d = dist(f.x, f.y, s.x, s.y);
         if (d > STORM.pull) { f.x += (s.x - f.x) / d * STORM.pull; f.y += (s.y - f.y) / d * STORM.pull; }
       });
@@ -938,7 +938,7 @@ function tickSummon(sm, now) {
   });
   if (monster.alive && !box) { const d = dist(monster.x, monster.y, sm.x, sm.y); if (d < fd) { fd = d; foe = monster; isBoss = true; } }
   let tx, ty, stop;
-  if (foe) { tx = foe.x; ty = foe.y; stop = isBoss ? 110 : foe.kind === 'fu' ? 90 : 60; }
+  if (foe) { tx = foe.x; ty = foe.y; stop = isBoss ? 110 : STATS.MOBS[foe.kind].boss ? 90 : 60; }
   else if (box ? DG.boxAt(owner.x, owner.y) === box : inField(owner)) { tx = owner.x + 50; ty = owner.y + 10; stop = 40; }
   else { tx = sm.x; ty = sm.y; stop = 1e9; }
   const d = dist(sm.x, sm.y, tx, ty);
@@ -961,8 +961,8 @@ function tickSummon(sm, now) {
   }
 }
 
-// ---------------- 副本（dungeon.js） ----------------
-const DG = createDungeon({
+// ---------------- 副本（dungeon.js：花蓮、台北101） ----------------
+const DG = createDungeons({
   io, players, MAP, STATS, GEAR, pushChat, sendStats, gainExp, TICK, wallBlocks, behindWall,
   hurtPlayer: (p, dmg, by) => hurt(p, dmg, by),
   isAway: (p) => awayTimers.has(p.id),
@@ -1102,7 +1102,7 @@ function giveGear(p, rare, src) {
   p.owned.push(id);
   const g = GEAR.GEAR[id];
   io.to(p.id).emit('gearGot', { item: id, owned: p.owned });
-  pushChat({ system: true, text: `🎁 ${p.name} 獲得了【${g.rarity}】${g.icon} ${g.name}！`, t: Date.now() });
+  pushChat({ system: true, text: `🎁 ${p.name} 獲得了【${g.rarity}】${g.icon ? g.icon + ' ' : ''}${g.name}！`, t: Date.now() });
   return id;
 }
 
@@ -1155,7 +1155,7 @@ function makeGame(key, label, game) {
   // 記分板用名字記（重新整理也還在），另外記最後一次的 id，讓畫面找得到這個人的頭像
   g.addScore = (p, n) => { g.scores.set(p.name, (g.scores.get(p.name) || 0) + n); g.scoreIds.set(p.name, p.id); };
   // 發裝備，拿到什麼也寫在遊戲紀錄裡
-  const prize = (id) => { const it = id && GEAR.GEAR[id]; return it ? `，獲得【${it.rarity}】${it.icon} ${it.name}` : '（裝備已經全部收集完了）'; };
+  const prize = (id) => { const it = id && GEAR.GEAR[id]; return it ? `，獲得【${it.rarity}】${it.icon ? it.icon + ' ' : ''}${it.name}` : '（裝備已經全部收集完了）'; };
   g.reward = (p, text, kind) => { const id = giveGear(p); g.log(text + prize(id), kind || 'right'); return id; };
   // 有人答對，主持人每題也拿一件
   g.rewardHost = () => {
@@ -1402,12 +1402,22 @@ io.on('connection', (socket) => {
          ...mobs.concat(DG.foes()).filter(m => m.alive && (m === foe || STATS.foeGap(center, m, false) <= reach)).map(m => [m, false])]
       : foe ? [[foe, isBoss]] : [];
     if (center) fx.hits = hits.map(([f, b]) => b ? 'boss' : f.id);
+    // 彈射、引雷：打中目標以後再打到旁邊幾隻怪（傷害打折）
+    if (skill.chain && foe && foe.alive && Math.random() < (skill.chain.chance || 1)) {
+      const c = skill.chain;
+      const near = mobs.concat(DG.foes()).filter(m => m.alive && m !== foe && dist(m.x, m.y, foe.x, foe.y) <= c.r)
+        .sort((a, b) => dist(a.x, a.y, foe.x, foe.y) - dist(b.x, b.y, foe.x, foe.y)).slice(0, c.n);
+      near.forEach(m => hits.push([m, false, c.mul]));
+      fx.chain = near.map(m => m.id);
+      if (c.bolt) fx.bolt = true;
+    }
     if (skill.weaken) hits.forEach(([f]) => { f.weakUntil = now + skill.weaken; });
     if (skill.freeze) hits.forEach(([f]) => { f.frozenUntil = now + skill.freeze; });
     // 震飛：從自己的位置往外推，推到前線的邊邊就停
     if (skill.knock) {
       fx.knock = [];
       hits.forEach(([f, b]) => {
+        if (skill.knock.noBoss && (b || STATS.MOBS[f.kind].boss)) return; // 這招撞不動頭目
         const d = Math.max(1, dist(f.x, f.y, p.x, p.y)), push = b ? skill.knock.boss : skill.knock.mob;
         const ux = d > 5 ? (f.x - p.x) / d : (Math.random() < 0.5 ? -1 : 1), uy = d > 5 ? (f.y - p.y) / d : 0;
         const B = f.dg ? DG.boundsOf(f) : Z, pad = f.dg ? T : 0;
@@ -1426,11 +1436,11 @@ io.on('connection', (socket) => {
 
     if (!skill.power) return ack({ ok: true });
     let total = 0;
-    hits.forEach(([f, b]) => {
+    hits.forEach(([f, b, mul]) => {
       if (!f.alive) return;
       const crit = Math.random() < (skill.crit || 0.12);
       const weak = now < f.weakUntil ? STATS.WEAKEN.dmgTaken : 1;
-      const dmg = Math.round(atkOf(p) * skill.power * (0.6 + Math.random() * 0.6) * (crit ? 2.5 : 1) * weak);
+      const dmg = Math.round(atkOf(p) * skill.power * (mul || 1) * (0.6 + Math.random() * 0.6) * (crit ? 2.5 : 1) * weak);
       total += dmg;
       damageFoe(p, f, b, dmg, crit, skillId);
     });
@@ -1586,13 +1596,13 @@ io.on('connection', (socket) => {
   socket.on('dgPush', (m, ack) => {
     const p = players.get(socket.id);
     if (!p || !m) return;
-    const r = DG.push(p, Number(m.i), Number(m.dx), Number(m.dy));
+    const r = DG.action('push', p, Number(m.i), Number(m.dx), Number(m.dy));
     if (typeof ack === 'function') ack(r);
   });
   socket.on('dgReset', (ack) => {
     const p = players.get(socket.id);
     if (!p || typeof ack !== 'function') return;
-    ack(DG.resetBlocks(p));
+    ack(DG.action('resetBlocks', p));
   });
 
   // 穿上 / 脫下裝備（id 是 null 就是脫掉）

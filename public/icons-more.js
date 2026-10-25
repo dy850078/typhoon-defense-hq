@@ -206,6 +206,30 @@
       });
       [[40, 10], [44, 16], [38, 42]].forEach(([a, b]) => { star(x, a, b, 3); C.fill(x, '#ffd23f', r, null); C.stroke(x, r, 1); });
     },
+    // 悠遊飛卡：一張轉著飛的卡，後面拖著兩條速度線
+    'sk-cardFlick'(x, r) {
+      zoom(x, r, [[3, 18, 14, 20], [3, 30, 13, 29]], '#4f9fd8');
+      x.save(); x.translate(30, 24); x.rotate(-0.4);
+      C.rect(x, -12, -8, 24, 16, r, 0.6); C.fill(x, '#4f9fd8', r, null); C.stroke(x, r, 2.2);
+      C.line(x, -9, 4, 9, -3, r, 1.8, '#ffffff', 0.3);
+      x.restore();
+      x.beginPath(); x.arc(30, 24, 18, -0.6, 0.5); C.stroke(x, r, 1.4, '#8a93a6');
+    },
+    // 阻尼甩錘：金球帶著鍊子劃一道弧
+    'sk-damperSwing'(x, r) {
+      x.beginPath(); x.arc(14, 38, 26, -1.25, -0.1); C.stroke(x, r, 1.6, '#8a93a6');
+      C.line(x, 8, 42, 18, 34, r, 3.4, '#8a5a3a');
+      for (let i = 0; i < 4; i++) { x.beginPath(); x.ellipse(21 + i * 3, 31 - i * 2.4, 1.6, 2.4, 0.9, 0, Math.PI * 2); C.stroke(x, r, 1.2, '#5b6577'); }
+      C.blob(x, 36, 18, 9, 9, r, 0.04); C.fill(x, '#ffc93c', r, null); C.stroke(x, r, 2.2);
+      shine(x, r, 33, 14, 2.6, 1.8);
+    },
+    // 避雷突刺：槍尖往前刺，上面打下一道雷
+    'sk-spireThrust'(x, r) {
+      C.line(x, 6, 40, 34, 18, r, 3, '#5f8f8c');
+      x.beginPath(); x.moveTo(34, 12); x.lineTo(44, 13); x.lineTo(37, 22); x.closePath(); C.fill(x, '#c6cbd6', r, null); C.stroke(x, r, 1.8);
+      x.beginPath(); x.moveTo(28, 2); x.lineTo(22, 11); x.lineTo(27, 11); x.lineTo(20, 21); x.lineTo(32, 8); x.lineTo(27, 8); x.closePath();
+      C.fill(x, '#ffd23f', r, null); C.stroke(x, r, 1.6);
+    },
     // 大理石重錘：錘子砸地
     'sk-marbleSmash'(x, r) {
       x.beginPath(); x.moveTo(3, 42); x.lineTo(45, 42); C.stroke(x, r, 2.2);
@@ -690,6 +714,33 @@
       C.rect(x, -17, -15, 3, 9, r, 0.3); C.fill(x, '#c9962a', r, null); C.stroke(x, r, 1.4);
       C.rect(x, 14, -15, 3, 9, r, 0.3); C.fill(x, '#c9962a', r, null); C.stroke(x, r, 1.4);
       x.restore();
+    },
+
+    'gear-easyCard'(x, r) {
+      x.save(); x.translate(24, 25); x.rotate(-0.25);
+      C.rect(x, -17, -11, 34, 22, r, 0.8); C.fill(x, '#4f9fd8', r, [-17, -11, 34, 22]); C.stroke(x, r, 2.4);
+      C.line(x, -14, 6, 14, -4, r, 2.4, '#ffffff', 0.4);
+      C.blob(x, -9, -4, 3.6, 3.6, r, 0.1, 10); C.fill(x, '#ffd23f', r, null); C.stroke(x, r, 1.2);
+      [[-2, -6], [6, -2]].forEach(([a, b]) => dot(x, a, b, 1.6, '#e8384f'));
+      x.restore();
+    },
+    'gear-damperFlail'(x, r) {
+      C.line(x, 7, 42, 17, 28, r, 4, '#8a5a3a');
+      for (let i = 0; i < 5; i++) { x.beginPath(); x.ellipse(19 + i * 2.6, 25 - i * 1.6, 1.8, 2.6, 0.9, 0, Math.PI * 2); C.stroke(x, r, 1.4, '#5b6577'); }
+      C.blob(x, 34, 16, 10, 10, r, 0.04); C.fill(x, '#ffc93c', r, [24, 6, 20, 20]); C.stroke(x, r, 2.4);
+      [-5, 0, 5].forEach(dy => { x.beginPath(); x.ellipse(34, 16 + dy, Math.sqrt(100 - dy * dy), 2, 0, 0, Math.PI); C.stroke(x, r, 1, 'rgba(140,96,20,0.6)'); });
+      shine(x, r, 30, 11, 3, 2);
+    },
+    'gear-spireSpear'(x, r) {
+      x.save(); x.translate(24, 24); x.rotate(0.6);
+      C.line(x, 0, 22, 0, -10, r, 3.4, '#5f8f8c');
+      [[-12, 7], [-17, 6], [-22, 5]].forEach(([y, w]) => {
+        x.beginPath(); x.moveTo(-w, y + 5); x.lineTo(-w - 1.5, y); x.lineTo(w + 1.5, y); x.lineTo(w, y + 5); x.closePath();
+        C.fill(x, '#7fb3ad', r, null); C.stroke(x, r, 1.6);
+      });
+      C.line(x, 0, -22, 0, -29, r, 1.8);
+      x.restore();
+      x.beginPath(); x.moveTo(40, 6); x.lineTo(35, 14); x.lineTo(40, 14); x.lineTo(35, 22); C.stroke(x, r, 2.2, '#ffb020');
     },
 
     // ================= 家具 =================

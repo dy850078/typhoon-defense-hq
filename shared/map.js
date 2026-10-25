@@ -194,12 +194,13 @@
     bubbletea: { name: '台灣珍奶', icon: '🧋' },
     chicken: { name: '台灣雞排', icon: '🍗' },
   };
+  const BAG_SLOTS = 25; // 背包格數：一種物資佔一格
   const CRATES = [
     { label: '泡麵', item: 'noodle', x1: 6, y1: 16, x2: 7, y2: 17 },
     { label: '礦泉水', item: 'water', x1: 6, y1: 20, x2: 8, y2: 22 },
     { label: '蔬菜', item: 'veggie', x1: 16, y1: 16, x2: 18, y2: 17 },
     { label: '綜合', item: null, x1: 15, y1: 21, x2: 18, y2: 22 },
-    { label: '台灣小吃', item: ['bubbletea', 'chicken'], icon: '🧋🍗', x1: 10, y1: 16, x2: 12, y2: 17 },
+    { label: '台灣小吃', item: ['bubbletea', 'chicken'], x1: 10, y1: 16, x2: 12, y2: 17 },
   ];
 
   const ROOMS = [
@@ -220,7 +221,7 @@
   // 會變動的擋路格子（關著的石門、九曲洞的大理石）：'tx,ty'
   const dyn = new Set();
   const map = {
-    W, H, MW, DX, LX, TILE, BLOCKING, ROOMS, ITEMS, CRATES, MONSTER_ZONE, DUNGEON, LOBBY, dyn,
+    W, H, MW, DX, LX, TILE, BLOCKING, ROOMS, ITEMS, BAG_SLOTS, CRATES, MONSTER_ZONE, DUNGEON, LOBBY, dyn,
     portal: { x: (PORTAL_TILE.x + 0.5) * TILE, y: (PORTAL_TILE.y + 0.5) * TILE },
     mentor: { x: (MENTOR_TILE.x + 0.5) * TILE, y: (MENTOR_TILE.y + 0.5) * TILE },
     guard: { x: (GUARD_TILE.x + 0.5) * TILE, y: (GUARD_TILE.y + 0.5) * TILE },
@@ -269,6 +270,10 @@
     fridge: { x: (FRIDGE_TILE.x + 0.5) * TILE, y: (FRIDGE_TILE.y + 0.5) * TILE },
     nearFridge(px, py) {
       return Math.hypot(px - this.fridge.x, py - this.fridge.y) < 2 * TILE;
+    },
+    // 戰情室的電視牆：站到牆前面那兩排就能開視訊或遊戲室
+    nearTv(px, py) {
+      return px >= 22.5 * TILE && px <= 33.5 * TILE && py >= 4 * TILE && py < 6.8 * TILE;
     },
     dj: { x: 22 * TILE, y: 15.5 * TILE },
     nearDj(px, py) {

@@ -1289,6 +1289,13 @@ io.on('connection', (socket) => {
     const key = tx + ',' + ty;
     const c = crates.get(key) || { hits: 0, emptyUntil: 0 };
     if (c.emptyUntil > now) return ack({ ok: false, empty: true });
+    // 背包最多 BAG_SLOTS 格，同種物資疊在同一格（一格最多 INV_MAX 個）；裝不下的箱子不讓敲
+    const pile = MAP.CRATES[ci].item;
+    const pool = (Array.isArray(pile) ? pile : pile ? [pile] : Object.keys(MAP.ITEMS)).filter(k => {
+      const used = Object.values(p.inv).filter(n => n > 0).length;
+      return p.inv[k] > 0 ? p.inv[k] < INV_MAX : used < MAP.BAG_SLOTS;
+    });
+    if (!pool.length) return ack({ ok: false, full: true });
     lastAction = now;
     io.emit('crateHit', { tx, ty, id: p.id });
     c.hits++;
@@ -1296,9 +1303,6 @@ io.on('connection', (socket) => {
     if (c.hits < CRATE_HITS) return ack({ ok: true, hits: c.hits });
     c.hits = 0;
     c.emptyUntil = now + CRATE_RESTOCK_MS;
-    const keys = Object.keys(MAP.ITEMS);
-    const pile = MAP.CRATES[ci].item;
-    const pool = Array.isArray(pile) ? pile : pile ? [pile] : keys;
     const item = pool[Math.floor(Math.random() * pool.length)];
     p.inv[item]++;
     io.emit('itemGot', { id: p.id, item });
@@ -1735,7 +1739,7 @@ io.on('connection', (socket) => {
     if (draw.host === p.id) {
       // 主持人可以聊天，但不能把答案講出來
       if (draw.answer && norm(t).includes(norm(draw.answer))) return ack({ ok: false, error: '不能說出答案喔' });
-      draw.log(`🎤 ${p.name}：${t}`, 'chat'); return ack({ ok: true });
+      draw.log(`主持人 ${p.name}：${t}`, 'chat'); return ack({ ok: true });
     }
     if (!draw.answer) { draw.log(`${p.name}：${t}`, 'chat'); return ack({ ok: true }); }
     if (draw.correct.has(p.id)) return ack({ ok: false, error: '你已經猜對了，等下一題' });
@@ -1773,7 +1777,7 @@ io.on('connection', (socket) => {
     if (!t) return ack({ ok: false });
     if (song.host === p.id) {
       if (song.title && (songHit(norm(t), song.singer) || songHit(norm(t), song.title))) return ack({ ok: false, error: '不能說出答案喔' });
-      song.log(`🎤 ${p.name}：${t}`, 'chat'); return ack({ ok: true });
+      song.log(`主持人 ${p.name}：${t}`, 'chat'); return ack({ ok: true });
     }
     if (!song.title) { song.log(`${p.name}：${t}`, 'chat'); return ack({ ok: true }); }
     const hadS = song.gotSinger.has(p.id), hadT = song.gotTitle.has(p.id);

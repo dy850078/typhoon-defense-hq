@@ -91,6 +91,31 @@ app.use('/vendor', express.static(path.join(__dirname, 'node_modules/phaser/dist
 const ICE_SERVERS = [{ urls: 'stun:stun.l.google.com:19302' }].concat(process.env.TURN_URL
   ? [{ urls: process.env.TURN_URL.split(','), username: process.env.TURN_USER || '', credential: process.env.TURN_PASS || '' }] : []);
 app.get('/config', (req, res) => res.json({ jitsiDomain: JITSI_DOMAIN, jitsiRoom: JITSI_ROOM, party: partyInfo(), iceServers: ICE_SERVERS }));
+// 有設 Cloudflare TURN 金鑰的話，跟 Cloudflare 拿臨時通行證（24 小時有效，剩不到 2 小時就換新的）
+// 手機網路、公司網路常常不讓兩個人直接連線，這時聲音改由 Cloudflare 的中繼伺服器轉送
+const CF_TURN_ID = process.env.CF_TURN_KEY_ID, CF_TURN_TOKEN = process.env.CF_TURN_KEY_TOKEN;
+let cfIce = null, cfIceUntil = 0, cfIceP = null;
+async function iceServers() {
+  if (!CF_TURN_ID || !CF_TURN_TOKEN) return ICE_SERVERS;
+  if (cfIce && Date.now() < cfIceUntil - 2 * 3600e3) return cfIce;
+  cfIceP = cfIceP || (async () => {
+    try {
+      const r = await fetch(`https://rtc.live.cloudflare.com/v1/turn/keys/${CF_TURN_ID}/credentials/generate-ice-servers`, {
+        method: 'POST', headers: { Authorization: `Bearer ${CF_TURN_TOKEN}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ttl: 86400 }), signal: AbortSignal.timeout(5000),
+      });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const list = [].concat((await r.json()).iceServers || []);
+      // 瀏覽器會擋 53 port，留著只會讓連線多等一段逾時
+      list.forEach(sv => { if (Array.isArray(sv.urls)) sv.urls = sv.urls.filter(u => !/:53(\?|$)/.test(u)); });
+      cfIce = ICE_SERVERS.concat(list); cfIceUntil = Date.now() + 86400e3;
+    } catch (e) {
+      console.warn('Cloudflare TURN 通行證拿不到，先只用 STUN：', e.message);
+    } finally { cfIceP = null; }
+  })();
+  await cfIceP;
+  return cfIce || ICE_SERVERS;
+}
 
 // ---------------- 帳號 API ----------------
 // 登入失敗太多次就暫停一下，避免有人一直猜密碼
@@ -1885,31 +1910,35 @@ io.on('connection', (socket) => {
   // ----- 小樹屋語音 -----
   socket.on('treeList', (ack) => { if (typeof ack === 'function') ack({ trees: treeList() }); });
   // 蓋一間新的小樹屋，自己直接住進去
-  socket.on('treeCreate', (data, ack) => {
+  socket.on('treeCreate', async (data, ack) => {
+    if (typeof ack !== 'function') return;
+    const ice = await iceServers(); // 先拿好通行證再改狀態（等的時候人可能已經走了）
     const p = players.get(socket.id);
-    if (typeof ack !== 'function' || !p) return;
+    if (!p) return;
     if (trees.size >= TREE_MAX) return ack({ ok: false, error: `小樹屋已經有 ${TREE_MAX} 間了，先去別人的坐坐吧` });
     leaveTree(p);
     const t = { id: 't' + (++treeSeq), name: clean(data && data.name, 12) || `${p.name}的小樹屋`, owner: p.id, ownerName: p.name, at: Date.now(), members: [p.id] };
     trees.set(t.id, t);
     p.tree = t.id; p.treeMuted = false;
     emitTrees();
-    ack({ ok: true, id: t.id, peers: [] });
+    ack({ ok: true, id: t.id, peers: [], ice });
   });
   // 進別人的小樹屋：回傳屋裡其他人，由新進來的人負責跟每個人打招呼（送 offer）
-  socket.on('treeJoin', (id, ack) => {
+  socket.on('treeJoin', async (id, ack) => {
+    if (typeof ack !== 'function') return;
+    const ice = await iceServers();
     const p = players.get(socket.id);
-    if (typeof ack !== 'function' || !p) return;
+    if (!p) return;
     const t = trees.get(String(id || ''));
     if (!t) return ack({ ok: false, error: '這間小樹屋已經拆掉了' });
-    if (p.tree === t.id) return ack({ ok: true, id: t.id, peers: t.members.filter(m => m !== p.id) });
+    if (p.tree === t.id) return ack({ ok: true, id: t.id, peers: t.members.filter(m => m !== p.id), ice });
     if (t.members.length >= TREE_CAP) return ack({ ok: false, error: `這間已經擠了 ${TREE_CAP} 個人，換一間吧` });
     leaveTree(p);
     const peers = t.members.slice();
     t.members.push(p.id);
     p.tree = t.id; p.treeMuted = false;
     emitTrees();
-    ack({ ok: true, id: t.id, peers });
+    ack({ ok: true, id: t.id, peers, ice });
   });
   socket.on('treeLeave', () => { const p = players.get(socket.id); if (leaveTree(p)) emitTrees(); });
   socket.on('treeMute', (m) => {
@@ -2110,9 +2139,11 @@ function removePlayer(id) {
 }
 
 server.listen(PORT, () => {
+  iceServers(); // 先拿一次 TURN 通行證，第一個進小樹屋的人就不用等
   console.log(`🌀 颱風天防衛總部已啟動：http://localhost:${PORT}`);
   console.log(`🔑 管理員介面：http://localhost:${PORT}/admin.html  密碼：${process.env.ADMIN_PASSWORD ? '（用 ADMIN_PASSWORD 設定的）' : settings.adminPassword}`);
   console.log(`📹 視訊房間：https://${JITSI_DOMAIN}/${JITSI_ROOM}`);
+  console.log(CF_TURN_ID && CF_TURN_TOKEN ? '🌳 小樹屋語音：使用 Cloudflare TURN 中繼' : process.env.TURN_URL ? '🌳 小樹屋語音：使用 TURN_URL 中繼' : '🌳 小樹屋語音：只有 STUN（手機網路之間可能接不通，見 README 的 Cloudflare TURN 設定）');
 });
 
 // 關掉伺服器（Ctrl+C）前先把大家的角色存好

@@ -559,7 +559,18 @@
     }
     const isOpen = () => modalKind === 'tree' && !$('modal').hidden;
     const mine = () => trees.find(t => t.id === myTree);
-    const ice = () => ({ iceServers: config.iceServers || [{ urls: 'stun:stun.l.google.com:19302' }] });
+    // 進屋時伺服器會給一份 ICE 伺服器清單（有設 Cloudflare TURN 的話含中繼通行證）
+    let iceList = null;
+    const ice = () => ({ iceServers: iceList || config.iceServers || [{ urls: 'stun:stun.l.google.com:19302' }] });
+    const retried = new Set(); // 已經重連過一次的人
+    const STATE = { connected: ['已接通', 'ok'], failed: ['連不上', 'bad'], closed: ['連不上', 'bad'] };
+    const stateOf = (id) => { const pr = peers.get(id); return STATE[pr ? (pr.stuck ? 'failed' : pr.pc.connectionState) : 'new'] || ['連線中…', 'wait']; };
+    function showState(id) {
+      const chip = document.querySelector(`.tree-mem[data-id="${id}"] .tree-st`);
+      if (!chip) return;
+      const [t, c] = stateOf(id);
+      chip.textContent = t; chip.className = 'tree-st ' + c;
+    }
 
     // 音量計：每 150ms 看一次，超過門檻就算在講話
     // pr 有給的話（別人的聲音）順便接一個音量旋鈕再送到喇叭，才能調到 200%
@@ -600,8 +611,22 @@
         pr.meter = meter(ms, pr);
         applyVol(id);
       };
+      // 連不上：重來一次（由 id 比較小的那邊重新打過去，避免兩邊同時打）；還是不行才說
+      const fail = () => {
+        if (peers.get(id) !== pr || pr.failed) return;
+        pr.failed = true;
+        showState(id);
+        if (!retried.has(id)) {
+          retried.add(id);
+          if (me && me.id < id) setTimeout(() => { if (peers.get(id) === pr && myTree) { drop(id); call(id).catch(e => console.warn('call', e)); } }, 800);
+        } else toast(`跟 ${nameOf(id)} 的語音連不上，可能是網路環境擋住了`);
+      };
+      // 有些網路連「失敗」都不會回報，一直卡在連線中：15 秒還沒接通就當作連不上
+      pr.watch = setTimeout(() => { if (pc.connectionState !== 'connected') { pr.stuck = true; fail(); } }, 15000);
       pc.onconnectionstatechange = () => {
-        if (pc.connectionState === 'failed') toast(`跟 ${nameOf(id)} 的語音連不上，可能是網路環境擋住了`);
+        if (pc.connectionState === 'connected') { retried.delete(id); clearTimeout(pr.watch); pr.stuck = false; }
+        showState(id);
+        if (pc.connectionState === 'failed') fail();
       };
       peers.set(id, pr);
       return pr;
@@ -609,7 +634,7 @@
     function drop(id) {
       const pr = peers.get(id);
       if (!pr) return;
-      pr.pc.close(); pr.audio.srcObject = null;
+      pr.pc.close(); pr.audio.srcObject = null; clearTimeout(pr.watch);
       if (pr.gain) pr.gain.disconnect();
       peers.delete(id); talking.delete(id);
     }
@@ -622,6 +647,8 @@
     socket.on('rtc', ({ from, data }) => {
       if (!myTree || !stream || !data) return;
       if (!data.sdp && !peers.has(from)) return;
+      // 已經連過的人又送 offer 來，代表對方在重連：丟掉舊的重新接
+      if (data.sdp && data.sdp.type === 'offer' && peers.has(from) && peers.get(from).pc.remoteDescription) drop(from);
       const pr = peer(from);
       pr.chain = (pr.chain || Promise.resolve()).then(async () => {
         const { pc } = pr;
@@ -669,17 +696,19 @@
       if (!res || !res.ok) { toast((res && res.error) || '進不去'); if (!myTree) hangUp(); return; }
       [...peers.keys()].forEach(drop); // 換屋：先跟舊屋的人斷線
       myTree = res.id;
+      if (res.ice) iceList = res.ice;
+      retried.clear();
       res.peers.forEach(id => call(id).catch(e => console.warn('call', e)));
       renderBtn();
       if (isOpen()) render(); // 名單可能比回應先到，這時卡片還不知道你已經在屋裡
     }
-    // 伺服器 5 秒沒回應（通常是更新後 node 還沒重開，不認得這個指令）就說出來，不要安靜沒反應
+    // 伺服器 8 秒沒回應（通常是更新後 node 還沒重開，不認得這個指令）就說出來，不要安靜沒反應
     let busy = false;
     async function ask(ev, data) {
       if (busy) return;
       busy = true;
       if (!(await mic())) { busy = false; return; }
-      socket.timeout(5000).emit(ev, data, (err, res) => {
+      socket.timeout(8000).emit(ev, data, (err, res) => {
         busy = false;
         enter(err ? { ok: false, error: '伺服器沒回應，可能伺服器還沒重開，重開之後大家重新整理就好' } : res);
       });
@@ -783,7 +812,10 @@
           li.dataset.id = m.id;
           li.appendChild(face(m));
           const who = el('div', 'tree-who');
-          who.appendChild(el('b', null, m.name));
+          const nm = el('b', null, m.name);
+          who.appendChild(nm);
+          // 同屋的別人：顯示你跟他之間的連線狀態
+          if (here && m.id !== (me && me.id)) { const [t2, c2] = stateOf(m.id); nm.appendChild(el('span', 'tree-st ' + c2, t2)); }
           const c = ST.CLASSES[m.cls] || ST.CLASSES.staff;
           who.appendChild(el('small', 'mono', `${m.user ? '@' + m.user : '訪客'} · ${plain(c.name)} Lv.${m.level || 1}`));
           li.appendChild(who);

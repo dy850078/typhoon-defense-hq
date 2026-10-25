@@ -428,8 +428,18 @@
     else if (e.key === 'Escape') { chatInput.blur(); closeModal(); if (!$('games').hidden) ROOM.close(); }
   });
   // 正在打字或開著視窗的時候，鍵盤不控制角色
-  const typing = () => document.activeElement === chatInput ||
-    (document.activeElement && document.activeElement.tagName === 'INPUT') || !$('modal').hidden || !$('games').hidden;
+  // 只有能打字的欄位才算「在打字」；音量條、按鈕這些被點過之後還留著焦點，不該擋住走路
+  const isTextField = (a) => !!a && (a.tagName === 'TEXTAREA' || a.isContentEditable ||
+    (a.tagName === 'INPUT' && !/^(range|checkbox|radio|button|submit|reset|color|file|image)$/i.test(a.type)));
+  const typing = () => isTextField(document.activeElement) || !$('modal').hidden || !$('games').hidden;
+  // 剛點過音量條或按鈕的時候按移動 / 攻擊鍵：先把焦點拿掉，不然方向鍵會去調音量、空白鍵會再按一次那顆按鈕
+  const GAME_KEYS = /^(w|a|s|d|j|k|l| |arrow(up|down|left|right))$/i;
+  window.addEventListener('keydown', (e) => {
+    const a = document.activeElement;
+    if (!joined || !a || a === document.body || isTextField(a) || !GAME_KEYS.test(e.key)) return;
+    if (!$('modal').hidden || !$('games').hidden) return;
+    a.blur();  // 不能 preventDefault：Phaser 會跳過被擋掉的按鍵，角色就走不動了
+  }, true);
   $('chat-toggle').addEventListener('click', () => $('chat').classList.toggle('collapsed'));
   if (window.innerWidth < 600 || window.innerHeight < 520) $('chat').classList.add('collapsed');
 
@@ -516,7 +526,7 @@
     $('modal').hidden = false;
     chatInput.blur();
   }
-  function closeModal() { $('modal').hidden = true; $('modal').classList.remove('wide'); modalKind = null; }
+  function closeModal() { if ($('modal').contains(document.activeElement)) document.activeElement.blur(); $('modal').hidden = true; $('modal').classList.remove('wide'); modalKind = null; }
   $('modal-x').addEventListener('click', closeModal);
   $('modal').addEventListener('pointerdown', (e) => { if (e.target === $('modal')) closeModal(); });
 
@@ -649,6 +659,8 @@
     $('music-fold').onclick = (e) => { e.stopPropagation(); fold(!$('music').classList.contains('mini')); };
     $('music').addEventListener('click', (e) => { if ($('music').classList.contains('mini') && e.target.id !== 'music-start') fold(false); });
     $('music-mute').onclick = () => { muted = !muted; store('hq-mute', muted ? '1' : '0'); applyVol(); };
+    // 拉完就放掉焦點，方向鍵才不會跑去調音量
+    $('music-vol').onchange = $('music-vol').onpointerup = (e) => e.target.blur();
     $('music-vol').oninput = (e) => { vol = Number(e.target.value); muted = false; store('hq-vol', String(vol)); store('hq-mute', '0'); applyVol(); };
     $('music-open').onclick = () => open();
     applyVol();
@@ -1550,6 +1562,7 @@
     }
     function close() {
       if ($('games').hidden) return;
+      if ($('games').contains(document.activeElement)) document.activeElement.blur();
       $('games').hidden = true;
       Object.values(GAMES).forEach(g => g.leave());
     }

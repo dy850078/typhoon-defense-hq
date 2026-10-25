@@ -812,3 +812,14 @@ button.inv-item:hover { border-color: var(--accent); }
 #music-mute .hq-icon { width: 20px; height: 20px; vertical-align: middle; }
 #cake-ic .hq-icon { width: 34px; height: 34px; vertical-align: 0; }
 .song-disc .hq-icon { width: 1em; height: 1em; }
+/* 小樹屋音量條 */
+.tree-master { display: flex; align-items: center; gap: 8px; background: var(--note); border-radius: var(--note-radius); padding: 8px 12px; }
+.tree-master b { font-size: 14px; white-space: nowrap; }
+.tree-vol-ic.hq-icon { width: 24px; height: 24px; }
+.tree-master .tree-vol { flex: 1; }
+.tree-vol { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.tree-vol input { flex: 1; min-width: 60px; margin: 0; accent-color: #3c8a66; }
+.tree-vol small { width: 36px; text-align: right; font-size: 11px; color: var(--muted); }
+.tree-mem .tree-vol { flex: 1; }
+.tree-mems:has(.tree-vol) { grid-template-columns: 1fr; }
+.tree-mems:has(.tree-vol) .tree-who { width: 140px; flex-shrink: 0; }

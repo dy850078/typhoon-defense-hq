@@ -175,15 +175,20 @@
       // 太魯閣峽谷的刻痕＋颱風符文
       const [lx, ly] = P(region.label);
       if (region === REGIONS.taipei) {
-        // 台北：刻一座小小的 101
-        const u = Math.max(2.2, s * 0.012);
-        for (let k = 0; k < 5; k++) { pc.beginPath(); pc.moveTo(lx - u * 2.2, ly + 12 - k * u * 2.6); pc.lineTo(lx - u * 2.8, ly + 12 - (k + 1) * u * 2.6); pc.lineTo(lx + u * 2.8, ly + 12 - (k + 1) * u * 2.6); pc.lineTo(lx + u * 2.2, ly + 12 - k * u * 2.6); CR.stroke(pc, r, 1.4, 'rgba(120,84,20,0.65)'); }
-        CR.line(pc, lx, ly + 12 - 5 * u * 2.6, lx, ly + 12 - 7 * u * 2.6, r, 1.4, 'rgba(120,84,20,0.65)');
-      } else for (let k = 0; k < 3; k++) CR.line(pc, lx - 18 + k * 8, ly - 4, lx - 6 + k * 10, ly + 40, r, 1.6, 'rgba(120,84,20,0.55)', 3);
-      const rr = Math.max(9, s * 0.09);
-      pc.save(); pc.translate(lx + 2, ly - rr * 1.6);
-      for (let k = 0; k < 3; k++) { pc.beginPath(); pc.arc(0, 0, rr * (0.35 + k * 0.32), k * 1.3, k * 1.3 + 4.2); CR.stroke(pc, r, 2, '#b07d10'); }
-      pc.restore();
+        // 台北：石板很小，101 照石板本身的大小畫（最多佔六成高、七成寬），放在正中間，不刻颱風符文
+        const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+        const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+        const u = Math.min((y1 - y0) * 0.6 / 18.2, (x1 - x0) * 0.7 / 5.6); // 5 節＋2 節高的天線 = 18.2u 高，最寬 5.6u
+        const base = cy + u * 9.1, lw = Math.max(1, Math.min(1.4, u * 0.5));
+        for (let k = 0; k < 5; k++) { pc.beginPath(); pc.moveTo(cx - u * 2.2, base - k * u * 2.6); pc.lineTo(cx - u * 2.8, base - (k + 1) * u * 2.6); pc.lineTo(cx + u * 2.8, base - (k + 1) * u * 2.6); pc.lineTo(cx + u * 2.2, base - k * u * 2.6); CR.stroke(pc, r, lw, 'rgba(120,84,20,0.65)'); }
+        CR.line(pc, cx, base - 5 * u * 2.6, cx, base - 7 * u * 2.6, r, lw, 'rgba(120,84,20,0.65)');
+      } else {
+        for (let k = 0; k < 3; k++) CR.line(pc, lx - 18 + k * 8, ly - 4, lx - 6 + k * 10, ly + 40, r, 1.6, 'rgba(120,84,20,0.55)', 3);
+        const rr = Math.max(9, s * 0.09);
+        pc.save(); pc.translate(lx + 2, ly - rr * 1.6);
+        for (let k = 0; k < 3; k++) { pc.beginPath(); pc.arc(0, 0, rr * (0.35 + k * 0.32), k * 1.3, k * 1.3 + 4.2); CR.stroke(pc, r, 2, '#b07d10'); }
+        pc.restore();
+      }
       pc.restore();
 
       // 金光先畫好一張（每一格都開 shadowBlur 在大螢幕上很慢）

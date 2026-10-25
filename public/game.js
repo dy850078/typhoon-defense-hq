@@ -1092,6 +1092,28 @@
     AV.drawAvatar(ctx, Object.assign({}, profile, { cls: myCls(), equip }));
     return c;
   }
+  // 裝備欄的大張人物圖：量出人物（含頭飾、翅膀、武器）實際的範圍，放大到填滿 w x h 的框，四周至少留 pad
+  // 沒戴什麼的時候人物比較小，最多放大 maxZ 倍，免得大到貼邊
+  function gearPortraitFit(equip, w, h, pad, maxZ) {
+    // 先畫在比角色框大一圈的畫布上，翅膀和戰錘才不會被切掉
+    const S = 4, src = document.createElement('canvas');
+    src.width = 160 * S; src.height = 150 * S;
+    const sx = src.getContext('2d');
+    sx.scale(S, S); sx.translate(48, 50);
+    AV.drawAvatar(sx, Object.assign({}, profile, { cls: myCls(), equip }));
+    const d = src.getContext('2d').getImageData(0, 0, src.width, src.height).data;
+    let l = src.width, t = src.height, r = -1, b = -1;
+    for (let y = 0; y < src.height; y++) for (let x = 0; x < src.width; x++) {
+      if (d[(y * src.width + x) * 4 + 3] > 20) { if (x < l) l = x; if (x > r) r = x; if (y < t) t = y; if (y > b) b = y; }
+    }
+    const k = 2, c = document.createElement('canvas');
+    c.width = w * k; c.height = h * k;
+    if (r < 0) return c;
+    const bw = r - l + 1, bh = b - t + 1, z = Math.min((w - pad * 2) / bw, (h - pad * 2) / bh, maxZ / S) * k;
+    const ctx = c.getContext('2d');
+    ctx.drawImage(src, l, t, bw, bh, (c.width - bw * z) / 2, (c.height - bh * z) / 2, bw * z, bh * z);
+    return c;
+  }
   function equipGear(slot, id) {
     socket.emit('equip', slot, id, (res) => {
       if (!res || !res.ok) return;
@@ -1108,7 +1130,7 @@
   function openGear() {
     const box = el('div', 'gear');
     const top = el('div', 'gear-top');
-    const pic = gearPortrait(myEquip, 2);
+    const pic = gearPortraitFit(myEquip, 178, 208, 14, 2.1);
     pic.className = 'gear-me' + (topRarity(myEquip) ? ' r-' + topRarity(myEquip) : '');
     top.appendChild(pic);
     const slots = el('div', 'gear-slots');

@@ -1121,9 +1121,10 @@
       if (it) { const off = el('button', 'hud-btn tiny', '脫下'); off.onclick = () => equipGear(slot, null); row.appendChild(off); }
       slots.appendChild(row);
     });
-    slots.appendChild(el('p', 'modal-hint', `收集 ${myOwned.length} / ${Object.keys(GR.GEAR).length} 件。到 戰情室玩 你畫我猜，猜對就會拿到新裝備！武器要找指揮中心的 古城守門員進副本，打倒最終頭目才會掉。`));
     top.appendChild(slots);
     box.appendChild(top);
+    // 收集說明放在人物圖和欄位下面，人物圖才能跟四個欄位上下對齊
+    box.appendChild(el('p', 'modal-hint', `收集 ${myOwned.length} / ${Object.keys(GR.GEAR).length} 件。到 戰情室玩 你畫我猜，猜對就會拿到新裝備！武器要找指揮中心的 古城守門員進副本，打倒最終頭目才會掉。`));
     Object.entries(GR.SLOTS).forEach(([slot, label]) => {
       box.appendChild(el('h3', 'gear-h', label));
       const grid = el('div', 'gear-grid');

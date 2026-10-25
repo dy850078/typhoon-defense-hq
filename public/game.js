@@ -364,7 +364,7 @@
     store('hq-owned', myOwned);
     const it = GR.GEAR[g.item];
     // 副本掉的武器，通關畫面會自己說
-    if (it && !(it.dungeon && g.from !== 'admin')) toast(`${g.from === 'admin' ? '管理員送你' : '獲得'}【${it.rarity}】${it.icon} ${it.name}！`);
+    if (it && !(it.dungeon && g.from !== 'admin')) toast(`${g.from === 'admin' ? '管理員送你' : '獲得'}【${it.rarity}】${it.name}！`, 'gear-' + g.item);
     if (scene && scene.me) scene.burst(scene.me.x, scene.me.y - 40, 16, 0xffd23f);
     if (modalKind === 'gear') openGear();
   });
@@ -382,7 +382,7 @@
     myFurn = g.furn;
     store('hq-furn', myFurn);
     const it = DC.DECOR[g.k];
-    if (it) toast(`撿到家具 ${it.icon} ${it.name}！`);
+    if (it) toast(`撿到家具 ${it.name}！`, 'dec-' + g.item);
     if (modalKind === 'furn') openFurn();
   });
   socket.on('furnSync', (g) => {
@@ -587,7 +587,7 @@
     const bag = el('button', 'inv-item bag-btn');
     bag.append(icon('btn-bag', '🎒'), ' 背包');
     if (total) bag.appendChild(el('span', 'bag-n', String(total > 99 ? '99+' : total)));
-    bag.title = Object.entries(MAP.ITEMS).map(([k, it]) => `${it.icon} ${it.name} × ${myInv[k] || 0}`).join('\n');
+    bag.title = Object.entries(MAP.ITEMS).map(([k, it]) => `${it.name} × ${myInv[k] || 0}`).join('\n');
     bag.onclick = openBag;
     box.appendChild(bag);
     const gear = el('button', 'inv-item bag-btn');
@@ -1070,7 +1070,7 @@
     socket.emit('eat', k, (res) => {
       if (!res || !res.ok) return;
       renderInventory(res.inv);
-      toast(`${MAP.ITEMS[k].icon} ${res.food}：血量 +${res.hp}、魔力 +${res.mp}`);
+      toast(`${res.food}：血量 +${res.hp}、魔力 +${res.mp}`, 'item-' + k);
     });
   }
   function drink() {
@@ -1100,7 +1100,7 @@
       if (slot === 'weapon') {
         renderSkillbar();
         const sk = ST.SKILLS[basic()];
-        toast(id ? `普攻變成「${sk.icon} ${sk.name}」` : `普攻換回「${sk.icon} ${sk.name}」`);
+        toast(id ? `普攻變成「${sk.name}」` : `普攻換回「${sk.name}」`, 'sk-' + basic());
       }
       if (modalKind === 'gear') openGear();
     });
@@ -1116,7 +1116,8 @@
       const id = myEquip[slot], it = GR.GEAR[id];
       const row = el('div', 'gear-slot' + (it ? ' r-' + it.rarity : ''));
       row.appendChild(el('span', 'gear-slot-k', label));
-      row.appendChild(el('b', null, it ? `${it.icon} ${it.name}` : '—'));
+      const nm = row.appendChild(el('b', null, it ? ' ' + it.name : '—'));
+      if (it) nm.prepend(icon('gear-' + id, ''));
       if (it) { const off = el('button', 'hud-btn tiny', '脫下'); off.onclick = () => equipGear(slot, null); row.appendChild(off); }
       slots.appendChild(row);
     });
@@ -1182,7 +1183,7 @@
         socket.emit('placeDecor', k, (res) => {
           if (!res || !res.ok) { if (res && res.error) toast(res.error); return; }
           myFurn = res.furn; store('hq-furn', myFurn);
-          closeModal(); toast(`擺好了 ${d.icon} ${d.name}`);
+          closeModal(); toast(`擺好了 ${d.name}`, 'dec-' + k);
         });
       };
       cell.appendChild(b);
@@ -1196,7 +1197,7 @@
       const list = el('div', 'modal-list');
       mine.forEach(({ key, k }) => {
         const row = el('div', 'modal-row');
-        row.appendChild(el('div', 'modal-icon', DC.DECOR[k].icon));
+        row.appendChild(el('div', 'modal-icon')).appendChild(icon('dec-' + k, ''));
         row.appendChild(el('div', 'modal-info', DC.DECOR[k].name));
         const b = el('button', 'hud-btn tiny', '收回');
         b.onclick = () => socket.emit('pickDecor', key, (res) => {
@@ -1814,7 +1815,7 @@
       inf.appendChild(el('b', null, `${c.name}（${c.role}）`));
       inf.appendChild(el('p', null, c.desc));
       inf.appendChild(el('span', 'mono tag', `HP ${st.maxHp} · MP ${st.maxMp} · ATK ${st.atk} · DEF ${st.def}`));
-      c.skills.slice(1).forEach(sid => { const s2 = ST.SKILLS[sid]; inf.appendChild(el('p', null, `${s2.icon} ${s2.name}：${s2.desc}`)); });
+      c.skills.slice(1).forEach(sid => { const s2 = ST.SKILLS[sid]; inf.appendChild(el('p', null, ` ${s2.name}：${s2.desc}`)).prepend(icon('sk-' + sid, '')); });
       row.appendChild(inf);
       const b = el('button', 'primary small', id === myCls() ? '目前職業' : '轉職');
       b.disabled = id === myCls();
@@ -1904,7 +1905,8 @@
       if (!res || !res.ok) { toast((res && res.error) || '讀不到這個人的資料'); return; }
       const c = ST.CLASSES[res.cls] || ST.CLASSES.staff;
       const box = el('div', 'modal-list');
-      box.appendChild(el('p', 'mono prof-line', `Lv.${res.level} · ${c.icon} ${c.name}`));
+      const pl = box.appendChild(el('p', 'mono prof-line', `Lv.${res.level} · `));
+      pl.append(icon('cls-' + (ST.CLASSES[res.cls] ? res.cls : 'staff'), c.icon), ' ' + c.name);
       const v = res.vip;
       if (!v) {
         box.appendChild(el('p', 'mentor-say', `${res.name} 還沒有在報名頁生成邀請函，所以沒有 VIP Pass。`));
@@ -1970,8 +1972,10 @@
     '先看看有沒有人許過一樣的願，幫他按個讚吧',
     '颱風天也要記得許願喔',
   ];
-  function toast(text) {
+  // iconKey：手繪 icon 的 key（public/icons.js、icons-more.js），放在文字前面
+  function toast(text, iconKey) {
     const t = el('div', 'toast', plain(text));
+    if (iconKey && window.HQ_ICONS && HQ_ICONS.url(iconKey)) t.prepend(icon(iconKey, ''), ' ');
     $('toasts').appendChild(t);
     setTimeout(() => t.remove(), 2600);
   }
@@ -3853,7 +3857,7 @@
       const sk = ST.SKILLS[fx.skill];
       const foe = this.foePos(fx.target);
       const mx = foe.x, my = foe.mid;
-      if (!sk.basic) this.floatText(who.x, who.y - 130, `${sk.icon} ${sk.name}！`, '#ffd23f', 20);
+      if (!sk.basic) this.floatText(who.x, who.y - 130, `${sk.name}！`, '#ffd23f', 20, 'sk-' + fx.skill);
       const ring = (r, color) => {
         const g = this.add.graphics({ x: who.x, y: who.y }).setDepth(-4);
         g.fillStyle(color, 0.25); g.fillEllipse(0, 0, r * 2, r * 1.4);
@@ -3920,7 +3924,7 @@
         const dir = mx < who.x ? -1 : 1;
         const n = this.add.image(who.x + dir * 18, who.y - 36, 'fx-syringe').setDepth(2050).setFlipX(dir === -1);
         this.tweens.add({ targets: n, x: who.x + dir * 44, duration: 110, yoyo: true, hold: 120, onComplete: () => n.destroy() });
-        this.time.delayedCall(110, () => this.floatText(mx, my - 40, '💉', '#ffffff', 22));
+        this.time.delayedCall(110, () => this.floatText(mx, my - 40, '', '#ffffff', 22, 'sk-syringe'));
       } else if (fx.skill === 'punch') {
         this.time.delayedCall(70, () => { this.burst(mx, my, 8, 0xffb020, 50); this.floatText(mx, my - 40, '碰！', '#ffd23f', 22); });
         this.cameras.main.shake(90, 0.003);
@@ -4347,7 +4351,7 @@
       if (fxOff()) return;
       const who = me && g.id === me.id ? this.me : this.remotes.get(g.id);
       const it = MAP.ITEMS[g.item];
-      if (who && it) this.floatText(who.x, who.y - 110, it.icon, '#ffffff', 34);
+      if (who && it) this.floatText(who.x, who.y - 110, '', '#ffffff', 34, 'item-' + g.item);
     }
 
     // 世界座標 (x, y) 上可以互動的東西，夠近才算
@@ -4525,7 +4529,7 @@
           if (!res || !res.item) return;
           renderInventory(res.inv);
           const it = MAP.ITEMS[res.item];
-          toast(`獲得 ${it.icon} ${it.name}！`);
+          toast(`獲得 ${it.name}！`, 'item-' + res.item);
         });
       }
     }
@@ -4949,13 +4953,33 @@
       this.tweens.add({ targets: who.body_, x: dir * 10, angle: dir * 12, duration: 70, yoyo: true });
     }
 
-    floatText(x, y, text, color, size) {
-      text = plain(text) || text; // 只有一個 emoji 的特效（技能的小圖）先留著，等手繪版
-      const t = this.add.text(x, y, text, {
+    // iconKey：文字左邊放一個手繪 icon；只有 icon 沒有字也可以
+    floatText(x, y, text, color, size, iconKey) {
+      text = plain(text);
+      const parts = [];
+      const t = text ? this.add.text(0, 0, text, {
         fontSize: size + 'px', fontStyle: 'bold', color, fontFamily: FONT,
         stroke: '#131a28', strokeThickness: 4,
-      }).setOrigin(0.5).setDepth(2000);
-      this.tweens.add({ targets: t, y: y - 40, alpha: 0, duration: 900, onComplete: () => t.destroy() });
+      }).setOrigin(0.5) : null;
+      const tex = iconKey && this.iconTexture(iconKey);
+      if (tex) {
+        const s = Math.round(size * 1.5), img = this.add.image(0, 0, tex).setDisplaySize(s, s);
+        if (t) { img.x = -t.width / 2 - 2; t.x = s / 2 + 2; }
+        parts.push(img);
+      }
+      if (t) parts.push(t);
+      if (!parts.length) return;
+      const box = this.add.container(x, y, parts).setDepth(2000);
+      this.tweens.add({ targets: box, y: y - 40, alpha: 0, duration: 900, onComplete: () => box.destroy() });
+    }
+    // 手繪 icon 轉成 Phaser 貼圖（第一次用到才畫）
+    iconTexture(key) {
+      const tex = 'icon-' + key;
+      if (this.textures.exists(tex)) return tex;
+      const cv = window.HQ_ICONS && HQ_ICONS.canvas(key);
+      if (!cv) return null;
+      this.textures.addCanvas(tex, cv);
+      return tex;
     }
 
     // ---------- 副本 ----------
@@ -5092,8 +5116,8 @@
       if (!mine) return;
       const g = mine.item && GR.GEAR[mine.item];
       if (!g) toast('這次什麼都沒掉……下次再來挑戰！');
-      else if (mine.dup) toast(`又是【${g.rarity}】${g.icon} ${g.name}，換成 600 經驗`);
-      else toast(`獲得武器【${g.rarity}】${g.icon} ${g.name}！`);
+      else if (mine.dup) toast(`又是【${g.rarity}】${g.name}，換成 600 經驗`, 'gear-' + mine.item);
+      else toast(`獲得武器【${g.rarity}】${g.name}！`, 'gear-' + mine.item);
       toast(`${Math.round(c.ms / 1000)} 秒後送回古城候位區`);
     }
 

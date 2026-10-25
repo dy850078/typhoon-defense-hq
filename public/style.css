@@ -151,6 +151,8 @@ button.inv-item:hover { border-color: var(--accent); }
 .sk-btn.plain .hq-icon { width: 82%; height: 82%; }
 .modal-icon .hq-icon { width: 42px; height: 42px; vertical-align: 0; }
 .stat-cls .hq-icon { width: 20px; height: 20px; vertical-align: -5px; }
+.toast .hq-icon { width: 22px; height: 22px; vertical-align: -6px; }
+.prof-line .hq-icon, .modal-info p .hq-icon, .gear-slot .hq-icon { width: 20px; height: 20px; vertical-align: -5px; }
 .bag-n { display: inline-block; margin-left: 4px; min-width: 18px; padding: 0 5px; border-radius: 999px; background: var(--accent);
   color: #fff; font: 700 11px/18px var(--mono); text-align: center; }
 .hud-btn { font: 700 14px var(--display); background: var(--ground); color: var(--ink); border: 2px solid var(--ink);

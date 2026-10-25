@@ -145,6 +145,10 @@
   const saved = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
   const savedJson = (k, d) => { try { return JSON.parse(saved(k) || 'null') || d; } catch (e) { return d; } };
   const store = (k, v) => { try { localStorage.setItem(k, typeof v === 'string' ? v : JSON.stringify(v)); } catch (e) { /* 無痕模式 */ } };
+  // 介面收合：手機直拿或橫拿算「小螢幕」，觸控裝置（手機、平板）的面板預設收起來，各自記住自己的選擇
+  const SMALL = () => matchMedia('(max-width: 600px), (max-height: 520px)').matches;
+  const TOUCH = matchMedia('(pointer: coarse)').matches;
+  const folded = (k, def) => { const v = saved('hq-fold-' + k); return v == null ? def : v === '1'; };
   // 拿到的裝備、身上穿的裝備也存在瀏覽器
   let myOwned = savedJson('hq-owned', []);
   let myEquip = savedJson('hq-equip', {});
@@ -360,7 +364,7 @@
     store('hq-owned', myOwned);
     const it = GR.GEAR[g.item];
     // 副本掉的武器，通關畫面會自己說
-    if (it && !(it.dungeon && g.from !== 'admin')) toast(`🎁 ${g.from === 'admin' ? '管理員送你' : '獲得'}【${it.rarity}】${it.icon} ${it.name}！到 👗 裝備 穿上看看`);
+    if (it && !(it.dungeon && g.from !== 'admin')) toast(`${g.from === 'admin' ? '管理員送你' : '獲得'}【${it.rarity}】${it.icon} ${it.name}！`);
     if (scene && scene.me) scene.burst(scene.me.x, scene.me.y - 40, 16, 0xffd23f);
     if (modalKind === 'gear') openGear();
   });
@@ -378,7 +382,7 @@
     myFurn = g.furn;
     store('hq-furn', myFurn);
     const it = DC.DECOR[g.k];
-    if (it) toast(`🎁 撿到家具 ${it.icon} ${it.name}！按右上角 🪑 家具 擺到總部裡`);
+    if (it) toast(`撿到家具 ${it.icon} ${it.name}！`);
     if (modalKind === 'furn') openFurn();
   });
   socket.on('furnSync', (g) => {
@@ -414,6 +418,13 @@
     box.appendChild(line);
     while (box.children.length > 100) box.firstChild.remove();
     box.scrollTop = box.scrollHeight;
+    // 聊天室收著的時候：亮一個小點，最新一句在旁邊浮出來幾秒（手機上才看得到）
+    if ($('chat').classList.contains('collapsed') && !msg.system && joined && (!me || msg.id !== me.id)) {
+      $('chat-dot').hidden = false;
+      const peek = $('chat-peek');
+      peek.textContent = msg.name + '：' + msg.text;
+      peek.classList.remove('show'); void peek.offsetWidth; peek.classList.add('show');
+    }
   }
   $('chat-form').addEventListener('submit', (e) => {
     e.preventDefault();
@@ -440,7 +451,11 @@
     if (!$('modal').hidden || !$('games').hidden) return;
     a.blur();  // 不能 preventDefault：Phaser 會跳過被擋掉的按鍵，角色就走不動了
   }, true);
-  $('chat-toggle').addEventListener('click', () => $('chat').classList.toggle('collapsed'));
+  const setChat = (open) => {
+    $('chat').classList.toggle('collapsed', !open);
+    if (open) { $('chat-dot').hidden = true; $('chat-peek').classList.remove('show'); }
+  };
+  $('chat-toggle').addEventListener('click', () => setChat($('chat').classList.contains('collapsed')));
   if (window.innerWidth < 600 || window.innerHeight < 520) $('chat').classList.add('collapsed');
 
   // ---------------- 視訊 ----------------
@@ -500,10 +515,28 @@
     box.appendChild(el('p', 'modal-hint', '視訊斷掉或會議過期了？開一個新房間，大家就能從這裡看到房號一起換過去。'));
     openModal('video', '📹 視訊房間', box);
   }
-  $('video-btn').addEventListener('click', () => socket.emit('videoList', (res) => {
+  const openVideo = () => socket.emit('videoList', (res) => {
     videoRooms = (res && res.rooms) || [{ code: config.jitsiRoom, name: '總部大廳', by: '', ago: 0, count: 0 }];
     renderVideo();
-  }));
+  });
+  // 戰情室的電視牆：選要開視訊還是進遊戲室
+  function openWarRoom() {
+    const box = el('div', 'modal-list');
+    [['act-tv', '視訊會議', '開一個 Jitsi 分頁，大家面對面聊天', '加入視訊', openVideo],
+      ['btn-games', '遊戲室', '你畫我猜、金曲猜歌王', '進去玩', () => { closeModal(); ROOM.open(); }]].forEach(([ik, name, desc, label, go]) => {
+      const row = el('div', 'modal-row');
+      row.appendChild(el('div', 'modal-icon')).appendChild(icon(ik, ''));
+      const inf = el('div', 'modal-info');
+      inf.appendChild(el('b', null, name));
+      inf.appendChild(el('p', null, desc));
+      row.appendChild(inf);
+      const b = el('button', 'primary small', label);
+      b.onclick = go;
+      row.appendChild(b);
+      box.appendChild(row);
+    });
+    openModal('warroom', '戰情室', box);
+  }
   socket.on('videoRooms', (rooms) => { videoRooms = rooms; if (modalKind === 'video' && !$('modal').hidden) renderVideo(); });
 
   // ---------------- 彈出視窗 ----------------
@@ -540,6 +573,7 @@
   };
   const EDIBLE = ['water', 'bubbletea', 'chicken'];
   let myInv = {};
+  let kitFolded = folded('kit', TOUCH);
   function renderInventory(inv) {
     myInv = inv || {};
     store('hq-inv', myInv); // 沒登入的話，重新整理後靠這份把背包帶回來
@@ -565,6 +599,14 @@
     song.append(icon('btn-song', '🎵'), ' 點歌');
     song.onclick = () => MUSIC.open();
     box.appendChild(song);
+    // 工具包：把上面四顆收起來，收著的時候背包數量改標在這顆上
+    const kit = el('button', 'inv-item bag-btn kit-btn');
+    kit.append(icon('btn-kit', '🧰'), el('span', 'kit-label', ' 工具包'));
+    if (total) kit.appendChild(el('span', 'bag-n', String(total > 99 ? '99+' : total)));
+    kit.title = '工具包';
+    kit.onclick = () => { kitFolded = !kitFolded; store('hq-fold-kit', kitFolded ? '1' : '0'); box.classList.toggle('folded', kitFolded); };
+    box.appendChild(kit);
+    box.classList.toggle('folded', kitFolded);
     if (modalKind === 'bag') openBag();
   }
   // ---------------- 點唱機：全場一條 YouTube 點歌隊伍，所有人同步聽 ----------------
@@ -982,7 +1024,7 @@
     const list = el('div', 'modal-list');
     Object.entries(MAP.ITEMS).forEach(([k, it]) => {
       const row = el('div', 'modal-row');
-      row.appendChild(el('div', 'modal-icon', it.icon));
+      row.appendChild(el('div', 'modal-icon')).appendChild(icon('item-' + k, it.icon));
       const info = el('div', 'modal-info');
       info.appendChild(el('b', null, `${it.name} × ${myInv[k] || 0}`));
       info.appendChild(el('p', null, ITEM_INFO[k].desc));
@@ -992,7 +1034,7 @@
         b.disabled = !myInv[k];
         b.onclick = () => {
           if (EDIBLE.includes(k)) eat(k);
-          else { closeModal(); toast('煮泡麵區在休息區的右下角，站到爐台旁按空白鍵'); }
+          else { closeModal(); toast('到休息區右下角的爐台煮'); }
         };
         row.appendChild(b);
       }
@@ -1596,7 +1638,6 @@
     });
     return { open, close };
   })();
-  $('games-btn').addEventListener('click', () => ROOM.open());
 
   // ---------------- 數值、技能欄 ----------------
   let myStats = null;
@@ -1608,8 +1649,8 @@
   function renderStats(st) {
     const clsChanged = !myStats || myStats.cls !== st.cls;
     myStats = st;
-    $('hp-fill').style.width = (100 * st.hp / st.maxHp) + '%';
-    $('mp-fill').style.width = (100 * st.mp / st.maxMp) + '%';
+    $('hp-fill').style.width = $('hp-mini').style.width = (100 * st.hp / st.maxHp) + '%';
+    $('mp-fill').style.width = $('mp-mini').style.width = (100 * st.mp / st.maxMp) + '%';
     $('hp-text').textContent = `${st.hp}/${st.maxHp}`;
     $('mp-text').textContent = `${st.mp}/${st.maxMp}`;
     $('atk-text').textContent = st.atk + (st.atkBuffMs > 0 ? ' 🎶' : '');
@@ -1619,10 +1660,37 @@
     $('exp-text').textContent = `${st.exp}/${st.expNext}`;
     try { localStorage.setItem('hq-level', st.level); localStorage.setItem('hq-exp', st.exp); } catch (e) {}
     const c = ST.CLASSES[myCls()];
-    $('cls-text').replaceChildren(icon('cls-' + myCls(), c.icon), ' ' + c.name);
+    $('cls-text').replaceChildren(icon('cls-' + myCls(), c.icon), el('span', 'cls-name', ' ' + c.name));
     if (clsChanged) renderSkillbar();
     if (modalKind === 'skills') openSkills();
   }
+  // 角色資料：點一下收成一行（職業圖示、等級、血條、魔力條），手機預設收起
+  $('stats').classList.toggle('mini', folded('stats', SMALL()));
+  $('stats').addEventListener('click', () => store('hq-fold-stats', $('stats').classList.toggle('mini') ? '1' : '0'));
+  // 手機：左邊的面板（角色資料、在線條、預告條、點唱機、副本膠囊）由上往下排，誰收合了下面的就跟著往上補
+  function stackLeft() {
+    const ids = matchMedia('(max-width: 600px)').matches ? ['stats', 'banner', 'notice-bar', 'music', 'dg-panel']
+      : matchMedia('(max-height: 520px)').matches ? ['stats', 'music'] : [];
+    ['banner', 'notice-bar', 'music', 'dg-panel'].forEach(id => { $(id).style.top = ''; });
+    let y = null;
+    ids.forEach(id => {
+      const e = $(id);
+      if (e.hidden || !e.getClientRects().length) return;
+      if (y != null) e.style.top = y + 'px';
+      y = e.getBoundingClientRect().bottom + 8;
+    });
+  }
+  let stackRaf = 0;
+  const restack = () => { cancelAnimationFrame(stackRaf); stackRaf = requestAnimationFrame(stackLeft); };
+  if (window.ResizeObserver) { const ro = new ResizeObserver(restack); ['stats', 'banner', 'notice-bar', 'music', 'dg-panel'].forEach(id => ro.observe($(id))); }
+  window.addEventListener('resize', restack);
+  // 技能欄：普攻一直都在，其他技能收進摺頁；走進颱風前線、副本自動打開，回到室內自動收起來
+  function setSkillFold(f) {
+    $('skillbar').classList.toggle('folded', f);
+    $('sk-fold').setAttribute('aria-label', f ? '展開技能欄' : '收合技能欄');
+  }
+  setSkillFold(true);
+  $('sk-fold').addEventListener('click', () => setSkillFold(!$('skillbar').classList.contains('folded')));
   // 技能列：一排小方塊，角落標快捷鍵；說明放在滑鼠移上去（手機長按）跳出來的提示框
   function renderSkillbar() {
     [['basic-btn', basic(), '空白'], ['skill-btn', special(), 'K'], ['skill2-btn', special2(), 'L']].forEach(([btn, id, key]) => {
@@ -1733,7 +1801,7 @@
           localStorage.setItem('hq-cls', id);
           Object.keys(cooldowns).forEach(k => delete cooldowns[k]);
           closeModal();
-          toast(`轉職成功！你現在是 ${c.icon} ${c.name}，按 K、L 放技能`);
+          toast(`轉職成功，現在是${c.name}！`);
         });
       };
       row.appendChild(b);
@@ -2045,7 +2113,7 @@
   // 靠近 NPC／物件時，頭上冒出的提示紙條：手繪 icon＋動作名稱＋「空白鍵」（手機是「點我」），底下有小尖角指著它
   const HINTS = {
     crate: ['act-crate', '敲箱子'], cook: ['act-cook', '煮泡麵'], mentor: ['act-mentor', '轉職'],
-    guard: ['act-guard', '前往副本'], dj: ['btn-song', '點歌'], well: ['wish-coin', '許個願'], greek: ['act-greek', '說話'],
+    guard: ['act-guard', '前往副本'], dj: ['btn-song', '點歌'], tv: ['act-tv', '視訊／遊戲'], well: ['wish-coin', '許個願'], greek: ['act-greek', '說話'],
   };
   // tail：尖角朝哪邊（down＝紙條在東西上面；left／right＝紙條在旁邊，上面被介面擋住的時候用）
   function drawHint(type, touch, tail) {
@@ -2769,16 +2837,14 @@
       }
     }
 
-    // 3. 物資箱上貼一張畫著內容物的貼紙
-    ctx.font = '22px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    // 3. 物資箱上貼一張手繪的內容物貼紙（台灣小吃畫珍奶，綜合畫問號箱）
     MAP.CRATES.forEach((cr, i) => {
       const r = CR.rng(i + 99);
       const cx = ((cr.x1 + cr.x2 + 1) / 2) * T, cy = ((cr.y1 + cr.y2 + 1) / 2) * T;
       CR.blob(ctx, cx, cy, 17, 17, r, 0.06); CR.fill(ctx, '#fafaf7', r, null); CR.stroke(ctx, r, 2.4);
-      ctx.font = cr.icon ? '15px sans-serif' : '22px sans-serif';
-      ctx.fillText(cr.icon || (cr.item ? MAP.ITEMS[cr.item].icon : '❓'), cx, cy + 1);
+      const art = window.HQ_ICONS && HQ_ICONS.canvas('item-' + ([].concat(cr.item)[0] || 'mix'));
+      if (art) ctx.drawImage(art, cx - 13, cy - 13, 26, 26);
     });
-    ctx.textBaseline = 'alphabetic';
 
     // 古城候位區：地上刻一圈金色的框，中間寫「候位區」
     const L = MAP.LOBBY, lr = CR.rng(77);
@@ -2822,6 +2888,7 @@
       this.input.on('pointermove', (p) => { if (this.drawing && this.drawing.pts.length && p.isDown) this.extendWall(p.worldX, p.worldY); });
       this.input.on('pointerdown', (p) => {
         if (!this.me || !$('games').hidden) return;
+        if (SMALL() && !$('chat').classList.contains('collapsed')) setChat(false); // 手機：點聊天室外面就收起來
         // 插畫結界師畫城牆中：按下去就開始畫，不會走路
         if (this.drawing && !p.rightButtonDown()) { chatInput.blur(); this.target = null; this.drawing.pts = [[p.worldX, p.worldY]]; this.drawing.len = 0; this.drawPreview(); return; }
         chatInput.blur();
@@ -4298,6 +4365,8 @@
         return { x: n.x, top: ny - (act.type === 'guard' ? 110 : 106), y: ny - 38, half: 30 };
       }
       if (act.type === 'dj') return { x: MAP.dj.x, top: MAP.dj.y - 52, y: MAP.dj.y - 4, half: 50 };
+      // 電視牆很長，紙條掛在自己正上方的那一段
+      if (act.type === 'tv') return { x: Phaser.Math.Clamp(this.me.x, 23.5 * T, 32.5 * T), top: 4 * T + 6, y: 4.5 * T, half: T / 2 };
       if (act.type === 'greek') { const ny = MAP.greek.y + 18; return { x: MAP.greek.x, top: ny - 110, y: ny - 38, half: 30 }; }
       if (act.type === 'well') return { x: MAP.well.x, top: MAP.well.y - 60, y: MAP.well.y, half: 44 };
       let tx = act.tx, ty = act.ty;
@@ -4316,7 +4385,7 @@
     // 上面、右邊、左邊依序試，挑第一個不會被畫面邊緣或介面（狀態欄、背包按鈕…）擋住的位置
     placeHint(a, touch) {
       const cam = this.cameras.main, rect = this.game.canvas.getBoundingClientRect();
-      const blocks = ['banner', 'stats', 'inventory', 'boss', 'notice-bar', 'dg-panel', 'video-prompt']
+      const blocks = ['banner', 'stats', 'inventory', 'boss', 'notice-bar', 'dg-panel', 'music', 'skillbar', 'chat']
         .map(id => $(id) && $(id).getBoundingClientRect()).filter(k => k && k.width > 0);
       const sc = 0.5 / cam.zoom;
       const tries = [['down', a.x, a.top, 0.5, 1], ['left', a.x + a.half, a.y, 0, 0.5], ['right', a.x - a.half, a.y, 1, 0.5]];
@@ -4380,6 +4449,7 @@
       if (!best && MAP.nearMentor(this.me.x, this.me.y)) return { type: 'mentor' };
       if (!best && MAP.nearGuard(this.me.x, this.me.y)) return { type: 'guard' };
       if (!best && MAP.nearDj(this.me.x, this.me.y)) return { type: 'dj' };
+      if (!best && MAP.nearTv(this.me.x, this.me.y)) return { type: 'tv' };
       if (!best && MAP.nearGreek(this.me.x, this.me.y)) return { type: 'greek' };
       if (!best && MAP.nearWell(this.me.x, this.me.y)) return { type: 'well' };
       return best;
@@ -4403,13 +4473,15 @@
         openMentor();
       } else if (act.type === 'guard') {
         socket.emit('dgGo', (res) => {
-          if (res && res.ok) toast('🏯 守門員：「去吧！在古城候位區集合，人到齊就按出發。」');
+          if (res && res.ok) toast('守門員：「去吧！到候位區按出發。」');
           else if (res && res.error) toast(res.error);
         });
       } else if (act.type === 'fridge') {
         openFridge();
       } else if (act.type === 'dj') {
         MUSIC.open();
+      } else if (act.type === 'tv') {
+        openWarRoom();
       } else if (act.type === 'well') {
         WISH.open();
       } else if (act.type === 'greek') {
@@ -4463,7 +4535,7 @@
       this.target = null;
       this.drawing = { id, pts: [], len: 0, max: sk.wall.len, g: this.add.graphics().setDepth(2060),
         timer: this.time.delayedCall(10000, () => { if (this.drawing) { this.cancelWall(); toast('太久沒畫，取消畫城牆'); } }) };
-      toast(`${sk.icon} 在地上拖曳畫一條線（最長 ${sk.wall.len}），放開就變成${sk.name}`);
+      toast(`在地上拖曳畫線，放開就變成${sk.name}`);
     }
     extendWall(x, y) {
       const d = this.drawing, [lx, ly] = d.pts[d.pts.length - 1], seg = Math.hypot(x - lx, y - ly);
@@ -4891,7 +4963,7 @@
       // 副本的面板按鈕
       $('dg-panel').addEventListener('click', (e) => {
         const b = e.target.closest('button');
-        if (!b) return;
+        if (!b) { $('dg-panel').classList.toggle('open'); return; }
         if (b.dataset.act === 'start') socket.emit('dgStart', (res) => { if (res && !res.ok && res.error) toast(res.error); });
         if (b.dataset.act === 'leave') socket.emit('dgLeave', () => {});
         if (b.dataset.act === 'home') socket.emit('dgHome', () => {});
@@ -4993,7 +5065,7 @@
       const g = mine.item && GR.GEAR[mine.item];
       if (!g) toast('🍃 這次什麼都沒掉……下次再來挑戰！');
       else if (mine.dup) toast(`🔁 又是【${g.rarity}】${g.icon} ${g.name}，換成 600 經驗`);
-      else toast(`⚔️ 獲得武器【${g.rarity}】${g.icon} ${g.name}！到 👗 裝備換上，普攻就會變`);
+      else toast(`獲得武器【${g.rarity}】${g.icon} ${g.name}！`);
       toast(`${Math.round(c.ms / 1000)} 秒後送回古城候位區`);
     }
 
@@ -5011,9 +5083,12 @@
         // 七星潭：面板上也畫出石碑的顏色順序（手機上石碑常常被上面的條擋住）
         const seq = d.stage === 0 && d.phase === 'run' ? '<span class="dg-seq">' + d.seq.map((si, k) =>
           `<i style="background:${D.stones[si].color}" class="${k < d.progress ? 'on' : ''}"></i>`).join('') + '</span>' : '';
+        // 手機上縮成一顆計時膠囊（只有關卡和時間），點一下才展開按鈕
+        const short = d.phase === 'clear' ? `通關 ${sec(Math.max(0, left))}` : `第 ${Math.min(d.stage, 2) + 1} 關 ${sec(Math.max(0, left))}`;
         key = 'in|' + what + d.stage + '|' + d.progress;
-        html = `<span>🌀 ${D.name}副本 · ${what}</span>` + seq + (d.stage === 1 && d.phase === 'run' ? '<button class="hud-btn tiny" data-act="reset" type="button">🔄 重排大理石</button>' : '') +
-          '<button class="hud-btn tiny" data-act="leave" type="button">🚪 離開</button>';
+        html = `<span class="dg-full">🌀 ${D.name}副本 · ${what}</span><span class="dg-short">${short}</span>` + seq + '<span class="dg-btns">' +
+          (d.stage === 1 && d.phase === 'run' ? '<button class="hud-btn tiny" data-act="reset" type="button">🔄 重排大理石</button>' : '') +
+          '<button class="hud-btn tiny" data-act="leave" type="button">🚪 離開</button></span>';
       } else if (this.roomId === 'lobby') {
         const homeBtn = '<button class="hud-btn tiny" data-act="home" type="button">🏠 回總部</button>';
         if (d.phase === 'idle') { key = 'idle'; html = `<span>🌀 ${D.title} · 1～${d.max} 人 · 限時 ${D.timeLimitMs / 60000} 分</span><button class="primary" data-act="start" type="button">出發</button>` + homeBtn; }
@@ -5025,6 +5100,7 @@
       } else { box.hidden = true; this.dgKey = null; return; }
       if (force) this.dgAt = performance.now();
       box.hidden = false;
+      box.classList.toggle('in', this.inDg());
       if (key === this.dgKey) return;
       this.dgKey = key;
       box.innerHTML = html;
@@ -5368,18 +5444,16 @@
         const first = this.roomId === undefined;
         this.roomId = rid;
         $('room-name').textContent = room ? room.name : '🌧️ 戶外（風雨很大！）';
-        $('video-prompt').hidden = rid !== 'video';
         if (rid !== 'video' && !$('games').hidden) { ROOM.close(); toast('離開戰情室了，已經退出遊戲'); }
-        if (room && !first) toast(`進入 ${room.name}`);
+        // 走進戰鬥區技能欄自動打開，回到室內自動收起來（戶外走道維持原樣）
+        if (rid === 'front' || (room && room.dungeon)) setSkillFold(false);
+        else if (room) setSkillFold(true);
+        // 其他地方的玩法交給頭上的提示紙條，只有不講會不知道規則的地方才提醒一句
         const tips = {
-          front: `野外有颱風${ST.MONSTER.name}和小怪！空白鍵攻擊、K 和 L 放技能，看到紅圈快閃開；回到圍欄裡就安全了`,
-          command: '找右上角的 📂 轉職資料沈理員，可以換職業',
-          storage: '走到箱子旁按空白鍵（或點箱子）敲三下',
-          kitchen: '站在爐台旁按空白鍵煮泡麵補血，有蔬菜會自動加進去',
-          lobby: `站在古城候位區按「出發」，${MAP.DUNGEON.countdownMs / 1000} 秒後一起傳送到花蓮副本（最多 ${MAP.DUNGEON.maxPlayers} 人），打倒最終頭目會掉武器；按「回總部」回到指揮中心`,
-          d1: '照石碑上的顏色順序踩石頭，踩錯會被浪打回起點',
-          d2: '往大理石走過去就能推（手機點石頭也可以），三顆都推進地上有 ⬇️ 的凹槽，石門就會開；卡住可以按「重排大理石」',
-          d3: '花蓮王！地上出現紅色範圍快閃開，他舉起拳頭就是要衝鋒了',
+          front: '看到紅圈快閃開，回到圍欄裡就安全了',
+          d1: '照石碑上的顏色順序踩石頭',
+          d2: '把三顆大理石推進地上的凹槽',
+          d3: '紅色範圍快閃開，他舉拳就是要衝鋒',
         };
         if (tips[rid] && !this.told[rid]) { this.told[rid] = true; toast(tips[rid]); }
       }

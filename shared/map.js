@@ -199,7 +199,7 @@
     { label: '礦泉水', item: 'water', x1: 6, y1: 20, x2: 8, y2: 22 },
     { label: '蔬菜', item: 'veggie', x1: 16, y1: 16, x2: 18, y2: 17 },
     { label: '綜合', item: null, x1: 15, y1: 21, x2: 18, y2: 22 },
-    { label: '台灣小吃', item: ['bubbletea', 'chicken'], icon: '🧋🍗', x1: 10, y1: 16, x2: 12, y2: 17 },
+    { label: '台灣小吃', item: ['bubbletea', 'chicken'], x1: 10, y1: 16, x2: 12, y2: 17 },
   ];
 
   const ROOMS = [
@@ -269,6 +269,10 @@
     fridge: { x: (FRIDGE_TILE.x + 0.5) * TILE, y: (FRIDGE_TILE.y + 0.5) * TILE },
     nearFridge(px, py) {
       return Math.hypot(px - this.fridge.x, py - this.fridge.y) < 2 * TILE;
+    },
+    // 戰情室的電視牆：站到牆前面那兩排就能開視訊或遊戲室
+    nearTv(px, py) {
+      return px >= 22.5 * TILE && px <= 33.5 * TILE && py >= 4 * TILE && py < 6.8 * TILE;
     },
     dj: { x: 22 * TILE, y: 15.5 * TILE },
     nearDj(px, py) {

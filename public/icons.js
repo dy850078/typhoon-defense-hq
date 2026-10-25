@@ -110,6 +110,74 @@
       C.blob(x, 13, 35, 6, 5, r, 0.06); C.fill(x, '#ffd23f', r, null); C.stroke(x, r, 2.2);
       C.blob(x, 33, 31, 6, 5, r, 0.06); C.fill(x, '#ffd23f', r, null); C.stroke(x, r, 2.2);
     },
+    // 工具包：收起背包、裝備、家具、點歌的紅色工具箱
+    'btn-kit'(x, r) {
+      x.beginPath(); x.moveTo(17, 15); x.lineTo(17, 9); x.quadraticCurveTo(24, 6, 31, 9); x.lineTo(31, 15); C.stroke(x, r, 3);
+      C.rect(x, 5, 15, 38, 26, r, 0.8); C.fill(x, '#ef4b5c', r, [5, 15, 38, 26]); C.stroke(x, r, 2.4);
+      C.line(x, 6, 24, 42, 24, r, 1.8);
+      C.rect(x, 20, 21, 8, 7, r, 0.4); C.fill(x, '#ffd23f', r, null); C.stroke(x, r, 1.6);
+    },
+    // 戰情室電視牆：有天線的小電視
+    'act-tv'(x, r) {
+      C.line(x, 24, 13, 15, 3, r, 2); C.line(x, 24, 13, 33, 3, r, 2);
+      C.rect(x, 5, 13, 38, 27, r, 0.8); C.fill(x, '#4f7cc2', r, [5, 13, 38, 27]); C.stroke(x, r, 2.4);
+      C.rect(x, 10, 17, 22, 18, r, 0.6); C.fill(x, '#bfe6ff', r, [10, 17, 22, 18]); C.stroke(x, r, 1.8);
+      C.blob(x, 38, 21, 2.2, 2.2, r, 0.1); C.fill(x, '#ffd23f', r, null); C.stroke(x, r, 1.2);
+      C.blob(x, 38, 30, 2.2, 2.2, r, 0.1); C.fill(x, '#ef4b5c', r, null); C.stroke(x, r, 1.2);
+      C.line(x, 12, 40, 10, 45, r, 2.2); C.line(x, 36, 40, 38, 45, r, 2.2);
+    },
+    // 遊戲室：手把
+    'btn-games'(x, r) {
+      C.smooth(x, [[8, 18], [20, 15], [28, 15], [40, 18], [44, 32], [40, 38], [33, 34], [24, 31], [15, 34], [8, 38], [4, 32]]);
+      C.fill(x, '#8a5cd6', r, [4, 15, 40, 23]); C.stroke(x, r, 2.4);
+      C.line(x, 14, 21, 14, 29, r, 2.4, '#fbf6e9'); C.line(x, 10, 25, 18, 25, r, 2.4, '#fbf6e9');
+      C.blob(x, 33, 22, 2.4, 2.4, r, 0.1); C.fill(x, '#ffd23f', r, null); C.stroke(x, r, 1.2);
+      C.blob(x, 37, 27, 2.4, 2.4, r, 0.1); C.fill(x, '#ef4b5c', r, null); C.stroke(x, r, 1.2);
+    },
+    // ---- 物資：箱子上的貼紙、背包裡的圖 ----
+    // 泡麵：一杯杯麵
+    'item-noodle'(x, r) {
+      x.beginPath(); x.moveTo(9, 14); x.lineTo(39, 14); x.lineTo(35, 43); x.lineTo(13, 43); x.closePath();
+      C.fill(x, '#fbfbf8', r, [9, 14, 30, 29]); C.stroke(x, r, 2.4);
+      C.rect(x, 11, 24, 26, 8, r, 0.4); C.fill(x, '#ef4b5c', r, null); C.stroke(x, r, 1.4);
+      C.rect(x, 6, 9, 36, 6, r, 0.6); C.fill(x, '#ffd23f', r, null); C.stroke(x, r, 2.2);
+      [17, 25, 32].forEach(sx => { x.beginPath(); x.moveTo(sx, 8); x.quadraticCurveTo(sx - 3, 5, sx, 2); C.stroke(x, r, 1.4, '#9aa3ad'); });
+    },
+    // 礦泉水：寶特瓶
+    'item-water'(x, r) {
+      C.rect(x, 20, 3, 8, 6, r, 0.4); C.fill(x, '#4f7cc2', r, null); C.stroke(x, r, 2);
+      x.beginPath(); x.moveTo(20, 9); x.lineTo(28, 9); x.quadraticCurveTo(35, 14, 35, 20); x.lineTo(35, 42); x.quadraticCurveTo(24, 45, 13, 42);
+      x.lineTo(13, 20); x.quadraticCurveTo(13, 14, 20, 9); x.closePath();
+      C.fill(x, '#bfe6ff', r, [13, 9, 22, 35]); C.stroke(x, r, 2.4);
+      C.rect(x, 13, 24, 22, 8, r, 0.4); C.fill(x, '#7fd1a8', r, null); C.stroke(x, r, 1.4);
+      C.line(x, 17, 15, 17, 21, r, 1.6, 'rgba(255,255,255,.9)');
+    },
+    // 蔬菜：一顆高麗菜
+    'item-veggie'(x, r) {
+      C.blob(x, 24, 26, 17, 16, r, 0.08); C.fill(x, '#7fd1a8', r, [7, 10, 34, 32]); C.stroke(x, r, 2.4);
+      C.blob(x, 24, 28, 10, 11, r, 0.1); C.fill(x, '#c3ecb5', r, null); C.stroke(x, r, 1.6);
+      x.beginPath(); x.moveTo(24, 18); x.quadraticCurveTo(21, 28, 24, 39); C.stroke(x, r, 1.4, '#4c9a6a');
+      x.beginPath(); x.moveTo(11, 22); x.quadraticCurveTo(15, 30, 13, 37); C.stroke(x, r, 1.2, '#4c9a6a');
+      x.beginPath(); x.moveTo(37, 22); x.quadraticCurveTo(33, 30, 35, 37); C.stroke(x, r, 1.2, '#4c9a6a');
+    },
+    // 台灣小吃：一杯珍奶
+    'item-bubbletea'(x, r) {
+      C.line(x, 27, 12, 33, 1, r, 3, '#ef4b5c');
+      x.beginPath(); x.moveTo(11, 13); x.lineTo(37, 13); x.lineTo(33, 44); x.lineTo(15, 44); x.closePath();
+      C.fill(x, '#e8c9a0', r, [11, 13, 26, 31]); C.stroke(x, r, 2.4);
+      C.blob(x, 24, 13, 15, 3.5, r, 0.06); C.fill(x, '#fbfbf8', r, null); C.stroke(x, r, 2);
+      [[18, 39], [23, 40], [29, 39], [20, 35], [26, 35], [31, 34], [17, 34]].forEach(([px, py]) => {
+        C.blob(x, px, py, 2.2, 2.2, r, 0.1); C.fill(x, '#3a2a22', r, null);
+      });
+    },
+    // 綜合：上面畫問號的神秘箱
+    'item-mix'(x, r) {
+      C.rect(x, 8, 14, 32, 28, r, 0.8); C.fill(x, '#ffd23f', r, [8, 14, 32, 28]); C.stroke(x, r, 2.4);
+      C.rect(x, 6, 10, 36, 7, r, 0.6); C.fill(x, '#ffb020', r, null); C.stroke(x, r, 2.2);
+      x.beginPath(); x.moveTo(19, 24); x.quadraticCurveTo(19, 19, 24, 19); x.quadraticCurveTo(29, 19, 29, 24); x.quadraticCurveTo(29, 27, 24, 29); x.lineTo(24, 32);
+      C.stroke(x, r, 2.6);
+      C.blob(x, 24, 37, 1.8, 1.8, r, 0.1); C.fill(x, '#2b2a33', r, null);
+    },
     // 技能說明：打開的書
     'btn-book'(x, r) {
       x.beginPath(); x.moveTo(24, 12); x.quadraticCurveTo(14, 7, 5, 10); x.lineTo(5, 38); x.quadraticCurveTo(14, 35, 24, 40); x.closePath();

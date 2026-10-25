@@ -73,19 +73,19 @@
       <div class="music-info"><b id="music-title"></b></div>
       <button id="music-start" class="primary small" type="button" hidden>▶ 點一下開始聽</button>
       <div class="music-ctl">
-        <button id="music-mute" type="button" title="靜音">🔊</button>
+        <button id="music-mute" type="button" title="靜音"></button>
         <input id="music-vol" type="range" min="0" max="100" aria-label="音量">
-        <button id="music-open" type="button">🎵 點歌</button>
+        <button id="music-open" type="button">點歌</button>
       </div>
     </div>
     <div id="skillbar">
-      <button id="cake-btn" class="sk-btn" type="button" hidden><span class="em-ol">🎂</span><small id="cake-left"></small></button>
+      <button id="cake-btn" class="sk-btn" type="button" hidden><span id="cake-ic"></span><small id="cake-left"></small></button>
       <button id="basic-btn" class="sk-btn" type="button"></button>
       <button id="sk-fold" type="button" aria-label="收合技能欄"></button>
       <button id="skill-btn" class="sk-btn sk-more" type="button"></button>
       <button id="skill2-btn" class="sk-btn sk-more" type="button"></button>
-      <button id="skills-open" class="sk-btn plain sk-more" type="button">📖</button>
-      <button id="fw-btn" class="sk-btn plain sk-more" type="button">🎆</button>
+      <button id="skills-open" class="sk-btn plain sk-more" type="button"></button>
+      <button id="fw-btn" class="sk-btn plain sk-more" type="button"></button>
     </div>
     <div id="sk-tip" role="tooltip" hidden></div>
     <div id="dg-panel" hidden></div>
@@ -106,10 +106,10 @@
   <div id="games" class="overlay" hidden>
     <div class="card draw-card" role="dialog" aria-modal="true" aria-labelledby="games-title">
       <button id="games-x" type="button" aria-label="離開">✕</button>
-      <h2 id="games-title">🎮 遊戲室</h2>
+      <h2 id="games-title">遊戲室</h2>
       <div class="game-tabs" role="tablist">
-        <button type="button" role="tab" data-game="draw" class="on">🎨 你畫我猜</button>
-        <button type="button" role="tab" data-game="song">🎤 金曲猜歌王</button>
+        <button type="button" role="tab" data-game="draw" class="on">你畫我猜</button>
+        <button type="button" role="tab" data-game="song">金曲猜歌王</button>
       </div>
       <section id="draw-panel" class="game-panel">
       <p id="draw-info" class="draw-info"></p>
@@ -119,7 +119,7 @@
           <div class="stage-wrap">
             <canvas id="draw-canvas" width="800" height="600"></canvas>
             <div id="draw-scorebox" class="game-scores">
-            <div class="gs-head"><button class="gs-toggle" type="button" aria-expanded="true">🏆 記分板 <span>▾</span></button><button id="draw-score-reset" class="gs-reset host-only" type="button" title="清空記分板，重新計分">🧹 清空</button></div>
+            <div class="gs-head"><button class="gs-toggle" type="button" aria-expanded="true">記分板 <span>▾</span></button><button id="draw-score-reset" class="gs-reset host-only" type="button" title="清空記分板，重新計分">清空</button></div>
             <ol id="draw-scores"></ol>
           </div>
           </div>
@@ -127,8 +127,8 @@
             <div id="draw-colors" class="draw-colors"></div>
             <div id="draw-shapes" class="draw-sizes draw-shapes"></div>
             <div id="draw-sizes" class="draw-sizes"></div>
-            <button id="draw-undo" class="hud-btn tiny" type="button" title="上一步（Ctrl+Z）">↩️ 上一步</button>
-            <button id="draw-clear" class="hud-btn tiny" type="button">🗑️ 清空</button>
+            <button id="draw-undo" class="hud-btn tiny" type="button" title="上一步（Ctrl+Z）">上一步</button>
+            <button id="draw-clear" class="hud-btn tiny" type="button">清空</button>
           </div>
           <form id="draw-start-form" class="draw-start host-only">
             <input id="draw-answer" maxlength="12" placeholder="輸入答案（別人看不到）" autocomplete="off">
@@ -144,7 +144,7 @@
             <input id="draw-guess" maxlength="20" autocomplete="off">
             <button class="primary small" type="submit">送出</button>
           </form>
-          <button id="draw-claim" class="hud-btn" type="button">🎤 搶主持棒</button>
+          <button id="draw-claim" class="hud-btn" type="button">搶主持棒</button>
         </div>
       </div>
       </section>
@@ -155,17 +155,17 @@
         <div class="draw-board">
           <div class="stage-wrap">
           <div class="song-stage">
-            <div class="song-disc">💿</div>
+            <div class="song-disc"></div>
             <div class="song-slots">
-              <div class="song-slot"><small>🎙️ 歌手</small><b id="song-singer-slot"></b></div>
-              <div class="song-slot"><small>🎵 歌名</small><b id="song-title-slot"></b></div>
+              <div class="song-slot"><small>歌手</small><b id="song-singer-slot"></b></div>
+              <div class="song-slot"><small>歌名</small><b id="song-title-slot"></b></div>
             </div>
             <p id="song-goal-text" class="song-goal"></p>
             <p id="song-pts-text" class="song-tip"></p>
             <p class="song-tip">主持人可以在視訊裡唱一段、哼旋律或播前奏，大家在右邊輸入歌手或歌名。歌手、歌名分開算分，越早答對分數越高，兩個都答對才算達標！</p>
           </div>
             <div id="song-scorebox" class="game-scores">
-            <div class="gs-head"><button class="gs-toggle" type="button" aria-expanded="true">🏆 記分板 <span>▾</span></button><button id="song-score-reset" class="gs-reset host-only" type="button" title="清空記分板，重新計分">🧹 清空</button></div>
+            <div class="gs-head"><button class="gs-toggle" type="button" aria-expanded="true">記分板 <span>▾</span></button><button id="song-score-reset" class="gs-reset host-only" type="button" title="清空記分板，重新計分">清空</button></div>
             <ol id="song-scores"></ol>
           </div>
           </div>
@@ -187,7 +187,7 @@
             <input id="song-guess" maxlength="40" autocomplete="off">
             <button class="primary small" type="submit">送出</button>
           </form>
-          <button id="song-claim" class="hud-btn" type="button">🎤 搶主持棒</button>
+          <button id="song-claim" class="hud-btn" type="button">搶主持棒</button>
         </div>
       </div>
       </section>
@@ -195,14 +195,14 @@
   </div>
 
   <!-- 網路斷掉、正在重新連線 -->
-  <div id="net-badge" role="status" hidden>📶 重新連線中…</div>
+  <div id="net-badge" role="status" hidden>重新連線中…</div>
   <!-- 管理員預告更新的倒數條 -->
   <div id="notice-bar" role="status" hidden></div>
   <!-- 伺服器重啟過了，請大家重新整理 -->
   <div id="update" class="overlay" hidden>
     <div class="card update-card" role="alertdialog" aria-modal="true" aria-labelledby="update-title">
       <p class="eyebrow">TYPHOON DAY · UPDATE</p>
-      <h2 id="update-title">✨ 總部更新了！</h2>
+      <h2 id="update-title">總部更新了！</h2>
       <p class="sub">重新整理才會拿到新版本，你的角色都存好了。</p>
       <div class="update-btns">
         <button id="update-now" class="primary" type="button">立即重新整理（<span id="update-sec">10</span>）</button>

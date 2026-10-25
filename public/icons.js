@@ -134,7 +134,51 @@
       C.blob(x, 33, 22, 2.4, 2.4, r, 0.1); C.fill(x, '#ffd23f', r, null); C.stroke(x, r, 1.2);
       C.blob(x, 37, 27, 2.4, 2.4, r, 0.1); C.fill(x, '#ef4b5c', r, null); C.stroke(x, r, 1.2);
     },
+    // 放下蛋糕：一塊插蠟燭的草莓蛋糕
+    'btn-cake'(x, r) {
+      C.line(x, 24, 6, 24, 15, r, 2.4, '#4f7cc2');
+      C.blob(x, 24, 4, 2, 3, r, 0.1); C.fill(x, '#ffb020', r, null);
+      C.rect(x, 7, 15, 34, 26, r, 0.8); C.fill(x, '#fbf6e9', r, [7, 15, 34, 26]); C.stroke(x, r, 2.4);
+      C.rect(x, 7, 26, 34, 5, r, 0.4); C.fill(x, '#ff8fab', r, null); C.stroke(x, r, 1.4);
+      [13, 24, 35].forEach(cx => { C.blob(x, cx, 15, 3.2, 3, r, 0.1); C.fill(x, '#ef4b5c', r, null); C.stroke(x, r, 1.4); });
+    },
+    // 音量：喇叭，關掉的時候打一個叉
+    'btn-vol'(x, r) {
+      x.beginPath(); x.moveTo(6, 18); x.lineTo(14, 18); x.lineTo(25, 9); x.lineTo(25, 39); x.lineTo(14, 30); x.lineTo(6, 30); x.closePath();
+      C.fill(x, '#ffd23f', r, [6, 9, 19, 30]); C.stroke(x, r, 2.4);
+      x.beginPath(); x.arc(27, 24, 8, -0.8, 0.8); C.stroke(x, r, 2.2);
+      x.beginPath(); x.arc(27, 24, 14, -0.8, 0.8); C.stroke(x, r, 2.2);
+    },
+    'btn-mute'(x, r) {
+      x.beginPath(); x.moveTo(6, 18); x.lineTo(14, 18); x.lineTo(25, 9); x.lineTo(25, 39); x.lineTo(14, 30); x.lineTo(6, 30); x.closePath();
+      C.fill(x, '#cfd5e0', r, [6, 9, 19, 30]); C.stroke(x, r, 2.4);
+      C.line(x, 31, 17, 43, 31, r, 2.8, '#ef4b5c'); C.line(x, 43, 17, 31, 31, r, 2.8, '#ef4b5c');
+    },
+    // ---- 你畫我猜的畫筆工具 ----
+    'tool-pen'(x, r) {
+      x.save(); x.translate(24, 24); x.rotate(0.8);
+      C.rect(x, -5, -18, 10, 26, r, 0.5); C.fill(x, '#ffb020', r, [-5, -18, 10, 26]); C.stroke(x, r, 2.2);
+      x.beginPath(); x.moveTo(-5, 8); x.lineTo(0, 18); x.lineTo(5, 8); x.closePath(); C.fill(x, '#f2d9b5', r, null); C.stroke(x, r, 2);
+      C.rect(x, -5, -22, 10, 5, r, 0.4); C.fill(x, '#ff8fab', r, null); C.stroke(x, r, 1.8);
+      x.restore();
+    },
+    'tool-circle'(x, r) { C.blob(x, 24, 24, 15, 15, r, 0.05); C.stroke(x, r, 3.2, '#4f7cc2'); },
+    'tool-rect'(x, r) { C.rect(x, 9, 11, 30, 26, r, 1.2); C.stroke(x, r, 3.2, '#4f7cc2'); },
+    'tool-tri'(x, r) { x.beginPath(); x.moveTo(24, 8); x.lineTo(41, 38); x.lineTo(7, 38); x.closePath(); C.stroke(x, r, 3.2, '#4f7cc2'); },
+    'tool-eraser'(x, r) {
+      x.save(); x.translate(24, 24); x.rotate(-0.5);
+      C.rect(x, -16, -9, 32, 18, r, 0.6); C.fill(x, '#fbfbf8', r, null); C.stroke(x, r, 2.2);
+      C.rect(x, -16, -9, 12, 18, r, 0.4); C.fill(x, '#7fd1ff', r, null); C.stroke(x, r, 2);
+      x.restore();
+    },
     // ---- 物資：箱子上的貼紙、背包裡的圖 ----
+    // 台灣雞排：大大一片、炸得金黃
+    'item-chicken'(x, r) {
+      C.smooth(x, [[10, 12], [22, 6], [36, 9], [43, 20], [40, 34], [30, 43], [16, 41], [6, 30], [5, 19]]);
+      C.fill(x, '#e0a040', r, [5, 6, 38, 37]); C.stroke(x, r, 2.4);
+      C.dots(x, 10, 12, 28, 26, 14, '#b8732a', r, 1.4);
+      C.dots(x, 12, 14, 24, 22, 8, '#ffd27a', r, 1.2);
+    },
     // 泡麵：一杯杯麵
     'item-noodle'(x, r) {
       x.beginPath(); x.moveTo(9, 14); x.lineTo(39, 14); x.lineTo(35, 43); x.lineTo(13, 43); x.closePath();

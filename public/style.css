@@ -745,3 +745,26 @@ button.inv-item:hover { border-color: var(--accent); }
   body.boss-on #toasts { top: 104px; }
   .toast { font-size: 13px; padding: 5px 12px; white-space: normal; text-align: center; }
 }
+/* 背包：5×5 小方格 */
+.bag-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; max-width: 280px; margin: 0 auto; }
+.bag-cell { position: relative; aspect-ratio: 1; padding: 0; border: 2px solid var(--ink); border-radius: 10px; background: var(--paper);
+  cursor: pointer; display: flex; align-items: center; justify-content: center; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+.bag-cell .hq-icon, .bag-cell .em-ol { width: 72%; height: 72%; vertical-align: 0; font-size: 26px; line-height: 1; display: flex; align-items: center; justify-content: center; }
+.bag-cell.on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+.bag-cell.empty { border: 2px dashed var(--line); background: transparent; cursor: default; }
+.bag-cnt { position: absolute; right: 3px; bottom: 1px; font: 700 11px var(--mono); color: var(--ink); text-shadow: 0 0 2px #fff, 0 0 2px #fff; }
+.bag-info { margin: 10px auto 0; max-width: 280px; min-height: 58px; background: var(--note); color: var(--note-ink); border: 2px solid var(--note-ink);
+  border-radius: var(--note-radius); padding: 8px 12px; }
+.bag-info b { font-size: 15px; }
+.bag-info p { margin: 3px 0 0; font-size: 13px; line-height: 1.5; }
+.bag-slots { text-align: center; margin: 8px 0 0; font-size: 12px; color: var(--muted); }
+#modal-body .bag { min-width: min(320px, calc(100vw - 80px)); }
+/* 記分板前三名：金銀銅小圓章 */
+.game-scores li .rk.rk1, .game-scores li .rk.rk2, .game-scores li .rk.rk3 { width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--ink);
+  font: 900 11px/16px var(--mono); color: var(--ink); }
+.rk.rk1 { background: #ffd23f; } .rk.rk2 { background: #dfe3ea; } .rk.rk3 { background: #e0a070; }
+.draw-shapes .tl .hq-icon { width: 22px; height: 22px; vertical-align: middle; }
+.draw-colors .hq-icon { width: 80%; height: 80%; vertical-align: middle; }
+#music-mute .hq-icon { width: 20px; height: 20px; vertical-align: middle; }
+#cake-ic .hq-icon { width: 34px; height: 34px; vertical-align: 0; }
+.song-disc .hq-icon { width: 1em; height: 1em; }

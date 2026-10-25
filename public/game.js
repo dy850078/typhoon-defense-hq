@@ -276,7 +276,7 @@
     if (bootId && updatePending) {
       bar.hidden = false;
       bar.innerHTML = '';
-      bar.append('✨ 總部已經更新，');
+      bar.append('總部已經更新，');
       const b = el('button', null, '按這裡重新整理'); b.type = 'button'; b.onclick = () => location.reload();
       bar.appendChild(b);
       return;
@@ -286,8 +286,8 @@
     const m = Math.floor(left / 60000), s = Math.floor(left / 1000) % 60;
     bar.hidden = false;
     bar.textContent = notice.ready || left <= 0
-      ? `🔧 ${notice.text}・角色已經存好，總部馬上要重新啟動`
-      : `🔧 ${notice.text}・${m}:${String(s).padStart(2, '0')} 後更新`;
+      ? `${notice.text}・角色已經存好，總部馬上要重新啟動`
+      : `${notice.text}・${m}:${String(s).padStart(2, '0')} 後更新`;
   }
   let updatePending = false;
   setInterval(renderNotice, 1000);
@@ -357,7 +357,7 @@
   socket.on('crateRestock', (c) => scene && scene.setCrateEmpty(c.tx, c.ty, false));
   socket.on('stats', (st) => scene && scene.onStats(st));
   socket.on('cooking', (c) => scene && scene.onCooking(c));
-  socket.on('ate', (a) => toast(`吃了 ${a.food}，血量 +${a.hp} ❤️`));
+  socket.on('ate', (a) => toast(`吃了 ${a.food}，血量 +${a.hp} `));
   socket.on('playerGear', (g) => scene && scene.onGear(g));
   socket.on('gearGot', (g) => {
     myOwned = g.owned;
@@ -388,7 +388,7 @@
   socket.on('furnSync', (g) => {
     myFurn = g.furn;
     store('hq-furn', myFurn);
-    if (!me || g.by !== me.id) toast('🧹 總部的家具被收乾淨了，你擺的都退回背包了');
+    if (!me || g.by !== me.id) toast('總部的家具被收乾淨了，你擺的都退回背包了');
     if (modalKind === 'furn') openFurn();
   });
   socket.on('drawState', (st) => DRAW.onState(st));
@@ -408,7 +408,7 @@
   function addMessage(msg) {
     const box = $('messages');
     const line = document.createElement('div');
-    if (msg.system) { line.className = 'sys'; line.textContent = msg.text; }
+    if (msg.system) { line.className = 'sys'; line.textContent = plain(msg.text); }
     else {
       const b = document.createElement('b');
       b.textContent = msg.name + '：';
@@ -479,11 +479,11 @@
     const mins = (ms) => { const m = Math.floor(ms / 60000); return m < 1 ? '剛開' : m < 60 ? `開了 ${m} 分鐘` : `開了 ${Math.floor(m / 60)} 小時 ${m % 60} 分`; };
     videoRooms.forEach((r, i) => {
       const row = el('div', 'modal-row' + (i === 1 ? ' on' : ''));
-      row.appendChild(el('div', 'modal-icon', i ? '📹' : '🏠'));
+      row.appendChild(el('div', 'modal-icon')).appendChild(icon('act-tv', ''));
       const inf = el('div', 'modal-info');
       inf.appendChild(el('b', null, r.name + (i === 1 ? '（最新）' : '')));
       inf.appendChild(el('span', 'mono tag', `房號 ${r.code}`));
-      inf.appendChild(el('p', null, [r.by && `${r.by} 開的`, mins(r.ago), `👥 ${r.count} 人在裡面`].filter(Boolean).join(' · ')));
+      inf.appendChild(el('p', null, [r.by && `${r.by} 開的`, mins(r.ago), `${r.count} 人在裡面`].filter(Boolean).join(' · ')));
       row.appendChild(inf);
       const b = el('button', 'primary small', '加入');
       b.onclick = () => joinVideo(r.code);
@@ -513,7 +513,7 @@
     };
     box.appendChild(mk); box.appendChild(jn);
     box.appendChild(el('p', 'modal-hint', '視訊斷掉或會議過期了？開一個新房間，大家就能從這裡看到房號一起換過去。'));
-    openModal('video', '📹 視訊房間', box);
+    openModal('video', '視訊房間', box);
   }
   const openVideo = () => socket.emit('videoList', (res) => {
     videoRooms = (res && res.rooms) || [{ code: config.jitsiRoom, name: '總部大廳', by: '', ago: 0, count: 0 }];
@@ -546,13 +546,16 @@
     if (text != null) e.textContent = text;
     return e;
   };
+  // 拿掉文字裡的 emoji（遊戲介面不用系統 emoji，要圖就畫手繪的）
+  const EMOJI = /(?:\p{Extended_Pictographic}|\p{Regional_Indicator})(?:\uFE0F|\u200D\p{Extended_Pictographic}?|[\u{1F3FB}-\u{1F3FF}])*/gu;
+  const plain = (t) => String(t == null ? '' : t).replace(EMOJI, '').replace(/[ \u3000]{2,}/g, ' ').replace(/\s+([，。！？、：」）])/g, '$1').trim();
   // 手繪 icon（public/icons.js）；還沒有手繪版的用 emoji 加墨線外框
   const icon = (key, emoji, cls) => window.HQ_ICONS ? HQ_ICONS.el(key, emoji, cls) : el('span', cls, emoji);
   let modalKind = null;
   function openModal(kind, title, body) {
     modalKind = kind;
     $('modal').classList.remove('wide');
-    $('modal-title').textContent = title;
+    $('modal-title').textContent = plain(title);
     const box = $('modal-body');
     box.innerHTML = '';
     box.appendChild(body);
@@ -642,12 +645,12 @@
     }
     function onError() {
       const vid = playing;
-      toast('🎵 這首播不了，等一下會自動換下一首');
+      toast('這首播不了，等一下會自動換下一首');
       setTimeout(() => { if (playing === vid) socket.emit('musicEnded', vid); }, 6000);
     }
     function applyVol() {
       $('music-vol').value = vol;
-      $('music-mute').textContent = muted || !vol ? '🔇' : '🔊';
+      $('music-mute').replaceChildren(icon(muted || !vol ? 'btn-mute' : 'btn-vol', ''));
       if (!player || !player.setVolume) return;
       player.setVolume(vol);
       if (muted) player.mute(); else player.unMute();
@@ -735,7 +738,7 @@
       }
       box.appendChild(nowRow);
       if (m.queue.length) {
-        box.appendChild(el('p', 'mono prof-line', `📦 唱片箱・接下來 ${m.queue.length} 張`));
+        box.appendChild(el('p', 'mono prof-line', `唱片箱・接下來 ${m.queue.length} 張`));
         const ol = el('ol', 'music-queue');
         m.queue.forEach((q, i) => {
           const li = el('li');
@@ -767,7 +770,7 @@
           if (b) b.disabled = false;
           if (!r || !r.ok) { err.textContent = (r && r.error) || '點歌失敗'; return; }
           draft = ''; results = null;
-          toast(`🎵 已點「${r.title}」`);
+          toast(`已點「${r.title}」`);
           // 點歌那一下就是使用者的點擊，順便讓手機可以出聲
           api().catch(() => {});
           open();
@@ -806,7 +809,7 @@
       }
       box.appendChild(el('p', 'modal-hint', `最多排 20 首。點歌的人可以直接切歌，其他人要超過一半同意才會切。`));
       const focused = document.activeElement && document.activeElement.closest && document.activeElement.closest('.music-form');
-      openModal('music', '🎵 點歌', box);
+      openModal('music', '點歌', box);
       if (focused || !results) setTimeout(() => input.focus(), 50);
     }
     return {
@@ -1020,28 +1023,46 @@
   })();
   socket.on('toastArea', (t) => { if (joined && t.area === MUSIC.area()) toast(t.text); });
 
+  // 背包：5×5 的小方格，一種物資一格、右下角標數量；點一下看說明，點兩下直接用
+  let bagSel = null, bagTap = { k: null, t: 0 };
+  function useItem(k) {
+    if (!myInv[k]) return;
+    if (EDIBLE.includes(k)) eat(k);
+    else if (k === 'noodle') { closeModal(); toast('到休息區右下角的爐台煮'); }
+    else toast(ITEM_INFO[k].desc);
+  }
   function openBag() {
-    const list = el('div', 'modal-list');
-    Object.entries(MAP.ITEMS).forEach(([k, it]) => {
-      const row = el('div', 'modal-row');
-      row.appendChild(el('div', 'modal-icon')).appendChild(icon('item-' + k, it.icon));
-      const info = el('div', 'modal-info');
-      info.appendChild(el('b', null, `${it.name} × ${myInv[k] || 0}`));
-      info.appendChild(el('p', null, ITEM_INFO[k].desc));
-      row.appendChild(info);
-      if (ITEM_INFO[k].use) {
-        const b = el('button', 'primary small', ITEM_INFO[k].use);
-        b.disabled = !myInv[k];
-        b.onclick = () => {
-          if (EDIBLE.includes(k)) eat(k);
-          else { closeModal(); toast('到休息區右下角的爐台煮'); }
+    const box = el('div', 'bag');
+    const grid = el('div', 'bag-grid');
+    const have = Object.keys(MAP.ITEMS).filter(k => myInv[k] > 0);
+    if (!have.includes(bagSel)) bagSel = have[0] || null;
+    for (let i = 0; i < MAP.BAG_SLOTS; i++) {
+      const k = have[i];
+      const cell = el('button', 'bag-cell' + (k ? '' : ' empty') + (k && k === bagSel ? ' on' : ''));
+      cell.type = 'button';
+      if (k) {
+        cell.appendChild(icon('item-' + k, MAP.ITEMS[k].icon));
+        cell.appendChild(el('span', 'bag-cnt', String(myInv[k])));
+        cell.setAttribute('aria-label', `${MAP.ITEMS[k].name} × ${myInv[k]}`);
+        cell.onclick = () => {
+          const now = performance.now(), dbl = bagTap.k === k && now - bagTap.t < 400;
+          bagTap = dbl ? { k: null, t: 0 } : { k, t: now };
+          if (dbl) { useItem(k); return; }
+          bagSel = k; openBag();
         };
-        row.appendChild(b);
-      }
-      list.appendChild(row);
-    });
-    list.appendChild(el('p', 'modal-hint', '到 📦 物資倉庫敲箱子可以拿到更多物資，箱子被拿光後過一陣子會補貨。'));
-    openModal('bag', '🎒 背包', list);
+      } else cell.disabled = true;
+      grid.appendChild(cell);
+    }
+    box.appendChild(grid);
+    const info = el('div', 'bag-info');
+    if (bagSel) {
+      const it = MAP.ITEMS[bagSel];
+      info.appendChild(el('b', null, `${it.name} × ${myInv[bagSel]}`));
+      info.appendChild(el('p', null, ITEM_INFO[bagSel].desc + (ITEM_INFO[bagSel].use ? '　點兩下使用。' : '')));
+    } else info.appendChild(el('p', null, '背包空空的，去物資倉庫敲箱子吧。'));
+    box.appendChild(info);
+    box.appendChild(el('p', 'bag-slots mono', `${have.length} / ${MAP.BAG_SLOTS} 格`));
+    openModal('bag', '背包', box);
   }
   function eat(k) {
     if (k === 'water') return drink();
@@ -1057,7 +1078,7 @@
     socket.emit('drink', (res) => {
       if (!res || !res.ok) return;
       renderInventory(res.inv);
-      toast(`喝了礦泉水，魔力 +${res.mp} 💧`);
+      toast(`喝了礦泉水，魔力 +${res.mp} `);
     });
   }
 
@@ -1079,7 +1100,7 @@
       if (slot === 'weapon') {
         renderSkillbar();
         const sk = ST.SKILLS[basic()];
-        toast(id ? `⚔️ 普攻變成「${sk.icon} ${sk.name}」` : `普攻換回「${sk.icon} ${sk.name}」`);
+        toast(id ? `普攻變成「${sk.icon} ${sk.name}」` : `普攻換回「${sk.icon} ${sk.name}」`);
       }
       if (modalKind === 'gear') openGear();
     });
@@ -1099,7 +1120,7 @@
       if (it) { const off = el('button', 'hud-btn tiny', '脫下'); off.onclick = () => equipGear(slot, null); row.appendChild(off); }
       slots.appendChild(row);
     });
-    slots.appendChild(el('p', 'modal-hint', `收集 ${myOwned.length} / ${Object.keys(GR.GEAR).length} 件。到 🎖️ 戰情室玩 🎨 你畫我猜，猜對就會拿到新裝備！武器要找指揮中心的 🏯 古城守門員進副本，打倒最終頭目才會掉。`));
+    slots.appendChild(el('p', 'modal-hint', `收集 ${myOwned.length} / ${Object.keys(GR.GEAR).length} 件。到 戰情室玩 你畫我猜，猜對就會拿到新裝備！武器要找指揮中心的 古城守門員進副本，打倒最終頭目才會掉。`));
     top.appendChild(slots);
     box.appendChild(top);
     Object.entries(GR.SLOTS).forEach(([slot, label]) => {
@@ -1126,7 +1147,7 @@
       });
       box.appendChild(grid);
     });
-    openModal('gear', '👗 裝備', box);
+    openModal('gear', '裝備', box);
     $('modal').classList.add('wide');
   }
   // 身上最稀有的裝備等級（決定光芒）
@@ -1187,7 +1208,7 @@
       });
       box.appendChild(list);
     }
-    openModal('furn', '🪑 家具', box);
+    openModal('furn', '家具', box);
     $('modal').classList.add('wide');
   }
 
@@ -1203,12 +1224,12 @@
       e.preventDefault();
       socket.emit('cake', input.value, (res) => {
         closeModal();
-        if (res && res.clean != null) toast(res.clean ? `🧹 收掉了 ${res.clean} 件家具，總部回到原本的樣子` : '🧹 總部本來就沒有擺家具');
-        else if (res && res.ok) toast('🎂 拿到蛋糕了！靠近你的人都會戴上慶祝帽');
-        else toast('🧊 冰箱裡只有幾瓶礦泉水…');
+        if (res && res.clean != null) toast(res.clean ? `收掉了 ${res.clean} 件家具，總部回到原本的樣子` : '總部本來就沒有擺家具');
+        else if (res && res.ok) toast('拿到蛋糕了！靠近你的人都會戴上慶祝帽');
+        else toast('冰箱裡只有幾瓶礦泉水…');
       });
     };
-    openModal('fridge', '🧊', box);
+    openModal('fridge', '', box);
     setTimeout(() => input.focus(), 30);
   }
   $('cake-btn').addEventListener('click', () => socket.emit('cakeDown'));
@@ -1217,7 +1238,7 @@
   // 遊戲紀錄、主持棒、投票、參加的人、記分板；k 是元素 id 的前綴（draw / song）
   function gameLog(k, l) {
     const box = $(k + '-log');
-    const line = el('div', 'dl-' + (l.kind || 'sys'), l.text);
+    const line = el('div', 'dl-' + (l.kind || 'sys'), l.kind === 'guess' || l.kind === 'chat' ? l.text : plain(l.text)); // 玩家自己打的字不動
     box.appendChild(line);
     while (box.children.length > 80) box.firstChild.remove();
     box.scrollTop = box.scrollHeight;
@@ -1228,16 +1249,16 @@
     $(k + '-info').textContent = info;
     const claim = $(k + '-claim');
     claim.hidden = host;
-    claim.textContent = state.host ? '🎤 搶主持棒' : '🎤 當主持人';
+    claim.textContent = state.host ? '搶主持棒' : '當主持人';
     const v = state.vote;
     $(k + '-vote').hidden = !v;
     if (v) {
-      $(k + '-vote-text').textContent = `📣 ${v.byName} 想搶主持棒（${v.yes.length} / ${v.need} 人同意）`;
+      $(k + '-vote-text').textContent = `${v.byName} 想搶主持棒（${v.yes.length} / ${v.need} 人同意）`;
       $(k + '-vote-yes').hidden = v.yes.includes(me && me.id);
     }
     const who = $(k + '-members');
     who.innerHTML = '';
-    state.members.forEach(m => who.appendChild(el('span', 'chip' + (me && m.id === me.id ? ' me' : ''), (m.id === state.host ? '🎤 ' : tag(m.id)) + m.name)));
+    state.members.forEach(m => who.appendChild(el('span', 'chip' + (me && m.id === me.id ? ' me' : ''), (m.id === state.host ? '主持・' : tag(m.id)) + m.name)));
     const g = $(k + '-guess');
     g.placeholder = host ? (state.playing ? '聊天…（不能說出答案喔）' : '聊天…') : placeholder;
     renderScores(k, state.scores);
@@ -1257,7 +1278,7 @@
     return url;
   }
   // 記分板：只列前 5 名（自己在 5 名外也會列出來）；名次往上爬的人會往上滑並閃一下
-  const SCORE_TOP = 5, MEDALS = ['🥇', '🥈', '🥉'];
+  const SCORE_TOP = 5;
   const lastRanks = { draw: new Map(), song: new Map() };
   function renderScores(k, scores) {
     const sc = $(k + '-scores'), prev = lastRanks[k];
@@ -1272,7 +1293,7 @@
       if (i === mine && i > SCORE_TOP) sc.appendChild(el('li', 'gap', '⋯'));
       const li = el('li', r.name === myName ? 'me' : null);
       li.dataset.name = r.name;
-      li.appendChild(el('span', 'rk', MEDALS[i] || String(i + 1)));
+      li.appendChild(el('span', 'rk' + (i < 3 ? ' rk' + (i + 1) : ''), String(i + 1)));
       const face = r.id ? faceOf(r.id) : '';
       if (face) { const img = el('img'); img.src = face; img.alt = ''; li.appendChild(img); }
       li.appendChild(el('span', 'nm', r.name));
@@ -1314,7 +1335,7 @@
     const COLORS = ['#2b2a33', '#e8384f', '#ff7a2f', '#ffd23f', '#6baf7b', '#4f7cc2', '#7a5cc8', '#a0663e'];
     const SIZES = [4, 10, 22];
     // 筆刷，或是拖一下拉出形狀（圓形、矩形、三角形）
-    const TOOLS = [['pen', '✏️', '筆刷'], ['circle', '⭕', '圓形'], ['rect', '⬜', '矩形'], ['tri', '🔺', '三角形']];
+    const TOOLS = [['pen', '筆刷'], ['circle', '圓形'], ['rect', '矩形'], ['tri', '三角形']];
     let state = null, answer = '', color = COLORS[0], size = SIZES[1], tool = 'pen', cur = null, sendTimer = 0, snap = null;
     // strokes：畫布上每一段，上一步時拿來重畫；sid 是每一筆的編號
     let strokes = [], sid = Math.floor(Math.random() * 1e6) * 1000;
@@ -1365,10 +1386,10 @@
       const guessers = state.members.filter(m => m.id !== state.host);
       const right = guessers.filter(m => state.correct.includes(m.id)).length;
       let info;
-      if (!state.host) info = '還沒有主持人，按「🎤 當主持人」來出題！';
+      if (!state.host) info = '還沒有主持人，按「當主持人」來出題！';
       else if (!state.playing) info = host ? '你是主持人：先輸入答案、按「出題」，出題後才能開始畫！' : `主持人 ${state.hostName} 正在想題目…`;
       else info = host ? `答案「${answer}」· 已猜對 ${right} / ${guessers.length}` : `${state.hostName} 出題中 · 答案有 ${state.len} 個字 · 已猜對 ${right} / ${guessers.length}`;
-      gameRender('draw', state, { info, tag: (id) => (state.correct.includes(id) ? '✅ ' : ''),
+      gameRender('draw', state, { info, tag: (id) => (state.correct.includes(id) ? '✓ ' : ''),
         placeholder: state.playing ? `猜猜看（${state.len} 個字）` : '聊天…' });
     }
     function onState(st) { state = st; if (!amHost()) { answer = ''; $('draw-answer').value = ''; } render(); }
@@ -1446,13 +1467,14 @@
     COLORS.concat(['#ffffff']).forEach(c => {
       const b = el('button', 'sw' + (c === color ? ' on' : ''));
       b.type = 'button'; b.style.background = c; b.title = c === '#ffffff' ? '橡皮擦' : '';
-      if (c === '#ffffff') b.textContent = '🧽';
+      if (c === '#ffffff') b.appendChild(icon('tool-eraser', ''));
       b.onclick = () => { color = c; [...pal.children].forEach(x => x.classList.toggle('on', x === b)); };
       pal.appendChild(b);
     });
     const tl = $('draw-shapes');
-    TOOLS.forEach(([k, icon, name]) => {
-      const b = el('button', 'tl' + (k === tool ? ' on' : ''), icon);
+    TOOLS.forEach(([k, name]) => {
+      const b = el('button', 'tl' + (k === tool ? ' on' : ''));
+      b.appendChild(icon('tool-' + k, ''));
       b.type = 'button'; b.title = name; b.setAttribute('aria-label', name);
       b.onclick = () => { tool = k; [...tl.children].forEach(x => x.classList.toggle('on', x === b)); setCursor(); };
       tl.appendChild(b);
@@ -1477,7 +1499,7 @@
       const a = $('draw-answer').value.trim();
       socket.emit('drawStart', a, (res) => {
         if (!res || !res.ok) { if (res && res.error) toast(res.error); return; }
-        if (res.edited && answer !== a) toast('✏️ 題目改好了');
+        if (res.edited && answer !== a) toast('題目改好了');
         answer = a; render();
       });
     };
@@ -1488,7 +1510,7 @@
       $('draw-guess').value = '';
       socket.emit('drawGuess', t, (res) => {
         if (res && res.error) toast(res.error);
-        if (res && res.correct) toast(res.item ? '🎉 猜對了！拿到一件新裝備' : '🎉 猜對了！（裝備已經全部收集完了）');
+        if (res && res.correct) toast(res.item ? '猜對了！拿到一件新裝備' : '猜對了！（裝備已經全部收集完了）');
       });
     };
     gameWire('draw');
@@ -1525,21 +1547,21 @@
       const gotS = state.gotSinger.includes(mine), gotT = state.gotTitle.includes(mine);
       const guessers = state.members.filter(m => m.id !== state.host);
       let info;
-      if (!state.host) info = '還沒有主持人，按「🎤 當主持人」來出題！';
+      if (!state.host) info = '還沒有主持人，按「當主持人」來出題！';
       else if (!state.playing) info = host ? '你是主持人：輸入歌手、歌名和達標人數，按「出題」開始！' : `主持人 ${state.hostName} 正在選歌…`;
       else info = `${host ? '你' : state.hostName} 出題中 · 全部答對 ${state.done} / ${state.goal} 人就結束`;
       $('song-panel').querySelector('.song-stage').classList.toggle('playing', state.playing);
       const slot = (id, len, got, real) => {
-        $(id).textContent = !state.playing ? '？' : host && real ? real : got ? '✅ 答對了！' : `${blanks(len)}（${len} 個字）`;
+        $(id).textContent = !state.playing ? '？' : host && real ? real : got ? '答對了！' : `${blanks(len)}（${len} 個字）`;
         $(id).parentNode.classList.toggle('got', state.playing && got);
       };
       slot('song-singer-slot', state.singerLen, gotS, answer && answer.singer);
       slot('song-title-slot', state.titleLen, gotT, answer && answer.title);
-      $('song-goal-text').textContent = state.playing ? `🏁 ${state.done} / ${state.goal} 人歌手＋歌名都答對` : '';
+      $('song-goal-text').textContent = state.playing ? `${state.done} / ${state.goal} 人歌手＋歌名都答對` : '';
       const ptsText = (a) => a.map((n, i) => `第${i + 1}名 ${n}`).join('、') + (a.length > 1 ? `，之後 ${a[a.length - 1]}` : '') + ' 分';
-      $('song-pts-text').textContent = state.playing ? `🎙️ 歌手：${ptsText(state.singerPts)}　🎵 歌名：${ptsText(state.titlePts)}` : '';
+      $('song-pts-text').textContent = state.playing ? `歌手：${ptsText(state.singerPts)}　歌名：${ptsText(state.titlePts)}` : '';
       gameRender('song', state, { info,
-        tag: (id) => { const s = state.gotSinger.includes(id), t = state.gotTitle.includes(id); return s && t ? '🏆 ' : s ? '🎙️ ' : t ? '🎵 ' : ''; },
+        tag: (id) => { const s = state.gotSinger.includes(id), t = state.gotTitle.includes(id); return s && t ? '✓✓ ' : s ? '歌手✓ ' : t ? '歌名✓ ' : ''; },
         placeholder: !state.playing ? '聊天…' : gotS && gotT ? '你全部答對了！' : gotS ? '再猜歌名…' : gotT ? '再猜歌手…' : '猜歌手或歌名…' });
       $('song-guess').disabled = host || (state.playing && gotS && gotT);
     }
@@ -1565,8 +1587,8 @@
       socket.emit('songGuess', t, (res) => {
         if (res && res.error) toast(res.error);
         if (!res || !res.correct) return;
-        if (res.both) toast(res.item ? '🏆 歌手和歌名都答對了！拿到一件新裝備' : '🏆 歌手和歌名都答對了！（裝備已經全部收集完了）');
-        else toast(res.singer && res.title ? '🎉 歌手和歌名都對了！' : res.singer ? '🎉 歌手答對了！再猜歌名' : '🎉 歌名答對了！再猜歌手');
+        if (res.both) toast(res.item ? '歌手和歌名都答對了！拿到一件新裝備' : '歌手和歌名都答對了！（裝備已經全部收集完了）');
+        else toast(res.singer && res.title ? '歌手和歌名都對了！' : res.singer ? '歌手答對了！再猜歌名' : '歌名答對了！再猜歌手');
       });
     };
     gameWire('song');
@@ -1653,8 +1675,8 @@
     $('mp-fill').style.width = $('mp-mini').style.width = (100 * st.mp / st.maxMp) + '%';
     $('hp-text').textContent = `${st.hp}/${st.maxHp}`;
     $('mp-text').textContent = `${st.mp}/${st.maxMp}`;
-    $('atk-text').textContent = st.atk + (st.atkBuffMs > 0 ? ' 🎶' : '');
-    $('def-text').textContent = st.def + (st.buffMs > 0 ? ' 🛡️' : '');
+    $('atk-text').textContent = st.atk + (st.atkBuffMs > 0 ? ' ↑' : '');
+    $('def-text').textContent = st.def + (st.buffMs > 0 ? ' ↑' : '');
     $('lv-text').textContent = 'Lv.' + st.level;
     $('exp-fill').style.width = (100 * st.exp / st.expNext) + '%';
     $('exp-text').textContent = `${st.exp}/${st.expNext}`;
@@ -1705,6 +1727,8 @@
     });
   }
   $('skills-open').replaceChildren(icon('btn-book', '📖'));
+  $('cake-ic').replaceChildren(icon('btn-cake', ''));
+  document.querySelector('.song-disc').replaceChildren(icon('btn-song', ''));
   $('fw-btn').replaceChildren(icon('btn-fw', '🎆'));
   $('skills-open').tip = () => ['技能說明', '', '看你的職業和全部技能'];
   $('fw-btn').tip = () => ['慶祝煙火', '', `Lv.${ST.LEVEL.fireworkLv} 以上可以在天空放一行字的煙火`];
@@ -1775,8 +1799,8 @@
       row.appendChild(b);
       box.appendChild(row);
     });
-    box.appendChild(el('p', 'modal-hint', '想換職業？到 🗺️ 指揮中心找 📂 轉職資料沈理員。'));
-    openModal('skills', '📖 技能', box);
+    box.appendChild(el('p', 'modal-hint', '想換職業？到 指揮中心找 轉職資料沈理員。'));
+    openModal('skills', '技能', box);
   }
   // 轉職導師的對話視窗
   function openMentor() {
@@ -1807,16 +1831,16 @@
       row.appendChild(b);
       box.appendChild(row);
     });
-    openModal('mentor', '📂 轉職資料沈理員', box);
+    openModal('mentor', '轉職資料沈理員', box);
   }
   // 慶祝煙火的輸入視窗
   function openFirework() {
     const box = el('form', 'fw-form');
     const lv = myStats ? myStats.level : 1;
     if (lv < ST.LEVEL.fireworkLv) {
-      box.appendChild(el('p', 'mentor-say', `🔒 升到 Lv.${ST.LEVEL.fireworkLv} 才能放煙火，你現在是 Lv.${lv}。`));
+      box.appendChild(el('p', 'mentor-say', `升到 Lv.${ST.LEVEL.fireworkLv} 才能放煙火，你現在是 Lv.${lv}。`));
       box.appendChild(el('p', 'modal-hint', '打颱風和野外的小怪會拿到經驗；在總部每待 10 分鐘也會自動升一等。'));
-      openModal('firework', '🎆 慶祝煙火', box);
+      openModal('firework', '慶祝煙火', box);
       return;
     }
     box.appendChild(el('p', 'modal-hint', '輸入想放的字（最多 8 個字），煙火會在你頭上炸開拼成這幾個字，大家都看得到！'));
@@ -1831,7 +1855,7 @@
       chips.appendChild(b);
     });
     box.appendChild(chips);
-    const go = el('button', 'primary', '🎆 發射！'); go.type = 'submit';
+    const go = el('button', 'primary', '發射！'); go.type = 'submit';
     box.appendChild(go);
     box.onsubmit = (e) => {
       e.preventDefault();
@@ -1843,7 +1867,7 @@
         closeModal();
       });
     };
-    openModal('firework', '🎆 慶祝煙火', box);
+    openModal('firework', '慶祝煙火', box);
     setTimeout(() => input.focus(), 50);
   }
 
@@ -1853,7 +1877,7 @@
     const m = $('ctx-menu');
     m.innerHTML = '';
     m.appendChild(el('div', 'ctx-name', who.name_));
-    const b = el('button', null, '📇 個人資料');
+    const b = el('button', null, '個人資料');
     b.onclick = () => { hideMenu(); showProfile(who.pid); };
     m.appendChild(b);
     m.hidden = false;
@@ -1886,7 +1910,7 @@
         box.appendChild(el('p', 'mentor-say', `${res.name} 還沒有在報名頁生成邀請函，所以沒有 VIP Pass。`));
         const a = el('a', 'primary small', '去報名頁生成邀請函'); a.href = '/'; a.target = '_blank';
         if (me && id === me.id) box.appendChild(a);
-        openModal('profile', `📇 ${res.name}`, box);
+        openModal('profile', `${res.name}`, box);
         return;
       }
       const card = el('div', 'vip' + (v.theme === 's' ? ' silver' : ''));
@@ -1933,7 +1957,7 @@
       stub.appendChild(el('span', 'vip-k', 'ADMIT ONE · ALL ACCESS'));
       card.appendChild(stub);
       box.appendChild(card);
-      openModal('profile', `📇 ${res.name} 的個人資料`, box);
+      openModal('profile', `${res.name} 的個人資料`, box);
       $('modal').classList.add('wide');
     });
   }
@@ -1947,7 +1971,7 @@
     '颱風天也要記得許願喔',
   ];
   function toast(text) {
-    const t = el('div', 'toast', text);
+    const t = el('div', 'toast', plain(text));
     $('toasts').appendChild(t);
     setTimeout(() => t.remove(), 2600);
   }
@@ -2685,8 +2709,10 @@
           // 九曲洞地上的凹槽：大理石要推到這裡
           CR.rect(ctx, px + 4, py + 4, T - 8, T - 8, r, 1); CR.fill(ctx, 'rgba(47,59,85,0.28)', r, null);
           ctx.save(); ctx.setLineDash([5, 4]); CR.rect(ctx, px + 4, py + 4, T - 8, T - 8, r, 1); CR.stroke(ctx, r, 2.4, '#ffb020'); ctx.restore();
-          ctx.font = '18px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('⬇️', px + T / 2, py + T / 2 + 1);
-          ctx.textBaseline = 'alphabetic';
+          // 中間畫一個往下的蠟筆箭頭
+          const ax = px + T / 2, ay = py + T / 2;
+          CR.line(ctx, ax, ay - 9, ax, ay + 7, r, 3, '#c9962a');
+          ctx.beginPath(); ctx.moveTo(ax - 7, ay + 1); ctx.lineTo(ax, ay + 9); ctx.lineTo(ax + 7, ay + 1); CR.stroke(ctx, r, 3, '#c9962a');
         } else if (ch === 'E' && at(x - 1, y) !== 'E') {
           // 七星潭的石碑（兩格寬），上面要踩的顏色順序另外畫
           CR.rect(ctx, px + 4, py - 30, T * 2 - 8, T + 22, r, 1.4); CR.fill(ctx, '#9aa3b5', r, [px, py - 30, T * 2, T + 22]); CR.stroke(ctx, r, 2.8);
@@ -3139,9 +3165,9 @@
       const was = who.prada;
       this.applyGlow(who);
       if (who.prada && !was) {
-        this.floatText(who.x, who.y - 110, '✨ 穿著Prada的惡魔', '#ffd23f', 22);
+        this.floatText(who.x, who.y - 110, '穿著Prada的惡魔', '#ffd23f', 22);
         this.burst(who.x, who.y - 40, 16, 0xffd23f);
-        if (who === this.me) toast('✨ 全身都是 SSR，你就是穿著Prada的惡魔！');
+        if (who === this.me) toast('全身都是 SSR，你就是穿著Prada的惡魔！');
       }
       this.burst(who.x, who.y - 40, 8, 0xffffff);
     }
@@ -3282,7 +3308,7 @@
     onCooking(c) {
       const who = me && c.id === me.id ? this.me : this.remotes.get(c.id);
       if (!who) return;
-      const t = this.bubbleImg(0, -104, '♨️ 咕嘟咕嘟…');
+      const t = this.bubbleImg(0, -104, '咕嘟咕嘟…');
       who.add(t);
       setTimeout(() => t.destroy(), c.ms);
       let best = null, bd = Infinity;
@@ -3314,7 +3340,7 @@
         steam.remove();
         flames.forEach(f => { this.tweens.killTweensOf(f); f.destroy(); });
         this.tweens.killTweensOf(pot); pot.destroy();
-        this.floatText(best.x, best.y - 50, '🍜 煮好了！', '#ffffff', 18);
+        this.floatText(best.x, best.y - 50, '煮好了！', '#ffffff', 18);
       }, c.ms);
     }
 
@@ -3337,7 +3363,7 @@
         g.fillStyle(0xffffff, 1).fillCircle(0, -11, 1.6);
         return this.add.container(x + dx, y - 4, [g]).setDepth(y + T / 2 - 1);
       };
-      const sign = this.add.text(x, y - 38, '🎧 DJ', { fontFamily: FONT, fontSize: '15px', fontStyle: '900', color: '#ffd23f',
+      const sign = this.add.text(x, y - 38, 'DJ', { fontFamily: FONT, fontSize: '15px', fontStyle: '900', color: '#ffd23f',
         stroke: '#131a28', strokeThickness: 4 }).setOrigin(0.5).setDepth(y + T / 2);
       this.djParts = { discs: [disc(-24), disc(24)], sign, nextNote: 0 };
     }
@@ -3346,7 +3372,7 @@
       if (!d) return;
       const on = MUSIC.playing();
       d.discs.forEach((c, i) => { if (on) c.rotation += (i ? 0.004 : 0.0045) * delta; });
-      d.sign.setText(on ? '🎧 DJ ♪' : '🎧 DJ');
+      d.sign.setText(on ? 'DJ ♪' : 'DJ');
       if (on && time > d.nextNote) {
         d.nextNote = time + 650;
         const n = this.add.text(MAP.dj.x + (Math.random() - 0.5) * 60, MAP.dj.y - 20, Math.random() < 0.5 ? '♪' : '♫',
@@ -3598,7 +3624,7 @@
         this.flash.setSize(this.scale.width, this.scale.height);
         this.tweens.add({ targets: this.flash, alpha: { from: 0.6, to: 0 }, duration: 600, delay: 2200 });
       }
-      this.floatText(x, y - 260, `🌪️ ${ST.MONSTER.name}變身成「${ST.MONSTER2.name}」了！`, '#ff8fab', 28);
+      this.floatText(x, y - 260, `${ST.MONSTER.name}變身成「${ST.MONSTER2.name}」了！`, '#ff8fab', 28);
     }
 
     // 楓之谷的頭目血條放在畫面上方（DOM），怪物頭上再留一條細的
@@ -3684,11 +3710,11 @@
         this.tweens.add({ targets: ring, alpha: { from: 1, to: 0.5 }, duration: 160, yoyo: true, repeat: -1 });
         this.time.delayedCall(a.delay + 60, () => { this.tweens.killTweensOf(ring); ring.destroy(); fill.destroy(); });
       });
-      const say = { gust: ['🌪️ 強風來了！', '#ffffff'], rain: ['🌧️ 暴雨彈！', '#bfe6ff'], bolt: ['⚡ 落雷！', '#ffd23f'],
-        tornado: ['🌪️🌪️ 超級龍捲風！', '#ff8fab'], hail: ['🧊 冰雹轟炸！', '#bfe6ff'] }[a.type];
+      const say = { gust: ['強風來了！', '#ffffff'], rain: ['暴雨彈！', '#bfe6ff'], bolt: ['落雷！', '#ffd23f'],
+        tornado: ['超級龍捲風！', '#ff8fab'], hail: ['冰雹轟炸！', '#bfe6ff'] }[a.type];
       this.floatText(this.monster.x, this.monster.y - 200 * this.monsterScale(), say[0], say[1], a.type === 'tornado' || a.type === 'hail' ? 26 : 20);
       if (this.me && !this.isDead() && this.roomId === 'front' && a.spots.some(sp => Math.hypot(this.me.x - sp.x, this.me.y - sp.y) <= a.r)) {
-        toast('⚠️ 快離開紅圈！');
+        toast('快離開紅圈！');
       }
     }
 
@@ -3754,7 +3780,7 @@
       // 被強風往外吹
       const f = a.type === 'tornado' ? 820 : 620;
       this.push = { x: (dx || 1) / (d || 1) * f, y: (dy || 0) / (d || 1) * f, t: 0.35 };
-      this.floatText(this.me.x, this.me.y - 100, '💨 被風吹走了！', '#ffffff', 18);
+      this.floatText(this.me.x, this.me.y - 100, '被風吹走了！', '#ffffff', 18);
     }
 
     // 一圈往外噴的小星星
@@ -3917,7 +3943,7 @@
         beam.lineStyle(10, 0x9b7be8, 0.7); beam.lineBetween(who.x, who.y - 140, mx, my);
         beam.lineStyle(4, 0xffffff, 0.9); beam.lineBetween(who.x, who.y - 140, mx, my);
         this.tweens.add({ targets: beam, alpha: 0, delay: 300, duration: 500, onComplete: () => beam.destroy() });
-        this.floatText(mx, my - 80, '🔮 被削弱了！', '#d9c4ff', 22);
+        this.floatText(mx, my - 80, '被削弱了！', '#d9c4ff', 22);
         this.time.delayedCall(80, () => this.refreshFoeTint(fx.target));
       } else if (fx.skill === 'milk') {
         const b = this.add.image(who.x, who.y - 100, 'fx-milk').setDepth(2050).setScale(0.3);
@@ -4019,7 +4045,7 @@
             (fx.hits || [fx.target]).forEach(t => {
               const f = this.foePos(t);
               this.burst(f.x, f.mid, 14, 0xbfe6ff, 120);
-              this.floatText(f.x, f.y - (f.mob ? 120 : 220), '❄️ 冰凍！', '#bfe6ff', 26);
+              this.floatText(f.x, f.y - (f.mob ? 120 : 220), '冰凍！', '#bfe6ff', 26);
               this.refreshFoeTint(t);
             });
           } });
@@ -4037,7 +4063,7 @@
         }
         fx.targets.forEach(id => {
           const t = me && id === me.id ? this.me : this.remotes.get(id);
-          if (t) this.floatText(t.x, t.y - 100, '🧱 防禦↑', '#ffe2b0', 18);
+          if (t) this.floatText(t.x, t.y - 100, '防禦↑', '#ffe2b0', 18);
         });
       } else if (fx.skill === 'forecast') {
         // 天上出現一顆太陽，灑下陽光
@@ -4053,7 +4079,7 @@
           this.tweens.add({ targets: beam, alpha: 0, delay: 300, duration: 500, onComplete: () => beam.destroy() });
           this.burst(t.x, t.y - 40, 8, 0xffd23f, 50);
         });
-        this.floatText(who.x, who.y - 210, '☀️ 放晴！', '#fff0a0', 22);
+        this.floatText(who.x, who.y - 210, '放晴！', '#fff0a0', 22);
       } else if (fx.skill === 'defib') {
         // 電擊器碰一下，黃色閃電劈到怪物身上
         const dir = mx < who.x ? -1 : 1;
@@ -4069,7 +4095,7 @@
         this.tweens.add({ targets: bolt, alpha: 0, duration: 300, onComplete: () => bolt.destroy() });
         this.time.delayedCall(120, () => {
           this.burst(mx, my, 12, 0xffd23f, 70);
-          this.floatText(mx, my - 50, '⚡ 電擊！', '#ffd23f', 24);
+          this.floatText(mx, my - 50, '電擊！', '#ffd23f', 24);
           this.refreshFoeTint(fx.target);
         });
         this.cameras.main.shake(120, 0.005);
@@ -4106,7 +4132,7 @@
         this.time.delayedCall(rain ? 600 : 560, () => (fx.hits || [fx.target]).forEach(t => {
           const f = this.foePos(t);
           this.burst(f.x, f.mid, 8, rain ? 0xff8fb8 : 0x7be08f, 60);
-          if (!rain) { this.floatText(f.x, f.y - (f.mob ? 110 : 200), '🛸 被削弱了！', '#b8f5cf', 20); this.refreshFoeTint(t); }
+          if (!rain) { this.floatText(f.x, f.y - (f.mob ? 110 : 200), '被削弱了！', '#b8f5cf', 20); this.refreshFoeTint(t); }
         }));
       } else if (fx.skill === 'note') {
         // 飆高音：音符一跳一跳飛過去
@@ -4160,7 +4186,7 @@
             this.tweens.add({ targets: n, y: t.y - 110 - Math.random() * 40, x: n.x + (Math.random() - 0.5) * 50, alpha: 0, angle: (Math.random() - 0.5) * 60,
               delay: i * 120, duration: 900, onComplete: () => n.destroy() });
           }
-          this.floatText(t.x, t.y - 120, '⚔️ 攻擊 +30%', '#ffd23f', 18);
+          this.floatText(t.x, t.y - 120, '攻擊 +30%', '#ffd23f', 18);
         });
       } else if (fx.skill === 'roar') {
         // 霸王怒吼：先蹲低蓄力，頭上冒出一顆金色獅子頭，接著一圈圈衝擊波＋放射狀的風壓線往外炸，怪全部被震飛
@@ -4207,7 +4233,7 @@
             this.tweens.add({ targets: t, x, y, duration: 380, ease: 'Cubic.out' });
             const body = id === 'boss' ? null : t.body_;
             if (body) this.tweens.add({ targets: body, angle: (x < who.x ? -1 : 1) * 360, duration: 420, onComplete: () => body.setAngle(0) });
-            this.floatText(x, y - (id === 'boss' ? 200 : 110), '💥 震飛！', '#ff9a3c', 24);
+            this.floatText(x, y - (id === 'boss' ? 200 : 110), '震飛！', '#ff9a3c', 24);
             this.burst(x, y - 30, 10, 0xffd23f, 70);
           });
         });
@@ -4231,7 +4257,7 @@
               frost.fillStyle(0xbfe6ff, 0.7); frost.fillEllipse(0, 0, 120 * big, 44 * big);
               frost.lineStyle(3, 0x4f7cc2, 0.8); frost.strokeEllipse(0, 0, 120 * big, 44 * big);
               this.tweens.add({ targets: frost, alpha: 0, delay: (sk.freeze || 1500) - 400, duration: 400, onComplete: () => frost.destroy() });
-              this.floatText(mx, my - 50, '🧊 凍住了！', '#bfe6ff', 24);
+              this.floatText(mx, my - 50, '凍住了！', '#bfe6ff', 24);
               this.refreshFoeTint(fx.target);
             }
             // 插在地上一下再碎掉
@@ -4495,6 +4521,7 @@
       } else {
         if (this.emptyCrates.has(act.tx + ',' + act.ty)) { toast('這箱被拿光了，等一下會補貨'); return; }
         socket.emit('hitCrate', { tx: act.tx, ty: act.ty }, (res) => {
+          if (res && res.full) { toast('背包滿了，先用掉一些再來敲'); return; }
           if (!res || !res.item) return;
           renderInventory(res.inv);
           const it = MAP.ITEMS[res.item];
@@ -4531,7 +4558,7 @@
       if (left > 0) { toast(`${sk.name}還在冷卻，${Math.ceil(left / 1000)} 秒後可以再用`); return; }
       if (myStats && myStats.mp < sk.mp) { toast(`魔力不夠，${sk.name}要 ${sk.mp} 點`); return; }
       const room = MAP.roomAt(this.me.x, this.me.y);
-      if (!room || (room.id !== 'front' && !room.dungeon)) { toast('要在 🌀 颱風前線或副本裡才能畫城牆'); return; }
+      if (!room || (room.id !== 'front' && !room.dungeon)) { toast('要在 颱風前線或副本裡才能畫城牆'); return; }
       this.target = null;
       this.drawing = { id, pts: [], len: 0, max: sk.wall.len, g: this.add.graphics().setDepth(2060),
         timer: this.time.delayedCall(10000, () => { if (this.drawing) { this.cancelWall(); toast('太久沒畫，取消畫城牆'); } }) };
@@ -4900,7 +4927,7 @@
         this.tweens.add({ targets: t, y: who.y - 170, alpha: { from: 1, to: 0 }, delay: 600, duration: 900, onComplete: () => t.destroy() });
       }
       if (who === this.me) {
-        toast(l.level === ST.LEVEL.fireworkLv ? `⭐ 升到 Lv.${l.level}！可以放慶祝煙火了 🎆` : `⭐ 升到 Lv.${l.level}！`);
+        toast(l.level === ST.LEVEL.fireworkLv ? `升到 Lv.${l.level}！可以放慶祝煙火了 ` : `升到 Lv.${l.level}！`);
         if (l.level === ST.LEVEL.fireworkLv && modalKind === 'firework') openFirework();
       }
     }
@@ -4923,6 +4950,7 @@
     }
 
     floatText(x, y, text, color, size) {
+      text = plain(text) || text; // 只有一個 emoji 的特效（技能的小圖）先留著，等手繪版
       const t = this.add.text(x, y, text, {
         fontSize: size + 'px', fontStyle: 'bold', color, fontFamily: FONT,
         stroke: '#131a28', strokeThickness: 4,
@@ -5048,23 +5076,23 @@
         this.tweens.add({ targets: sp, alpha: 0, scale: 1.4, duration: 800, onComplete: () => sp.destroy() });
         this.burst(st.x, st.y - 10, 12, 0xffffff, 80);
       } });
-      this.floatText(st.x, st.y - 60, '🌊 踩錯了！', '#bfe6ff', 22);
-      if (me && e.id === me.id) toast('🌊 踩錯顏色，被浪打回起點了！要從石碑上的第一顆重新踩');
+      this.floatText(st.x, st.y - 60, '踩錯了！', '#bfe6ff', 22);
+      if (me && e.id === me.id) toast('踩錯顏色，被浪打回起點了！要從石碑上的第一顆重新踩');
     }
     onDgStage(e) {
       if (!this.inDg()) return;
       this.cameras.main.shake(500, 0.006);
-      toast(e.stage === 1 ? '✨ 石門打開了！往下走到太魯閣九曲洞' : '✨ 石門打開了！往下走到清水斷崖……小心');
+      toast(e.stage === 1 ? '石門打開了！往下走到太魯閣九曲洞' : '石門打開了！往下走到清水斷崖……小心');
     }
     onDgClear(c) {
       if (!this.inDg()) return;
       const mine = c.drops.find(d => me && d.id === me.id);
       for (let i = 0; i < 4; i++) this.time.delayedCall(i * 300, () => this.burst(this.me.x + (Math.random() - 0.5) * 200, this.me.y - 120 - Math.random() * 80, 16, [0xffd23f, 0xff8fab, 0x7fd1ff, 0x7be08f][i], 120));
-      this.floatText(this.me.x, this.me.y - 150, '🎉 副本通關！', '#ffd23f', 30);
+      this.floatText(this.me.x, this.me.y - 150, '副本通關！', '#ffd23f', 30);
       if (!mine) return;
       const g = mine.item && GR.GEAR[mine.item];
-      if (!g) toast('🍃 這次什麼都沒掉……下次再來挑戰！');
-      else if (mine.dup) toast(`🔁 又是【${g.rarity}】${g.icon} ${g.name}，換成 600 經驗`);
+      if (!g) toast('這次什麼都沒掉……下次再來挑戰！');
+      else if (mine.dup) toast(`又是【${g.rarity}】${g.icon} ${g.name}，換成 600 經驗`);
       else toast(`獲得武器【${g.rarity}】${g.icon} ${g.name}！`);
       toast(`${Math.round(c.ms / 1000)} 秒後送回古城候位區`);
     }
@@ -5079,24 +5107,24 @@
       if (this.inDg()) {
         const st = D.stages[Math.min(d.stage, 2)];
         const left = d.phase === 'clear' ? d.clearLeft - (performance.now() - this.dgAt) : d.timeLeft - (performance.now() - this.dgAt);
-        const what = d.phase === 'clear' ? `🎉 通關！${sec(Math.max(0, left))} 後回入口` : `第 ${Math.min(d.stage, 2) + 1} 關 ${st.name} · ⏱ ${sec(Math.max(0, left))}`;
+        const what = d.phase === 'clear' ? `通關！${sec(Math.max(0, left))} 後回入口` : `第 ${Math.min(d.stage, 2) + 1} 關 ${st.name} · ${sec(Math.max(0, left))}`;
         // 七星潭：面板上也畫出石碑的顏色順序（手機上石碑常常被上面的條擋住）
         const seq = d.stage === 0 && d.phase === 'run' ? '<span class="dg-seq">' + d.seq.map((si, k) =>
           `<i style="background:${D.stones[si].color}" class="${k < d.progress ? 'on' : ''}"></i>`).join('') + '</span>' : '';
         // 手機上縮成一顆計時膠囊（只有關卡和時間），點一下才展開按鈕
         const short = d.phase === 'clear' ? `通關 ${sec(Math.max(0, left))}` : `第 ${Math.min(d.stage, 2) + 1} 關 ${sec(Math.max(0, left))}`;
         key = 'in|' + what + d.stage + '|' + d.progress;
-        html = `<span class="dg-full">🌀 ${D.name}副本 · ${what}</span><span class="dg-short">${short}</span>` + seq + '<span class="dg-btns">' +
-          (d.stage === 1 && d.phase === 'run' ? '<button class="hud-btn tiny" data-act="reset" type="button">🔄 重排大理石</button>' : '') +
-          '<button class="hud-btn tiny" data-act="leave" type="button">🚪 離開</button></span>';
+        html = `<span class="dg-full">${D.name}副本 · ${what}</span><span class="dg-short">${short}</span>` + seq + '<span class="dg-btns">' +
+          (d.stage === 1 && d.phase === 'run' ? '<button class="hud-btn tiny" data-act="reset" type="button">重排大理石</button>' : '') +
+          '<button class="hud-btn tiny" data-act="leave" type="button">離開</button></span>';
       } else if (this.roomId === 'lobby') {
-        const homeBtn = '<button class="hud-btn tiny" data-act="home" type="button">🏠 回總部</button>';
-        if (d.phase === 'idle') { key = 'idle'; html = `<span>🌀 ${D.title} · 1～${d.max} 人 · 限時 ${D.timeLimitMs / 60000} 分</span><button class="primary" data-act="start" type="button">出發</button>` + homeBtn; }
+        const homeBtn = '<button class="hud-btn tiny" data-act="home" type="button">回總部</button>';
+        if (d.phase === 'idle') { key = 'idle'; html = `<span>${D.title} · 1～${d.max} 人 · 限時 ${D.timeLimitMs / 60000} 分</span><button class="primary" data-act="start" type="button">出發</button>` + homeBtn; }
         else if (d.phase === 'countdown') {
           const left = d.countdown - (performance.now() - this.dgAt);
           key = 'cd' + Math.ceil(left / 1000);
-          html = `<span>⏳ ${Math.max(0, Math.ceil(left / 1000))} 秒後出發！站在候位區就會一起去</span>` + homeBtn;
-        } else { key = 'busy' + d.members.length + d.stage; html = `<span>⚔️ 副本進行中：${d.members.length} 人，打到第 ${Math.min(d.stage, 2) + 1} 關，等他們出來</span>` + homeBtn; }
+          html = `<span>${Math.max(0, Math.ceil(left / 1000))} 秒後出發！站在候位區就會一起去</span>` + homeBtn;
+        } else { key = 'busy' + d.members.length + d.stage; html = `<span>副本進行中：${d.members.length} 人，打到第 ${Math.min(d.stage, 2) + 1} 關，等他們出來</span>` + homeBtn; }
       } else { box.hidden = true; this.dgKey = null; return; }
       if (force) this.dgAt = performance.now();
       box.hidden = false;
@@ -5138,7 +5166,7 @@
       if (p2 && was && was.phase !== 2 && m.visible) {
         this.cameras.main.shake(900, 0.008);
         for (let i = 0; i < 3; i++) this.time.delayedCall(i * 350, () => this.burst(m.x, m.y - 80, 16, i % 2 ? 0x8a5cd6 : 0x2b2a33, 160));
-        this.floatText(m.x, m.y - 190, `🌑 黑化成「${def.phase2.name}」了！`, '#d9c4ff', 26);
+        this.floatText(m.x, m.y - 190, `黑化成「${def.phase2.name}」了！`, '#d9c4ff', 26);
         this.tweens.add({ targets: m.body_, angle: 360, duration: 1200, ease: 'Cubic.inOut', onComplete: () => m.body_.setAngle(0) });
       }
       if (this.bossFor === 'fu') this.refreshBossLabel();
@@ -5168,7 +5196,7 @@
         this.tweens.add({ targets: g, alpha: { from: 1, to: 0.55 }, duration: 160, yoyo: true, repeat: -1 });
         this.time.delayedCall(a.delay + 60, () => { this.tweens.killTweensOf(g); g.destroy(); });
       };
-      const mine = (hit) => { if (this.me && !this.isDead() && this.inDg() && hit(this.me)) toast('⚠️ 快離開紅色範圍！'); };
+      const mine = (hit) => { if (this.me && !this.isDead() && this.inDg() && hit(this.me)) toast('快離開紅色範圍！'); };
       if (a.type === 'slash' || a.type === 'wave') {
         const spots = a.type === 'slash' ? [{ x: a.x, y: a.y }] : a.spots;
         spots.forEach(sp => {
@@ -5177,7 +5205,7 @@
           fill.fillStyle(0x8a5cd6, 0.35); fill.fillEllipse(0, 0, a.r * 2, a.r * 1.4);
           this.tweens.add({ targets: fill, scale: 1, duration: a.delay, onComplete: () => fill.destroy() });
         });
-        if (m) this.floatText(m.x, m.y - 200, a.type === 'slash' ? '🗡️ 黑暗劍氣！' : '🌑 劍氣波！', '#d9c4ff', 22);
+        if (m) this.floatText(m.x, m.y - 200, a.type === 'slash' ? '黑暗劍氣！' : '劍氣波！', '#d9c4ff', 22);
         mine(p => spots.some(sp => Math.hypot(p.x - sp.x, p.y - sp.y) <= a.r));
       } else if (a.type === 'charge') {
         const ang = Math.atan2(a.y2 - a.y1, a.x2 - a.x1), len = Math.max(40, Math.hypot(a.x2 - a.x1, a.y2 - a.y1));
@@ -5191,7 +5219,7 @@
           m.body_.setTexture('mob-fu-fist');
           m.body_.setFlipX(a.x2 < a.x1);
           this.tweens.add({ targets: m.body_, y: -8, duration: 200, yoyo: true, repeat: 1 });
-          this.floatText(m.x, m.y - 200, '👊 衝鋒！', '#ffb020', 24);
+          this.floatText(m.x, m.y - 200, '衝鋒！', '#ffb020', 24);
         }
         const segD = (p) => {
           const dx = a.x2 - a.x1, dy = a.y2 - a.y1, l2 = dx * dx + dy * dy || 1;
@@ -5443,7 +5471,7 @@
       if (rid !== this.roomId) {
         const first = this.roomId === undefined;
         this.roomId = rid;
-        $('room-name').textContent = room ? room.name : '🌧️ 戶外（風雨很大！）';
+        $('room-name').textContent = room ? plain(room.name) : '戶外（風雨很大！）';
         if (rid !== 'video' && !$('games').hidden) { ROOM.close(); toast('離開戰情室了，已經退出遊戲'); }
         // 走進戰鬥區技能欄自動打開，回到室內自動收起來（戶外走道維持原樣）
         if (rid === 'front' || (room && room.dungeon)) setSkillFold(false);

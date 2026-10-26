@@ -6,7 +6,7 @@
   // 副本區、候位區、副本大廳都走不過去，只能傳送
   const MW = 40;
   const DX = 42; // 花蓮副本區最左邊那一格
-  const LX = DX + 24; // 古城候位區最左邊那一格
+  const LX = DX + 46; // 古城候位區最左邊那一格（花蓮副本有兩欄，各 22 格寬）
   const TDX = LX + 14; // 台北101副本區最左邊那一格
   const TLX = TDX + 24; // 101 大廳候位區最左邊那一格
   const HX = TLX + 14; // 副本大廳最左邊那一格
@@ -24,6 +24,7 @@
   // 副本區：(空白) 虛空    Y  峽谷岩壁    Z  深海       y  七星潭礫石灘
   //         u  洞穴地板    x  大理石要推到的凹槽         n  斷崖上的草地
   //         X  關卡之間的石門（關著的時候擋路）          E  七星潭石碑
+  //         a  燕子口的步道  m  砂卡礑步道  s  砂卡礑的泉水  v  砂卡礑的水車
   // 候位區：Q  古城石牆    q  古城石板地    H  古城守門員（站在副本大廳）
   // 台北101：g  玻璃帷幕牆  k  天空         p  信義廣場地磚  f  阻尼球層的鋼板地
   //         c  控制台（踩上去）            o  觀景台地板    A  觀景台的大柱子
@@ -31,7 +32,7 @@
   // 副本傳送門：e  指揮中心的副本傳送門（不擋路）
   // 副本大廳：w  大廳的牆     j  大廳地板    b  副本告示板    D  還沒開放的空台座（敬請期待）
   const BLOCKING = new Set(['#', 'T', 'B', 'K', 'M', 'P', 'S', 'F', 'G', 'N', 'W', 'R', 'J', 'L', 'I', ' ', 'Y', 'Z', 'E', 'Q', 'H',
-    'g', 'k', 'A', 'U', 'w', 'b', 'D']);
+    'g', 'k', 'A', 'U', 'w', 'b', 'D', 's', 'v']);
 
   const g = [];
   for (let y = 0; y < H; y++) g.push(new Array(W).fill(','));
@@ -102,7 +103,8 @@
   [[1, 33], [38, 33], [2, 44], [37, 44]].forEach(([x, y]) => set(x, y, 'T'));
 
   // ---------------- 花蓮副本 ----------------
-  // 一關接一關往下走：七星潭 → 太魯閣九曲洞 → 清水斷崖，關卡之間的石門解開謎題才會打開
+  // 兩欄：左欄由上往下 七星潭 → 太魯閣九曲洞 → 燕子口，過了燕子口被溪水送到右欄最上面的砂卡礑步道，
+  // 再往下走到清水斷崖打花蓮王；關卡之間的石門解開謎題才會打開
   rect(MW, 0, W - 1, H - 1, ' ');
   const HUALIEN = [
     // 第一關：七星潭（上面三排是海）
@@ -120,24 +122,74 @@
     'YyyyyyyyyyyyyyyyyyyyyY',
     'YyyyyyyyyyyyyyyyyyyyyY',
     'YYYYYYYYYYXXYYYYYYYYYY',
-    // 第二關：太魯閣九曲洞（把三顆大理石推進凹槽）
+    // 第二關：太魯閣九曲洞（把四顆大理石推進凹槽，推錯地方會卡住）
     'YuuuuuuuuuuuuuuuuuuuuY',
     'YuuuuuuuuuuuuuuuuuuuuY',
     'YuuuYYuuuuuuuuuuYYuuuY',
     'YuuuYYuuuuuuuuuuYYuuuY',
     'YuuuuuuuuuuuuuuuuuuuuY',
-    'YuuuuuuuuuuuuuuuuuuuuY',
+    'YuuuuuuuYuuuuYuuuuuuuY',
     'YYYYYYYuuuuuuuuYYYYYYY',
     'YuuuuuuuuuuuuuuuuuuuuY',
     'YuuuuuuuuuuuuuuuuuuuuY',
+    'YuuuYYuuuuYYuuuuYYuuuY',
+    'YxuuuuuuuuuuuuuuuuuuxY',
+    'YYYuuuuuYuuuuYuuuuYYYY',
+    'YuuuuuuuYuuuuYuuuuuuuY',
     'YuuuYYuuuuuuuuuuYYuuuY',
-    'YuuuuuuuuuuuuuuuuuuuuY',
-    'YuuuuuuuuuuuuuuuuuuuuY',
-    'YuuuxuuuuuxuuuuuuxuuuY',
-    'YuuuuuuuuuuuuuuuuuuuuY',
-    'YuuuuuuuuuuuuuuuuuuuuY',
+    'YuuuuuuuuxYYxuuuuuuuuY',
     'YYYYYYYYYYXXYYYYYYYYYY',
-    // 第三關：清水斷崖（右邊是太平洋）
+    // 第三關：燕子口（兩塊踏板要同時有人踩，下面三排是立霧溪）
+    'YaaaaaaaaaaaaaaaaaaaaY',
+    'YaaaaaaaaaaaaaaaaaaaaY',
+    'YaaaYYaaaaaaaaaaYYaaaY',
+    'YaaaYYaaaaaaaaaaYYaaaY',
+    'YaaaaaaaaaaaaaaaaaaaaY',
+    'YaaaaaaaaaaaaaaaaaaaaY',
+    'YaaaaaaaaaaaaaaaaaaaaY',
+    'YaaaaaaaYaaaaYaaaaaaaY',
+    'YaaaaaaaYaaaaYaaaaaaaY',
+    'YaaaaaaaaaaaaaaaaaaaaY',
+    'YaaaaaaaaaaaaaaaaaaaaY',
+    'YaaaaaaaaaaaaaaaaaaaaY',
+    'ZZZZZZZZZZZZZZZZZZZZZZ',
+    'ZZZZZZZZZZZZZZZZZZZZZZ',
+    'ZZZZZZZZZZZZZZZZZZZZZZ',
+    'YYYYYYYYYYYYYYYYYYYYYY',
+  ];
+  const HUALIEN_R = [
+    // 第四關：砂卡礑步道（左邊的泉水接到右邊的水車）
+    'YYYYYYYYYYYYYYYYYYYYYY',
+    'YYYYYYYYYYYYYYYYYYYYYY',
+    'YYYYYYYYYYYYYYYYYYYYYY',
+    'YmmmmmmmmmmmmmmmmmmmmY',
+    'YmmmmmmmmmmmmmmmmmmmmY',
+    'YmmmmmmmmmmmmmmmmmmmmY',
+    'YmmmmmmmmmmmmmmmmmmmmY',
+    'YmmmmmmmmmmmmmmmmmmmmY',
+    'YmmmmmmmmmmmmmmmmmmmmY',
+    'YmmmmmmmmmmmmmmmmmmmmY',
+    'YmmmmmmmmmmmmmmmmmmmmY',
+    'YmmmmmmmmmmmmmmmmmmmmY',
+    'YmmmmmmmmmmmmmmmmmmmmY',
+    'YsmmmmmmmmmmmmmmmmmmvY',
+    'YmmmmmmmmmmmmmmmmmmmmY',
+    'YmmmmmmmmmmmmmmmmmmmmY',
+    'YmmmmmmmmmmmmmmmmmmmmY',
+    'YmmmmmmmmmmmmmmmmmmmmY',
+    'YmmmmmmmmmmmmmmmmmmmmY',
+    'YmmmmmmmmmmmmmmmmmmmmY',
+    'YmmmmmmmmmmmmmmmmmmmmY',
+    'YmmmmmmmmmmmmmmmmmmmmY',
+    'YmmmmmmmmmmmmmmmmmmmmY',
+    'YmmmmmmmmmmmmmmmmmmmmY',
+    'YmmmmmmmmmmmmmmmmmmmmY',
+    'YmmmmmmmmmmmmmmmmmmmmY',
+    'YmmmmmmmmmmmmmmmmmmmmY',
+    'YmmmmmmmmmmmmmmmmmmmmY',
+    'YmmmmmmmmmmmmmmmmmmmmY',
+    'YYYYYYYYYYXXYYYYYYYYYY',
+    // 第五關：清水斷崖（右邊是太平洋）
     'YnnnnnnnnnnnnnnnnnZZZY',
     'YnnnnnnnnnnnnnnnnnnZZY',
     'YnnnnnnnnnnnnnnnnnnZZY',
@@ -156,6 +208,7 @@
     'YYYYYYYYYYYYYYYYYYYYYY',
   ];
   HUALIEN.forEach((row, y) => [...row].forEach((c, x) => set(DX + x, y, c)));
+  HUALIEN_R.forEach((row, y) => [...row].forEach((c, x) => set(DX + 22 + x, y, c)));
 
   // ---------------- 台北101副本 ----------------
   // 一樣一關接一關往下走：信義廣場（打三波怪）→ 87 樓阻尼球（四個控制台）→ 觀景台打天龍王
@@ -254,18 +307,23 @@
   ];
   const gates = (dx) => [[[dx + 10, 13], [dx + 11, 13]], [[dx + 10, 29], [dx + 11, 29]]];
   const hb = boxes(DX, 20), tb = boxes(TDX, 20);
+  const rpx = (x) => (DX + 22 + x + 0.5) * TILE; // 花蓮右欄
+  const hr = boxes(DX + 22, 20);
+  hr[0].y1 = 3 * TILE; // 砂卡礑步道從第 3 排一直到第 28 排
   const DUNGEON = {
     id: 'hualien', name: '花蓮', title: '花蓮・太魯閣峽谷', dx: DX, lx: LX, lobby: LOBBY, npcName: '古城守門員', lobbyName: '古城候位區',
-    portalName: '古城門・花蓮副本', minLevel: 0,
-    maxPlayers: 6, countdownMs: 10000, timeLimitMs: 20 * 60 * 1000, respawnMs: 10000,
-    // 每一關的起點（倒下也是在這裡復活）和範圍（像素）
+    portalName: '古城門・花蓮副本', minLevel: 0, cols: 2,
+    maxPlayers: 6, countdownMs: 10000, timeLimitMs: 30 * 60 * 1000, respawnMs: 10000,
+    // 每一關的起點（倒下也是在這裡復活）和範圍（像素）；warp：前一關過了就把大家傳送過去（換欄）
     stages: [
       { id: 'd1', name: '七星潭', start: { x: px(10.5), y: py(11) }, box: hb[0] },
       { id: 'd2', name: '太魯閣九曲洞', start: { x: px(10.5), y: py(14.6) }, box: hb[1] },
-      { id: 'd3', name: '清水斷崖', start: { x: px(10.5), y: py(30.6) }, box: hb[2] },
+      { id: 'd3', name: '燕子口', start: { x: px(10.5), y: py(30.6) }, box: hb[2] },
+      { id: 'd4', name: '砂卡礑步道', start: { x: rpx(10.5), y: py(4) }, box: { x1: hr[0].x1, y1: 3 * TILE, x2: hr[0].x2, y2: 29 * TILE }, warp: true },
+      { id: 'd5', name: '清水斷崖', start: { x: rpx(10.5), y: py(30.6) }, box: hr[2] },
     ],
-    // 關卡之間的石門：第 n 關過了就打開第 n 道
-    gates: gates(DX),
+    // 關卡之間的石門：第 n 關過了就打開第 n 道（燕子口到砂卡礑是傳送，沒有門）
+    gates: [...gates(DX), [], [[DX + 32, 29], [DX + 33, 29]]],
     // 七星潭的七顆彩色石頭（七種顏色），石碑上會畫出要踩的順序
     stones: [
       { x: px(4), y: py(6), color: '#e8384f', name: '紅' },
@@ -277,10 +335,15 @@
       { x: px(16), y: py(9), color: '#fbfbf8', name: '白' },
     ],
     stele: { x: (DX + 11) * TILE, y: 3 * TILE + 16 }, // 石碑上畫順序的位置
-    seqLen: 5,
-    // 九曲洞：三顆大理石的起點（格子座標）
-    blocks: [[DX + 6, 18], [DX + 15, 18], [DX + 10, 23]],
-    boss: { x: px(10), y: py(38) },
+    seqLen: 7, seqShowMs: 8000,
+    // 大理石的起點（格子座標）和在第幾關：九曲洞四顆、燕子口一顆（一個人玩的時候拿來壓踏板）
+    blocks: [[DX + 6, 17, 1], [DX + 15, 17, 1], [DX + 9, 22, 1], [DX + 12, 22, 1], [DX + 10, 35, 2]],
+    // 燕子口的兩塊踏板（格子座標）
+    plates: [[DX + 3, 36], [DX + 18, 36]], holdMs: 5000,
+    // 砂卡礑：5x3 塊會轉的水道石板（格子座標），泉水從左邊中間那排進來，水車在右邊中間那排
+    pipes: { xs: [4, 7, 10, 13, 16].map(x => DX + 22 + x), ys: [9, 13, 17], src: 1, dst: 1 },
+    flood: { y: 28, every: 50000, rows: 3, max: 4 }, // 溪水每 50 秒漲 3 排，最多漲 4 次
+    boss: { x: rpx(10), y: py(38) },
   };
   const TAIPEI_DG = {
     id: 'taipei', name: '台北101', title: '台北101・天龍之巔', dx: TDX, lx: TLX, lobby: TLOBBY, npcName: '101 電梯小姐', lobbyName: '101 大廳候位區',
@@ -334,7 +397,9 @@
     { id: 'lobby', name: '🏯 古城候位區', lobby: 'hualien', ...LOBBY },
     { id: 'd1', name: '🌊 七星潭', dungeon: 'hualien', x1: DX + 1, y1: 3, x2: DX + 20, y2: 12 },
     { id: 'd2', name: '🪨 太魯閣九曲洞', dungeon: 'hualien', x1: DX + 1, y1: 14, x2: DX + 20, y2: 28 },
-    { id: 'd3', name: '⚔️ 清水斷崖', dungeon: 'hualien', boss: true, x1: DX + 1, y1: 30, x2: DX + 20, y2: 44 },
+    { id: 'd3', name: '燕子口', dungeon: 'hualien', x1: DX + 1, y1: 30, x2: DX + 20, y2: 44 },
+    { id: 'd4', name: '砂卡礑步道', dungeon: 'hualien', x1: DX + 23, y1: 3, x2: DX + 42, y2: 28 },
+    { id: 'd5', name: '⚔️ 清水斷崖', dungeon: 'hualien', boss: true, x1: DX + 23, y1: 30, x2: DX + 42, y2: 44 },
     { id: 'tlobby', name: '101 大廳候位區', lobby: 'taipei', ...TLOBBY },
     { id: 'hub', name: '副本大廳', ...HUB },
     { id: 't1', name: '信義廣場', dungeon: 'taipei', x1: TDX + 1, y1: 3, x2: TDX + 20, y2: 12 },

@@ -173,6 +173,12 @@
   Object.assign(MOBS, {
     rock: { name: '落石怪', level: 18, hp: 650, dmg: [9, 14], range: 80, speed: 60, exp: 120, dungeon: true,
       say: ['轟隆隆～', '落石注意！', '擋路擋路', '🪨'] },
+    crab: { name: '寄居蟹', level: 15, hp: 420, dmg: [6, 10], range: 70, speed: 80, exp: 80, dungeon: true, scale: 0.7,
+      say: ['夾夾！', '這是我的殼', '走開走開'] },
+    swallow: { name: '燕子口的燕子', level: 22, hp: 320, dmg: [8, 12], range: 75, speed: 150, exp: 70, dungeon: true, scale: 0.7, hitMs: 1400,
+      say: ['啾啾！', '這是我家', '俯衝～'] },
+    monkey: { name: '台灣獼猴', level: 25, hp: 750, dmg: [10, 15], range: 75, speed: 95, exp: 150, dungeon: true, scale: 0.8,
+      say: ['嘰嘰！', '你的東西我拿走囉', '嘻嘻'] },
     horse: { name: '黑馬分身', level: 40, hp: 900, dmg: [14, 20], range: 90, speed: 95, exp: 150, dungeon: true, scale: 0.8,
       say: ['嘶～', '🐴', '衝啊！'] },
     fu: { name: '花蓮王', level: 50, hp: 9000, dmg: [0, 0], range: 0, speed: 70, exp: 800, dungeon: true, boss: true, scale: 1,

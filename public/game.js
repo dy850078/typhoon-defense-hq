@@ -343,6 +343,7 @@
   socket.on('dgEnter', (e) => HQ_TAIWAN.play({ region: e.region, title: e.title, sub: 'DUNGEON · 副本' }));
   socket.on('dgStone', (e) => scene && scene.onStone(e));
   socket.on('dgBlock', (e) => scene && scene.onBlock(e));
+  socket.on('dgPipe', (e) => scene && scene.onPipe(e));
   socket.on('dgStage', (e) => scene && scene.onDgStage(e));
   socket.on('dgBallHit', (e) => scene && scene.onBallHit(e));
   socket.on('dgAttack', (a) => scene && scene.onFuAttack(a));
@@ -3233,6 +3234,54 @@
     CR.fill(ctx, '#8a5cd6', r, null); CR.stroke(ctx, r, 1.6);
     ctx.fillStyle = '#ff3b3b'; ctx.beginPath(); ctx.arc(77, 29, 2.2, 0, Math.PI * 2); ctx.fill();
   });
+  // 寄居蟹：背著海螺殼的紅色小螃蟹
+  const drawCrabMob = () => mobCanvas(94, (ctx, r) => {
+    ctx.fillStyle = 'rgba(19,26,40,0.18)'; ctx.beginPath(); ctx.ellipse(48, 81, 24, 4, 0, 0, Math.PI * 2); ctx.fill();
+    [[30, 74, -1], [36, 77, -1], [60, 77, 1], [66, 74, 1]].forEach(([x, y, k]) => CR.line(ctx, x, y - 8, x + k * 6, y + 2, r, 2.6, '#c8402f', 0.4));
+    // 殼：一圈一圈的海螺
+    CR.blob(ctx, 52, 50, 22, 20, r, 0.08); CR.fill(ctx, '#f2d7b0', r, [30, 30, 44, 40]); CR.stroke(ctx, r, 2.6);
+    ctx.beginPath(); for (let i = 0; i <= 30; i++) { const a = i * 0.45, d = 2 + i * 0.55; ctx[i ? 'lineTo' : 'moveTo'](54 + Math.cos(a) * d, 48 + Math.sin(a) * d); }
+    CR.stroke(ctx, r, 1.8, '#b8865a');
+    // 身體和兩隻大鉗子
+    CR.blob(ctx, 40, 66, 16, 10, r, 0.08); CR.fill(ctx, '#e8604a', r, null); CR.stroke(ctx, r, 2.4);
+    [[20, 58], [30, 54]].forEach(([x, y]) => { CR.blob(ctx, x, y, 7, 6, r, 0.1); CR.fill(ctx, '#e8604a', r, null); CR.stroke(ctx, r, 2.2);
+      CR.line(ctx, x - 5, y - 1, x + 1, y + 1, r, 1.6); });
+    [[34, 54], [42, 54]].forEach(([x, y]) => { CR.line(ctx, x, y + 6, x, y, r, 1.8); ctx.fillStyle = CR.INK; ctx.beginPath(); ctx.arc(x, y, 2.6, 0, Math.PI * 2); ctx.fill(); });
+  });
+  // 燕子：深藍色背、白肚子、剪刀尾巴
+  const drawSwallowMob = () => mobCanvas(95, (ctx, r) => {
+    ctx.fillStyle = 'rgba(19,26,40,0.12)'; ctx.beginPath(); ctx.ellipse(48, 81, 18, 3, 0, 0, Math.PI * 2); ctx.fill();
+    // 尾巴
+    ctx.beginPath(); ctx.moveTo(30, 44); ctx.lineTo(10, 30); ctx.lineTo(22, 46); ctx.lineTo(8, 56); ctx.lineTo(32, 50); ctx.closePath();
+    CR.fill(ctx, '#2f3b6b', r, null); CR.stroke(ctx, r, 2.2);
+    // 翅膀（往上張開）
+    ctx.beginPath(); ctx.moveTo(44, 40); ctx.quadraticCurveTo(40, 14, 62, 6); ctx.quadraticCurveTo(58, 26, 58, 40); ctx.closePath();
+    CR.fill(ctx, '#2f3b6b', r, null); CR.stroke(ctx, r, 2.4);
+    CR.blob(ctx, 50, 46, 20, 12, r, 0.06); CR.fill(ctx, '#2f3b6b', r, [30, 34, 40, 24]); CR.stroke(ctx, r, 2.6);
+    CR.blob(ctx, 54, 50, 12, 6, r, 0.08); CR.fill(ctx, '#fbf6e9', r, null);
+    // 頭：紅色喉嚨、黃嘴巴
+    CR.blob(ctx, 68, 40, 10, 9, r, 0.06); CR.fill(ctx, '#2f3b6b', r, null); CR.stroke(ctx, r, 2.4);
+    CR.blob(ctx, 72, 46, 5, 3.5, r, 0.1); CR.fill(ctx, '#e8384f', r, null);
+    ctx.beginPath(); ctx.moveTo(77, 39); ctx.lineTo(85, 41); ctx.lineTo(77, 43); ctx.closePath(); CR.fill(ctx, '#ffd23f', r, null); CR.stroke(ctx, r, 1.6);
+    ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(70, 38, 2.6, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = CR.INK; ctx.beginPath(); ctx.arc(70.6, 38.2, 1.4, 0, Math.PI * 2); ctx.fill();
+  });
+  // 台灣獼猴：咖啡色的毛、粉紅色的臉，手上抱著一顆石頭
+  const drawMonkeyMob = () => mobCanvas(96, (ctx, r) => {
+    ctx.fillStyle = 'rgba(19,26,40,0.18)'; ctx.beginPath(); ctx.ellipse(48, 81, 22, 4, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(64, 70); ctx.quadraticCurveTo(84, 66, 80, 46); CR.stroke(ctx, r, 4, '#8a6a4a');
+    [[38, 76], [56, 76]].forEach(([x, y]) => { CR.blob(ctx, x, y, 7, 4, r, 0.08); CR.fill(ctx, '#7a5a3c', r, null); CR.stroke(ctx, r, 2.2); });
+    CR.blob(ctx, 47, 60, 19, 17, r, 0.08); CR.fill(ctx, '#9b7652', r, [28, 43, 38, 34]); CR.stroke(ctx, r, 2.6);
+    CR.blob(ctx, 47, 64, 11, 10, r, 0.08); CR.fill(ctx, '#d9b896', r, null);
+    // 頭和耳朵
+    [[29, 32], [65, 32]].forEach(([x, y]) => { CR.blob(ctx, x, y, 6, 6, r, 0.1); CR.fill(ctx, '#e7a89a', r, null); CR.stroke(ctx, r, 2); });
+    CR.blob(ctx, 47, 32, 17, 15, r, 0.08); CR.fill(ctx, '#9b7652', r, [30, 17, 34, 30]); CR.stroke(ctx, r, 2.6);
+    CR.blob(ctx, 47, 36, 12, 10, r, 0.08); CR.fill(ctx, '#f0b4a6', r, null); CR.stroke(ctx, r, 1.8);
+    [[42, 33], [52, 33]].forEach(([x, y]) => { ctx.fillStyle = CR.INK; ctx.beginPath(); ctx.arc(x, y, 2.2, 0, Math.PI * 2); ctx.fill(); });
+    ctx.beginPath(); ctx.moveTo(43, 41); ctx.quadraticCurveTo(47, 44, 51, 41); CR.stroke(ctx, r, 1.8);
+    // 抱著的小石頭
+    CR.blob(ctx, 47, 58, 8, 6, r, 0.12); CR.fill(ctx, '#c9ccd3', r, null); CR.stroke(ctx, r, 2);
+  });
   // 花蓮王：黑色披風在後面，前面是 avatar.js 畫的人（npc: 'fu'）
   const drawFuMob = (fist) => mobCanvas(93, (ctx, r) => {
     ctx.beginPath(); ctx.moveTo(28, 50); ctx.quadraticCurveTo(14, 70, 18, 84); ctx.lineTo(78, 84); ctx.quadraticCurveTo(82, 70, 68, 50); ctx.closePath();
@@ -3404,7 +3453,8 @@
         return y < 29 || (y === 29 && ch === 'X') ? 'steel' : 'deck';
       }
       if (x >= MAP.LX) return ch === 'q' || ch === 'O' ? 'temple' : ch === 'Q' ? 'templewall' : 'void';
-      if (x >= MAP.MW) return ch === 'Z' ? 'sea' : ch === 'Y' ? 'rock' : 'yE'.includes(ch) ? 'sand' : ch === 'n' ? 'cliff' : 'cave';
+      if (x >= MAP.MW) return ch === 'Z' ? 'sea' : ch === 'Y' ? 'rock' : 'yE'.includes(ch) ? 'sand' : ch === 'n' ? 'cliff'
+        : ch === 'a' ? 'gorge' : 'msv'.includes(ch) ? 'trail' : 'cave';
       if (y > 30 && ':T~'.includes(ch)) return 'mud';
       if (',T~BFOLI'.includes(ch)) return 'grass';
       if (ch === '#') return 'wall';
@@ -3456,6 +3506,16 @@
           ctx.fillStyle = (x * 3 + y) % 4 ? '#c9ccd3' : '#c2c6ce'; ctx.fillRect(px, py, T, T);
           CR.line(ctx, px + r() * 20, py + r() * T, px + 28 + r() * 20, py + r() * T, r, 1, 'rgba(110,118,132,0.35)', 6);
           CR.dots(ctx, px, py, T, T, 3, 'rgba(255,255,255,0.5)', r, 1.6);
+        } else if (base === 'gorge') {
+          // 燕子口：大理石峽谷裡的步道，灰藍色的碎石
+          ctx.fillStyle = (x * 3 + y) % 4 ? '#b9bfc6' : '#b3b9c1'; ctx.fillRect(px, py, T, T);
+          CR.dots(ctx, px, py, T, T, 4, 'rgba(90,100,112,0.35)', r, 2.4);
+          CR.dots(ctx, px, py, T, T, 3, 'rgba(255,255,255,0.5)', r, 1.6);
+        } else if (base === 'trail') {
+          // 砂卡礑步道：淺色的石板路，路邊長青苔
+          ctx.fillStyle = (x + y) % 2 ? '#d8d2c2' : '#d2ccbb'; ctx.fillRect(px, py, T, T);
+          CR.rect(ctx, px + 3, py + 3, T - 6, T - 6, r, 1); CR.stroke(ctx, r, 1.2, 'rgba(110,100,84,0.35)');
+          if (r() < 0.3) CR.dots(ctx, px + 4, py + T - 14, 18, 10, 5, 'rgba(107,175,123,0.7)', r, 2.2);
         } else if (base === 'cliff') {
           // 清水斷崖上的草地
           ctx.fillStyle = (x * 3 + y) % 5 ? '#b5d68f' : '#aed087'; ctx.fillRect(px, py, T, T);
@@ -3569,6 +3629,17 @@
           CR.rect(ctx, px + 4, py - 30, T * 2 - 8, T + 22, r, 1.4); CR.fill(ctx, '#9aa3b5', r, [px, py - 30, T * 2, T + 22]); CR.stroke(ctx, r, 2.8);
           CR.rect(ctx, px + 10, py - 24, T * 2 - 20, T + 8, r, 1); CR.fill(ctx, '#b8c0cc', r, null); CR.stroke(ctx, r, 1.6);
           ctx.font = '900 11px sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#2b2a33'; ctx.fillText('七星潭', px + T, py - 12);
+        } else if (ch === 's') {
+          // 砂卡礑的泉水：岩壁上的小洞流出藍綠色的水
+          CR.blob(ctx, px + 20, py + 24, 20, 18, r, 0.1); CR.fill(ctx, '#8d8577', r, [px, py + 4, T, 40]); CR.stroke(ctx, r, 2.6);
+          CR.blob(ctx, px + 24, py + 24, 11, 10, r, 0.1); CR.fill(ctx, '#5fc6d0', r, null); CR.stroke(ctx, r, 2);
+          CR.dots(ctx, px + 16, py + 16, 16, 16, 4, 'rgba(255,255,255,0.8)', r, 1.6);
+        } else if (ch === 'v') {
+          // 水車：木頭輪子，一格一格的葉片
+          ctx.fillStyle = 'rgba(19,26,40,0.2)'; ctx.beginPath(); ctx.ellipse(px + 24, py + 44, 22, 5, 0, 0, Math.PI * 2); ctx.fill();
+          ctx.beginPath(); ctx.arc(px + 24, py + 16, 26, 0, Math.PI * 2); CR.fill(ctx, '#c39a62', r, [px - 2, py - 10, T + 4, 52]); CR.stroke(ctx, r, 2.8);
+          for (let k = 0; k < 8; k++) { const ang = k * Math.PI / 4; CR.line(ctx, px + 24, py + 16, px + 24 + Math.cos(ang) * 26, py + 16 + Math.sin(ang) * 26, r, 2.2, '#7a5a3c'); }
+          ctx.beginPath(); ctx.arc(px + 24, py + 16, 6, 0, Math.PI * 2); CR.fill(ctx, '#7a5a3c', r, null); CR.stroke(ctx, r, 2);
         } else if (ch === 'b' && at(x - 1, y) !== 'b') {
           // 副本大廳的告示板（整排畫成一塊木板，上面的字另外寫）
           let n = 0; while (at(x + n, y) === 'b') n++;
@@ -3881,6 +3952,9 @@
         cls: 'suit', suit: '#f2f4f8', tie: '#f2f4f8', npc: 'hsu' }, 'sign'));
       this.textures.addCanvas('mob-rock', drawRockMob());
       this.textures.addCanvas('mob-horse', drawHorseMob());
+      this.textures.addCanvas('mob-crab', drawCrabMob());
+      this.textures.addCanvas('mob-swallow', drawSwallowMob());
+      this.textures.addCanvas('mob-monkey', drawMonkeyMob());
       this.textures.addCanvas('mob-fu', drawFuMob(false));
       this.textures.addCanvas('mob-fu-fist', drawFuMob(true));
       this.textures.addCanvas('dg-gate', drawGate());
@@ -5486,6 +5560,13 @@
     }
 
     isDead() { return !!(myStats && myStats.dead); }
+    // 砂卡礑的溪水漲上來的地方走得比較慢
+    floodSlow() {
+      const d = this.myDg();
+      if (!d || d.id !== 'hualien' || d.stage !== 3 || !d.flood || MAP.stageAt(this.me.x, this.me.y) !== 3) return 1;
+      const F = MAP.DUNGEONS.hualien.flood;
+      return this.me.y >= (F.y + 1 - d.flood * F.rows) * T ? 0.55 : 1;
+    }
 
     // 提示紙條掛在哪裡（世界座標）：top＝放上面時尖角的位置，y／half＝放旁邊時的高度和東西的半寬
     hintAnchor(act) {
@@ -5939,8 +6020,17 @@
     onMobAttack(a) {
       if (fxOff()) return;
       const m = this.mobs.get(a.mid);
-      const who = this.actorOf(a.id);
-      if (!m || !who) return;
+      const who = a.id && this.actorOf(a.id);
+      if (!m) return;
+      // 沒有目標的（例如獼猴在轉石板）：只冒台詞
+      if (!who) {
+        if (!a.say) return;
+        if (m.say) m.say.destroy();
+        const say = m.say = this.bubbleImg(0, -104 * (m.k || 1), a.say);
+        m.add(say);
+        this.time.delayedCall(1600, () => { if (m.say === say) { say.destroy(); m.say = null; } });
+        return;
+      }
       // 往目標撲一下，頭上冒出台詞
       const dir = who.x < m.x ? -1 : 1;
       this.tweens.add({ targets: m.body_, x: dir * 16, angle: dir * 10, duration: 150, yoyo: true, delay: 250 });
@@ -6134,6 +6224,11 @@
         d.gates.forEach((g, i) => MAP.setGate(d, i, false));
       });
       this.blockImgs = D.blocks.map(([x, y]) => this.add.image((x + 0.5) * T, (y + 1) * T + 2, 'fx-marble').setOrigin(0.5, 1).setDepth((y + 1) * T));
+      // 燕子口的兩塊踏板、砂卡礑的水道石板和漲上來的溪水（狀態變了就重畫）
+      this.plateG = this.add.graphics().setDepth(-6);
+      this.pipeG = this.add.graphics().setDepth(-6);
+      this.floodG = this.add.graphics().setDepth(-5);
+      this.drawPlates(); this.drawPipes();
       this.blockPos = D.blocks.map(b => b.slice());
       this.blockPos.forEach(([x, y]) => MAP.dyn.add(x + ',' + y));
       // 87 樓：四個控制台的燈、盪來盪去的阻尼球（球的鋼索每一格重畫）
@@ -6195,7 +6290,10 @@
       });
       if (d.id === 'hualien') {
         d.blocks.forEach(([x, y], i) => this.placeBlock(i, x, y, true));
-        this.drawStele();
+        this.drawStele(); this.drawPlates(); this.drawPipes();
+        // 石碑的順序亮著的時候，時間到要自己藏起來
+        clearTimeout(this.steleTimer);
+        if (d.seqLeft > 0) this.steleTimer = setTimeout(() => { if (this.dgs.hualien === d) { d.seq = d.seq.map((v, k) => (k < d.progress ? v : -1)); this.drawStele(); this.renderDgPanel(true); } }, d.seqLeft + 50);
       } else this.drawConsoles();
       if (this.hereDg() === d || this.myDg() === d) this.renderDgPanel(true);
       this.renderHubBoard();
@@ -6229,12 +6327,66 @@
       if (!d || !d.seq || !d.seq.length || d.phase === 'idle') return;
       const n = d.seq.length, gap = 15, x0 = S.x - (n - 1) * gap / 2, y = S.y;
       d.seq.forEach((si, k) => {
+        // 沒亮的時候是 -1：畫一顆灰色的問號
+        if (si < 0) { g.fillStyle(0x6b7280, 1); g.fillCircle(x0 + k * gap, y, 6); g.lineStyle(2, 0x2b2a33, 1); g.strokeCircle(x0 + k * gap, y, 6); return; }
         const col = Phaser.Display.Color.HexStringToColor(D.stones[si].color).color, done = k < d.progress;
         g.fillStyle(col, 1); g.fillCircle(x0 + k * gap, y, 6);
         g.lineStyle(2, done ? 0xffd23f : 0x2b2a33, 1); g.strokeCircle(x0 + k * gap, y, done ? 7.5 : 6);
         if (done) this.stoneImgs[si].glow.setVisible(true);
       });
       if (d.stage > 0) { g.lineStyle(3, 0xffd23f, 1); g.strokeRoundedRect(S.x - n * gap / 2 - 6, y - 12, n * gap + 12, 24, 8); }
+    }
+    // 燕子口的踏板：有人踩著就亮黃色；兩塊都亮的時候中間畫一圈倒數
+    drawPlates() {
+      const g = this.plateG, d = this.dgs && this.dgs.hualien, D = MAP.DUNGEONS.hualien;
+      g.clear();
+      D.plates.forEach(([x, y], i) => {
+        const cx = (x + 0.5) * T, cy = (y + 0.5) * T, on = !!(d && d.plates && d.plates[i]), done = d && d.stage > 2;
+        g.fillStyle(0x131a28, 0.18); g.fillRoundedRect(cx - 24, cy - 20, 50, 44, 8);
+        g.fillStyle(on || done ? 0xffd23f : 0x9aa3b5, 1); g.fillRoundedRect(cx - 22, cy - 22, 44, 40, 8);
+        g.lineStyle(3, 0x2b2a33, 0.9); g.strokeRoundedRect(cx - 22, cy - 22, 44, 40, 8);
+        g.lineStyle(2, 0xffffff, 0.6); g.strokeRoundedRect(cx - 15, cy - 15, 30, 26, 5);
+      });
+      if (d && d.hold > 0 && d.stage === 2) {
+        const [a, b] = D.plates, mx = (a[0] + b[0] + 1) / 2 * T, my = a[1] * T - 30;
+        g.lineStyle(8, 0x2b2a33, 0.25); g.strokeCircle(mx, my, 26);
+        g.lineStyle(8, 0x7be08f, 1); g.beginPath(); g.arc(mx, my, 26, -Math.PI / 2, -Math.PI / 2 + d.hold * Math.PI * 2); g.strokePath();
+      }
+    }
+    // 砂卡礑：每塊石板畫出水道，泉水流得到的那些變成藍色；溪水漲到哪裡就蓋一層藍
+    drawPipes() {
+      const g = this.pipeG, d = this.dgs && this.dgs.hualien, P = MAP.DUNGEONS.hualien.pipes, C = P.xs.length;
+      g.clear(); this.floodG.clear();
+      if (!d || !d.pipes || !d.pipes.length) return;
+      const wet = new Set(d.pipeFlow || []), done = d.stage > 3;
+      const chan = (x1, y1, x2, y2, w) => {
+        g.lineStyle(14, 0x2b2a33, 0.9); g.lineBetween(x1, y1, x2, y2);
+        g.lineStyle(9, w ? 0x5fc6d0 : 0xe8e1d0, 1); g.lineBetween(x1, y1, x2, y2);
+      };
+      // 泉水到第一欄、最後一欄到水車的固定水道
+      const sy = (P.ys[P.src] + 0.5) * T, dy = (P.ys[P.dst] + 0.5) * T;
+      chan((P.xs[0] - 2.4) * T, sy, (P.xs[0]) * T, sy, true);
+      chan((P.xs[C - 1] + 1) * T, dy, (P.xs[C - 1] + 3.4) * T, dy, done);
+      d.pipes.forEach((m, i) => {
+        const cx = (P.xs[i % C] + 0.5) * T, cy = (P.ys[Math.floor(i / C)] + 0.5) * T, w = wet.has(i);
+        g.fillStyle(0x131a28, 0.2); g.fillRoundedRect(cx - 24, cy - 21, 52, 50, 8);
+        g.fillStyle(0xc9c3b8, 1); g.fillRoundedRect(cx - 25, cy - 25, 50, 50, 8);
+        g.lineStyle(3, 0x2b2a33, 0.9); g.strokeRoundedRect(cx - 25, cy - 25, 50, 50, 8);
+        [[1, 0, -1], [2, 1, 0], [4, 0, 1], [8, -1, 0]].forEach(([bit, ux, uy]) => { if (m & bit) chan(cx, cy, cx + ux * 24, cy + uy * 24, w); });
+        g.fillStyle(w ? 0x5fc6d0 : 0xe8e1d0, 1); g.fillCircle(cx, cy, 5);
+      });
+      const F = MAP.DUNGEONS.hualien.flood, B = MAP.DUNGEONS.hualien.stages[3].box;
+      if (d.flood > 0 && !done) {
+        const top = (F.y + 1 - d.flood * F.rows) * T;
+        this.floodG.fillStyle(0x4f86c6, 0.35).fillRect(B.x1, top, B.x2 - B.x1, (F.y + 1) * T - top);
+        this.floodG.lineStyle(3, 0xffffff, 0.7).lineBetween(B.x1, top, B.x2, top);
+      }
+    }
+    onPipe(e) {
+      const d = this.dgs.hualien;
+      if (!d || !d.pipes) return;
+      d.pipes[e.i] = e.m;
+      this.drawPipes();
     }
     onStone(e) {
       const st = MAP.DUNGEONS.hualien.stones[e.i];
@@ -6298,10 +6450,10 @@
       if (!d || d.id !== e.id) return;
       this.cameras.main.shake(500, 0.006);
       const msg = {
-        hualien: ['石門打開了！往下走到太魯閣九曲洞', '石門打開了！往下走到清水斷崖……小心'],
+        hualien: ['石門打開了！往下走到太魯閣九曲洞', '石門打開了！往下走到燕子口，找到兩塊踏板', '溪水把大家沖到砂卡礑步道了！踩石板把水道轉到通', '水車轉起來了！往下走到清水斷崖……小心'],
         taipei: ['電梯門開了！往下走到 87 樓，小心阻尼球', '阻尼球停了！電梯直達觀景台……天龍王就在上面'],
       }[e.id];
-      toast(msg[Math.min(e.stage, 2) - 1]);
+      toast(msg[Math.min(e.stage, msg.length) - 1]);
     }
     onDgClear(c) {
       const d = this.myDg();
@@ -6332,16 +6484,22 @@
         let extra = '';
         // 七星潭：面板上也畫出石碑的顏色順序（手機上石碑常常被上面的條擋住）
         if (d.id === 'hualien' && d.stage === 0 && d.phase === 'run') extra = '<span class="dg-seq">' + d.seq.map((si, k) =>
-          `<i style="background:${D.stones[si].color}" class="${k < d.progress ? 'on' : ''}"></i>`).join('') + '</span>';
+          `<i style="background:${si < 0 ? '#6b7280' : D.stones[si].color}" class="${k < d.progress ? 'on' : ''}"></i>`).join('') + '</span>' +
+          (d.seq.some(si => si < 0) ? '<span class="dg-note">記住順序了嗎？</span>' : '<span class="dg-note">快記下來！</span>');
+        // 燕子口：兩塊踏板有沒有人踩；砂卡礑：溪水漲到第幾次
+        if (d.id === 'hualien' && d.phase === 'run' && d.stage === 2) extra = '<span class="dg-seq">' + (d.plates || []).map(on =>
+          `<i style="background:${on ? '#ffd23f' : '#5b6577'}" class="${on ? 'on' : ''}"></i>`).join('') + '</span>';
+        if (d.id === 'hualien' && d.phase === 'run' && d.stage === 3 && d.flood) extra = `<span class="dg-note">溪水 ${d.flood}／${D.flood.max}</span>`;
         // 信義廣場：第幾波；87 樓：四個控制台亮了幾個
         if (d.id === 'taipei' && d.phase === 'run' && d.stage === 0) extra = `<span class="dg-note">第 ${Math.max(1, d.wave)}／${d.waves} 波</span>`;
         if (d.id === 'taipei' && d.phase === 'run' && d.stage === 1) extra = '<span class="dg-seq">' + d.lit.map(t =>
           `<i style="background:${t > 0 ? '#ffd23f' : '#5b6577'}" class="${t > 0 ? 'on' : ''}"></i>`).join('') + '</span>';
         // 手機上縮成一顆計時膠囊（只有關卡和時間），點一下才展開按鈕
         const short = d.phase === 'clear' ? `通關 ${sec(Math.max(0, left))}` : `第 ${Math.min(d.stage, last) + 1} 關 ${sec(Math.max(0, left))}`;
-        key = 'in|' + d.id + what + d.stage + '|' + d.progress + '|' + d.wave + '|' + (d.lit || []).map(t => t > 0 ? 1 : 0).join('');
+        key = 'in|' + d.id + what + d.stage + '|' + d.progress + '|' + d.wave + '|' + (d.lit || []).map(t => t > 0 ? 1 : 0).join('') +
+          '|' + (d.seq || []).join(',') + '|' + (d.plates || []).join(',') + '|' + (d.flood || 0);
         html = `<span class="dg-full">${D.name}副本 · ${what}</span><span class="dg-short">${short}</span>` + extra + '<span class="dg-btns">' +
-          (d.id === 'hualien' && d.stage === 1 && d.phase === 'run' ? '<button class="hud-btn tiny" data-act="reset" type="button">重排大理石</button>' : '') +
+          (d.id === 'hualien' && (d.stage === 1 || d.stage === 2) && d.phase === 'run' ? '<button class="hud-btn tiny" data-act="reset" type="button">重排大理石</button>' : '') +
           '<button class="hud-btn tiny" data-act="leave" type="button">離開</button></span>';
       } else {
         const homeBtn = '<button class="hud-btn tiny" data-act="home" type="button">回副本大廳</button>';
@@ -6363,10 +6521,10 @@
     // 九曲洞：往大理石的方向走（或點石頭）就會推
     tryPush(dx, dy) {
       const d = this.myDg();
-      if (!d || d.id !== 'hualien' || d.stage !== 1 || MAP.stageAt(this.me.x, this.me.y) !== 1) return;
+      if (!d || d.id !== 'hualien' || (d.stage !== 1 && d.stage !== 2) || MAP.stageAt(this.me.x, this.me.y) !== d.stage) return;
       const fx = Math.floor((this.me.x + dx * 26) / T), fy = Math.floor((this.me.y - 4 + dy * 26) / T);
       const i = this.blockPos.findIndex(([x, y]) => x === fx && y === fy);
-      if (i < 0) return;
+      if (i < 0 || MAP.DUNGEONS.hualien.blocks[i][2] !== d.stage) return;
       const now = performance.now();
       if (now - (this.lastPush || 0) < 260) return;
       this.lastPush = now;
@@ -6610,7 +6768,7 @@
       const len = Math.hypot(dx, dy);
       let moving = false;
       if (len > 0) {
-        const step = SPEED * dt / len;
+        const step = SPEED * this.floodSlow() * dt / len;
         const nx = this.me.x + dx * step, ny = this.me.y + dy * step;
         const ox = this.me.x, oy = this.me.y;
         if (this.canStand(nx, this.me.y)) this.me.x = nx;
@@ -6618,7 +6776,7 @@
         moving = this.me.x !== ox || this.me.y !== oy;
         // 九曲洞：往大理石走過去就是推
         const md = this.myDg();
-        if (md && md.id === 'hualien' && md.stage === 1) {
+        if (md && md.id === 'hualien' && (md.stage === 1 || md.stage === 2)) {
           const hz = Math.abs(dx) >= Math.abs(dy), pdx = hz ? Math.sign(dx) : 0, pdy = hz ? 0 : Math.sign(dy);
           if (!this.canStand(this.me.x + pdx * 4, this.me.y + pdy * 4)) this.tryPush(pdx, pdy);
         }
@@ -6705,10 +6863,12 @@
       // 總部、副本、候位區分開設鏡頭範圍，才不會看到中間的空地；比螢幕窄的區域放在畫面正中間
       const zone = MAP.zoneOf(this.me.x), inD = zone === 'dungeon', zd = MAP.dungeonAt(this.me.x);
       const cam = this.cameras.main, vw = cam.width / cam.zoom, vh = cam.height / cam.zoom;
-      const camKey = MAP.areaOf(this.me.x) + '|' + Math.round(vw) + 'x' + Math.round(vh);
+      // 有兩欄的副本（花蓮）：鏡頭只看自己在的那一欄
+      const col = inD && zd.cols > 1 && this.me.x >= (zd.dx + 22) * T ? 1 : 0;
+      const camKey = MAP.areaOf(this.me.x) + col + '|' + Math.round(vw) + 'x' + Math.round(vh);
       if (camKey !== this.camKey) {
         this.camKey = camKey;
-        const [x1, x2, y1, y2] = zone === 'dungeon' ? [zd.dx, zd.dx + 22, 0, MAP.H]
+        const [x1, x2, y1, y2] = zone === 'dungeon' ? [zd.dx + col * 22, zd.dx + col * 22 + 22, 0, MAP.H]
           : zone === 'lobby' ? [zd.lx, zd.lx + 12, 0, 18] : zone === 'hub' ? [MAP.HX, MAP.HX + 16, 0, 18] : [0, MAP.MW, 0, MAP.H];
         const w = (x2 - x1) * T, h = (y2 - y1) * T;
         const bw = Math.max(w, vw), bh = Math.max(h, vh), bx = x1 * T - (bw - w) / 2, by = y1 * T - (bh - h) / 2;

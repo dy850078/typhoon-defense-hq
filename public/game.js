@@ -931,7 +931,7 @@
           if (w.face) {
             box.classList.add('face');
             const f = el('div', 'tv-face');
-            const u = faceOf(id);
+            const u = bigFaceOf(id, 320);
             if (u) { const i = document.createElement('img'); i.src = u; i.alt = ''; f.appendChild(i); }
             else f.appendChild(icon('cls-' + (w.face.cls || 'staff'), ''));
             box.appendChild(f);
@@ -1870,6 +1870,23 @@
     c.getContext('2d').drawImage(src, (FRAME.ox + 8) * 2, (FRAME.oy - 2) * 2, 96, 96, 0, 0, 48, 48);
     const url = c.toDataURL();
     faceCache.set(who.texKey, url);
+    return url;
+  }
+  // 大一點的頭像（小樹屋大畫面用）：直接用角色資料重畫一張高解析度的，頭放正中間
+  function bigFaceOf(id, px) {
+    const who = scene && (scene.me && me && id === me.id ? scene.me : scene.remotes.get(id));
+    if (!who || !who.look) return faceOf(id);
+    const look = Object.assign({}, who.look, { cls: who.stats ? who.stats.cls : 'staff' });
+    const key = 'big-' + px + '-' + (who.texKey || JSON.stringify(look));
+    if (faceCache.has(key)) return faceCache.get(key);
+    const c = document.createElement('canvas'); c.width = c.height = px;
+    const x = c.getContext('2d');
+    // 頭的中心大約在角色座標 (32, 27)；切 54×54，四周留一點邊，頭髮、帽子不會貼到圓框
+    const S = 54, k = px / S;
+    x.scale(k, k); x.translate(-(32 - S / 2), -(27 - S / 2));
+    try { AV.drawAvatar(x, look); } catch (e) { return faceOf(id); }
+    const url = c.toDataURL();
+    faceCache.set(key, url);
     return url;
   }
   // 記分板：只列前 5 名（自己在 5 名外也會列出來）；名次往上爬的人會往上滑並閃一下

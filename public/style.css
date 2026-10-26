@@ -853,9 +853,9 @@ button.inv-item:hover { border-color: var(--accent); }
 .tree-video.stage .tv-tile video { object-fit: contain; }
 .tree-video.stage .tv-name { font-size: 13px; }
 .tv-tile.face { display: flex; align-items: center; justify-content: center; background: #24304a; cursor: default; }
-.tv-face { width: min(40%, 160px); aspect-ratio: 1; border-radius: 50%; border: 3px solid var(--ink); background: var(--paper); overflow: hidden;
+.tv-face { height: min(62%, 180px); max-width: 80%; aspect-ratio: 1; flex-shrink: 0; border-radius: 50%; border: 3px solid var(--ink); background: var(--paper); overflow: hidden;
   display: flex; align-items: center; justify-content: center; }
-.tv-face img { width: 100%; height: 100%; display: block; }
+.tv-face img { width: 100%; height: 100%; display: block; object-fit: cover; }
 .tv-face .hq-icon { width: 70%; height: 70%; }
 .tv-fold { background: none; border: 0; color: inherit; font-size: 14px; cursor: pointer; padding: 0 4px; }
 .tree-video.folded .tv-grid { display: none; }

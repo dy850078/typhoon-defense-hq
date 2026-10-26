@@ -673,26 +673,25 @@
       ctx.save(); ctx.translate(31.9, 47.9); ctx.rotate(0.9); ctx.scale(1.25, 1.25); ctx.translate(0, 16);
       // 杖身：左右兩條邊歪歪扭扭，最下面收成一個尖；上面接進杖頭裡
       const shaft = () => {
-        ctx.beginPath(); ctx.moveTo(-5.5, -40);
+        ctx.beginPath(); ctx.moveTo(-3.6, -42);
         ctx.quadraticCurveTo(-2, -31, -2.8, -22); ctx.quadraticCurveTo(-3.8, -15, -2.2, -9); ctx.quadraticCurveTo(-1, -3, -1.6, 3);
         ctx.quadraticCurveTo(-0.6, 9, 1.4, 15);
-        ctx.quadraticCurveTo(2.2, 9, 2.4, 3); ctx.quadraticCurveTo(1.6, -3, 2.8, -9); ctx.quadraticCurveTo(3.6, -16, 2.2, -22); ctx.quadraticCurveTo(1.6, -31, 5.5, -40);
+        ctx.quadraticCurveTo(2.2, 9, 2.4, 3); ctx.quadraticCurveTo(1.6, -3, 2.8, -9); ctx.quadraticCurveTo(3.6, -16, 2.2, -22); ctx.quadraticCurveTo(1.6, -31, 3.6, -42);
         ctx.closePath();
       };
       // 杖頭：木頭往上捲成一個月牙，缺口朝右上；下面那個角往右伸出去
-      const HEAD = [[-4.5, -36.5], [-8.5, -41], [-10, -47], [-9, -53.5], [-5.5, -58.5], [-0.5, -61], [3.5, -60.5], [5, -58.5],
-        [2, -56.5], [-0.5, -53], [-1, -48.5], [1, -45], [5, -43.5], [9.5, -44.5], [12.5, -46], [13.5, -42.5], [11, -38.5], [6, -36], [1.5, -35]];
+      const HEAD = [[-3.5, -38.5], [-6, -41.5], [-6.8, -47], [-6, -52.5], [-3.5, -56.8], [0, -59], [3.5, -59], [5, -57.6],
+        [2.5, -56], [0.4, -52.8], [-0.4, -48.5], [1.5, -45.4], [5, -44.3], [9.5, -45], [12.5, -46.4], [13, -43.6], [10.5, -41.3], [6, -40.2], [1.5, -39.3]];
       // 一體成型：兩塊的外框先畫兩倍粗，再把兩塊都填色蓋上去，接縫的線就被蓋掉，只剩外面一圈
       shaft(); C.stroke(ctx, r, 4); C.smooth(ctx, HEAD); C.stroke(ctx, r, 4.4);
-      shaft(); C.fill(ctx, WOOD, r, [-6, -40, 12, 55]); C.smooth(ctx, HEAD); C.fill(ctx, WOOD, r, [-10, -61, 24, 26]);
+      shaft(); C.fill(ctx, WOOD, r, [-6, -40, 12, 55]); C.smooth(ctx, HEAD); C.fill(ctx, WOOD, r, [-7, -59, 20, 21]);
       [[-0.8, -36, 0.4, -20, -1, -6], [1, -33, 1.6, -16, 0.6, 2]].forEach(([x1, y1, cx, cy, x2, y2]) => {
         ctx.beginPath(); ctx.moveTo(x1, y1); ctx.quadraticCurveTo(cx, cy, x2, y2); C.stroke(ctx, r, 0.9, GRAIN);
       });
       // 木紋順著月牙彎
       ctx.save(); C.smooth(ctx, HEAD); ctx.clip();
-      [[[-2, -37.5], [-7, -44], [-6.5, -53], [-2, -58], [2.5, -59]],
-       [[1, -38], [-3.5, -44], [-4, -51.5], [-1.5, -56.5]],
-       [[3.5, -39], [8, -40.5], [11.5, -42.5]]].forEach(line => {
+      [[[-2, -40], [-3.6, -46], [-3.2, -52], [-1, -56], [2.5, -57.6]],
+       [[3, -42.2], [8, -43], [11.5, -44.6]]].forEach(line => {
         ctx.beginPath(); ctx.moveTo(line[0][0], line[0][1]);
         for (let i = 1; i < line.length; i++) { const [x0, y0] = line[i - 1], [x1, y1] = line[i]; ctx.quadraticCurveTo(x0 + (y1 - y0) * 0.2, y0 - (x1 - x0) * 0.2, x1, y1); }
         C.stroke(ctx, r, 0.9, GRAIN);
@@ -714,6 +713,13 @@
       ctx.restore();
       ctx.beginPath(); ctx.arc(ox, oy, R, 0, Math.PI * 2); C.stroke(ctx, r, 1.6);
       C.blob(ctx, ox - 1.6, oy - 1.8, 1.2, 0.8, r, 0.1, 8); ctx.fillStyle = 'rgba(255,255,255,0.9)'; ctx.fill();
+      // 一顆小亮光斜斜地繞著寶珠轉圈；轉到後面時變小變淡
+      const sa = t * Math.PI * 2 * 2, front = Math.sin(sa) > 0;
+      const sx = ox + Math.cos(sa) * R * 1.9, sy = oy + Math.sin(sa) * R * 0.7 - Math.cos(sa) * R * 0.5;
+      ctx.save(); ctx.globalAlpha = front ? 1 : 0.45;
+      const sg = ctx.createRadialGradient(sx, sy, 0, sx, sy, 3.2); sg.addColorStop(0, 'rgba(60,220,150,0.7)'); sg.addColorStop(1, 'rgba(60,220,150,0)');
+      ctx.fillStyle = sg; ctx.beginPath(); ctx.arc(sx, sy, 3.2, 0, Math.PI * 2); ctx.fill();
+      sparkle(ctx, sx, sy, front ? 1.4 : 0.9, '#ffffff'); ctx.restore();
       ctx.restore();
       [[77, 14, 1.8], [60, 6, 1.3]].forEach(([x, y, s]) => sparkle(ctx, x, y, s, '#b8ffe0'));
     } },

@@ -348,7 +348,10 @@
   socket.on('skillFx', (fx) => scene && scene.onSkillFx(fx));
   socket.on('mob', (m) => scene && scene.setMob(m));
   socket.on('dungeon', (d) => scene && scene.setDungeon(d));
-  socket.on('dgEnter', (e) => HQ_TAIWAN.play({ region: e.region, title: e.title, sub: 'DUNGEON · 副本' }));
+  socket.on('dgEnter', (e) => {
+    const p = introWait = HQ_TAIWAN.play({ region: e.region, title: e.title, sub: 'DUNGEON · 副本' });
+    p.then(() => { if (introWait === p) introWait = null; });
+  });
   socket.on('dgStone', (e) => scene && scene.onStone(e));
   socket.on('dgBlock', (e) => scene && scene.onBlock(e));
   socket.on('dgPipe', (e) => scene && scene.onPipe(e));
@@ -417,7 +420,7 @@
   socket.on('songState', (st) => SONG.onState(st));
   socket.on('songLog', (l) => SONG.log(l));
   // 只跟自己（或自己的副本隊伍）有關的系統訊息：字比較多的停久一點
-  socket.on('sysToast', (m) => toast(m.text, null, Math.min(7000, 2600 + m.text.length * 60)));
+  socket.on('sysToast', (m) => hint(m.text));
   socket.on('chat', (msg) => {
     addMessage(msg);
     if (!msg.system && scene) scene.showBubble(msg.id, msg.text);
@@ -3002,8 +3005,36 @@
   function toast(text, iconKey, ms) {
     const t = el('div', 'toast', plain(text));
     if (iconKey && window.HQ_ICONS && HQ_ICONS.url(iconKey)) t.prepend(icon(iconKey, ''), ' ');
+    // 淡出動畫跟著停留時間走，不然長的提示 2 秒多就看不到了
+    if (ms) t.style.animationDuration = ms + 'ms';
     $('toasts').appendChild(t);
     setTimeout(() => t.remove(), ms || 2600);
+    return t;
+  }
+  // 走進這些地方提醒一句規則；副本的也會常駐在副本面板上
+  const ROOM_TIPS = {
+    walk: '野區的怪會追人，打不過就回到圍欄裡',
+    office: '這一區的怪比較強，急件老闆也在這裡',
+    temple: '最強的一區，小心虎姑婆婆',
+    d1: '石碑上的顏色順序只亮一下，快記下來再照順序踩',
+    d2: '把四顆大理石推進地上的凹槽，推到角落會卡住',
+    d3: '兩塊踏板要同時有人踩，一個人可以把大理石推上去壓',
+    d4: '踩石板會轉水道，把泉水接到水車；溪水會漲，獼猴會亂轉',
+    d5: '紅色範圍快閃開，他舉拳就是要衝鋒',
+    t1: '撐過三波怪，地上的紅圈是招牌要掉下來了',
+    t2: '站在答案按鈕上 1.5 秒就算作答，答錯會掉招牌下來',
+    t3: '看阻尼球閃的顏色順序點控制台，四個要同時亮',
+    t4: '碰避雷針，它和左右兩根會一起切換，五根全亮就過關',
+    t5: '黃圈是分攤要靠過去，暴風來時躲到柱子後面',
+  };
+  // 要讀的提示（副本規則、關卡訊息）：依字數停 5～12 秒，點一下就關掉
+  // 進副本的台灣地圖動畫還在播：提示等它播完再出來，不然一出來就被蓋住
+  let introWait = null;
+  function hint(text) {
+    if (introWait) { introWait.then(() => hint(text)); return; }
+    const t = toast(text, null, Math.min(12000, Math.max(5000, 2000 + plain(text).length * 150)));
+    t.classList.add('tap');
+    t.addEventListener('click', () => t.remove());
   }
   $('basic-btn').addEventListener('click', () => {
     if (!scene || !scene.me) return;
@@ -7043,6 +7074,8 @@
       if (Array.isArray(d)) { d.forEach(x => this.setDungeon(x)); return; }
       const first = !this.dgs[d.id], D = MAP.DUNGEONS[d.id];
       this.dgs[d.id] = d;
+      // 還沒出發：下一趟走進每一關都再提醒一次規則
+      if (d.phase === 'idle' || d.phase === 'countdown') D.stages.forEach(s => delete this.told[s.id]);
       d.at = performance.now();
       d.gates.forEach((open, i) => {
         MAP.setGate(D, i, open);
@@ -7321,7 +7354,9 @@
           '|' + (d.seq || []).join(',') + '|' + (d.plates || []).join(',') + '|' + (d.flood || 0) + '|' + (d.quiz ? d.quiz.done : '') + '|' + (d.rods || []).join(',');
         html = `<span class="dg-full">${D.name}副本 · ${what}</span><span class="dg-short">${short}</span>` + extra + '<span class="dg-btns">' +
           (d.id === 'hualien' && (d.stage === 1 || d.stage === 2) && d.phase === 'run' ? '<button class="hud-btn tiny" data-act="reset" type="button">重排大理石</button>' : '') +
-          '<button class="hud-btn tiny" data-act="leave" type="button">離開</button></span>';
+          '<button class="hud-btn tiny" data-act="leave" type="button">離開</button></span>' +
+          // 這關要做什麼：常駐在面板上，提示紙條消失了也看得到
+          (d.phase === 'run' && ROOM_TIPS[st.id] ? `<span class="dg-goal">${ROOM_TIPS[st.id]}</span>` : '');
       } else {
         const homeBtn = '<button class="hud-btn tiny" data-act="home" type="button">回副本大廳</button>';
         const lv = D.minLevel ? ` · Lv.${D.minLevel} 以上` : '';
@@ -7801,22 +7836,7 @@
         if (room && (room.field || room.dungeon)) setSkillFold(false);
         else if (room) setSkillFold(true);
         // 其他地方的玩法交給頭上的提示紙條，只有不講會不知道規則的地方才提醒一句
-        const tips = {
-          walk: '野區的怪會追人，打不過就回到圍欄裡',
-          office: '這一區的怪比較強，急件老闆也在這裡',
-          temple: '最強的一區，小心虎姑婆婆',
-          d1: '石碑上的顏色順序只亮一下，快記下來再照順序踩',
-          d2: '把四顆大理石推進地上的凹槽，推到角落會卡住',
-          d3: '兩塊踏板要同時有人踩，一個人可以把大理石推上去壓',
-          d4: '踩石板會轉水道，把泉水接到水車；溪水會漲，獼猴會亂轉',
-          d5: '紅色範圍快閃開，他舉拳就是要衝鋒',
-          t1: '撐過三波怪，地上的紅圈是招牌要掉下來了',
-          t2: '站在答案按鈕上 1.5 秒就算作答，答錯會掉招牌下來',
-          t3: '看阻尼球閃的顏色順序點控制台，四個要同時亮',
-          t4: '碰避雷針，它和左右兩根會一起切換，五根全亮就過關',
-          t5: '黃圈是分攤要靠過去，暴風來時躲到柱子後面',
-        };
-        if (tips[rid] && !this.told[rid]) { this.told[rid] = true; toast(tips[rid]); }
+        if (ROOM_TIPS[rid] && !this.told[rid]) { this.told[rid] = true; hint(ROOM_TIPS[rid]); }
       }
     }
 

@@ -29,7 +29,8 @@
     defib: 150, arrowRain: 650, roar: 200, icicle: 330, mothership: 600, note: 280, paint: 260, noteBlade: 760,
     lilyDart: 280, pebbleOrb: 330, marbleSmash: 160, cardFlick: 260, damperSwing: 340, spireThrust: 150 };
   // 人物貼圖比 64x80 大一圈，翅膀、氣球、帽子才畫得下；(16,32) 是人物框的左上角，腳底在 y=108
-  const FRAME = { w: 96, h: 112, ox: 16, oy: 32 };
+  // 角色貼圖的框：人物 64x80，上面留 32（帽子、翅膀），左右各留 32（背著的魔杖、戰錘會伸出去）
+  const FRAME = { w: 128, h: 112, ox: 32, oy: 32 };
   const AV_ORIGIN_Y = (FRAME.oy + 76) / FRAME.h;
   const T = MAP.TILE;
   const SPEED = 220;
@@ -1192,6 +1193,8 @@
   let modalKind = null;
   function openModal(kind, title, body) {
     modalKind = kind;
+    // 扭蛋的開獎畫面是蓋在整張卡片上的，換內容時要一起拿掉
+    $('modal').querySelectorAll('.gacha-stage').forEach(e => e.remove());
     $('modal').classList.remove('wide');
     $('modal-title').textContent = plain(title);
     const box = $('modal-body');
@@ -1200,7 +1203,7 @@
     $('modal').hidden = false;
     chatInput.blur();
   }
-  function closeModal() { if ($('modal').contains(document.activeElement)) document.activeElement.blur(); $('modal').hidden = true; $('modal').classList.remove('wide'); modalKind = null; }
+  function closeModal() { if ($('modal').contains(document.activeElement)) document.activeElement.blur(); $('modal').querySelectorAll('.gacha-stage').forEach(e => e.remove()); $('modal').hidden = true; $('modal').classList.remove('wide'); modalKind = null; }
   $('modal-x').addEventListener('click', closeModal);
   $('modal').addEventListener('pointerdown', (e) => { if (e.target === $('modal')) closeModal(); });
 

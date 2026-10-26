@@ -1712,7 +1712,7 @@
   }
   const bagIcon = (kind, k) => kind === 'food' ? 'item-' + k : kind === 'decor' ? 'dec-' + k : 'gear-' + k;
   const bagName = (kind, k) => kind === 'food' ? MAP.ITEMS[k].name : kind === 'decor' ? DC.DECOR[k].name : GR.GEAR[k].name;
-  // 一頁裡的格子：補品一種一格；家具同種疊 10 個一格；裝備一件一格（同一件有兩件就兩格）
+  // 一頁裡的格子：補品一種一格；家具同種疊 10 個一格；裝備同款疊一格（只有身上那件的格子不算格數，free）
   function bagCells(tab) {
     const out = [];
     const invOf = (sec) => Object.keys(MAP.ITEMS).filter(k => myInv[k] > 0 && BAG.invSec(k) === sec);
@@ -1731,7 +1731,7 @@
       const order = ['SSR', 'SR', 'R'];
       Object.keys(myGear).filter(id => GR.GEAR[id] && myGear[id] > 0)
         .sort((a, b) => order.indexOf(GR.GEAR[a].rarity) - order.indexOf(GR.GEAR[b].rarity))
-        .forEach(id => { for (let i = 0; i < myGear[id]; i++) out.push({ kind: 'gear', k: id, n: 1, on: i === 0 && Object.values(myEquip).includes(id) }); });
+        .forEach(id => out.push({ kind: 'gear', k: id, n: myGear[id], on: Object.values(myEquip).includes(id), free: !BAG.inBag({ gear: myGear, equip: myEquip }, id) }));
     }
     return out;
   }
@@ -1816,7 +1816,7 @@
     Object.entries(BAG.SECTIONS).forEach(([sec, S]) => {
       const b = el('button', 'bag-tab' + (sec === bagTab ? ' on' : ''));
       b.type = 'button';
-      b.append(S.name, el('span', 'bag-tab-n mono', `${BAG.used({ inv: myInv, furn: myFurn, gear: myGear }, sec)}/${S.slots}`));
+      b.append(S.name, el('span', 'bag-tab-n mono', `${BAG.used({ inv: myInv, furn: myFurn, gear: myGear, equip: myEquip }, sec)}/${S.slots}`));
       b.onclick = () => { bagTab = sec; bagSel = null; trashArm = null; store('hq-bag-tab', sec); openBag(); };
       tabs.appendChild(b);
     });
@@ -1827,6 +1827,10 @@
     const grid = el('div', 'bag-grid');
     // 寶石不佔格子：排在 cells 最後面，畫在格子下面的寶石袋
     const nGrid = cells.filter(c => !c.gem).length;
+    // 只有身上那件的裝備不算格，格子多畫幾格給它們
+    const nSlots = S.slots + cells.filter(c => c.free).length;
+    // 格子很多的時候（裝備 60 格）空格只畫到 30 格或多一排，不然手機上要滑很久才看到下面的說明
+    const nDraw = Math.min(nSlots, Math.max(30, Math.ceil((nGrid + 1) / 5) * 5));
     const setup = (cell, c, i) => {
       cell.appendChild(icon(bagIcon(c.kind, c.k), c.kind === 'food' ? MAP.ITEMS[c.k].icon : ''));
       if (c.n > 1 || c.kind === 'food') cell.appendChild(el('span', 'bag-cnt', String(c.n)));
@@ -1842,9 +1846,9 @@
         bagSel = i; openBag();
       };
     };
-    for (let i = 0; i < Math.max(S.slots, nGrid); i++) {
+    for (let i = 0; i < Math.max(nDraw, nGrid); i++) {
       const c = cells[i];
-      const cell = el('button', 'bag-cell' + (c ? '' : ' empty') + (c && i === bagSel ? ' on' : '') + (c && c.kind === 'gear' ? ' r-' + GR.GEAR[c.k].rarity : '') + (i >= S.slots ? ' over' : ''));
+      const cell = el('button', 'bag-cell' + (c ? '' : ' empty') + (c && i === bagSel ? ' on' : '') + (c && c.kind === 'gear' ? ' r-' + GR.GEAR[c.k].rarity : '') + (i >= nSlots ? ' over' : ''));
       cell.type = 'button';
       if (c) setup(cell, c, i);
       else cell.disabled = true;
@@ -1866,14 +1870,14 @@
     const info = el('div', 'bag-info');
     const c = cells[bagSel];
     if (c) {
-      const head = el('b', null, bagName(c.kind, c.k) + (c.kind === 'gear' ? `【${GR.GEAR[c.k].rarity}】` : ` × ${BAG.count({ inv: myInv, furn: myFurn, gear: myGear }, c.kind, c.k)}`));
+      const head = el('b', null, bagName(c.kind, c.k) + (c.kind === 'gear' ? `【${GR.GEAR[c.k].rarity}】` : ` × ${BAG.count({ inv: myInv, furn: myFurn, gear: myGear, equip: myEquip }, c.kind, c.k)}`));
       info.appendChild(head);
       let desc;
       if (c.kind === 'food') desc = ITEM_INFO[c.k].desc + (ITEM_INFO[c.k].use ? '　點兩下使用。' : '');
       else if (c.kind === 'decor') desc = '站在總部室內的地板上，點兩下擺在腳下。';
       else {
         const g = GR.GEAR[c.k], n = myGear[c.k];
-        desc = `${GR.SLOTS[g.slot]}・${(GR.SERIES[g.series] || {}).name || ''}${n > 1 ? `・有 ${n} 件` : ''}。` + (myEquip[g.slot] === c.k ? '穿著中，點兩下脫下。' : '點兩下穿上。');
+        desc = `${GR.SLOTS[g.slot]}・${(GR.SERIES[g.series] || {}).name || ''}${n > 1 ? `・有 ${n} 件` : ''}。` + (myEquip[g.slot] === c.k ? '穿著中，點兩下脫下。' : '點兩下穿上。') + (c.free ? '身上這件不佔背包格子。' : '');
       }
       info.appendChild(el('p', null, desc));
       const row = el('div', 'bag-acts');
@@ -1892,7 +1896,7 @@
     } else info.appendChild(el('p', null, bagTab === 'food' ? '補品區空空的，去物資倉庫敲箱子，或打怪撿掉在地上的東西。'
       : bagTab === 'misc' ? '雜物區空空的。打怪會噴家具，走過去按 Z 或點一下就能撿。' : '裝備區空空的。打怪會噴裝備，玩你畫我猜、猜歌也拿得到。'));
     box.appendChild(info);
-    box.appendChild(el('p', 'bag-slots mono', `${S.name} ${BAG.used({ inv: myInv, furn: myFurn, gear: myGear }, bagTab)} / ${S.slots} 格・按住拖到格子外面，就丟在地上給別人撿`));
+    box.appendChild(el('p', 'bag-slots mono', `${S.name} ${BAG.used({ inv: myInv, furn: myFurn, gear: myGear, equip: myEquip }, bagTab)} / ${S.slots} 格・按住拖到格子外面，就丟在地上給別人撿`));
     openModal('bag', '背包', box);
   }
   function eat(k) {

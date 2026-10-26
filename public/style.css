@@ -77,10 +77,11 @@ input:focus { border-color: var(--accent); }
   display: flex; gap: 12px; align-items: center; font-weight: 700; box-shadow: 0 6px 20px rgba(0,0,0,.25); }
 #dg-panel[hidden] { display: none; }
 #dg-panel { border-top-color: #ffb020; z-index: 3; }
-/* 平板：底下有聊天室和技能列，副本面板改放上面、在線條下面，提示往下讓一點 */
-@media (min-width: 601px) and (max-width: 1100px) {
+/* 平板和電腦：底下有聊天室和技能列，副本面板改放上面、在線條下面，提示往下讓一點 */
+@media (min-width: 601px) {
   #dg-panel { bottom: auto; top: 68px; }
   body:has(#dg-panel:not([hidden])) #toasts { top: 136px; }
+  body:has(#dg-panel.in:not([hidden])) #toasts { top: 168px; }
 }
 .dg-seq { display: inline-flex; gap: 5px; align-items: center; }
 .dg-seq i { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--ink); display: inline-block; }
@@ -118,6 +119,7 @@ button.inv-item:hover { border-color: var(--accent); }
   align-items: center; pointer-events: none; z-index: 35; } /* 浮在彈出視窗（20）上面，視窗裡的提示才看得到 */
 .toast { background: var(--note); color: var(--note-ink); border: 2.5px solid var(--note-ink); border-radius: var(--note-radius);
   box-shadow: var(--note-shadow); padding: 7px 16px; font-weight: 700; animation: toast 2.2s ease forwards; white-space: nowrap; }
+#toasts .toast.tap { pointer-events: auto; cursor: pointer; } /* 副本提示點一下就關掉 */
 @keyframes toast { 0% { opacity: 0; transform: translateY(-6px); } 10%, 80% { opacity: 1; transform: none; } 100% { opacity: 0; } }
 /* 場景互動（敲箱子、點歌…）：技能列上面的小膠囊 */
 /* 技能列：一排蠟筆風小方塊，角落標快捷鍵 */
@@ -829,6 +831,10 @@ button.inv-item:hover { border-color: var(--accent); }
 .dg-short { display: none; font: 700 13px var(--mono); }
 @media (max-width: 600px) { #dg-panel.in .dg-short { display: inline; } #dg-panel.in.open .dg-short { display: none; } }
 .dg-btns { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+/* 這關的目標：面板最下面一行，手機上收成膠囊時藏起來 */
+#dg-panel.in { flex-wrap: wrap; }
+.dg-goal { flex: 1 0 100%; font-size: 13px; font-weight: 600; color: var(--muted); line-height: 1.4; }
+@media (max-width: 600px) { #dg-panel.in:not(.open) .dg-goal { display: none; } }
 @media (max-width: 600px) { #dg-panel.in:not(.open) .dg-seq i { width: 12px; height: 12px; border-width: 1.5px; } }
 /* 手機橫拿：提示縮小，放在颱風血條下面 */
 @media (min-width: 601px) and (max-height: 520px) {

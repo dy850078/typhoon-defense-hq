@@ -628,7 +628,9 @@ button.inv-item:hover { border-color: var(--accent); }
 #music.mini .music-info b { font-size: 12px; -webkit-line-clamp: 1; }
 #music.mini .dj-head { order: 2; gap: 4px; }
 #music.mini #music-fold { transform: rotate(-90deg); }
-#music.mini #music-start { order: 3; flex-basis: 100%; }
+/* 收起來時「點一下開始聽」縮成標題旁一顆小 ▶，點了照樣開始播 */
+#music.mini #music-start { order: 1; flex-shrink: 0; width: 26px; height: 26px; padding: 0 !important; border-radius: 50%; font-size: 11px; line-height: 1; }
+#music.mini .music-start-txt { display: none; }
 .music-results li { display: flex; gap: 10px; align-items: center; }
 .music-r-info { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .music-r-info b { font-size: 14px; line-height: 1.35; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }

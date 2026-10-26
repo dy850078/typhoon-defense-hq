@@ -1497,7 +1497,7 @@
     setTimeout(() => input.focus(), 50);
   }
 
-  // ---------------- 個人資料（VIP Pass） ----------------
+  // ---------------- 個人資料（識別證） ----------------
   // 右鍵選單
   function showMenu(who, cx, cy) {
     const m = $('ctx-menu');
@@ -1513,8 +1513,7 @@
   function hideMenu() { $('ctx-menu').hidden = true; }
   window.addEventListener('pointerdown', (e) => { if (!$('ctx-menu').contains(e.target) && e.target.tagName !== 'CANVAS') hideMenu(); });
 
-  // 跟報名頁一樣的頭銜、來賓編號、條碼（由名字算出來）
-  const TIERS = ['泡麵戰略儲備官', '超市搶菜特派員', '家裡蹲首席執行長', '沙發守護隊長', '追劇值勤員', '零食補給官', '窗戶膠帶工程師', '停班停課等待員', '行動電源備援官', '棉被結界師'];
+  // 跟報名頁一樣的職員編號、條碼（由名字算出來）
   function hashOf(str) {
     let h = 2166136261;
     for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
@@ -1530,11 +1529,11 @@
       if (!res || !res.ok) { toast((res && res.error) || '讀不到這個人的資料'); return; }
       const c = ST.CLASSES[res.cls] || ST.CLASSES.staff;
       const box = el('div', 'modal-list');
-      box.appendChild(el('p', 'mono prof-line', `Lv.${res.level} · ${c.icon} ${c.name}`));
       const v = res.vip;
       if (!v) {
-        box.appendChild(el('p', 'mentor-say', `${res.name} 還沒有在報名頁生成邀請函，所以沒有 VIP Pass。`));
-        const a = el('a', 'primary small', '去報名頁生成邀請函'); a.href = '/'; a.target = '_blank';
+        box.appendChild(el('p', 'mono prof-line', `Lv.${res.level} · ${c.name}`));
+        box.appendChild(el('p', 'mentor-say', `${res.name} 還沒有在報名頁報到，所以還沒有識別證。`));
+        const a = el('a', 'primary small', '去報名頁領識別證'); a.href = '/'; a.target = '_blank';
         if (me && id === me.id) box.appendChild(a);
         openModal('profile', `📇 ${res.name}`, box);
         return;
@@ -1542,7 +1541,7 @@
       const card = el('div', 'vip' + (v.theme === 's' ? ' silver' : ''));
       const main = el('div', 'vip-main');
       const top = el('div', 'vip-top');
-      top.appendChild(el('span', 'vip-brand', 'TYPHOON DAY · VIP PASS'));
+      top.appendChild(el('span', 'vip-brand', 'THIS IS NOT A · STAFF BADGE'));
       top.appendChild(el('span', 'vip-spark', '✦'));
       main.appendChild(top);
       const idRow = el('div', 'vip-id');
@@ -1551,15 +1550,15 @@
       idRow.appendChild(ava);
       const who = el('div', 'vip-who');
       const tier = el('span', 'vip-tier');
-      tier.appendChild(el('span', 'vip-hq', '防颱總部'));
-      tier.appendChild(el('span', null, TIERS[hashOf(v.name) % TIERS.length]));
+      tier.appendChild(el('span', 'vip-hq', `Lv.${res.level || 1}`));
+      tier.appendChild(el('span', null, c.name));
       who.appendChild(tier);
       who.appendChild(el('span', 'vip-name', v.name));
-      who.appendChild(el('span', 'vip-sub', `特約職員・${config.party.md} 颱風假開趴`));
+      who.appendChild(el('span', 'vip-sub', `防衛總部職員・${c.role}`));
       idRow.appendChild(who);
       main.appendChild(idRow);
       const facts = el('div', 'vip-facts');
-      [['ON REPEAT', v.song], ["TONIGHT'S POUR", v.drink]].forEach(([k, val]) => {
+      [['ON REPEAT', v.song], ['GO-TO DRINK', v.drink]].forEach(([k, val]) => {
         const f = el('div', 'vip-fact');
         f.appendChild(el('span', 'vip-k', k));
         f.appendChild(el('span', 'vip-v', val || '—'));
@@ -1568,9 +1567,10 @@
       main.appendChild(facts);
       card.appendChild(main);
       const stub = el('div', 'vip-stub');
-      stub.appendChild(el('span', 'vip-k', 'GUEST NO.'));
+      stub.appendChild(el('span', 'vip-k', 'STAFF NO.'));
       stub.appendChild(el('span', 'vip-no', guestNo(v.name)));
-      stub.appendChild(el('span', 'vip-k', `${config.party.dateDot} / ${config.party.time}`));
+      const since = window.HQ_ACCOUNT.fmtDate(res.since);
+      if (since) stub.appendChild(el('span', 'vip-k', `SINCE ${since}`));
       const bar = el('div', 'vip-bar');
       let seed = hashOf(v.name) || 1;
       for (let i = 0; i < 30; i++) {
@@ -1580,7 +1580,7 @@
         bar.appendChild(b);
       }
       stub.appendChild(bar);
-      stub.appendChild(el('span', 'vip-k', 'ADMIT ONE · ALL ACCESS'));
+      stub.appendChild(el('span', 'vip-k', 'ALL ACCESS · 24/7'));
       card.appendChild(stub);
       box.appendChild(card);
       openModal('profile', `📇 ${res.name} 的個人資料`, box);

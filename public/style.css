@@ -1,4 +1,4 @@
-/* 配色跟報名頁的邀請函一致：灰銀、午夜藍、橘 */
+/* 配色跟報名頁的識別證一致：灰銀、午夜藍、橘 */
 /* 手機、平板連點不會放大畫面（畫畫板、拉桿另外設 none） */
 html, body, * { touch-action: manipulation; }
 /* 平板、手機往下拉不會整頁重新整理，捲到底也不會帶動後面的畫面 */
@@ -209,12 +209,12 @@ button.inv-item:hover { border-color: var(--accent); }
   padding: 6px 14px; font-size: 12px; }
 
 
-/* 個人資料：跟報名頁同一張 VIP Pass（樣式從 index.html 搬過來，字級縮小放進視窗） */
+/* 個人資料：跟報名頁同一張識別證（樣式從 index.html 搬過來，字級縮小放進視窗） */
 #modal .vip { --navy-bg: #131A28; --navy-fg: #F2F4F8; --navy-dim: #9AA3B5; --navy-dot: rgba(255,255,255,0.08);
   --navy-line: rgba(255,255,255,0.14); --navy-perf: rgba(255,255,255,0.26); --navy-hot: #FF7A2F; --navy-face: #2A3244;
   --silver-bg: #D6DAE1; --silver-fg: #141923; --silver-dim: #4E5566; --silver-dot: rgba(20,25,35,0.10);
   --silver-line: rgba(20,25,35,0.16); --silver-perf: rgba(20,25,35,0.30); --silver-hot: #B23F00; --silver-face: #BFC4CD; }
-/* VIP pass */
+/* 識別證 */
 .vip {
   --c-bg: var(--navy-bg); --c-fg: var(--navy-fg); --c-dim: var(--navy-dim); --c-dot: var(--navy-dot);
   --c-line: var(--navy-line); --c-perf: var(--navy-perf); --c-hot: var(--navy-hot); --c-face: var(--navy-face);

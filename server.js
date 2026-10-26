@@ -94,7 +94,7 @@ function failed(req) {
   failures.set(ip, f && f.until > Date.now() ? { n: f.n + 1, until: f.until } : { n: 1, until: Date.now() + 10 * 60 * 1000 });
 }
 const bearer = (req) => String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
-const meOf = (u) => ({ ok: true, username: u.username, save: u.save });
+const meOf = (u) => ({ ok: true, username: u.username, save: u.save, since: u.created || 0 });
 app.post('/api/register', (req, res) => {
   const b = req.body || {};
   const r = accounts.register(b.username, b.password, sanitizeSave(b.save || {}));
@@ -1286,12 +1286,12 @@ io.on('connection', (socket) => {
     ack({ ok: true, dmg: total });
   });
 
-  // 看某個人的個人資料（報名時的 VIP Pass）
+  // 看某個人的個人資料（報名時做的識別證）
   socket.on('profile', (id, ack) => {
     if (typeof ack !== 'function') return;
     const q = players.get(id);
     if (!q) return ack({ ok: false, error: '這個人已經離開了' });
-    ack({ ok: true, name: q.name, cls: q.cls, level: q.level, vip: q.vip && Object.assign({}, q.vip, { hd: q.photoHd || '' }) });
+    ack({ ok: true, name: q.name, cls: q.cls, level: q.level, since: (q.account && q.account.created) || 0, vip: q.vip && Object.assign({}, q.vip, { hd: q.photoHd || '' }) });
   });
 
   // 跟指揮中心的導師說話轉職：血量魔力照比例換算，技能冷卻重置

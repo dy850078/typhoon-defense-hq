@@ -7,7 +7,7 @@ const REGIONS = { hualien: require('./dungeon-hualien'), taipei: require('./dung
 function createDungeon(ctx, D, region) {
   const { io, players, MAP, STATS, GEAR, pushChat, sendStats, gainExp, hurtPlayer, isAway, wallBlocks, behindWall, TICK } = ctx;
   const T = MAP.TILE;
-  const CLEAR_SHOW_MS = 20000; // 打倒頭目後還能在裡面待多久
+  const CLEAR_SHOW_MS = 30000; // 打倒頭目後還能在裡面待多久（撿地上的寶物）
   const dist = (ax, ay, bx, by) => Math.hypot(ax - bx, ay - by);
   const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
   const rand = ([lo, hi]) => lo + Math.floor(Math.random() * (hi - lo + 1));
@@ -121,6 +121,7 @@ function createDungeon(ctx, D, region) {
       sendStats(p);
     });
     if (text) say(text);
+    ctx.loot().clearDg(D.id);
     reset();
   }
 
@@ -269,6 +270,7 @@ function createDungeon(ctx, D, region) {
     io.emit('mob', mobState(f));
     gainExp(p, def.exp);
     if (f.kind === region.boss) return victory(p, f);
+    ctx.loot().fromFoe(f, D.id);
     region.onFoeDead && region.onFoeDead(api, f, now);
   }
 
@@ -277,22 +279,18 @@ function createDungeon(ctx, D, region) {
     st.phase = 'clear';
     st.endAt = now0() + CLEAR_SHOW_MS;
     say(`🎉 ${p.name} 打出最後一擊，${bossName}被擊敗了！${D.title}副本通關！`);
-    const drops = [];
+    // 寶物噴在頭目倒下的地方，大家搶：隊伍裡每個人各抽一次武器（可能沒有），再加一些補品；離開副本前沒撿就沒了
+    const pile = [];
     memberList().forEach(q => {
       gainExp(q, region.clearExp);
-      const id = GEAR.rollWeapon(D.id), g = id && GEAR.GEAR[id];
-      if (!g) { drops.push({ id: q.id, name: q.name, item: null }); say(`🍃 ${q.name} 什麼都沒撿到……下次再來！`); return; }
-      if (q.owned.includes(id)) {
-        gainExp(q, region.dupExp);
-        drops.push({ id: q.id, name: q.name, item: id, dup: true, exp: region.dupExp });
-        say(`🔁 ${q.name} 又撿到了【${g.rarity}】${g.name}，已經有了，換成 ${region.dupExp} 經驗`);
-        return;
-      }
-      q.owned.push(id);
-      io.to(q.id).emit('gearGot', { item: id, owned: q.owned });
-      drops.push({ id: q.id, name: q.name, item: id });
-      say(`⚔️ ${q.name} 獲得了武器【${g.rarity}】${g.name}！`);
+      const id = GEAR.rollWeapon(D.id);
+      if (id) pile.push({ kind: 'gear', k: id });
+      pile.push(...ctx.loot().roll({ n: [1, 2], food: 100 }));
     });
+    ctx.loot().scatter(pile, f.x, f.y, D.id, 150);
+    const weapons = pile.filter(l => l.kind === 'gear').map(l => `【${GEAR.GEAR[l.k].rarity}】${GEAR.GEAR[l.k].name}`);
+    say(weapons.length ? `⚔️ ${bossName}掉了 ${weapons.join('、')}，快去撿！` : `🍃 ${bossName}這次沒有掉武器……下次再來！`);
+    const drops = pile.length;
     const top = [...f.damage.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3);
     if (top.length) say('🏅 輸出排行：' + top.map(([n, d], i) => `${i + 1}. ${n} ${d}`).join('、'));
     io.emit('dgClear', { id: D.id, drops, ms: CLEAR_SHOW_MS });
@@ -353,6 +351,7 @@ module.exports = function createDungeons(ctx) {
     tick: (now) => list.forEach(g => g.tick(now)),
     mobState: (f) => byId(f.dgId).mobState(f),
     isMember: (p) => !!mine(p),
+    dgOf: (p) => { const g = mine(p); return g ? g.D.id : null; },
     // 總部、副本、候位區之間只能靠傳送，不能自己走過去
     allowMove: (p, x, y) => {
       const g = mine(p);

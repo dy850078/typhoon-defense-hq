@@ -5,6 +5,7 @@
   const ST = HQ_STATS;
   const GR = HQ_GEAR;
   const DC = HQ_DECOR;
+  const BAG = HQ_BAG;
   // iOS 不理 viewport 的 user-scalable，手指捏合會放大，這裡擋掉；連點兩下靠 CSS 的 touch-action
   ['gesturestart', 'gesturechange'].forEach(t => document.addEventListener(t, e => e.preventDefault(), { passive: false }));
   document.addEventListener('dblclick', e => e.preventDefault(), { passive: false });
@@ -150,9 +151,16 @@
   const TOUCH = matchMedia('(pointer: coarse)').matches;
   const folded = (k, def) => { const v = saved('hq-fold-' + k); return v == null ? def : v === '1'; };
   // 拿到的裝備、身上穿的裝備也存在瀏覽器
+  // myGear：每件裝備有幾件（可以重複）；myOwned：身上有的（每件至少一件）；mySeen：圖鑑，拿過哪些
   let myOwned = savedJson('hq-owned', []);
+  let myGear = savedJson('hq-gear', null) || Object.fromEntries(myOwned.map(id => [id, 1]));
+  let mySeen = savedJson('hq-seen', myOwned.slice());
   let myEquip = savedJson('hq-equip', {});
   let myFurn = savedJson('hq-furn', {});
+  const loadBag = () => {
+    myOwned = savedJson('hq-owned', []); myEquip = savedJson('hq-equip', {}); myFurn = savedJson('hq-furn', {});
+    myGear = savedJson('hq-gear', null) || Object.fromEntries(myOwned.map(id => [id, 1])); mySeen = savedJson('hq-seen', myOwned.slice());
+  };
 
   // 有登入的話，先從帳號拿最新的角色（可能在別台裝置玩過）
   const ACC = window.HQ_ACCOUNT;
@@ -171,12 +179,12 @@
     showAcct();
     if (!r || joined) return;
     readProfile(); buildCreate();
-    myOwned = savedJson('hq-owned', []); myEquip = savedJson('hq-equip', {}); myFurn = savedJson('hq-furn', {});
+    loadBag();
   }).catch(() => {});
   function doJoin() {
     const vip = savedJson('hq-vip', null);
     const data = Object.assign({}, profile, { level: Number(saved('hq-level')) || 1, exp: Number(saved('hq-exp')) || 0, vip,
-      owned: myOwned, equip: myEquip, furn: myFurn, inv: savedJson('hq-inv', {}), token: ACC.token(), rk: RK });
+      owned: myOwned, gear: myGear, seen: mySeen, equip: myEquip, furn: myFurn, inv: savedJson('hq-inv', {}), token: ACC.token(), rk: RK });
     // 斷線太久（或伺服器重開）重新加入：從剛剛站的地方繼續，不會被送回出生點
     if (scene && scene.me) Object.assign(data, { x: Math.round(scene.me.x), y: Math.round(scene.me.y) });
     joinedToken = data.token;
@@ -184,9 +192,8 @@
       if (!res.ok) { $('join-error').textContent = res.error; return; }
       joined = true;
       me = res.you;
-      myOwned = res.you.owned || [];
+      setBag({ gear: res.you.gear || {}, seen: res.you.seen || [], owned: res.you.owned || [], furn: res.you.furn || {} });
       myEquip = res.you.equip || {};
-      myFurn = res.you.furn || {};
       $('join').hidden = true;
       $('hud').hidden = false;
       $('messages').innerHTML = '';
@@ -310,7 +317,7 @@
     setTimeout(() => {
       showAcct();
       readProfile();
-      myOwned = savedJson('hq-owned', []); myEquip = savedJson('hq-equip', {}); myFurn = savedJson('hq-furn', {});
+      loadBag();
       socket.disconnect(); socket.connect();
     }, 500);
   });
@@ -360,9 +367,11 @@
   socket.on('cooking', (c) => scene && scene.onCooking(c));
   socket.on('ate', (a) => toast(`吃了 ${a.food}，血量 +${a.hp} `));
   socket.on('playerGear', (g) => scene && scene.onGear(g));
+  socket.on('bagSync', (b) => setBag(b));
+  socket.on('bagFull', (b) => toast(`背包的${BAG.SECTIONS[BAG.SECTION_OF[b.kind]].name}區滿了，${b.name}掉在你腳邊`));
+  socket.on('loot', (list) => scene && list.forEach(l => scene.addLoot(l)));
+  socket.on('lootGone', (g) => scene && scene.removeLoot(g.id, g.by));
   socket.on('gearGot', (g) => {
-    myOwned = g.owned;
-    store('hq-owned', myOwned);
     const it = GR.GEAR[g.item];
     // 副本掉的武器，通關畫面會自己說
     if (it && !(it.dungeon && g.from !== 'admin')) toast(`${g.from === 'admin' ? '管理員送你' : '獲得'}【${it.rarity}】${it.name}！`, 'gear-' + g.item);
@@ -1593,45 +1602,168 @@
   })();
   socket.on('toastArea', (t) => { if (joined && t.area === MUSIC.area()) toast(t.text); });
 
-  // 背包：5×5 的小方格，一種物資一格、右下角標數量；點一下看說明，點兩下直接用
-  let bagSel = null, bagTap = { k: null, t: 0 };
+  // 背包：分成補品、雜物、裝備三頁（shared/bag.js），每頁各自算格數
+  // 點一下看說明，點兩下直接用；按住一格拖到格子外面放開，就丟在地上給別人撿
+  let bagTab = saved('hq-bag-tab') || 'food', bagSel = null, bagTap = { k: null, t: 0 }, trashArm = null;
+  const KIND_OF = { food: 'food', misc: 'decor', gear: 'gear' };
+  // 收到伺服器的背包（撿東西、丟東西、拿到獎勵之後）
+  function setBag(b) {
+    if (b.gear) { myGear = b.gear; store('hq-gear', myGear); }
+    if (b.seen) { mySeen = b.seen; store('hq-seen', mySeen); }
+    if (b.owned) { myOwned = b.owned; store('hq-owned', myOwned); }
+    if (b.furn) { myFurn = b.furn; store('hq-furn', myFurn); }
+    if (b.inv) renderInventory(b.inv);
+    else if (modalKind === 'bag') openBag();
+    if (modalKind === 'gear') openGear();
+    if (modalKind === 'furn') openFurn();
+  }
+  const bagIcon = (kind, k) => kind === 'food' ? 'item-' + k : kind === 'decor' ? 'dec-' + k : 'gear-' + k;
+  const bagName = (kind, k) => kind === 'food' ? MAP.ITEMS[k].name : kind === 'decor' ? DC.DECOR[k].name : GR.GEAR[k].name;
+  // 一頁裡的格子：補品一種一格；家具同種疊 10 個一格；裝備一件一格（同一件有兩件就兩格）
+  function bagCells(tab) {
+    const out = [];
+    if (tab === 'food') Object.keys(MAP.ITEMS).forEach(k => { if (myInv[k] > 0) out.push({ kind: 'food', k, n: myInv[k] }); });
+    if (tab === 'misc') Object.keys(DC.DECOR).forEach(k => {
+      for (let left = myFurn[k] || 0; left > 0; left -= BAG.SECTIONS.misc.stack) out.push({ kind: 'decor', k, n: Math.min(left, BAG.SECTIONS.misc.stack) });
+    });
+    if (tab === 'gear') {
+      const order = ['SSR', 'SR', 'R'];
+      Object.keys(myGear).filter(id => GR.GEAR[id] && myGear[id] > 0)
+        .sort((a, b) => order.indexOf(GR.GEAR[a].rarity) - order.indexOf(GR.GEAR[b].rarity))
+        .forEach(id => { for (let i = 0; i < myGear[id]; i++) out.push({ kind: 'gear', k: id, n: 1, on: i === 0 && Object.values(myEquip).includes(id) }); });
+    }
+    return out;
+  }
   function useItem(k) {
     if (!myInv[k]) return;
     if (EDIBLE.includes(k)) eat(k);
     else if (k === 'noodle') { closeModal(); toast('到休息區右下角的爐台煮'); }
     else toast(ITEM_INFO[k].desc);
   }
+  // 點兩下：吃喝、擺家具、穿脫裝備
+  function useCell(c) {
+    if (c.kind === 'food') return useItem(c.k);
+    if (c.kind === 'decor') return placeFurn(c.k);
+    const slot = GR.GEAR[c.k].slot;
+    equipGear(slot, myEquip[slot] === c.k ? null : c.k);
+  }
+  function placeFurn(k) {
+    if (scene && scene.me) socket.emit('move', { x: Math.round(scene.me.x), y: Math.round(scene.me.y), dir: scene.me.dir, moving: false });
+    socket.emit('placeDecor', k, (res) => {
+      if (!res || !res.ok) { if (res && res.error) toast(res.error); return; }
+      myFurn = res.furn; store('hq-furn', myFurn);
+      closeModal(); toast(`擺好了 ${DC.DECOR[k].name}`, 'dec-' + k);
+    });
+  }
+  function dropCell(c) {
+    if (scene && scene.me) socket.emit('move', { x: Math.round(scene.me.x), y: Math.round(scene.me.y), dir: scene.me.dir, moving: false });
+    socket.emit('dropItem', c.kind, c.k, (res) => { if (res && !res.ok && res.error) toast(res.error); });
+  }
+  function trashCell(c) {
+    socket.emit('trashItem', c.kind, c.k, (res) => {
+      if (res && !res.ok && res.error) toast(res.error);
+      else toast(`丟掉了 ${bagName(c.kind, c.k)}`);
+    });
+  }
+  // 拖曳：按住超過 8px 才算開始拖（點兩下不會變成拖），拖的時候背包變透明，放在格子外面就丟出去
+  function dragCell(cell, c, grid, e) {
+    if (e.button > 0) return;
+    e.preventDefault(); // 不要讓瀏覽器拖圖片（會把後面的 pointermove 吃掉）
+    const x0 = e.clientX, y0 = e.clientY;
+    let ghost = null, tip = null;
+    const outside = (ev) => { const r = grid.getBoundingClientRect(); return ev.clientX < r.left - 6 || ev.clientX > r.right + 6 || ev.clientY < r.top - 6 || ev.clientY > r.bottom + 6; };
+    const move = (ev) => {
+      if (!ghost) {
+        if (Math.hypot(ev.clientX - x0, ev.clientY - y0) < 8) return;
+        ghost = el('div', 'bag-ghost');
+        ghost.appendChild(icon(bagIcon(c.kind, c.k), ''));
+        tip = el('div', 'bag-ghost-tip');
+        document.body.append(ghost, tip);
+        $('modal').classList.add('dragging');
+        cell.classList.add('lifted');
+        try { cell.setPointerCapture(ev.pointerId); } catch (er) { /* 舊瀏覽器 */ }
+      }
+      ev.preventDefault();
+      ghost.style.transform = `translate(${ev.clientX - 26}px, ${ev.clientY - 26}px)`;
+      const out = outside(ev);
+      tip.textContent = out ? '放開，丟在地上' : '拖到格子外面';
+      tip.classList.toggle('out', out);
+      tip.style.transform = `translate(${ev.clientX - 50}px, ${ev.clientY - 62}px)`;
+    };
+    const up = (ev) => {
+      removeEventListener('pointermove', move); removeEventListener('pointerup', up); removeEventListener('pointercancel', up);
+      if (!ghost) return;
+      ghost.remove(); tip.remove();
+      $('modal').classList.remove('dragging');
+      cell.classList.remove('lifted');
+      bagTap = { k: null, t: 0 };
+      cell.dataset.dragged = '1';
+      if (ev.type === 'pointerup' && outside(ev)) dropCell(c);
+    };
+    addEventListener('pointermove', move, { passive: false });
+    addEventListener('pointerup', up);
+    addEventListener('pointercancel', up);
+  }
   function openBag() {
     const box = el('div', 'bag');
+    const tabs = el('div', 'bag-tabs');
+    Object.entries(BAG.SECTIONS).forEach(([sec, S]) => {
+      const b = el('button', 'bag-tab' + (sec === bagTab ? ' on' : ''));
+      b.type = 'button';
+      b.append(S.name, el('span', 'bag-tab-n mono', `${BAG.used({ inv: myInv, furn: myFurn, gear: myGear }, sec)}/${S.slots}`));
+      b.onclick = () => { bagTab = sec; bagSel = null; trashArm = null; store('hq-bag-tab', sec); openBag(); };
+      tabs.appendChild(b);
+    });
+    box.appendChild(tabs);
+    const S = BAG.SECTIONS[bagTab], cells = bagCells(bagTab);
+    if (bagSel != null && !cells[bagSel]) bagSel = null;
+    if (bagSel == null && cells.length) bagSel = 0;
     const grid = el('div', 'bag-grid');
-    const have = Object.keys(MAP.ITEMS).filter(k => myInv[k] > 0);
-    if (!have.includes(bagSel)) bagSel = have[0] || null;
-    for (let i = 0; i < MAP.BAG_SLOTS; i++) {
-      const k = have[i];
-      const cell = el('button', 'bag-cell' + (k ? '' : ' empty') + (k && k === bagSel ? ' on' : ''));
+    for (let i = 0; i < Math.max(S.slots, cells.length); i++) {
+      const c = cells[i];
+      const cell = el('button', 'bag-cell' + (c ? '' : ' empty') + (c && i === bagSel ? ' on' : '') + (c && c.kind === 'gear' ? ' r-' + GR.GEAR[c.k].rarity : '') + (i >= S.slots ? ' over' : ''));
       cell.type = 'button';
-      if (k) {
-        cell.appendChild(icon('item-' + k, MAP.ITEMS[k].icon));
-        cell.appendChild(el('span', 'bag-cnt', String(myInv[k])));
-        cell.setAttribute('aria-label', `${MAP.ITEMS[k].name} × ${myInv[k]}`);
+      if (c) {
+        cell.appendChild(icon(bagIcon(c.kind, c.k), c.kind === 'food' ? MAP.ITEMS[c.k].icon : ''));
+        if (c.n > 1 || c.kind === 'food') cell.appendChild(el('span', 'bag-cnt', String(c.n)));
+        if (c.on) cell.appendChild(el('span', 'bag-on', '穿著'));
+        cell.setAttribute('aria-label', `${bagName(c.kind, c.k)} × ${c.n}`);
+        cell.addEventListener('pointerdown', (e) => dragCell(cell, c, grid, e));
         cell.onclick = () => {
-          const now = performance.now(), dbl = bagTap.k === k && now - bagTap.t < 400;
-          bagTap = dbl ? { k: null, t: 0 } : { k, t: now };
-          if (dbl) { useItem(k); return; }
-          bagSel = k; openBag();
+          if (cell.dataset.dragged) { delete cell.dataset.dragged; return; }
+          const key = c.kind + c.k, now = performance.now(), dbl = bagTap.k === key && now - bagTap.t < 400;
+          bagTap = dbl ? { k: null, t: 0 } : { k: key, t: now };
+          if (dbl) { useCell(c); return; }
+          if (bagSel !== i) trashArm = null;
+          bagSel = i; openBag();
         };
       } else cell.disabled = true;
       grid.appendChild(cell);
     }
     box.appendChild(grid);
     const info = el('div', 'bag-info');
-    if (bagSel) {
-      const it = MAP.ITEMS[bagSel];
-      info.appendChild(el('b', null, `${it.name} × ${myInv[bagSel]}`));
-      info.appendChild(el('p', null, ITEM_INFO[bagSel].desc + (ITEM_INFO[bagSel].use ? '　點兩下使用。' : '')));
-    } else info.appendChild(el('p', null, '背包空空的，去物資倉庫敲箱子吧。'));
+    const c = cells[bagSel];
+    if (c) {
+      const head = el('b', null, bagName(c.kind, c.k) + (c.kind === 'gear' ? `【${GR.GEAR[c.k].rarity}】` : ` × ${BAG.count({ inv: myInv, furn: myFurn, gear: myGear }, c.kind, c.k)}`));
+      info.appendChild(head);
+      let desc;
+      if (c.kind === 'food') desc = ITEM_INFO[c.k].desc + (ITEM_INFO[c.k].use ? '　點兩下使用。' : '');
+      else if (c.kind === 'decor') desc = '站在總部室內的地板上，點兩下擺在腳下。';
+      else {
+        const g = GR.GEAR[c.k], n = myGear[c.k];
+        desc = `${GR.SLOTS[g.slot]}・${(GR.SERIES[g.series] || {}).name || ''}${n > 1 ? `・有 ${n} 件` : ''}。` + (myEquip[g.slot] === c.k ? '穿著中，點兩下脫下。' : '點兩下穿上。');
+      }
+      info.appendChild(el('p', null, desc));
+      const row = el('div', 'bag-acts');
+      const tr = el('button', 'hud-btn tiny' + (trashArm === bagSel ? ' danger' : ''), trashArm === bagSel ? '確定丟掉？' : '丟掉');
+      tr.type = 'button';
+      tr.onclick = () => { if (trashArm === bagSel) { trashArm = null; trashCell(c); } else { trashArm = bagSel; openBag(); } };
+      row.appendChild(tr);
+      info.appendChild(row);
+    } else info.appendChild(el('p', null, bagTab === 'food' ? '補品區空空的，去物資倉庫敲箱子，或打怪撿掉在地上的東西。'
+      : bagTab === 'misc' ? '雜物區空空的。打怪會噴家具，走過去按 Z 或點一下就能撿。' : '裝備區空空的。打怪會噴裝備，玩你畫我猜、猜歌也拿得到。'));
     box.appendChild(info);
-    box.appendChild(el('p', 'bag-slots mono', `${have.length} / ${MAP.BAG_SLOTS} 格`));
+    box.appendChild(el('p', 'bag-slots mono', `${S.name} ${BAG.used({ inv: myInv, furn: myFurn, gear: myGear }, bagTab)} / ${S.slots} 格・按住拖到格子外面，就丟在地上給別人撿`));
     openModal('bag', '背包', box);
   }
   function eat(k) {
@@ -1718,14 +1850,14 @@
     box.appendChild(top);
     // 套裝狀態和收集說明放在人物圖和欄位下面，人物圖才能跟四個欄位上下對齊
     if (setId) box.appendChild(el('p', 'gear-set-on', `套裝效果發動中：${GR.SERIES[setId].name}`));
-    box.appendChild(el('p', 'modal-hint', `收集 ${myOwned.length} / ${Object.keys(GR.GEAR).length} 件。頭飾、服裝、披風都穿同一個系列，就會發動套裝特效。到 戰情室玩 你畫我猜，猜對就會拿到新裝備；女僕咖啡廳系列要在廚房煮泡麵才會掉。武器要找指揮中心的 古城守門員進副本，打倒最終頭目才會掉。`));
+    box.appendChild(el('p', 'modal-hint', `圖鑑 ${mySeen.filter(id => GR.GEAR[id]).length} / ${Object.keys(GR.GEAR).length} 件。頭飾、服裝、披風都穿同一個系列，就會發動套裝特效。野外的怪會噴裝備在地上，走過去按 Z 或點一下撿；到戰情室玩你畫我猜，猜對也會拿到新裝備；女僕咖啡廳系列要在廚房煮泡麵才會掉。武器在副本裡，打倒最終頭目會噴在地上。拿到的裝備都放在背包的裝備區。`));
     // 依系列分組，每組可以收合；沒點過的話，只展開身上有穿的系列
     const folds = (() => { try { return JSON.parse(localStorage.getItem('hq-gear-folds')) || {}; } catch (e) { return {}; } })();
     const worn = new Set(Object.values(myEquip).map(id => GR.GEAR[id] && GR.GEAR[id].series));
     Object.entries(GR.SERIES).forEach(([sid, S]) => {
       const items = Object.entries(GR.GEAR).filter(([, g]) => g.series === sid);
       if (!items.length) return;
-      const got = items.filter(([id]) => myOwned.includes(id)).length;
+      const got = items.filter(([id]) => mySeen.includes(id)).length;
       const sec = el('details', 'gear-series' + (sid === setId ? ' set-on' : ''));
       sec.open = sid in folds ? folds[sid] : worn.has(sid);
       const sum = el('summary', 'gear-h');
@@ -1750,6 +1882,15 @@
           cell.appendChild(el('span', 'gear-name', g.name));
           cell.appendChild(el('span', 'gear-act', on ? '✓ 穿著（點一下脫下）' : '點一下穿上'));
           cell.onclick = () => equipGear(slot, on ? null : id);
+        } else if (mySeen.includes(id)) {
+          // 拿過，但已經丟掉或送人了：圖鑑還記得
+          const thumb = gearPortrait({ [slot]: id }, 1);
+          thumb.className = 'gear-thumb';
+          cell.classList.add('gone');
+          cell.appendChild(thumb);
+          cell.appendChild(el('span', 'gear-name', g.name));
+          cell.appendChild(el('span', 'gear-act', '已經不在背包裡'));
+          cell.disabled = true;
         } else {
           cell.appendChild(el('span', 'gear-lock', '？'));
           cell.appendChild(el('span', 'gear-name', '？？？'));
@@ -1781,7 +1922,7 @@
   }
   function openFurn() {
     const box = el('div', 'furn');
-    box.appendChild(el('p', 'modal-hint', '打倒野外的小怪有機會掉家具，打退颱風每個有出力的人都拿一件。站在總部室內的地板上按「擺在腳下」，大家都看得到！'));
+    box.appendChild(el('p', 'modal-hint', '打倒野外的怪會噴家具在地上，走過去按 Z 或點一下撿起來，會放在背包的雜物區。站在總部室內的地板上按「擺在腳下」，大家都看得到！'));
     const grid = el('div', 'gear-grid');
     Object.entries(DC.DECOR).forEach(([k, d]) => {
       const n = myFurn[k] || 0;
@@ -2768,17 +2909,19 @@
   }
   // 小閃電
   // 靠近 NPC／物件時，頭上冒出的提示紙條：手繪 icon＋動作名稱＋「空白鍵」（手機是「點我」），底下有小尖角指著它
+  const LOOT_REACH = 1.6 * T; // 站多近撿得到地上的東西（伺服器是 1.7 格，留一點誤差）
   const HINTS = {
     crate: ['act-crate', '敲箱子'], cook: ['act-cook', '煮泡麵'], mentor: ['act-mentor', '轉職'],
-    guard: ['act-guard', '前往副本'], elevator: ['act-elevator', '前往 101'], dj: ['btn-song', '點歌'], tv: ['act-tv', '視訊／遊戲'], well: ['wish-coin', '許個願'], greek: ['act-greek', '說話'],
+    loot: ['', '撿起來'], guard: ['act-guard', '前往副本'], elevator: ['act-elevator', '前往 101'], dj: ['btn-song', '點歌'], tv: ['act-tv', '視訊／遊戲'], well: ['wish-coin', '許個願'], greek: ['act-greek', '說話'],
   };
   // tail：尖角朝哪邊（down＝紙條在東西上面；left／right＝紙條在旁邊，上面被介面擋住的時候用）
-  function drawHint(type, touch, tail) {
-    const [iconKey, label] = HINTS[type];
+  // 地上的東西（loot）名字每次不一樣：圖示和字放在 act 裡，鍵帽是 Z
+  function drawHint(act, touch, tail) {
+    const type = act.type, iconKey = act.icon || HINTS[type][0], label = act.label || HINTS[type][1];
     const RES = 2, ICON = 22, PH = 30, TL = 7;
     const cv = document.createElement('canvas'), ctx = cv.getContext('2d');
     const font = `bold 13px ${FONT}`, capFont = `bold 10px ${FONT}`;
-    const cap = touch ? '點我' : '空白鍵';
+    const cap = touch ? '點我' : type === 'loot' ? 'Z' : '空白鍵';
     ctx.font = font; const tw = ctx.measureText(label).width;
     ctx.font = capFont; const cw = ctx.measureText(cap).width + 10;
     const bw = Math.ceil(7 + ICON + 5 + tw + 7 + cw + 7);
@@ -3772,6 +3915,8 @@
       // K：職業的招牌技能（花魔力）
       kb.on('keydown-K', (e) => { if (!typing()) { e.preventDefault(); this.useSkill(special()); } });
       kb.on('keydown-L', (e) => { if (!typing()) { e.preventDefault(); this.useSkill(special2()); } });
+      // Z：撿地上的東西
+      kb.on('keydown-Z', (e) => { if (!typing() && !e.ctrlKey && !e.metaKey && $('games').hidden) { e.preventDefault(); this.pickNearest(); } });
       // 右鍵點人物（手機長按）可以看個人資料
       this.input.mouse.disableContextMenu();
       this.input.on('pointerup', () => {
@@ -3797,6 +3942,13 @@
         if (this.hint && this.hintAct) {
           const b = this.hint.getBounds(), pad = 12;
           if (p.worldX > b.x - pad && p.worldX < b.right + pad && p.worldY > b.y - pad && p.worldY < b.bottom + pad) { this.doAction(this.hintAct); return; }
+        }
+        // 點到地上的東西：夠近就撿，不然先走過去再撿
+        const lt = this.lootAt(p.worldX, p.worldY);
+        if (lt) {
+          if (Math.hypot(lt.x - this.me.x, lt.y - this.me.y) < LOOT_REACH) this.pickLoot(lt.state.id);
+          else { this.target = { x: lt.x, y: lt.y }; this.pendingPick = lt.state.id; }
+          return;
         }
         // 點到颱風或箱子、而且夠近，就直接打；否則走過去
         const act = this.actionAt(p.worldX, p.worldY);
@@ -3845,6 +3997,7 @@
       });
       this.summons = new Map();
       this.decor = new Map();
+      this.loot = new Map(); // 地上的掉落物 id -> container
       // 大閃電（落雷用）
       const big = drawBolt();
       this.textures.addCanvas('bolt-big', big);
@@ -4457,6 +4610,9 @@
       this.decor.forEach(d => d.destroy());
       this.decor.clear();
       (res.decor || []).forEach(d => this.setDecor(d));
+      this.loot.forEach(c => c.destroy());
+      this.loot.clear();
+      (res.loot || []).forEach(l => this.addLoot(l));
       this.makeDj();
       this.makeWell();
       TREE.refresh();
@@ -5428,6 +5584,111 @@
       if (who && it) this.floatText(who.x, who.y - 110, '', '#ffffff', 34, 'item-' + g.item);
     }
 
+    // ---------- 地上的掉落物 ----------
+    // 打倒怪噴出來、或有人從背包丟出來的東西；誰都能撿（走到旁邊按 Z，或點一下）
+    lootTex(kind, k) {
+      const key = bagIcon(kind, k), tex = 'lt-' + key;
+      if (!this.textures.exists(tex)) {
+        const cv = window.HQ_ICONS && HQ_ICONS.canvas(key);
+        if (!cv) return null;
+        this.textures.addCanvas(tex, cv);
+      }
+      return tex;
+    }
+    addLoot(l) {
+      if (this.loot.has(l.id)) return;
+      const tex = this.lootTex(l.kind, l.k);
+      const rar = l.kind === 'gear' ? GR.GEAR[l.k].rarity : null;
+      const c = this.add.container(l.x, l.y).setDepth(l.y);
+      c.state = l;
+      c.until = performance.now() + l.ms;
+      const shadow = this.add.ellipse(0, 2, 30, 9, 0x131a28, 0.22);
+      c.add(shadow);
+      // SR 橘光、SSR 粉紅光加白圈，一直閃
+      if (rar && rar !== 'R') {
+        const col = rar === 'SSR' ? 0xe46bd6 : 0xffb020;
+        const glow = this.add.ellipse(0, -14, 50, 42, col, 0.35);
+        c.add(glow);
+        this.tweens.add({ targets: glow, scale: { from: 0.8, to: 1.2 }, alpha: { from: 0.45, to: 0.15 }, duration: rar === 'SSR' ? 600 : 1000, yoyo: true, repeat: -1 });
+        if (rar === 'SSR') {
+          const ring = this.add.ellipse(0, 0, 40, 13).setStrokeStyle(2.5, 0xffffff, 0.9);
+          c.add(ring);
+          this.tweens.add({ targets: ring, scale: { from: 0.6, to: 1.5 }, alpha: { from: 1, to: 0 }, duration: 900, repeat: -1 });
+        }
+      }
+      const img = tex ? this.add.image(0, -14, tex).setScale(0.24) : this.add.circle(0, -14, 12, 0xffd23f);
+      c.add(img);
+      c.img = img;
+      this.loot.set(l.id, c);
+      const bob = () => this.tweens.add({ targets: img, y: -18, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      // 從怪身上噴出來／從人手上丟出來：畫一條拋物線，落地彈一下
+      if (l.fx != null && !fxOff()) {
+        const who = l.by && (me && l.by === me.id ? this.me : this.remotes.get(l.by));
+        if (who) this.lunge(who, l.x);
+        const h = 60 + Math.random() * 30;
+        c.setPosition(l.fx, l.fy);
+        shadow.setVisible(false);
+        this.tweens.addCounter({ from: 0, to: 1, duration: 520, ease: 'Linear',
+          onUpdate: (tw) => { const k = tw.getValue(); c.setPosition(l.fx + (l.x - l.fx) * k, l.fy + (l.y - l.fy) * k - Math.sin(k * Math.PI) * h); },
+          onComplete: () => {
+            if (!c.active) return;
+            c.setPosition(l.x, l.y); shadow.setVisible(true);
+            this.tweens.add({ targets: img, y: -24, duration: 140, yoyo: true, ease: 'Quad.easeOut', onComplete: () => c.active && bob() });
+          } });
+      } else bob();
+    }
+    removeLoot(id, by) {
+      const c = this.loot.get(id);
+      if (!c) return;
+      this.loot.delete(id);
+      if (this.pendingPick === id) this.pendingPick = null;
+      const who = by && (me && by === me.id ? this.me : this.remotes.get(by));
+      this.tweens.killTweensOf(c.list);
+      // 被撿走：飛進那個人身上；時間到：淡掉
+      if (who && !fxOff()) this.tweens.add({ targets: c, x: who.x, y: who.y - 40, scale: 0.4, alpha: 0, duration: 260, ease: 'Quad.easeIn', onComplete: () => c.destroy() });
+      else this.tweens.add({ targets: c, alpha: 0, duration: 300, onComplete: () => c.destroy() });
+    }
+    // 離自己最近、搆得到的
+    nearestLoot(reach) {
+      if (!this.me) return null;
+      let best = null, bd = reach;
+      this.loot.forEach(c => { const d = Math.hypot(c.x - this.me.x, c.y - this.me.y); if (d < bd) { bd = d; best = c; } });
+      return best;
+    }
+    // 點到哪一個
+    lootAt(x, y) {
+      let best = null, bd = 30;
+      this.loot.forEach(c => { const d = Math.hypot(c.x - x, c.y - 14 - y); if (d < bd) { bd = d; best = c; } });
+      return best;
+    }
+    // 頭上的提示紙條：撿 名字（裝備已經有的話標出有幾件，不想要就不撿）
+    lootAction() {
+      const c = this.nearestLoot(LOOT_REACH);
+      if (!c) return null;
+      const l = c.state, n = l.kind === 'gear' ? myGear[l.k] || 0 : 0;
+      return { type: 'loot', id: l.id, kind: l.kind, k: l.k, icon: bagIcon(l.kind, l.k),
+        label: `撿 ${bagName(l.kind, l.k)}${n ? `（有 ${n} 件）` : ''}` };
+    }
+    pickLoot(id) {
+      const c = this.loot.get(id);
+      if (!c || this.isDead()) return;
+      const now = performance.now();
+      if (now - (this.lastPick || 0) < 200) return;
+      this.lastPick = now;
+      this.target = null; this.pendingPick = null;
+      socket.emit('move', { x: Math.round(this.me.x), y: Math.round(this.me.y), dir: this.me.dir, moving: false });
+      socket.emit('pickLoot', id, (res) => {
+        if (!res) return;
+        if (res.ok) this.floatText(this.me.x, this.me.y - 110, '+1', '#ffffff', 26, bagIcon(res.kind, res.k));
+        else if (res.error) toast(res.error);
+      });
+    }
+    // Z：撿身邊最近的
+    pickNearest() {
+      const c = this.nearestLoot(LOOT_REACH);
+      if (c) this.pickLoot(c.state.id);
+    }
+
     // 世界座標 (x, y) 上可以互動的東西，夠近才算
     actionAt(x, y) {
       const reach = Math.max(130, ST.SKILLS[basic()].range);
@@ -5465,6 +5726,10 @@
 
     // 提示紙條掛在哪裡（世界座標）：top＝放上面時尖角的位置，y／half＝放旁邊時的高度和東西的半寬
     hintAnchor(act) {
+      if (act.type === 'loot') {
+        const c = this.loot.get(act.id);
+        return c ? { x: c.x, top: c.y - 38, y: c.y - 14, half: 20 } : { x: this.me.x, top: this.me.y - 100, y: this.me.y, half: 20 };
+      }
       if (act.type === 'mentor' || act.type === 'guard' || act.type === 'elevator') {
         const n = MAP[act.type], ny = n.y + 18;
         return { x: n.x, top: ny - (act.type === 'mentor' ? 106 : 110), y: ny - 38, half: 30 };
@@ -5495,8 +5760,8 @@
       const sc = 0.5 / cam.zoom;
       const tries = [['down', a.x, a.top, 0.5, 1], ['left', a.x + a.half, a.y, 0, 0.5], ['right', a.x - a.half, a.y, 1, 0.5]];
       for (let i = 0; i < tries.length; i++) {
-        const [tail, x, y, ox, oy] = tries[i], tex = 'hint-' + this.hintAct.type + (touch ? '-t' : '') + '-' + tail;
-        if (!this.textures.exists(tex)) this.textures.addCanvas(tex, drawHint(this.hintAct.type, touch, tail));
+        const [tail, x, y, ox, oy] = tries[i], tex = 'hint-' + this.hintAct.type + (this.hintAct.label ? '-' + this.hintAct.label : '') + (touch ? '-t' : '') + '-' + tail;
+        if (!this.textures.exists(tex)) this.textures.addCanvas(tex, drawHint(this.hintAct, touch, tail));
         const src = this.textures.get(tex).getSourceImage(), w = src.width * sc, h = src.height * sc;
         // 換成螢幕座標，上下多留一點給飄動
         const l = rect.left + (x - w * ox - cam.worldView.x) * cam.zoom, t = rect.top + (y - h * oy - 6 - cam.worldView.y) * cam.zoom;
@@ -5508,7 +5773,7 @@
     }
 
     updateHint(act, time) {
-      const key = act ? act.type + (act.tx != null ? act.tx + ',' + act.ty : '') : '';
+      const key = act ? act.type + (act.tx != null ? act.tx + ',' + act.ty : '') + (act.label || '') + (act.id || '') : '';
       const touch = matchMedia('(pointer: coarse)').matches;
       if (key !== this.hintKey) {
         this.hintKey = key;
@@ -5571,7 +5836,9 @@
       this.target = null;
       // 先把目前位置告訴伺服器，它才會判斷你夠近
       socket.emit('move', { x: Math.round(this.me.x), y: Math.round(this.me.y), dir: this.me.dir, moving: false });
-      if (act.type === 'attack') {
+      if (act.type === 'loot') {
+        this.pickLoot(act.id);
+      } else if (act.type === 'attack') {
         this.castSkill(act.skill || basic(), act.target);
       } else if (act.type === 'push') {
         this.tryPush(act.dx, act.dy);
@@ -6253,14 +6520,9 @@
     onDgClear(c) {
       const d = this.myDg();
       if (!d || d.id !== c.id) return;
-      const mine = c.drops.find(x => me && x.id === me.id);
       for (let i = 0; i < 4; i++) this.time.delayedCall(i * 300, () => this.burst(this.me.x + (Math.random() - 0.5) * 200, this.me.y - 120 - Math.random() * 80, 16, [0xffd23f, 0xff8fab, 0x7fd1ff, 0x7be08f][i], 120));
       this.floatText(this.me.x, this.me.y - 150, '副本通關！', '#ffd23f', 30);
-      if (!mine) return;
-      const g = mine.item && GR.GEAR[mine.item];
-      if (!g) toast('這次什麼都沒掉……下次再來挑戰！');
-      else if (mine.dup) toast(`又是【${g.rarity}】${g.name}，換成 ${mine.exp || 600} 經驗`, 'gear-' + mine.item);
-      else toast(`獲得武器【${g.rarity}】${g.name}！`, 'gear-' + mine.item);
+      if (c.drops) toast('頭目掉了寶物在地上，按 Z 或點一下去撿，離開副本就沒了！');
       toast(`${Math.round(c.ms / 1000)} 秒後送回${MAP.DUNGEONS[c.id].lobbyName}`);
     }
 
@@ -6686,7 +6948,19 @@
       const all0 = [this.me, ...this.remotes.values()];
       const near = this.nearbyAction();
       const canHit = !!near && !this.isDead() && near.type === 'attack';
-      this.updateHint(!near || this.isDead() || canHit || !HINTS[near.type] || !$('games').hidden ? null : near, time);
+      // 旁邊有怪的時候空白鍵是攻擊（提示在技能列），這時候紙條改提示地上的東西
+      const show = !near || canHit ? this.lootAction() : near;
+      this.updateHint(!show || this.isDead() || !HINTS[show.type] || !$('games').hidden ? null : show, time);
+      // 點了遠處地上的東西：走到旁邊就撿；中途自己改走別的地方就算了
+      if (this.pendingPick) {
+        const c = this.loot.get(this.pendingPick);
+        if (!c) this.pendingPick = null;
+        else if (Math.hypot(c.x - this.me.x, c.y - this.me.y) < LOOT_REACH) this.pickLoot(this.pendingPick);
+        else if (!this.target) this.pendingPick = null;
+      }
+      // 快消失的東西（剩 10 秒）一閃一閃
+      const nowMs = performance.now();
+      this.loot.forEach(c => { if (c.img) c.img.setAlpha(c.until - nowMs < 10000 ? (Math.floor(nowMs / 250) % 2 ? 0.35 : 1) : 1); });
       if (canHit !== this.canHit) { this.canHit = canHit; $('basic-btn').classList.toggle('ready', canHit); }
       // 技能的冷卻遮罩（從下往上退），魔力不夠就變暗
       this.cdPct = this.cdPct || {};

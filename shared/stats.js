@@ -194,6 +194,14 @@
       say: ['天龍國是我的！', '你住哪一區？', '這裡不歡迎你', '看我的龍捲風！'] },
   });
   const MOB_RESPAWN_MS = 45000;
+  // 打倒怪會在地上噴出掉落物：每隻怪可以寫自己的 drops，沒寫的用這裡的預設
+  // n：一次噴幾個（最少、最多）；food / decor / gear：每一個抽到補品、家具、裝備的權重，加起來不到 100 的部分算沒掉
+  // series：限定掉哪些裝備系列；rare：裝備只掉 SR、SSR
+  const DROPS = {
+    field: { n: [0, 2], food: 35, decor: 25, gear: 8 },
+    dungeon: { n: [0, 1], food: 50, gear: 4 },
+    boss: { n: [3, 5], food: 40, decor: 30, gear: 30, rare: true }, // 颱風（每多一個有出力的人多噴一個）
+  };
 
   // 現在的普通攻擊：有拿武器就用武器的打法
   function basicOf(cls, equip) {
@@ -227,7 +235,7 @@
   }
 
   const stats = { BASE, CLASSES, SKILLS, SUMMONS, SUMMON_MAX, SUMMON_HIT_MS, FOODS, REGEN, MONSTER, MONSTER2, RESPAWN_MS, WEAKEN, LEVEL,
-    MOBS, MOB_RESPAWN_MS, statsFor, reduce, boost, bonusDef, foeGap, basicOf, skillsOf };
+    MOBS, MOB_RESPAWN_MS, DROPS, statsFor, reduce, boost, bonusDef, foeGap, basicOf, skillsOf };
   if (typeof module !== 'undefined' && module.exports) module.exports = stats;
   else root.HQ_STATS = stats;
 })(this);

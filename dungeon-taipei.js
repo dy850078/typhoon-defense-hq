@@ -26,7 +26,7 @@ const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 const env = (stage) => ({ id: 'tp-env-' + stage, alive: true, frozenUntil: 0, weakUntil: 0, stage, kind: 'sign' });
 
 const R = {
-  boss: 'tianlong', clearExp: 2000, dupExp: 3000, dmgMul: DMG_MUL,
+  boss: 'tianlong', clearExp: 2000, dmgMul: DMG_MUL,
   bossExtra: (a) => {
     const hp = BOSS_HP + BOSS_HP_PER_PLAYER * a.st.members.size, now = a.now0();
     return { hp, maxHp: hp, phase: 1, nextAttack: now + 4000, transformUntil: 0,

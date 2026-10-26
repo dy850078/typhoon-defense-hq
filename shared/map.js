@@ -169,7 +169,7 @@
     'YYYuuuuuYuuuuYuuuuYYYY',
     'YuuuuuuuYuuuuYuuuuuuuY',
     'YuuuYYuuuuuuuuuuYYuuuY',
-    'YuuuuuuuuxYYxuuuuuuuuY',
+    'YuuuuuuuuxuuxuuuuuuuuY',
     'YYYYYYYYYYXXYYYYYYYYYY',
     // 第三關：燕子口（兩塊踏板要同時有人踩，下面三排是立霧溪）
     'YaaaaaaaaaaaaaaaaaaaaY',

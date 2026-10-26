@@ -14,6 +14,7 @@
     singer: { body: '#5b3f8f', sleeve: '#5b3f8f' }, // 紫色亮片晚禮服＋耳麥＋音符髮夾
     painter: { body: '#f4efe4', sleeve: '#4f7cc2' }, // 沾滿顏料的畫家圍裙＋條紋袖＋紅色貝雷帽
     suit: { body: '#2f3b55', sleeve: '#2f3b55' }, // NPC 西裝
+    greek: { body: '#fbfbf8', sleeve: null }, // NPC 希臘少女：白色單肩長袍＋金色腰繩＋橄欖葉冠
   };
   const SKINS = ['#fde6d4', '#f6cfae', '#e2a983', '#b77a55'];
   const HAIR_COLORS = ['#2b2a33', '#6b4a32', '#c9772f', '#9aa3b5'];
@@ -58,10 +59,17 @@
       C.fill(ctx, hairColor, r, [10, 6, 44, 52]); C.stroke(ctx, r, W);
     }
     gear('outfit', 'back');
+    gear('head', 'back'); // 頭飾在頭後面的部分，例如新娘頭紗
     if (dressed) gear('outfit', 'front');
     else {
     // 腿 + 雨鞋
-    [[23, 30], [34, 41]].forEach(([x1, x2]) => {
+    if (cos === 'greek') [[23, 30], [34, 41]].forEach(([x1, x2]) => {
+      // 光腳穿綁帶涼鞋
+      C.rect(ctx, x1, 62, x2 - x1, 12, r, 0.8); C.fill(ctx, skin, r, null); C.stroke(ctx, r, W);
+      C.blob(ctx, (x1 + x2) / 2 + (x1 < 30 ? -1 : 1), 75, 5.5, 2.6, r, 0.06); C.fill(ctx, '#c08a4a', r, null); C.stroke(ctx, r, 1.8);
+      [67, 71].forEach(y => C.line(ctx, x1, y, x2, y + 1, r, 1.4, '#a06a30', 0.3));
+    });
+    else [[23, 30], [34, 41]].forEach(([x1, x2]) => {
       C.rect(ctx, x1, 62, x2 - x1, 11, r, 0.8); C.fill(ctx, '#8a5a3a', r, [x1, 62, 10, 11]); C.stroke(ctx, r, W);
       C.blob(ctx, (x1 + x2) / 2 + (x1 < 30 ? -1 : 1), 74, 6, 3.5, r, 0.06); C.fill(ctx, cos === 'skater' ? '#fbfbf8' : '#2f3b55', r, null); C.stroke(ctx, r, W);
       if (cos === 'skater') C.line(ctx, x1 - 2, 78.5, x2 + 1, 78.5, r, 1.8, '#9aa3b5', 0.3); // 冰刀
@@ -69,6 +77,14 @@
 
     // 手臂（袖子 + 手）
     if (p.npc !== 'chiang') [[13, -0.5], [51, 0.5]].forEach(([x, tilt]) => {
+      if (p.fist && x > 32) return; // 花蓮王舉拳：右手另外畫在上面
+      if (p.npc === 'greek' && x > 32) return; // 希臘少女的右手比「噓」，另外畫在上面
+      if (cos === 'greek') {
+        // 露出手臂，戴金色臂環
+        C.blob(ctx, x, 55, 4.2, 9, r, 0.08); C.fill(ctx, skin, r, null); C.stroke(ctx, r, W);
+        C.line(ctx, x - 4, 51, x + 4, 50.5, r, 2.6, '#e0b84a', 0.2);
+        return;
+      }
       // 超能力霸王露出粗粗的手臂
       if (cos === 'tank') { C.blob(ctx, x + tilt * 2, 55, 6.5, 9.5, r, 0.08); C.fill(ctx, skin, r, null); C.stroke(ctx, r, W); return; }
       C.blob(ctx, x, 54, 5, 9, r, 0.08); C.fill(ctx, sleeve, r, [x - 5, 45, 10, 18]); C.stroke(ctx, r, W);
@@ -82,7 +98,7 @@
 
     // 雨衣身體
     // 長袍、旗裝比較長，蓋住一點腿
-    const hem = cos === 'prophet' || cos === 'skater' || cos === 'singer' ? 71 : 66;
+    const hem = cos === 'greek' ? 73 : cos === 'prophet' || cos === 'skater' || cos === 'singer' ? 71 : 66;
     ctx.beginPath();
     ctx.moveTo(19, 47); ctx.quadraticCurveTo(32, 41 + r(), 45, 47);
     ctx.quadraticCurveTo(49 + r(), 58, 48 + (hem - 66) * 0.3, hem); ctx.quadraticCurveTo(32, hem + 3 + r(), 16 - (hem - 66) * 0.3, hem);
@@ -228,13 +244,95 @@
       });
     }
 
+    if (p.npc === 'tianlong') {
+      // 台北101的天龍王：黑色墨鏡、金色小皇冠、胸前口袋插一條金色手帕
+      [[26, 28.5], [38, 28.5]].forEach(([x, y]) => { C.blob(ctx, x, y, 5.4, 4.2, r, 0.06, 14); C.fill(ctx, '#1f1d24', r, null); C.stroke(ctx, r, 1.6); });
+      C.line(ctx, 31, 28, 33, 28, r, 1.8);
+      ctx.save(); ctx.globalAlpha = 0.6; C.line(ctx, 23, 27, 26, 26, r, 1.2, '#ffffff', 0.2); C.line(ctx, 35, 27, 38, 26, r, 1.2, '#ffffff', 0.2); ctx.restore();
+      ctx.beginPath(); ctx.moveTo(23, 13); ctx.lineTo(24, 4); ctx.lineTo(28, 9); ctx.lineTo(32, 2); ctx.lineTo(36, 9); ctx.lineTo(40, 4); ctx.lineTo(41, 13); ctx.closePath();
+      C.fill(ctx, '#ffd23f', r, null); C.stroke(ctx, r, 1.8);
+      [[28, 11, '#e8384f'], [32, 10.5, '#4f7cc2'], [36, 11, '#6baf7b']].forEach(([x, y, col]) => { ctx.fillStyle = col; ctx.beginPath(); ctx.arc(x, y, 1.4, 0, Math.PI * 2); ctx.fill(); });
+      ctx.beginPath(); ctx.moveTo(38, 52); ctx.lineTo(41, 48.5); ctx.lineTo(43, 52); ctx.closePath(); C.fill(ctx, '#ffd23f', r, null); C.stroke(ctx, r, 1.2);
+    }
+    if (p.npc === 'elevator') {
+      // 101 電梯小姐：小圓帽（帽沿一圈金邊）、白手套
+      C.rect(ctx, 22, 7, 20, 8, r, 0.5); C.fill(ctx, '#2f5f5c', r, null); C.stroke(ctx, r, 1.8);
+      C.line(ctx, 22, 13.5, 42, 13.5, r, 1.6, '#ffd23f', 0.2);
+      [[13, 63], [51, 63]].forEach(([x, y]) => { C.blob(ctx, x, y, 3.8, 3.6, r, 0.1); C.fill(ctx, '#fbfbf8', r, null); C.stroke(ctx, r, 1.8); });
+    }
+    if (p.npc === 'fu') drawFu(ctx, C, r, p, W, skin);
+    if (p.npc === 'greek') drawGreek(ctx, C, r, W, skin);
+
     gear('head', 'head');
     gear('outfit', 'over');
+    gear('weapon', 'hand'); // 武器拿在右手，畫在最上面
 
     ctx.restore();
   }
 
+  // 副本頭目花蓮王：往旁邊梳的黑色短髮、圓臉大笑、黑色盔甲；舉拳（p.fist）是衝鋒前的預告
+  function drawFu(ctx, C, r, p, W, skin) {
+    ctx.beginPath();
+    ctx.moveTo(14.5, 28); ctx.quadraticCurveTo(12.5, 7.5, 32, 8); ctx.quadraticCurveTo(51, 7.5, 50.5, 26);
+    ctx.quadraticCurveTo(47, 17.5, 38, 16.5); ctx.quadraticCurveTo(27, 15.5, 21.5, 20); ctx.quadraticCurveTo(17.5, 23, 17, 28); ctx.closePath();
+    C.fill(ctx, '#1f1d24', r, [13, 8, 38, 20]); C.stroke(ctx, r, W);
+    C.line(ctx, 24, 10, 21.5, 17.5, r, 1.3, 'rgba(255,255,255,0.4)', 0.3); // 旁分的分線
+    C.line(ctx, 33, 10.5, 44, 14, r, 1.1, 'rgba(255,255,255,0.25)', 0.3);
+    // 開口大笑，露出一排白牙
+    ctx.beginPath(); ctx.moveTo(25, 38.2); ctx.quadraticCurveTo(32, 47, 39, 38.2); ctx.quadraticCurveTo(32, 39.6, 25, 38.2); ctx.closePath();
+    C.fill(ctx, '#8a2f35', r, null); C.stroke(ctx, r, 1.6);
+    ctx.beginPath(); ctx.moveTo(26.2, 38.8); ctx.quadraticCurveTo(32, 40.2, 37.8, 38.8); ctx.lineTo(37, 40.6); ctx.quadraticCurveTo(32, 42, 27, 40.6); ctx.closePath();
+    ctx.fillStyle = '#ffffff'; ctx.fill();
+    // 黑色盔甲：肩甲、胸前的紫色徽章
+    [16, 48].forEach((x) => {
+      C.blob(ctx, x, 48.5, 8.5, 5.5, r, 0.06); C.fill(ctx, '#3a3746', r, null); C.stroke(ctx, r, W);
+      C.line(ctx, x - 5.5, 47.5, x + 5.5, 47.5, r, 1.4, '#a07be8', 0.3);
+    });
+    C.blob(ctx, 32, 56, 4.6, 4.6, r, 0.1, 12); C.fill(ctx, '#8a5cd6', r, null); C.stroke(ctx, r, 1.6);
+    if (p.fist) {
+      // 右手握拳舉到臉旁邊
+      ctx.beginPath(); ctx.moveTo(47, 52); ctx.quadraticCurveTo(57, 46, 57, 33);
+      C.stroke(ctx, r, 9, C.INK); C.stroke(ctx, r, 6.4, '#3a3746');
+      C.blob(ctx, 57, 28, 6, 6.5, r, 0.1, 14); C.fill(ctx, skin, r, null); C.stroke(ctx, r, W);
+      [24.5, 27.5, 30.5].forEach(y => C.line(ctx, 53.5, y, 57, y, r, 1, 'rgba(43,42,51,0.6)', 0.2));
+    } else {
+      // 右手拿一把發紫光的黑劍
+      ctx.save(); ctx.globalAlpha = 0.35; C.line(ctx, 52, 62, 62, 16, r, 9, '#a07be8', 0.3); ctx.restore();
+      ctx.beginPath(); ctx.moveTo(51, 60); ctx.lineTo(59.5, 18); ctx.lineTo(63, 17); ctx.lineTo(55, 61); ctx.closePath();
+      C.fill(ctx, '#2b2a33', r, null); C.stroke(ctx, r, 1.6);
+      C.line(ctx, 55, 52, 60, 24, r, 1, 'rgba(255,255,255,0.45)', 0.2);
+      C.line(ctx, 46, 60, 58, 63, r, 3.2, '#ffd23f', 0.3);
+    }
+  }
+
   // 衣服上的細節（畫在身體上面）
+  // 希臘少女：畫眼線的大眼睛、粉紅唇，右手食指比「噓」，手上戴戒指和亮晶晶的手環
+  function drawGreek(ctx, C, r, W, skin) {
+    [[26, 1], [38, -1]].forEach(([x, k]) => {
+      C.blob(ctx, x, 28.3, 2.7, 3.1, r, 0.06, 12); C.fill(ctx, C.INK, r, null);
+      ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(x - 0.8, 27.2, 0.9, 0, Math.PI * 2); ctx.fill();
+      // 眼線：上眼皮一道，眼尾輕輕往外勾
+      ctx.beginPath(); ctx.moveTo(x + 2.6 * k, 27.4); ctx.quadraticCurveTo(x, 24.6, x - 2.8 * k, 27); ctx.lineTo(x - 4.4 * k, 26.2);
+      C.stroke(ctx, r, 1.3);
+    });
+    ctx.fillStyle = '#e0607a'; ctx.beginPath(); ctx.ellipse(32, 40.4, 3.3, 1.7, 0, 0, Math.PI * 2); ctx.fill();
+    // 右手從胸口抬到下巴：握拳，只伸出食指貼在嘴唇正中間
+    ctx.beginPath(); ctx.moveTo(48, 56); ctx.quadraticCurveTo(46, 50.5, 38.5, 49);
+    C.stroke(ctx, r, 8, C.INK); C.stroke(ctx, r, 5, skin);
+    C.line(ctx, 42.6, 52.6, 43.8, 48.6, r, 3, '#cfd6e2', 0.2); // 手環
+    [[42, 51], [44.6, 52]].forEach(([x, y]) => { ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(x, y, 0.8, 0, Math.PI * 2); ctx.fill(); });
+    // 食指：圓頭的長條，指尖有一點指甲
+    ctx.beginPath();
+    ctx.moveTo(30.6, 45.5); ctx.lineTo(30.8, 38.6); ctx.quadraticCurveTo(32, 36.6, 33.2, 38.6); ctx.lineTo(33.4, 45.5); ctx.closePath();
+    C.fill(ctx, skin, r, null); C.stroke(ctx, r, 1.4);
+    ctx.fillStyle = '#f6d3d8'; ctx.beginPath(); ctx.ellipse(32, 38.9, 0.8, 1.1, 0, 0, Math.PI * 2); ctx.fill();
+    // 握起來的拳頭，三個指節
+    C.blob(ctx, 34.5, 47.8, 5, 3.6, r, 0.06, 14); C.fill(ctx, skin, r, null); C.stroke(ctx, r, 1.6);
+    [33.6, 36.2, 38.4].forEach(x => C.line(ctx, x, 45.2, x - 0.2, 47.4, r, 0.9, 'rgba(43,42,51,0.55)', 0.1));
+    C.blob(ctx, 34.9, 45.4, 1.2, 0.9, r, 0.1, 8); C.fill(ctx, '#e0b84a', r, null); C.stroke(ctx, r, 0.7); // 戒指
+    C.blob(ctx, 37.3, 45.5, 1.2, 0.9, r, 0.1, 8); C.fill(ctx, '#e8edf3', r, null); C.stroke(ctx, r, 0.7);
+  }
+
   function drawCostume(ctx, C, r, cos, hem, p) {
     const dot = (x, y, rad, color) => { ctx.fillStyle = color; ctx.beginPath(); ctx.arc(x, y, rad, 0, Math.PI * 2); ctx.fill(); };
     if (cos === 'staff') {
@@ -288,6 +386,18 @@
       C.line(ctx, 37, 51, 41, 43, r, 2, '#8a5a3a', 0.2); dot(41.5, 42.5, 1.6, '#e8384f');
       C.line(ctx, 34, 51, 35, 44, r, 2, '#8a5a3a', 0.2); dot(35, 43.5, 1.6, '#4f7cc2');
       [[20, 57, '#e8384f'], [44, 60, '#3f9f5a'], [26, 66, '#ffd23f'], [40, 66, '#4f7cc2'], [30, 47, '#ff7a2f']].forEach(([x, y, c]) => dot(x, y, 1.8, c));
+    } else if (cos === 'greek') {
+      // 單肩長袍：右肩露出來，布從左肩斜斜垂下，金色腰繩打個結，裙襬一圈金邊
+      ctx.beginPath(); ctx.moveTo(36, 45); ctx.quadraticCurveTo(43, 44.5, 45.5, 48.5); ctx.lineTo(44, 51); ctx.quadraticCurveTo(40, 47.5, 36, 45); ctx.closePath();
+      C.fill(ctx, p && p.skin || '#fde6d4', r, null);
+      ctx.beginPath(); ctx.moveTo(20, 46.5); ctx.quadraticCurveTo(33, 47, 44.5, 52); C.stroke(ctx, r, 1.6);
+      [[24, 50, 21, 62], [30, 50, 29, 64], [38, 54, 40, 66], [26, 60, 24, 70], [35, 60, 36, 71]].forEach(([x1, y1, x2, y2]) =>
+        C.line(ctx, x1, y1, x2, y2, r, 1.1, 'rgba(43,42,51,0.35)', 0.4));
+      C.line(ctx, 17.5, 56, 46.5, 56, r, 2.2, '#e0b84a', 0.3);
+      C.blob(ctx, 27, 56, 2, 1.6, r, 0.1, 8); C.fill(ctx, '#e0b84a', r, null); C.stroke(ctx, r, 1);
+      C.line(ctx, 26.5, 57, 25, 62, r, 1.4, '#e0b84a', 0.3); C.line(ctx, 27.5, 57, 28.5, 61.5, r, 1.4, '#e0b84a', 0.3);
+      C.line(ctx, 15.5, hem - 2.5, 48.5, hem - 2.5, r, 2, '#e0b84a', 0.4);
+      for (let x = 18; x < 47; x += 5) C.line(ctx, x, hem - 2.5, x, hem - 5, r, 1, '#e0b84a', 0.2);
     } else if (cos === 'suit') {
       // 白襯衫 V 領＋領帶
       ctx.beginPath(); ctx.moveTo(26, 46); ctx.lineTo(38, 46); ctx.lineTo(32, 56); ctx.closePath();
@@ -331,6 +441,15 @@
       C.blob(ctx, 14, 29, 3, 4, r, 0.1, 10); C.fill(ctx, '#2b2a33', r, null); C.stroke(ctx, r, 1.4);
       C.blob(ctx, 44, 12, 3, 2.4, r, 0.1, 10); C.fill(ctx, '#ffd23f', r, null); C.stroke(ctx, r, 1.2);
       C.line(ctx, 46.5, 12, 46.5, 4, r, 1.6, C.INK, 0.2); C.line(ctx, 46.5, 4, 50, 6, r, 1.6, C.INK, 0.2);
+    } else if (cos === 'greek') {
+      // 金色橄欖葉冠：沿著頭頂繞一圈的小葉子
+      ctx.beginPath(); ctx.arc(32, 25, 18.5, Math.PI * 1.08, Math.PI * 1.92); C.stroke(ctx, r, 1.6, '#a07a20');
+      for (let i = 0; i <= 8; i++) {
+        const a = Math.PI * (1.1 + i * 0.1), x = 32 + Math.cos(a) * 18.5, y = 25 + Math.sin(a) * 18.5;
+        ctx.save(); ctx.translate(x, y); ctx.rotate(a + Math.PI / 2 + (i % 2 ? 0.6 : -0.6));
+        C.blob(ctx, 0, -2.6, 1.6, 3.2, r, 0.08, 10); C.fill(ctx, '#e8c04a', r, null); C.stroke(ctx, r, 1);
+        ctx.restore();
+      }
     } else if (cos === 'painter') {
       // 歪戴的紅色貝雷帽，頂端一個小尾巴
       C.blob(ctx, 29, 11, 19, 6.5, r, 0.08, 14); C.fill(ctx, '#d9384a', r, [10, 4, 38, 14]); C.stroke(ctx, r, W);

@@ -90,13 +90,32 @@
       teamAtk: { mul: 0.3, ms: 12000, r: 380 },
       desc: '唱一首振奮人心的歌，身邊隊友（包含自己）攻擊力 +30%，持續 12 秒。哪裡都能用。' },
     fireWall: { name: '火焰城牆', icon: '🔥', mp: 25, cooldown: 9000, power: 0, support: true,
-      wall: { kind: 'fire', ms: 10000, len: 420, burn: 0.5 },
-      desc: '在颱風前線拖曳畫一條線（最長 420），變成 10 秒的火牆：怪物過不去，碰到還會被燒（每秒普攻 0.5 倍）。' },
+      wall: { kind: 'fire', ms: 10000, len: 700, burn: 0.5 },
+      desc: '在颱風前線拖曳畫一條線（最長 700），變成 10 秒的火牆：怪物過不去，碰到還會被燒（每秒普攻 0.5 倍）。跟冰牆交叉圍成一圈，圈裡會落雷、颳龍捲風。' },
     iceWall: { name: '冰霜城牆', icon: '🧊', mp: 25, cooldown: 9000, power: 0, support: true,
-      wall: { kind: 'ice', ms: 10000, len: 420, freeze: 2000 },
-      desc: '在颱風前線拖曳畫一條線（最長 420），變成 10 秒的冰牆：怪物過不去，第一次碰到會被凍住 2 秒。' },
+      wall: { kind: 'ice', ms: 10000, len: 700, freeze: 2000 },
+      desc: '在颱風前線拖曳畫一條線（最長 700），變成 10 秒的冰牆：怪物過不去，第一次碰到會被凍住 2 秒。跟火牆交叉圍成一圈，圈裡會落雷、颳龍捲風。' },
     mothership: { name: '母艦光束', icon: '🛸', mp: 30, cooldown: 10000, power: 1.8, range: 420, aoeAt: 220, weaken: 5000,
       desc: '呼叫外星母艦從天上照下一道光束，目標附近的怪都受到普攻 1.8 倍傷害，並被削弱 5 秒。' },
+  });
+
+  // 武器的普通攻擊：裝備武器以後，空白鍵的普攻換成這些（不管什麼職業）
+  Object.assign(SKILLS, {
+    lilyDart: { name: '金針花鏢', icon: '🌼', mp: 0, cooldown: 450, power: 1.05, range: 420, basic: true, weapon: true,
+      desc: '射出一朵旋轉的金針花，遠距離。（金針花標）' },
+    pebbleOrb: { name: '七星彩石彈', icon: '🔮', mp: 0, cooldown: 600, power: 1.05, range: 320, aoeAt: 110, basic: true, weapon: true,
+      desc: '法杖射出一顆彩石魔法彈，中距離，打到會在一小塊範圍裡炸開。（七星潭法杖）' },
+    marbleSmash: { name: '大理石重錘', icon: '🔨', mp: 0, cooldown: 700, power: 1.8, range: 140, aoe: 150, basic: true, weapon: true,
+      desc: '掄起大理石錘往地上砸，近距離，身邊的怪全部打到，傷害最高。（太魯閣戰錘）' },
+    cardFlick: { name: '悠遊飛卡', mp: 0, cooldown: 450, power: 1.15, range: 440, basic: true, weapon: true,
+      chain: { n: 2, r: 200, mul: 0.6 },
+      desc: '把悠遊卡甩出去，遠距離，打中以後會彈到旁邊最多 2 隻怪（六成傷害）。（捷運悠遊卡）' },
+    damperSwing: { name: '阻尼甩錘', mp: 0, cooldown: 750, power: 1.6, range: 260, aoeAt: 100, basic: true, weapon: true,
+      knock: { mob: 60, boss: 0, stun: 300, noBoss: true },
+      desc: '甩出金色的阻尼球，中距離，砸到的地方一小圈都打到，小怪會被撞退。（阻尼球流星錘）' },
+    spireThrust: { name: '避雷突刺', mp: 0, cooldown: 650, power: 1.9, range: 200, basic: true, weapon: true,
+      chain: { n: 3, r: 240, mul: 0.8, chance: 0.3, bolt: true },
+      desc: '長槍往前刺，中近距離，傷害很高；有三成機率引來一道雷，劈到附近最多 3 隻怪。（101 避雷針長槍）' },
   });
 
   // 召喚師叫出來的奇異生物：weight 越大越常出現，越強的越少見
@@ -149,7 +168,40 @@
     hsu: { name: '徐小心', level: 15, hp: 1100, dmg: [12, 18], range: 90, speed: 65, exp: 180,
       say: ['小心喔！', '我要查你喔～', '⚠️ 小心！', '你過來一下'] },
   };
+  // 副本裡的怪（只在副本出現，不會自己重生）
+  // scale：畫多大；gap：打得到的身體範圍（半寬、頭頂多高、腳下多低）
+  Object.assign(MOBS, {
+    rock: { name: '落石怪', level: 18, hp: 650, dmg: [9, 14], range: 80, speed: 60, exp: 120, dungeon: true,
+      say: ['轟隆隆～', '落石注意！', '擋路擋路', '🪨'] },
+    horse: { name: '黑馬分身', level: 40, hp: 900, dmg: [14, 20], range: 90, speed: 95, exp: 150, dungeon: true, scale: 0.8,
+      say: ['嘶～', '🐴', '衝啊！'] },
+    fu: { name: '花蓮王', level: 50, hp: 9000, dmg: [0, 0], range: 0, speed: 70, exp: 800, dungeon: true, boss: true, scale: 1,
+      gap: { half: 46, top: 130, bottom: 16 }, phase2: { name: '暗黑花蓮王', level: 60 },
+      say: ['花蓮是我的！', '我們一起努力！', '凍蒜！', '這個我不同意', '👊'] },
+    // 台北101副本（要 Lv.50）：血和傷害照 Lv.50 的人調
+    sign: { name: '飛天招牌', level: 52, hp: 2600, dmg: [35, 50], range: 85, speed: 70, exp: 220, dungeon: true, noFlip: true,
+      say: ['大拍賣！', '最後一天！', '吹走啦～', '跳樓大特價'] },
+    scooter: { name: '暴衝機車', level: 54, hp: 2200, dmg: [40, 55], range: 90, speed: 115, exp: 220, dungeon: true, hitMs: 1600,
+      say: ['叭叭！', '借過借過', '紅燈右轉！', '嗡嗡嗡～'] },
+    bike: { name: '飛天機車', level: 60, hp: 7500, dmg: [60, 80], range: 95, speed: 100, exp: 600, dungeon: true, scale: 0.8,
+      gap: { half: 40, top: 90, bottom: 12 }, say: ['暴衝囉！', '安全帽呢？', '叭——！'] },
+    blackout: { name: '停電小怪', level: 55, hp: 1800, dmg: [35, 45], range: 80, speed: 90, exp: 180, dungeon: true, sight: 600,
+      say: ['啪！', '沒電了～', '誰關燈？', '黑漆漆'] },
+    whirl: { name: '小風窩', level: 62, hp: 4000, dmg: [40, 55], range: 90, speed: 60, exp: 300, dungeon: true,
+      say: ['呼呼～', '轉轉轉', '風好大'] },
+    tianlong: { name: '天龍王', level: 70, hp: 40000, dmg: [0, 0], range: 0, speed: 75, exp: 2500, dungeon: true, boss: true, scale: 1, barY: -200,
+      gap: { half: 70, top: 170, bottom: 18 }, phase2: { name: '狂風天龍王', level: 75 }, phase3: { name: '暴走天龍王', level: 80 },
+      say: ['天龍國是我的！', '你住哪一區？', '這裡不歡迎你', '看我的龍捲風！'] },
+  });
   const MOB_RESPAWN_MS = 45000;
+
+  // 現在的普通攻擊：有拿武器就用武器的打法
+  function basicOf(cls, equip) {
+    const G = typeof module !== 'undefined' && module.exports ? require('./gear') : root.HQ_GEAR;
+    const w = equip && G && G.GEAR[equip.weapon];
+    return w && w.basic && SKILLS[w.basic] ? w.basic : (CLASSES[cls] || CLASSES.staff).skills[0];
+  }
+  const skillsOf = (cls, equip) => { const c = CLASSES[cls] || CLASSES.staff; return [basicOf(cls, equip), c.skills[1], c.skills[2]]; };
 
   function statsFor(cls, level = 1) {
     const c = CLASSES[cls] || CLASSES.staff;
@@ -167,14 +219,15 @@
   // 再多給一點寬限，抵掉位置同步的延遲（颱風和人都在動）
   function foeGap(p, foe, isBoss) {
     const k = isBoss && foe.phase === 2 ? MONSTER2.scale : 1; // 變身後體型變大，打得到的範圍也跟著變大
-    const half = isBoss ? 100 * k : 26, top = isBoss ? 180 * k : 70, bottom = isBoss ? 30 * k : 10;
+    const kind = !isBoss && (foe.kind || (foe.state && foe.state.kind)), g = kind && MOBS[kind] && MOBS[kind].gap;
+    const half = g ? g.half : isBoss ? 100 * k : 26, top = g ? g.top : isBoss ? 180 * k : 70, bottom = g ? g.bottom : isBoss ? 30 * k : 10;
     const dx = Math.max(0, Math.abs(p.x - foe.x) - half);
     const dy = Math.max(0, foe.y - top - p.y, p.y - (foe.y + bottom));
     return Math.hypot(dx, dy) - 40;
   }
 
   const stats = { BASE, CLASSES, SKILLS, SUMMONS, SUMMON_MAX, SUMMON_HIT_MS, FOODS, REGEN, MONSTER, MONSTER2, RESPAWN_MS, WEAKEN, LEVEL,
-    MOBS, MOB_RESPAWN_MS, statsFor, reduce, boost, bonusDef, foeGap };
+    MOBS, MOB_RESPAWN_MS, statsFor, reduce, boost, bonusDef, foeGap, basicOf, skillsOf };
   if (typeof module !== 'undefined' && module.exports) module.exports = stats;
   else root.HQ_STATS = stats;
 })(this);

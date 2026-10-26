@@ -9,6 +9,8 @@ const STATS = require('./shared/stats');
 const GEAR = require('./shared/gear');
 const DECOR = require('./shared/decor');
 const ACCOUNTS = require('./accounts');
+const WISHES = require('./wishes');
+const createDungeons = require('./dungeon');
 
 const PORT = Number(process.env.PORT) || 3000;
 const MAX_PLAYERS = Number(process.env.MAX_PLAYERS) || 40;
@@ -22,6 +24,7 @@ const MONSTER_HP_PER_PLAYER = Number(process.env.MONSTER_HP_PER_PLAYER) || 2000;
 const RESPAWN_MS = (Number(process.env.RESPAWN_MINUTES) || 5) * 60 * 1000;
 const CRATE_RESTOCK_MS = (Number(process.env.CRATE_RESTOCK_SECONDS) || 60) * 1000;
 const COOK_MS = 2500;
+const COOK_GEAR_RATE = 0.15; // 煮一次泡麵掉女僕咖啡廳裝備的機率
 // 颱風的三種攻擊：先在地上預警，delay 毫秒後打下來
 const ATTACKS = {
   gust: { r: 240, delay: 1200, dmg: [16, 24] }, // 強風：以颱風為中心吹一圈，會把人吹開
@@ -62,6 +65,8 @@ function partyInfo() {
 }
 
 const accounts = ACCOUNTS.create(DATA_DIR);
+const wishes = WISHES.create(DATA_DIR);
+const WISH_CAT = { bug: 'Bug 回報', feature: '新功能', improve: '功能優化', other: '其他' };
 
 const app = express();
 app.use(express.json({ limit: '400kb' }));
@@ -82,7 +87,73 @@ app.get(['/', '/index.html'], (req, res) => {
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/shared', express.static(path.join(__dirname, 'shared')));
 app.use('/vendor', express.static(path.join(__dirname, 'node_modules/phaser/dist')));
-app.get('/config', (req, res) => res.json({ jitsiDomain: JITSI_DOMAIN, jitsiRoom: JITSI_ROOM, party: partyInfo() }));
+// 小樹屋語音用的 ICE 伺服器：預設只有 Google 的 STUN；有些公司、學校網路連不上的話，設 TURN_URL/TURN_USER/TURN_PASS 加一台中繼
+const ICE_SERVERS = [{ urls: 'stun:stun.l.google.com:19302' }].concat(process.env.TURN_URL
+  ? [{ urls: process.env.TURN_URL.split(','), username: process.env.TURN_USER || '', credential: process.env.TURN_PASS || '' }] : []);
+app.get('/config', (req, res) => res.json({ jitsiDomain: JITSI_DOMAIN, jitsiRoom: JITSI_ROOM, party: partyInfo(), iceServers: ICE_SERVERS }));
+// 小樹屋的 TURN 中繼：手機網路、公司網路常常不讓兩個人直接連線，這時聲音改由中繼伺服器轉送
+// 兩種都可以（擇一）：
+//   Metered（免綁卡，每月免費 20GB）：TURN_API_URL=https://你的app.metered.live/api/v1/turn/credentials?apiKey=你的金鑰
+//   Cloudflare（每月免費 1000GB）：CF_TURN_KEY_ID + CF_TURN_KEY_TOKEN
+// 伺服器自己去拿臨時通行證、快過期就換新，金鑰不會傳到瀏覽器
+const CF_TURN_ID = process.env.CF_TURN_KEY_ID, CF_TURN_TOKEN = process.env.CF_TURN_KEY_TOKEN, TURN_API_URL = process.env.TURN_API_URL;
+const TURN_PROVIDER = CF_TURN_ID && CF_TURN_TOKEN ? 'Cloudflare' : TURN_API_URL ? 'Metered' : null;
+let turnIce = null, turnIceUntil = 0, turnIceP = null;
+// 中繼用量上限：瀏覽器每 30 秒回報走中繼的流量，伺服器記在 data/turn-usage.json（每個月重算）
+// 到了上限（TURN_LIMIT_GB，預設 800GB，Cloudflare 免費額度是 1000GB）就不再發中繼通行證，只剩直連，保證不會超過免費額度
+const TURN_LIMIT = (Number(process.env.TURN_LIMIT_GB) || 800) * 1e9;
+const TURN_USAGE_FILE = path.join(DATA_DIR, 'turn-usage.json');
+const monthNow = () => new Date().toISOString().slice(0, 7);
+let turnUsage = { month: monthNow(), bytes: 0 };
+try { const u = JSON.parse(fs.readFileSync(TURN_USAGE_FILE, 'utf8')); if (u && u.month && Number.isFinite(u.bytes)) turnUsage = u; } catch (e) { /* 還沒有用量紀錄 */ }
+let turnSaveTimer = null;
+function addTurnUsage(bytes) {
+  if (turnUsage.month !== monthNow()) turnUsage = { month: monthNow(), bytes: 0 };
+  const was = turnUsage.bytes >= TURN_LIMIT;
+  turnUsage.bytes += bytes;
+  if (!was && turnUsage.bytes >= TURN_LIMIT) console.warn(`🌳 小樹屋中繼這個月已經用了 ${(turnUsage.bytes / 1e9).toFixed(2)}GB，到上限了，先停發中繼通行證`);
+  turnSaveTimer = turnSaveTimer || setTimeout(() => {
+    turnSaveTimer = null;
+    try { fs.mkdirSync(DATA_DIR, { recursive: true }); fs.writeFileSync(TURN_USAGE_FILE, JSON.stringify(turnUsage)); } catch (e) { console.warn('中繼用量存不了', e.message); }
+  }, 60000);
+}
+const turnOver = () => turnUsage.month === monthNow() && turnUsage.bytes >= TURN_LIMIT;
+const turnState = () => ({ provider: TURN_PROVIDER, month: monthNow(), gb: turnUsage.month === monthNow() ? turnUsage.bytes / 1e9 : 0, limitGb: TURN_LIMIT / 1e9, over: turnOver() });
+// Cloudflare 通行證 6 小時就過期：到上限停發之後，最晚 6 小時所有中繼都會停（走中繼連續講超過 6 小時的那對會斷，要重進小樹屋）
+const CF_TTL = 6 * 3600;
+async function fetchTurn() {
+  if (TURN_PROVIDER === 'Cloudflare') {
+    const r = await fetch(`https://rtc.live.cloudflare.com/v1/turn/keys/${CF_TURN_ID}/credentials/generate-ice-servers`, {
+      method: 'POST', headers: { Authorization: `Bearer ${CF_TURN_TOKEN}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ttl: CF_TTL }), signal: AbortSignal.timeout(5000),
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return { list: (await r.json()).iceServers, ms: CF_TTL * 1000 };
+  }
+  const r = await fetch(TURN_API_URL, { signal: AbortSignal.timeout(5000) });
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  const j = await r.json();
+  return { list: Array.isArray(j) ? j : j.iceServers, ms: 12 * 3600e3 };
+}
+async function iceServers() {
+  if (!TURN_PROVIDER || turnOver()) return ICE_SERVERS;
+  // 同一張通行證最多發一小時，之後換新的，保證拿到的人至少還能用 5 小時（Metered 是 12 小時的，就留 2 小時）
+  if (turnIce && Date.now() < turnIceUntil - (TURN_PROVIDER === 'Cloudflare' ? 5 : 2) * 3600e3) return turnIce;
+  turnIceP = turnIceP || (async () => {
+    try {
+      const { list, ms } = await fetchTurn();
+      const servers = [].concat(list || []).map(sv => Object.assign({}, sv));
+      // 瀏覽器會擋 53 port，留著只會讓連線多等一段逾時
+      servers.forEach(sv => { if (Array.isArray(sv.urls)) sv.urls = sv.urls.filter(u => !/:53(\?|$)/.test(u)); });
+      if (!servers.length) throw new Error('沒有拿到伺服器清單');
+      turnIce = ICE_SERVERS.concat(servers); turnIceUntil = Date.now() + ms;
+    } catch (e) {
+      console.warn(`${TURN_PROVIDER} TURN 通行證拿不到，先只用 STUN：`, e.message);
+    } finally { turnIceP = null; }
+  })();
+  await turnIceP;
+  return turnIce || ICE_SERVERS;
+}
 
 // ---------------- 帳號 API ----------------
 // 登入失敗太多次就暫停一下，避免有人一直猜密碼
@@ -186,7 +257,7 @@ app.post('/api/admin/login', (req, res) => {
 app.get('/api/admin/state', (req, res) => {
   if (!isAdmin(req)) return res.status(401).json({ ok: false });
   const online = new Set([...players.values()].map(p => p.account && p.account.username));
-  res.json({ ok: true, party: partyInfo(), notice: noticeState(), accounts: accounts.list().map(a => Object.assign(a, { online: online.has(a.username) })) });
+  res.json({ ok: true, party: partyInfo(), notice: noticeState(), wishes: wishes.all(), turn: turnState(), accounts: accounts.list().map(a => Object.assign(a, { online: online.has(a.username) })) });
 });
 app.post('/api/admin/settings', (req, res) => {
   if (!isAdmin(req)) return res.status(401).json({ ok: false });
@@ -221,6 +292,7 @@ app.post('/api/admin/announce', (req, res) => {
   noticeTimer = setTimeout(() => {
     players.forEach(snapshot);
     accounts.flush();
+  wishes.flush();
     notice.ready = true;
     io.emit('notice', noticeState());
   }, minutes * 60000);
@@ -266,7 +338,7 @@ app.post('/api/admin/gift', (req, res) => {
     });
     sent++;
   });
-  if (sent) pushChat({ system: true, text: `🎁 管理員送出了【${g.rarity}】${g.icon} ${g.name}${all ? '給大家' : `給 ${users[0].save.name || users[0].username}`}！`, t: Date.now() });
+  if (sent) pushChat({ system: true, text: `🎁 管理員送出了【${g.rarity}】${g.icon ? g.icon + ' ' : ''}${g.name}${all ? '給大家' : `給 ${users[0].save.name || users[0].username}`}！`, t: Date.now() });
   res.json({ ok: true, sent, had });
 });
 app.post('/api/admin/delete', (req, res) => {
@@ -274,6 +346,17 @@ app.post('/api/admin/delete', (req, res) => {
   const name = String((req.body || {}).username || '');
   [...players.values()].filter(p => p.account && p.account.username.toLowerCase() === name.toLowerCase()).forEach(p => { p.account = null; });
   res.json({ ok: accounts.remove(name) });
+});
+
+// 許願池：改處理狀態（待處理／評估中／處理中／已完成／不處理）或刪掉，總部裡開著許願板的人會馬上看到
+app.post('/api/admin/wish', (req, res) => {
+  if (!isAdmin(req)) return res.status(401).json({ ok: false });
+  const b = req.body || {}, id = Number(b.id);
+  const r = b.delete ? wishes.remove(id) : wishes.setStatus(id, b.status);
+  if (r.error) return res.status(400).json({ ok: false, error: r.error });
+  if (r.wish && r.wish.status === 'done' && r.was !== 'done') pushChat({ system: true, text: `許願池：「${r.wish.title}」完成了！謝謝 ${r.wish.name} 的願望`, t: Date.now() });
+  io.emit('wishes');
+  res.json({ ok: true, wishes: wishes.all() });
 });
 
 // ---------------- 視訊房間 ----------------
@@ -362,6 +445,29 @@ function musicNext(area) {
   m.now = n ? Object.assign(n, { startedAt: Date.now() + 1500 }) : null; // 留一點時間讓大家載入
   m.skips = new Set();
   emitMusic();
+}
+
+// ---------------- 小樹屋：同一間的人用 WebRTC 直接語音通話 ----------------
+// 伺服器只記誰在哪一間、幫忙轉送連線資訊（offer/answer/ice），聲音是玩家之間直接傳
+// 每個人要跟屋裡每個人各連一條，所以一間最多 8 人；沒人了就自動拆掉
+const TREE_CAP = 8, TREE_MAX = 12;
+const trees = new Map(); // id -> { id, name, owner, ownerName, at, members: [socket id] }
+let treeSeq = 0;
+function treeList() {
+  return [...trees.values()].map(t => ({ id: t.id, name: t.name, ownerName: t.ownerName, ago: Date.now() - t.at, cap: TREE_CAP,
+    members: t.members.map(id => players.get(id)).filter(Boolean).map(p => ({ id: p.id, name: p.name, cls: p.cls, level: p.level,
+      user: p.account ? p.account.username : '', muted: !!p.treeMuted, video: p.treeVideo || '' })) }));
+}
+const emitTrees = () => io.emit('trees', treeList());
+// 離開目前的小樹屋（換屋、斷線、離開總部都會走這裡）；回傳有沒有變動
+function leaveTree(p) {
+  const t = p && p.tree && trees.get(p.tree);
+  if (p) { p.tree = null; p.treeVideo = ''; }
+  if (!t) return false;
+  t.members = t.members.filter(id => id !== p.id);
+  if (!t.members.length) trees.delete(t.id);
+  else if (t.owner === p.id) { const o = players.get(t.members[0]); t.owner = o.id; t.ownerName = o.name; }
+  return true;
 }
 
 function addVideoRoom(code, name, by) {
@@ -485,6 +591,7 @@ function placeMob(m) {
 }
 mobs.forEach(placeMob);
 function mobState(m) {
+  if (m.dg) return DG.mobState(m);
   const now = Date.now();
   return { id: m.id, kind: m.kind, alive: m.alive, hp: m.hp, maxHp: m.maxHp, x: Math.round(m.x), y: Math.round(m.y),
     frozen: Math.max(0, m.frozenUntil - now), weak: Math.max(0, m.weakUntil - now) };
@@ -519,7 +626,7 @@ function tickMob(m, now) {
     m.nextHit = now + 2200 + Math.random() * 800;
     io.emit('mobAttack', { mid: m.id, id: prey.id, say: def.say[Math.floor(Math.random() * def.say.length)] });
     setTimeout(() => {
-      if (!m.alive || Date.now() < m.frozenUntil) return;
+      if (!m.alive || Date.now() < m.frozenUntil || Date.now() < (m.stunUntil || 0)) return;
       if (dist(prey.x, prey.y, m.x, m.y) > def.range * 1.3) return; // 跑掉就沒打到
       if (behindWall(m.x, m.y, prey.x, prey.y)) return; // 中間多了一道城牆
       const weak = Date.now() < m.weakUntil ? STATS.WEAKEN.dmgDealt : 1;
@@ -537,12 +644,15 @@ setInterval(() => {
   mobs.forEach(m => tickMob(m, now));
   summons.slice().forEach(sm => tickSummon(sm, now));
   tickMonster(now);
+  DG.tick(now);
   tickWalls(now);
+  tickStorms(now);
   // 所有會動的東西合成一則送出：volatile 在同一個 tick 連送好幾則時，後面的常常被丟掉（颱風位置就一直沒更新）
   io.volatile.emit('world', {
-    mobs: mobs.filter(m => m.alive).map(m => [m.id, Math.round(m.x), Math.round(m.y)]),
+    mobs: mobs.concat(DG.foes()).filter(m => m.alive).map(m => [m.id, Math.round(m.x), Math.round(m.y)]),
     summons: summons.map(sm => [sm.id, Math.round(sm.x), Math.round(sm.y)]),
     boss: monster.alive ? [Math.round(monster.x), Math.round(monster.y)] : null,
+    storms: storms.map(s => [s.id, ...s.twisters.flatMap(t => [Math.round(t.x), Math.round(t.y)])]),
   });
 }, TICK);
 
@@ -618,6 +728,7 @@ function hurt(p, raw, by) {
   if (p.hp > 0) return sendStats(p);
   p.dead = true;
   sendStats(p);
+  if (DG.isMember(p)) return DG.onDeath(p, by); // 副本裡倒下：在這一關的起點復活
   pushChat({ system: true, text: `💫 ${p.name} 被${by}打倒了，${STATS.RESPAWN_MS / 1000} 秒後回到總部`, t: Date.now() });
   setTimeout(() => {
     if (!players.has(p.id)) return;
@@ -674,14 +785,15 @@ const cross = (ax, ay, bx, by, cx, cy, dx, dy) => {
 const behindWall = (ax, ay, bx, by) => walls.some(w => w.pts.slice(1).some((q, i) => cross(ax, ay, bx, by, w.pts[i][0], w.pts[i][1], q[0], q[1])));
 // 檢查玩家畫的線：點要在前線、離自己不太遠，總長度超過上限就截斷
 function wallLine(p, pts, maxLen) {
-  if (!inField(p) || !Array.isArray(pts) || pts.length < 2) return null;
+  if ((!inField(p) && !DG.inFight(p)) || !Array.isArray(pts) || pts.length < 2) return null;
+  const B = DG.boxAt(p.x, p.y) || { x1: Z.x1 - 2 * T, y1: Z.y1 - 2 * T, x2: Z.x2 + 2 * T, y2: Z.y2 + 2 * T };
   const out = [];
   let len = 0;
-  for (const q of pts.slice(0, 80)) {
+  for (const q of pts.slice(0, 120)) {
     if (!Array.isArray(q)) return null;
     let x = Number(q[0]), y = Number(q[1]);
     if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
-    x = clamp(x, Z.x1 - 2 * T, Z.x2 + 2 * T); y = clamp(y, Z.y1 - 2 * T, Z.y2 + 2 * T);
+    x = clamp(x, B.x1, B.x2); y = clamp(y, B.y1, B.y2);
     if (dist(x, y, p.x, p.y) > 700) return null;
     if (out.length) {
       const [lx, ly] = out[out.length - 1], seg = dist(x, y, lx, ly);
@@ -697,13 +809,14 @@ function addWall(p, def, pts, now) {
   const w = { id: 'w' + (++wallSeq), kind: def.kind, owner: p.id, pts, until: now + def.ms, def, frozen: new Set(), nextBurn: now + 1000 };
   walls.push(w);
   io.emit('wall', { id: w.id, kind: w.kind, pts, ms: def.ms, by: p.id });
+  walls.forEach(o => { if (o.kind !== w.kind) tryStorm(p, w, o, now); });
 }
 function tickWalls(now) {
   for (let i = walls.length - 1; i >= 0; i--) {
     const w = walls[i];
     if (now >= w.until) { walls.splice(i, 1); io.emit('wallGone', { id: w.id }); continue; }
     const owner = players.get(w.owner);
-    const foes = [...(monster.alive ? [[monster, true]] : []), ...mobs.filter(m => m.alive).map(m => [m, false])]
+    const foes = [...(monster.alive ? [[monster, true]] : []), ...mobs.concat(DG.foes()).filter(m => m.alive).map(m => [m, false])]
       .filter(([f, b]) => wallDist(w, f.x, f.y) < (b ? WALL_R.boss : WALL_R.mob) + 24);
     if (w.kind === 'ice') {
       foes.forEach(([f, b]) => {
@@ -722,6 +835,103 @@ function tickWalls(now) {
   }
 }
 
+// ---------------- 冰火合擊：雷暴圈 ----------------
+// 火牆和冰牆碰在一起兩處以上（交叉、或線尾貼著另一條線），就當作圍成一圈（判定刻意放寬）
+// 圈裡會一直落雷、有兩個小龍捲風亂轉，撐到其中一面牆消失
+const STORM = { max: 2, touch: 50, rMin: 90, rMax: 300, boltMs: 700, boltR: 80, bolt: 1.2, shock: 600,
+  twisterR: 70, twisterHitMs: 500, twister: 0.4, twisterSpeed: 14, pull: 6 };
+const storms = [];
+let stormSeq = 0;
+// 點落在折線的第幾段（取最近的那段）
+const nearSeg = (w, x, y) => {
+  let best = 0, bd = Infinity;
+  w.pts.slice(1).forEach((b, i) => { const d = segDist(x, y, w.pts[i][0], w.pts[i][1], b[0], b[1]); if (d < bd) { bd = d; best = i; } });
+  return best;
+};
+function segCross(ax, ay, bx, by, cx, cy, dx, dy) {
+  const d = (bx - ax) * (dy - cy) - (by - ay) * (dx - cx);
+  if (!d) return null;
+  const t = ((cx - ax) * (dy - cy) - (cy - ay) * (dx - cx)) / d, u = ((cx - ax) * (by - ay) - (cy - ay) * (bx - ax)) / d;
+  return t >= 0 && t <= 1 && u >= 0 && u <= 1 ? [ax + (bx - ax) * t, ay + (by - ay) * t] : null;
+}
+// 找兩面牆圍出來的圈：回傳 { x, y, r } 或 null
+function stormCircle(a, b) {
+  const touches = [];
+  const add = (x, y) => { if (!touches.some(([tx, ty]) => dist(tx, ty, x, y) < 40)) touches.push([x, y]); };
+  a.pts.slice(1).forEach((q, i) => b.pts.slice(1).forEach((r, j) => {
+    const c = segCross(a.pts[i][0], a.pts[i][1], q[0], q[1], b.pts[j][0], b.pts[j][1], r[0], r[1]);
+    if (c) add(c[0], c[1]);
+  }));
+  [[a, b], [b, a]].forEach(([w, o]) => [w.pts[0], w.pts[w.pts.length - 1]].forEach(([x, y]) => {
+    if (wallDist(o, x, y) < STORM.touch) add(x, y);
+  }));
+  if (touches.length < 2) return null;
+  // 每面牆只取碰到的那幾處之間的那一段，和碰到的點一起算圓心、半徑
+  const pts = touches.slice();
+  [a, b].forEach(w => {
+    const idx = touches.map(([x, y]) => nearSeg(w, x, y));
+    pts.push(...w.pts.slice(Math.min(...idx) + 1, Math.max(...idx) + 1));
+  });
+  const x = pts.reduce((s, q) => s + q[0], 0) / pts.length, y = pts.reduce((s, q) => s + q[1], 0) / pts.length;
+  const r = pts.reduce((s, q) => s + dist(x, y, q[0], q[1]), 0) / pts.length;
+  if (r < 50) return null; // 兩條線擠在一起交叉，圍不出東西
+  return { x: Math.round(x), y: Math.round(y), r: Math.round(clamp(r, STORM.rMin, STORM.rMax)) };
+}
+function tryStorm(p, w, o, now) {
+  if (storms.length >= STORM.max) return;
+  const c = stormCircle(w, o);
+  if (!c) return;
+  const twisters = [0, 1].map(i => {
+    const a = Math.PI * i + Math.random();
+    return { x: c.x + Math.cos(a) * c.r * 0.4, y: c.y + Math.sin(a) * c.r * 0.4, dir: Math.random() * Math.PI * 2 };
+  });
+  const s = { id: 'st' + (++stormSeq), ...c, owner: p.id, until: Math.min(w.until, o.until), walls: [w.id, o.id],
+    nextBolt: now + 300, nextTwist: now + STORM.twisterHitMs, twisters };
+  storms.push(s);
+  io.emit('storm', stormState(s));
+  pushChat({ system: true, text: `${p.name} 讓冰與火交會，召喚出雷暴圈！`, t: now });
+}
+const stormState = (s) => ({ id: s.id, x: s.x, y: s.y, r: s.r, ms: s.until - Date.now(), tw: s.twisters.map(t => [Math.round(t.x), Math.round(t.y)]) });
+function tickStorms(now) {
+  for (let i = storms.length - 1; i >= 0; i--) {
+    const s = storms[i];
+    if (now >= s.until || !s.walls.every(id => walls.some(w => w.id === id))) { storms.splice(i, 1); io.emit('stormGone', { id: s.id }); continue; }
+    const owner = players.get(s.owner);
+    const foes = [...(monster.alive ? [[monster, true]] : []), ...mobs.concat(DG.foes()).filter(m => m.alive).map(m => [m, false])]
+      .filter(([f]) => dist(f.x, f.y, s.x, s.y) < s.r + 40);
+    const hit = (f, b, mul, skill) => { if (owner && f.alive) damageFoe(owner, f, b, Math.max(1, Math.round(atkOf(owner) * mul * (0.8 + Math.random() * 0.4))), false, skill); };
+    // 龍捲風：在圈裡亂轉，快碰到圈邊就轉回中間
+    s.twisters.forEach(t => {
+      t.dir += (Math.random() - 0.5) * 0.8;
+      if (dist(t.x, t.y, s.x, s.y) > s.r * 0.75) t.dir = Math.atan2(s.y - t.y, s.x - t.x) + (Math.random() - 0.5);
+      t.x += Math.cos(t.dir) * STORM.twisterSpeed; t.y += Math.sin(t.dir) * STORM.twisterSpeed;
+      // 碰到的小怪被往圈中間捲（颱風和副本魔王太重捲不動）
+      foes.forEach(([f, b]) => {
+        if (b || STATS.MOBS[f.kind].boss || dist(f.x, f.y, t.x, t.y) > STORM.twisterR) return;
+        const d = dist(f.x, f.y, s.x, s.y);
+        if (d > STORM.pull) { f.x += (s.x - f.x) / d * STORM.pull; f.y += (s.y - f.y) / d * STORM.pull; }
+      });
+    });
+    if (now >= s.nextTwist) {
+      s.nextTwist = now + STORM.twisterHitMs;
+      foes.forEach(([f, b]) => { if (s.twisters.some(t => dist(f.x, f.y, t.x, t.y) < STORM.twisterR + (b ? WALL_R.boss : 0))) hit(f, b, STORM.twister, 'stormTwister'); });
+    }
+    if (now >= s.nextBolt) {
+      s.nextBolt = now + STORM.boltMs;
+      // 圈裡隨機一點落雷；有怪在圈裡的話一半機率直接劈怪
+      const inside = foes.filter(([f, b]) => dist(f.x, f.y, s.x, s.y) < s.r + (b ? WALL_R.boss : 0));
+      let x, y;
+      if (inside.length && Math.random() < 0.5) { const [f] = inside[Math.floor(Math.random() * inside.length)]; x = f.x; y = f.y; }
+      else { const a = Math.random() * Math.PI * 2, d = Math.sqrt(Math.random()) * s.r; x = s.x + Math.cos(a) * d; y = s.y + Math.sin(a) * d; }
+      // 每道雷都讓圈裡所有怪電暈一下：不能動、不能出招
+      inside.forEach(([f]) => { f.stunUntil = Math.max(f.stunUntil || 0, now + STORM.shock); });
+      io.emit('stormBolt', { id: s.id, x: Math.round(x), y: Math.round(y), ms: STORM.shock,
+        foes: inside.filter(([, b]) => !b).map(([f]) => f.id), boss: inside.some(([, b]) => b) });
+      foes.forEach(([f, b]) => { if (dist(f.x, f.y, x, y) < STORM.boltR + (b ? WALL_R.boss : 0)) hit(f, b, STORM.bolt, 'stormBolt'); });
+    }
+  }
+}
+
 // ---------------- 物資箱 ----------------
 // key 'tx,ty' -> { hits, emptyUntil }；被敲開的箱子會空一段時間再補貨
 const crates = new Map();
@@ -733,6 +943,7 @@ function emptyCrates() {
 // ---------------- 打怪：扣血、打倒、掉落 ----------------
 // p 是拿到傷害和經驗的玩家，hitBy 是實際出手的人或召喚物（給畫面用）
 function damageFoe(p, foe, isBoss, dmg, crit, skillId, hitBy) {
+  if (foe.dg) return DG.damage(p, foe, dmg, crit, skillId, hitBy);
   const now = Date.now();
   if (isBoss && now < monster.transformUntil) return; // 變身中打不動
   foe.hp = Math.max(0, foe.hp - dmg);
@@ -810,17 +1021,35 @@ function tickSummon(sm, now) {
   // 找最近的敵人：小怪或颱風
   // 整個前線都找得到，離最近的那隻走過去打
   let foe = null, isBoss = false, fd = 1600;
-  mobs.forEach(m => { if (!m.alive) return; const d = dist(m.x, m.y, sm.x, sm.y); if (d < fd) { fd = d; foe = m; isBoss = false; } });
-  if (monster.alive) { const d = dist(monster.x, monster.y, sm.x, sm.y); if (d < fd) { fd = d; foe = monster; isBoss = true; } }
+  const box = DG.boxAt(sm.x, sm.y); // 在副本裡：只找同一關的怪，也不會走出這一關
+  if (box) {
+    // 主人離開副本（通關、失敗、自己離開）就收回；主人走到別關就瞬移到主人身邊
+    const obox = DG.boxAt(owner.x, owner.y);
+    if (MAP.areaOf(owner.x) !== MAP.areaOf(sm.x)) return removeSummon(sm);
+    if (obox && obox !== box) {
+      sm.x = clamp(owner.x + 50, obox.x1 + 20, obox.x2 - 20);
+      sm.y = clamp(owner.y + 10, obox.y1 + 30, obox.y2 - 10);
+      return;
+    }
+  }
+  (box ? DG.foes().filter(m => m.x >= box.x1 && m.x < box.x2 && m.y >= box.y1 && m.y < box.y2) : mobs).forEach(m => {
+    if (!m.alive) return; const d = dist(m.x, m.y, sm.x, sm.y); if (d < fd) { fd = d; foe = m; isBoss = false; }
+  });
+  if (monster.alive && !box) { const d = dist(monster.x, monster.y, sm.x, sm.y); if (d < fd) { fd = d; foe = monster; isBoss = true; } }
   let tx, ty, stop;
-  if (foe) { tx = foe.x; ty = foe.y; stop = isBoss ? 110 : 60; }
-  else if (inField(owner)) { tx = owner.x + 50; ty = owner.y + 10; stop = 40; }
+  if (foe) { tx = foe.x; ty = foe.y; stop = isBoss ? 110 : STATS.MOBS[foe.kind].boss ? 90 : 60; }
+  else if (box ? DG.boxAt(owner.x, owner.y) === box : inField(owner)) { tx = owner.x + 50; ty = owner.y + 10; stop = 40; }
   else { tx = sm.x; ty = sm.y; stop = 1e9; }
   const d = dist(sm.x, sm.y, tx, ty);
   if (d > stop) {
     const step = Math.min(d - stop, def.speed * TICK / 1000);
-    sm.x = clamp(sm.x + (tx - sm.x) / d * step, Z.x1 - 3 * T, Z.x2 + 3 * T);
-    sm.y = clamp(sm.y + (ty - sm.y) / d * step, 32 * T, Z.y2 + T);
+    if (box) {
+      sm.x = clamp(sm.x + (tx - sm.x) / d * step, box.x1 + 20, box.x2 - 20);
+      sm.y = clamp(sm.y + (ty - sm.y) / d * step, box.y1 + 30, box.y2 - 10);
+    } else {
+      sm.x = clamp(sm.x + (tx - sm.x) / d * step, Z.x1 - 3 * T, Z.x2 + 3 * T);
+      sm.y = clamp(sm.y + (ty - sm.y) / d * step, 32 * T, Z.y2 + T);
+    }
   }
   if (foe && d <= stop + 20 && now >= sm.nextHit) {
     sm.nextHit = now + STATS.SUMMON_HIT_MS;
@@ -830,6 +1059,15 @@ function tickSummon(sm, now) {
     damageFoe(owner, foe, isBoss, dmg, crit, 'pet', sm.id);
   }
 }
+
+// ---------------- 副本（dungeon.js：花蓮、台北101） ----------------
+const DG = createDungeons({
+  io, players, MAP, STATS, GEAR, pushChat, sendStats, gainExp, TICK, wallBlocks, behindWall,
+  hurtPlayer: (p, dmg, by) => hurt(p, dmg, by),
+  isAway: (p) => awayTimers.has(p.id),
+  summons: () => summons,
+  hurtSummon,
+});
 
 // ---------------- 室內設計：家具 ----------------
 // 打怪掉落的家具可以擺在總部室內，擺好的家具存在 data/decor.json，伺服器重開也還在
@@ -884,7 +1122,7 @@ function giveDecor(p) {
 // 這格能不能擺家具：要在室內、不能是牆或門、不能擋到東西
 function canDecorate(tx, ty) {
   const room = MAP.roomAt((tx + 0.5) * T, (ty + 0.5) * T);
-  if (!room || room.id === 'front') return false;
+  if (!room || room.id === 'front' || room.dungeon || room.lobby) return false;
   const ch = MAP.tiles[ty] && MAP.tiles[ty][tx];
   return !!ch && !MAP.BLOCKING.has(ch) && ch !== '=' && ch !== ',';
 }
@@ -905,6 +1143,8 @@ function sanitizeSave(data) {
     if (!vip.name || (!vip.song && !vip.drink && !vip.photo)) vip = null;
   }
   const owned = [...new Set((Array.isArray(data.owned) ? data.owned : []).filter(id => GEAR.GEAR[id]))];
+  // 白紗原本自帶頭紗，後來拆成「新娘頭紗」頭飾：有白紗的人直接送一件
+  if (owned.includes('gown') && !owned.includes('veil')) owned.push('veil');
   const equip = {};
   if (data.equip && typeof data.equip === 'object') Object.keys(GEAR.SLOTS).forEach(slot => {
     const id = data.equip[slot];
@@ -955,13 +1195,13 @@ function publicPlayer(p) {
 
 // ---------------- 裝備 ----------------
 // 抽一件還沒有的裝備送給玩家，全部都有了就回傳 null
-function giveGear(p, rare) {
-  const id = GEAR.roll(p.owned, rare);
+function giveGear(p, rare, src) {
+  const id = GEAR.roll(p.owned, rare, src);
   if (!id) return null;
   p.owned.push(id);
   const g = GEAR.GEAR[id];
   io.to(p.id).emit('gearGot', { item: id, owned: p.owned });
-  pushChat({ system: true, text: `🎁 ${p.name} 獲得了【${g.rarity}】${g.icon} ${g.name}！`, t: Date.now() });
+  pushChat({ system: true, text: `🎁 ${p.name} 獲得了【${g.rarity}】${g.icon ? g.icon + ' ' : ''}${g.name}！`, t: Date.now() });
   return id;
 }
 
@@ -1014,7 +1254,7 @@ function makeGame(key, label, game) {
   // 記分板用名字記（重新整理也還在），另外記最後一次的 id，讓畫面找得到這個人的頭像
   g.addScore = (p, n) => { g.scores.set(p.name, (g.scores.get(p.name) || 0) + n); g.scoreIds.set(p.name, p.id); };
   // 發裝備，拿到什麼也寫在遊戲紀錄裡
-  const prize = (id) => { const it = id && GEAR.GEAR[id]; return it ? `，獲得【${it.rarity}】${it.icon} ${it.name}` : '（裝備已經全部收集完了）'; };
+  const prize = (id) => { const it = id && GEAR.GEAR[id]; return it ? `，獲得【${it.rarity}】${it.icon ? it.icon + ' ' : ''}${it.name}` : '（裝備已經全部收集完了）'; };
   g.reward = (p, text, kind) => { const id = giveGear(p); g.log(text + prize(id), kind || 'right'); return id; };
   // 有人答對，主持人每題也拿一件
   g.rewardHost = () => {
@@ -1099,7 +1339,8 @@ io.on('connection', (socket) => {
     const rk = typeof data.rk === 'string' ? data.rk.slice(0, 40) : '';
     if (rk) [...players.values()].filter(o => o.rk === rk && awayTimers.has(o.id)).forEach(o => removePlayer(o.id));
     const x = Number(data.x), y = Number(data.y);
-    const back = Number.isFinite(x) && Number.isFinite(y) && !MAP.isBlocked(x, y);
+    // 副本裡的位置不能直接接回去（副本要從候位區出發）
+    const back = Number.isFinite(x) && Number.isFinite(y) && !MAP.isBlocked(x, y) && MAP.zoneOf(x) !== 'dungeon';
 
     if (account) keepProgress(d, account);
     const p = Object.assign({
@@ -1115,9 +1356,9 @@ io.on('connection', (socket) => {
 
     growMonster();
     ack({ ok: true, you: Object.assign(publicPlayer(p), { owned: p.owned, furn: p.furn }), players: [...players.values()].map(publicPlayer), history,
-      monster: monsterState(), mobs: mobs.map(mobState), emptyCrates: emptyCrates(),
+      monster: monsterState(), mobs: mobs.map(mobState).concat(DG.allFoes().map(mobState)), emptyCrates: emptyCrates(), dungeon: DG.state(),
       summons: summons.map(summonState), decor: decorList(),
-      walls: walls.map(w => ({ id: w.id, kind: w.kind, pts: w.pts, ms: w.until - Date.now() })), music: musicState() });
+      walls: walls.map(w => ({ id: w.id, kind: w.kind, pts: w.pts, ms: w.until - Date.now() })), storms: storms.map(stormState), music: musicState() });
     socket.broadcast.emit('playerJoined', publicPlayer(p));
     pushChat({ system: true, text: `${p.name} 進入了防衛總部 🌀`, t: Date.now() });
   });
@@ -1127,6 +1368,8 @@ io.on('connection', (socket) => {
     if (!p || !m || p.dead) return;
     const x = Number(m.x), y = Number(m.y);
     if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+    // 副本的門：不合法的位置不收，把人拉回伺服器記得的位置（也擋掉傳送之後才到的舊封包）
+    if (!DG.allowMove(p, x, y)) return socket.emit('playerMoved', { id: p.id, x: p.x, y: p.y, dir: p.dir, moving: false, teleport: true });
     p.x = clamp(x, 0, MAP.W * MAP.TILE);
     p.y = clamp(y, 0, MAP.H * MAP.TILE);
     p.dir = m.dir === -1 ? -1 : 1;
@@ -1148,6 +1391,13 @@ io.on('connection', (socket) => {
     const key = tx + ',' + ty;
     const c = crates.get(key) || { hits: 0, emptyUntil: 0 };
     if (c.emptyUntil > now) return ack({ ok: false, empty: true });
+    // 背包最多 BAG_SLOTS 格，同種物資疊在同一格（一格最多 INV_MAX 個）；裝不下的箱子不讓敲
+    const pile = MAP.CRATES[ci].item;
+    const pool = (Array.isArray(pile) ? pile : pile ? [pile] : Object.keys(MAP.ITEMS)).filter(k => {
+      const used = Object.values(p.inv).filter(n => n > 0).length;
+      return p.inv[k] > 0 ? p.inv[k] < INV_MAX : used < MAP.BAG_SLOTS;
+    });
+    if (!pool.length) return ack({ ok: false, full: true });
     lastAction = now;
     io.emit('crateHit', { tx, ty, id: p.id });
     c.hits++;
@@ -1155,9 +1405,6 @@ io.on('connection', (socket) => {
     if (c.hits < CRATE_HITS) return ack({ ok: true, hits: c.hits });
     c.hits = 0;
     c.emptyUntil = now + CRATE_RESTOCK_MS;
-    const keys = Object.keys(MAP.ITEMS);
-    const pile = MAP.CRATES[ci].item;
-    const pool = Array.isArray(pile) ? pile : pile ? [pile] : keys;
     const item = pool[Math.floor(Math.random() * pool.length)];
     p.inv[item]++;
     io.emit('itemGot', { id: p.id, item });
@@ -1174,7 +1421,7 @@ io.on('connection', (socket) => {
     if (typeof ack !== 'function') return;
     if (!p || p.dead) return ack({ ok: false });
     const skill = STATS.SKILLS[skillId];
-    if (!skill || !STATS.CLASSES[p.cls].skills.includes(skillId)) return ack({ ok: false });
+    if (!skill || !STATS.skillsOf(p.cls, p.equip).includes(skillId)) return ack({ ok: false });
     const now = Date.now();
     if (now - lastAction < 300 || now < (p.cooldowns[skillId] || 0)) return ack({ ok: false });
     // 插畫結界師的城牆：target 是畫出來的線
@@ -1182,7 +1429,7 @@ io.on('connection', (socket) => {
     if (skill.wall && !line) return ack({ ok: false, error: '要在 🌀 颱風前線、自己附近畫一條線' });
     if (skill.wall) target = 'boss';
     const isBoss = !target || target === 'boss';
-    const foe = isBoss ? monster : mobs.find(m => m.id === target);
+    const foe = isBoss ? monster : mobs.find(m => m.id === target) || DG.foe(target);
     const foeName = isBoss ? `颱風${STATS.MONSTER.name}` : foe ? STATS.MOBS[foe.kind].name : '';
     if (!skill.support) {
       if (!foe || !foe.alive) return ack({ ok: false, error: isBoss ? `颱風${STATS.MONSTER.name}還沒出現` : '它已經被打倒了' });
@@ -1191,7 +1438,7 @@ io.on('connection', (socket) => {
     if (p.mp < skill.mp) return ack({ ok: false, error: '魔力不夠' });
     let kind = null;
     if (skill.summon) {
-      if (!inField(p)) return ack({ ok: false, error: '要在 🌀 颱風前線才能召喚' });
+      if (!inField(p) && !DG.inFight(p)) return ack({ ok: false, error: '要在 🌀 颱風前線或副本裡才能召喚' });
       if (summons.filter(sm => sm.owner === p.id).length >= STATS.SUMMON_MAX) return ack({ ok: false, error: `最多同時召喚 ${STATS.SUMMON_MAX} 隻` });
       kind = pickSummonKind();
     }
@@ -1251,18 +1498,31 @@ io.on('connection', (socket) => {
     const center = skill.aoe ? p : skill.aoeAt && foe ? foe : null, reach = skill.aoe || skill.aoeAt;
     const hits = center
       ? [...(monster.alive && (monster === foe || STATS.foeGap(center, monster, true) <= reach) ? [[monster, true]] : []),
-         ...mobs.filter(m => m.alive && (m === foe || STATS.foeGap(center, m, false) <= reach)).map(m => [m, false])]
+         ...mobs.concat(DG.foes()).filter(m => m.alive && (m === foe || STATS.foeGap(center, m, false) <= reach)).map(m => [m, false])]
       : foe ? [[foe, isBoss]] : [];
     if (center) fx.hits = hits.map(([f, b]) => b ? 'boss' : f.id);
+    // 彈射、引雷：打中目標以後再打到旁邊幾隻怪（傷害打折）
+    if (skill.chain && foe && foe.alive && Math.random() < (skill.chain.chance || 1)) {
+      const c = skill.chain;
+      const near = mobs.concat(DG.foes()).filter(m => m.alive && m !== foe && dist(m.x, m.y, foe.x, foe.y) <= c.r)
+        .sort((a, b) => dist(a.x, a.y, foe.x, foe.y) - dist(b.x, b.y, foe.x, foe.y)).slice(0, c.n);
+      near.forEach(m => hits.push([m, false, c.mul]));
+      fx.chain = near.map(m => m.id);
+      if (c.bolt) fx.bolt = true;
+    }
     if (skill.weaken) hits.forEach(([f]) => { f.weakUntil = now + skill.weaken; });
     if (skill.freeze) hits.forEach(([f]) => { f.frozenUntil = now + skill.freeze; });
     // 震飛：從自己的位置往外推，推到前線的邊邊就停
     if (skill.knock) {
       fx.knock = [];
       hits.forEach(([f, b]) => {
+        if (skill.knock.noBoss && (b || STATS.MOBS[f.kind].boss)) return; // 這招撞不動頭目
         const d = Math.max(1, dist(f.x, f.y, p.x, p.y)), push = b ? skill.knock.boss : skill.knock.mob;
         const ux = d > 5 ? (f.x - p.x) / d : (Math.random() < 0.5 ? -1 : 1), uy = d > 5 ? (f.y - p.y) / d : 0;
-        f.x = clamp(f.x + ux * push, Z.x1, Z.x2); f.y = clamp(f.y + uy * push, Z.y1, Z.y2);
+        const B = f.dg ? DG.boundsOf(f) : Z, pad = f.dg ? T : 0;
+        let nx = clamp(f.x + ux * push, B.x1 + pad, B.x2 - pad), ny = clamp(f.y + uy * push, B.y1 + pad, B.y2 - pad);
+        if (f.dg && MAP.isBlocked(nx, ny)) { nx = f.x; ny = f.y; } // 副本裡撞到岩壁就不推
+        f.x = nx; f.y = ny;
         f.tx = f.x; f.ty = f.y;
         f.stunUntil = now + skill.knock.stun;
         fx.knock.push([b ? 'boss' : f.id, Math.round(f.x), Math.round(f.y)]);
@@ -1275,11 +1535,11 @@ io.on('connection', (socket) => {
 
     if (!skill.power) return ack({ ok: true });
     let total = 0;
-    hits.forEach(([f, b]) => {
+    hits.forEach(([f, b, mul]) => {
       if (!f.alive) return;
       const crit = Math.random() < (skill.crit || 0.12);
       const weak = now < f.weakUntil ? STATS.WEAKEN.dmgTaken : 1;
-      const dmg = Math.round(atkOf(p) * skill.power * (0.6 + Math.random() * 0.6) * (crit ? 2.5 : 1) * weak);
+      const dmg = Math.round(atkOf(p) * skill.power * (mul || 1) * (0.6 + Math.random() * 0.6) * (crit ? 2.5 : 1) * weak);
       total += dmg;
       damageFoe(p, f, b, dmg, crit, skillId);
     });
@@ -1349,6 +1609,8 @@ io.on('connection', (socket) => {
       p.hp = Math.min(p.maxHp, p.hp + food.hp);
       sendStats(p);
       socket.emit('ate', { food: food.name, hp: food.hp });
+      // 女僕咖啡廳系列只有在廚房煮東西才會掉
+      if (Math.random() < COOK_GEAR_RATE) giveGear(p, false, 'cook');
     }, COOK_MS);
   });
 
@@ -1406,6 +1668,40 @@ io.on('connection', (socket) => {
     io.emit('decor', { key: String(key), removed: true });
     saveDecor();
     ack({ ok: true, furn: p.furn });
+  });
+
+  // ---------------- 副本 ----------------
+  socket.on('dgGo', (ack) => {
+    const p = players.get(socket.id);
+    if (!p || typeof ack !== 'function') return;
+    ack(DG.go(p));
+  });
+  socket.on('dgHome', (ack) => {
+    const p = players.get(socket.id);
+    if (!p || typeof ack !== 'function') return;
+    ack(DG.home(p));
+  });
+  socket.on('dgStart', (ack) => {
+    const p = players.get(socket.id);
+    if (!p || typeof ack !== 'function') return;
+    ack(DG.start(p));
+  });
+  socket.on('dgLeave', (ack) => {
+    const p = players.get(socket.id);
+    if (!p) return;
+    const r = DG.leave(p);
+    if (typeof ack === 'function') ack(r);
+  });
+  socket.on('dgPush', (m, ack) => {
+    const p = players.get(socket.id);
+    if (!p || !m) return;
+    const r = DG.action('push', p, Number(m.i), Number(m.dx), Number(m.dy));
+    if (typeof ack === 'function') ack(r);
+  });
+  socket.on('dgReset', (ack) => {
+    const p = players.get(socket.id);
+    if (!p || typeof ack !== 'function') return;
+    ack(DG.action('resetBlocks', p));
   });
 
   // 穿上 / 脫下裝備（id 是 null 就是脫掉）
@@ -1557,7 +1853,7 @@ io.on('connection', (socket) => {
     if (draw.host === p.id) {
       // 主持人可以聊天，但不能把答案講出來
       if (draw.answer && norm(t).includes(norm(draw.answer))) return ack({ ok: false, error: '不能說出答案喔' });
-      draw.log(`🎤 ${p.name}：${t}`, 'chat'); return ack({ ok: true });
+      draw.log(`主持人 ${p.name}：${t}`, 'chat'); return ack({ ok: true });
     }
     if (!draw.answer) { draw.log(`${p.name}：${t}`, 'chat'); return ack({ ok: true }); }
     if (draw.correct.has(p.id)) return ack({ ok: false, error: '你已經猜對了，等下一題' });
@@ -1595,7 +1891,7 @@ io.on('connection', (socket) => {
     if (!t) return ack({ ok: false });
     if (song.host === p.id) {
       if (song.title && (songHit(norm(t), song.singer) || songHit(norm(t), song.title))) return ack({ ok: false, error: '不能說出答案喔' });
-      song.log(`🎤 ${p.name}：${t}`, 'chat'); return ack({ ok: true });
+      song.log(`主持人 ${p.name}：${t}`, 'chat'); return ack({ ok: true });
     }
     if (!song.title) { song.log(`${p.name}：${t}`, 'chat'); return ack({ ok: true }); }
     const hadS = song.gotSinger.has(p.id), hadT = song.gotTitle.has(p.id);
@@ -1647,6 +1943,69 @@ io.on('connection', (socket) => {
     p.video = code;
     io.emit('videoRooms', videoList());
     ack({ ok: true, code });
+  });
+
+  // ----- 小樹屋語音 -----
+  socket.on('treeList', (ack) => { if (typeof ack === 'function') ack({ trees: treeList() }); });
+  // 蓋一間新的小樹屋，自己直接住進去
+  socket.on('treeCreate', async (data, ack) => {
+    if (typeof ack !== 'function') return;
+    const ice = await iceServers(); // 先拿好通行證再改狀態（等的時候人可能已經走了）
+    const p = players.get(socket.id);
+    if (!p) return;
+    if (trees.size >= TREE_MAX) return ack({ ok: false, error: `小樹屋已經有 ${TREE_MAX} 間了，先去別人的坐坐吧` });
+    leaveTree(p);
+    const t = { id: 't' + (++treeSeq), name: clean(data && data.name, 12) || `${p.name}的小樹屋`, owner: p.id, ownerName: p.name, at: Date.now(), members: [p.id] };
+    trees.set(t.id, t);
+    p.tree = t.id; p.treeMuted = false; p.treeVideo = '';
+    emitTrees();
+    ack({ ok: true, id: t.id, peers: [], ice });
+  });
+  // 進別人的小樹屋：回傳屋裡其他人，由新進來的人負責跟每個人打招呼（送 offer）
+  socket.on('treeJoin', async (id, ack) => {
+    if (typeof ack !== 'function') return;
+    const ice = await iceServers();
+    const p = players.get(socket.id);
+    if (!p) return;
+    const t = trees.get(String(id || ''));
+    if (!t) return ack({ ok: false, error: '這間小樹屋已經拆掉了' });
+    if (p.tree === t.id) return ack({ ok: true, id: t.id, peers: t.members.filter(m => m !== p.id), ice });
+    if (t.members.length >= TREE_CAP) return ack({ ok: false, error: `這間已經擠了 ${TREE_CAP} 個人，換一間吧` });
+    leaveTree(p);
+    const peers = t.members.slice();
+    t.members.push(p.id);
+    p.tree = t.id; p.treeMuted = false; p.treeVideo = '';
+    emitTrees();
+    ack({ ok: true, id: t.id, peers, ice });
+  });
+  // 瀏覽器回報這 30 秒走中繼的流量（位元組）；一次最多算 50MB，避免亂報
+  socket.on('turnUsage', (n) => {
+    const p = players.get(socket.id);
+    n = Math.floor(Number(n));
+    if (!p || !p.tree || !TURN_PROVIDER || !(n > 0)) return;
+    addTurnUsage(Math.min(n, 50e6));
+  });
+  socket.on('treeLeave', () => { const p = players.get(socket.id); if (leaveTree(p)) emitTrees(); });
+  socket.on('treeMute', (m) => {
+    const p = players.get(socket.id);
+    if (!p || !p.tree || p.treeMuted === !!m) return;
+    p.treeMuted = !!m;
+    emitTrees();
+  });
+  // 開視訊／分享螢幕：'cam'、'screen' 或 ''（關掉），讓同屋的人知道要不要顯示畫面
+  socket.on('treeVideo', (v) => {
+    const p = players.get(socket.id);
+    v = v === 'cam' || v === 'screen' ? v : '';
+    if (!p || !p.tree || (p.treeVideo || '') === v) return;
+    p.treeVideo = v;
+    emitTrees();
+  });
+  // 轉送 WebRTC 連線資訊，只有同一間小樹屋的人之間可以傳
+  socket.on('rtc', (msg) => {
+    const p = players.get(socket.id);
+    const to = msg && players.get(msg.to);
+    if (!p || !p.tree || !to || to.tree !== p.tree || !msg.data || typeof msg.data !== 'object') return;
+    io.to(to.id).emit('rtc', { from: p.id, data: msg.data });
   });
 
   socket.on('musicSearch', async (q, ack) => {
@@ -1717,6 +2076,50 @@ io.on('connection', (socket) => {
     if (m.now && m.now.vid === vid && Date.now() - m.now.startedAt > 5000) musicNext(area);
   });
 
+  // ---------- 許願池 ----------
+  // 按讚用帳號算；沒登入的用瀏覽器存的裝置代號（wid）
+  const voterOf = (p, wid) => p.account ? 'u:' + p.account.username.toLowerCase()
+    : (typeof wid === 'string' && /^[a-z0-9]{8,24}$/.test(wid) ? 'g:' + wid : '');
+  const userOf = (p) => p.account && p.account.username;
+  // 每個許願池的事件都是 (m, ack)：m 裡面有 wid，回傳 { ok, ... }
+  const onWish = (ev, fn) => socket.on(ev, (m, ack) => {
+    const p = players.get(socket.id);
+    if (!p || typeof ack !== 'function' || !m || typeof m !== 'object') return;
+    const r = fn(p, m);
+    ack(r.error ? { ok: false, error: r.error } : Object.assign({ ok: true }, r));
+  });
+  onWish('wishList', (p, m) => Object.assign(wishes.query(m, voterOf(p, m.wid), userOf(p)),
+    { login: !!p.account, left: wishes.left(userOf(p)), perDay: wishes.PER_DAY, titleLen: wishes.TITLE_LEN, bodyLen: wishes.BODY_LEN }));
+  onWish('wishGet', (p, m) => {
+    const w = wishes.get(Number(m.id), voterOf(p, m.wid), userOf(p));
+    return w ? { wish: w } : { error: '這個願望已經不在了' };
+  });
+  onWish('wishAdd', (p, m) => {
+    const r = wishes.add(userOf(p), p.name, m);
+    if (r.error) return r;
+    pushChat({ system: true, text: `${p.name} 在許願池許了一個願：【${WISH_CAT[r.wish.cat]}】${r.wish.title}`, t: Date.now() });
+    io.emit('wishes', { coin: p.id });
+    return { id: r.wish.id };
+  });
+  onWish('wishEdit', (p, m) => {
+    const r = wishes.edit(Number(m.id), userOf(p), m);
+    if (r.error) return r;
+    io.emit('wishes');
+    return { id: r.wish.id };
+  });
+  onWish('wishLike', (p, m) => {
+    const r = wishes.like(Number(m.id), voterOf(p, m.wid));
+    if (r.error) return r;
+    io.emit('wishes');
+    return r;
+  });
+  onWish('wishWithdraw', (p, m) => {
+    const r = wishes.withdraw(Number(m.id), userOf(p));
+    if (r.error) return r;
+    io.emit('wishes');
+    return {};
+  });
+
   socket.on('chat', (text) => {
     const p = players.get(socket.id);
     if (!p) return;
@@ -1745,6 +2148,7 @@ io.on('connection', (socket) => {
 const AWAY_SHOW_MS = 5000, HOST_WAIT_MS = 30000;
 function goAway(p) {
   p.moving = false;
+  if (leaveTree(p)) emitTrees(); // 斷線了聲音也斷了，先請出小樹屋，回來再自己進去
   io.emit('playerMoved', { id: p.id, x: p.x, y: p.y, dir: p.dir, moving: false });
   awayTimers.set(p.id, [
     setTimeout(() => {
@@ -1776,23 +2180,29 @@ function removePlayer(id) {
   awayTimers.delete(id);
   snapshot(p);
   GAMES.forEach(g => g.remove(id));
+  DG.remove(id);
   summons.filter(sm => sm.owner === id).forEach(sm => removeSummon(sm));
   const hadVideo = !!p.video;
+  const hadTree = leaveTree(p);
   players.delete(id);
   if (hadVideo) io.emit('videoRooms', videoList());
+  if (hadTree) emitTrees();
   io.emit('playerLeft', id);
   pushChat({ system: true, text: `${p.name} 離開了總部`, t: Date.now() });
 }
 
 server.listen(PORT, () => {
+  iceServers(); // 先拿一次 TURN 通行證，第一個進小樹屋的人就不用等
   console.log(`🌀 颱風天防衛總部已啟動：http://localhost:${PORT}`);
   console.log(`🔑 管理員介面：http://localhost:${PORT}/admin.html  密碼：${process.env.ADMIN_PASSWORD ? '（用 ADMIN_PASSWORD 設定的）' : settings.adminPassword}`);
   console.log(`📹 視訊房間：https://${JITSI_DOMAIN}/${JITSI_ROOM}`);
+  console.log(TURN_PROVIDER ? `🌳 小樹屋語音：使用 ${TURN_PROVIDER} TURN 中繼` : process.env.TURN_URL ? '🌳 小樹屋語音：使用 TURN_URL 中繼' : '🌳 小樹屋語音：只有 STUN（手機網路之間可能接不通，見 README 的「小樹屋語音」）');
 });
 
 // 關掉伺服器（Ctrl+C）前先把大家的角色存好
 ['SIGINT', 'SIGTERM'].forEach(sig => process.on(sig, () => {
   players.forEach(snapshot);
   accounts.flush();
+  wishes.flush();
   process.exit(0);
 }));

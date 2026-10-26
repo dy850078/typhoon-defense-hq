@@ -101,6 +101,10 @@ npm start
 | `MAX_PLAYERS` | `40` | 最多同時上線人數 |
 | `JITSI_ROOM` | 每次啟動隨機產生 | 視訊房間名稱，想固定的話自己設一個不好猜的名字 |
 | `JITSI_DOMAIN` | `meet.jit.si` | 如果有自架 Jitsi 可以換掉 |
+| `CF_TURN_KEY_ID` / `CF_TURN_KEY_TOKEN` | 不設 | 小樹屋語音用 Cloudflare 的 TURN 中繼，設定方法見下面「小樹屋語音」 |
+| `TURN_LIMIT_GB` | `800` | 中繼每個月最多用多少 GB，到了就停用中繼（Cloudflare 免費額度 1000GB） |
+| `TURN_API_URL` | 不設 | 或改用 Metered 的 TURN 中繼（免綁卡） |
+| `TURN_URL` / `TURN_USER` / `TURN_PASS` | 不設 | 小樹屋語音的中繼伺服器（例如 `turn:example.com:3478`）；有人在公司、學校網路連不上語音時再加 |
 | `MONSTER_HP` | `8000` | 颱風怪物的基本血量 |
 | `MONSTER_HP_PER_PLAYER` | `2000` | 每多一位在線玩家，颱風多幾點血 |
 | `RESPAWN_MINUTES` | `5` | 颱風被打倒後幾分鐘重新生成 |
@@ -114,6 +118,34 @@ npm start
 
 - meet.jit.si 嵌在別人網頁裡的話，通話 5 分鐘後會被自動切斷，所以這裡是**開新分頁**進 Jitsi，大家會進同一個房間。
 - meet.jit.si 現在需要第一個進房的人用 Google / GitHub 等帳號登入當主持人，其他人就可以直接加入。
+
+## 小樹屋語音
+
+設計細節（連線流程、視訊、中繼用量上限的取捨）見 [docs/design/treehouse.md](docs/design/treehouse.md)。
+
+同一間小樹屋的人是兩兩直接連線通話（WebRTC），伺服器只幫忙交換連線資訊。手機 4G/5G、公司、學校網路常常不讓外面直接連進來，兩個人都在這種網路時就會互相聽不到（小樹屋卡片上那個人旁邊會顯示「連不上」）。這時要加一台 TURN 中繼伺服器幫忙轉送聲音。只有接不通的那幾對會走中繼，語音一小時大約 36MB，免費額度很夠用。
+
+進了小樹屋，工具列上麥克風旁邊可以開視訊（320×240、每秒 15 張）跟分享螢幕（只有電腦版瀏覽器有）。畫面跟聲音走同一條連線，走中繼的那幾對開視訊一小時大約多 100MB、分享螢幕大約多 400MB，一樣算在 `TURN_LIMIT_GB` 上限裡，到上限就停發中繼通行證，不會超過免費額度。
+
+### 用 Cloudflare（每月免費 1000GB，要綁信用卡）
+
+1. 登入 [Cloudflare 後台](https://dash.cloudflare.com/)，左邊選單找 **Realtime**（舊名 Calls）→ **TURN Server** → **Create**，隨便取個名字。
+2. 建好後會看到 **Turn Token ID** 和 **API Token**（API Token 只會顯示一次，先複製起來）。
+3. 啟動時帶上這兩個值：
+
+   ```bash
+   CF_TURN_KEY_ID=你的TurnTokenID CF_TURN_KEY_TOKEN=你的APIToken npm start
+   ```
+
+   啟動訊息出現「小樹屋語音：使用 Cloudflare TURN 中繼」就成功了，大家重新整理、重新進小樹屋即可。
+
+**不會超過免費額度**：大家的瀏覽器會回報走中繼的流量，伺服器記在 `data/turn-usage.json`，這個月用到 `TURN_LIMIT_GB`（預設 800GB）就停發中繼通行證，只剩直連。管理員頁面的「小樹屋語音中繼」可以看到這個月用了多少。Cloudflare 本身沒有自動停用的開關，建議另外到 **Manage Account → Billing → Billable Usage → Create budget alert** 設一個 1 美元的預算提醒，有任何收費就會寄信給你。
+
+### 或用 Metered（免綁卡，每月免費 20GB）
+
+到 [metered.ca](https://www.metered.ca/tools/openrelay/) 註冊、建一個 app，在 TURN Server 頁面拿 API Key，啟動時設 `TURN_API_URL="https://你的app.metered.live/api/v1/turn/credentials?apiKey=你的APIKey"`。兩種都設的話用 Cloudflare。
+
+伺服器會自己去換臨時通行證給玩家，API Key / Token 不會傳到瀏覽器。這些值是密碼，不要 commit 進 repo。
 
 ## 專案結構
 
@@ -129,6 +161,8 @@ public/index.html  首頁：颱風假開趴報名頁（專屬 VIP 邀請函、IG
 public/hq.html     遊戲頁：角色創建、聊天框
 public/game.js     遊戲主程式（Phaser 場景、地圖與颱風的繪製）
 public/crayon.js   蠟筆手繪風的繪圖小工具（抖動外框、顆粒、格紋）
+public/icons.js    手繪 icon（職業、按鈕、提示泡泡…），沒有 emoji
+public/icons-more.js 手繪 icon 第二批：每個技能、裝備、家具各一張（sk-／gear-／dec- 開頭）
 public/style.css   介面樣式
 ```
 

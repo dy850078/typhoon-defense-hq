@@ -495,7 +495,7 @@ const dist = (ax, ay, bx, by) => Math.hypot(ax - bx, ay - by);
 
 // ---------------- 颱風怪物 ----------------
 const Z = MAP.MONSTER_ZONE;
-const monster = { alive: true, hp: MONSTER_HP, maxHp: MONSTER_HP, x: (Z.x1 + Z.x2) / 2, y: (Z.y1 + Z.y2) / 2,
+const monster = { alive: STATS.FIELD_BOSS, hp: MONSTER_HP, maxHp: MONSTER_HP, x: (Z.x1 + Z.x2) / 2, y: (Z.y1 + Z.y2) / 2,
   tx: 0, ty: 0, respawnAt: 0, nextAttack: Date.now() + 6000, frozenUntil: 0, weakUntil: 0, damage: new Map(),
   phase: 1, transformUntil: 0 };
 
@@ -536,8 +536,8 @@ function pickMonsterTarget() {
 pickMonsterTarget();
 
 const alivePlayers = () => [...players.values()].filter(p => !p.dead && !awayTimers.has(p.id)); // 斷線中的人不會被打
-// 只有站在颱風前線（圍欄外）的人會被怪物打到，回到圍欄內就安全了
-const inField = (p) => { const r = MAP.roomAt(p.x, p.y); return !!r && r.id === 'front'; };
+// 只有站在野區（圍欄外）的人會被怪物打到，回到圍欄內就安全了
+const inField = (p) => { const r = MAP.roomAt(p.x, p.y); return !!r && !!r.field; };
 const fieldPlayers = () => alivePlayers().filter(inField);
 
 // 颱風出招：先送預警（地上的圈圈），時間到再判定誰被打到；被冰凍的話這招就取消
@@ -577,16 +577,23 @@ function monsterAttack(now) {
 }
 
 // ---------------- 野外小怪 ----------------
-// 蔣不聽、徐小心各兩隻：在前線晃，有人靠近就追過去打
+// 野區三區各有自己的怪（STATS.FIELD_MOBS），只在自己那一區晃，有人靠近就追過去打
 const mobs = [];
-['chiang', 'chiang', 'hsu', 'hsu'].forEach((kind, i) => {
-  const def = STATS.MOBS[kind];
-  mobs.push({ id: 'm' + i, kind, alive: true, hp: def.hp, maxHp: def.hp, x: 0, y: 0, tx: 0, ty: 0,
-    respawnAt: 0, nextHit: 0, frozenUntil: 0, weakUntil: 0, damage: new Map() });
+Object.entries(STATS.FIELD_MOBS).forEach(([kind, n]) => {
+  for (let i = 0; i < n; i++) {
+    const def = STATS.MOBS[kind];
+    mobs.push({ id: 'm' + mobs.length, kind, zone: def.zone, alive: true, hp: def.hp, maxHp: def.hp, x: 0, y: 0, tx: 0, ty: 0,
+      respawnAt: 0, nextHit: 0, frozenUntil: 0, weakUntil: 0, damage: new Map() });
+  }
 });
+const zoneOf = (m) => MAP.FIELD_ZONES[m.zone] || Z;
 function placeMob(m) {
-  m.x = Z.x1 + Math.random() * (Z.x2 - Z.x1);
-  m.y = Z.y1 + Math.random() * (Z.y2 - Z.y1);
+  const B = zoneOf(m);
+  for (let i = 0; i < 20; i++) { // 找一個沒有東西擋著的地方
+    m.x = B.x1 + Math.random() * (B.x2 - B.x1);
+    m.y = B.y1 + Math.random() * (B.y2 - B.y1);
+    if (!MAP.isBlocked(m.x, m.y)) break;
+  }
   m.tx = m.x; m.ty = m.y;
 }
 mobs.forEach(placeMob);
@@ -597,29 +604,35 @@ function mobState(m) {
     frozen: Math.max(0, m.frozenUntil - now), weak: Math.max(0, m.weakUntil - now) };
 }
 function tickMob(m, now) {
-  const def = STATS.MOBS[m.kind];
+  const def = STATS.MOBS[m.kind], B = zoneOf(m);
   if (!m.alive) {
-    if (now < m.respawnAt) return;
+    // 區域頭目重生得比較慢（打倒時記的是一般的重生時間，這裡再多等一段）
+    if (now < m.respawnAt + Math.max(0, (def.respawnMs || 0) - STATS.MOB_RESPAWN_MS)) return;
     Object.assign(m, { alive: true, hp: def.hp, frozenUntil: 0, weakUntil: 0 });
     m.damage.clear();
     placeMob(m);
     io.emit('mob', mobState(m));
+    if (def.elite) pushChat({ system: true, text: `${def.name}出現在${MAP.ROOMS.find(r => r.id === m.zone).name}了！`, t: now });
     return;
   }
   if (now < m.frozenUntil || now < (m.stunUntil || 0)) return;
-  // 追最近的人（只追在前線的），召喚物也會被追
+  // 追最近的人（只追在自己這一區的），召喚物也會被追
   let prey = null, pd = 280;
-  fieldPlayers().concat(summons).forEach(p => { const d = dist(p.x, p.y, m.x, m.y); if (d < pd) { pd = d; prey = p; } });
+  fieldPlayers().concat(summons).forEach(p => {
+    const d = dist(p.x, p.y, m.x, m.y);
+    if (d < pd && p.x >= B.x1 - T && p.x <= B.x2 + T && p.y >= B.y1 - T && p.y <= B.y2 + T) { pd = d; prey = p; }
+  });
   if (prey) { m.tx = prey.x; m.ty = prey.y; }
   else if (dist(m.x, m.y, m.tx, m.ty) < 10) {
-    m.tx = clamp(m.x + (Math.random() - 0.5) * 400, Z.x1, Z.x2);
-    m.ty = clamp(m.y + (Math.random() - 0.5) * 300, Z.y1, Z.y2);
+    m.tx = clamp(m.x + (Math.random() - 0.5) * 400, B.x1, B.x2);
+    m.ty = clamp(m.y + (Math.random() - 0.5) * 300, B.y1, B.y2);
   }
   const d = dist(m.x, m.y, m.tx, m.ty);
   if (d > (prey ? def.range * 0.6 : 10)) {
     const step = Math.min(d, def.speed * TICK / 1000);
-    const nx = clamp(m.x + (m.tx - m.x) / d * step, Z.x1, Z.x2), ny = clamp(m.y + (m.ty - m.y) / d * step, Z.y1, Z.y2);
-    if (wallBlocks(m.x, m.y, nx, ny, WALL_R.mob)) { if (!prey) { m.tx = m.x; m.ty = m.y; } } // 被城牆擋住：原地不動
+    const nx = clamp(m.x + (m.tx - m.x) / d * step, B.x1, B.x2), ny = clamp(m.y + (m.ty - m.y) / d * step, B.y1, B.y2);
+    // 被城牆、辦公桌、香爐這些東西擋住：原地不動，閒晃的話換個方向
+    if (wallBlocks(m.x, m.y, nx, ny, WALL_R.mob) || MAP.isBlocked(nx, ny)) { if (!prey) { m.tx = m.x; m.ty = m.y; } }
     else { m.x = nx; m.y = ny; }
   }
   if (prey && pd <= def.range && now >= m.nextHit && !behindWall(m.x, m.y, prey.x, prey.y)) {
@@ -657,6 +670,7 @@ setInterval(() => {
 }, TICK);
 
 function tickMonster(now) {
+  if (!STATS.FIELD_BOSS) return; // 颱風收起來了
   if (!monster.alive) {
     if (now >= monster.respawnAt) spawnMonster();
     return;
@@ -761,7 +775,7 @@ setInterval(() => {
 }, 1000);
 
 // ---------------- 插畫結界師的城牆 ----------------
-// 畫在前線的一條折線，存活 ms 毫秒；怪物走不過去，火牆會燒、冰牆第一次碰到會凍住
+// 畫在野區的一條折線，存活 ms 毫秒；怪物走不過去，火牆會燒、冰牆第一次碰到會凍住
 const walls = [];
 let wallSeq = 0;
 const WALL_R = { mob: 26, boss: 70 }; // 離線多近就算撞到
@@ -783,10 +797,10 @@ const cross = (ax, ay, bx, by, cx, cy, dx, dy) => {
   return t >= 0 && t <= 1 && u >= 0 && u <= 1;
 };
 const behindWall = (ax, ay, bx, by) => walls.some(w => w.pts.slice(1).some((q, i) => cross(ax, ay, bx, by, w.pts[i][0], w.pts[i][1], q[0], q[1])));
-// 檢查玩家畫的線：點要在前線、離自己不太遠，總長度超過上限就截斷
+// 檢查玩家畫的線：點要在野區、離自己不太遠，總長度超過上限就截斷
 function wallLine(p, pts, maxLen) {
   if ((!inField(p) && !DG.inFight(p)) || !Array.isArray(pts) || pts.length < 2) return null;
-  const B = DG.boxAt(p.x, p.y) || { x1: Z.x1 - 2 * T, y1: Z.y1 - 2 * T, x2: Z.x2 + 2 * T, y2: Z.y2 + 2 * T };
+  const B = DG.boxAt(p.x, p.y) || MAP.FIELD_BOX;
   const out = [];
   let len = 0;
   for (const q of pts.slice(0, 120)) {
@@ -907,7 +921,7 @@ function tickStorms(now) {
       t.x += Math.cos(t.dir) * STORM.twisterSpeed; t.y += Math.sin(t.dir) * STORM.twisterSpeed;
       // 碰到的小怪被往圈中間捲（颱風和副本魔王太重捲不動）
       foes.forEach(([f, b]) => {
-        if (b || STATS.MOBS[f.kind].boss || dist(f.x, f.y, t.x, t.y) > STORM.twisterR) return;
+        if (b || STATS.MOBS[f.kind].boss || STATS.MOBS[f.kind].elite || dist(f.x, f.y, t.x, t.y) > STORM.twisterR) return;
         const d = dist(f.x, f.y, s.x, s.y);
         if (d > STORM.pull) { f.x += (s.x - f.x) / d * STORM.pull; f.y += (s.y - f.y) / d * STORM.pull; }
       });
@@ -988,7 +1002,7 @@ function transformMonster(p, now) {
 }
 
 // ---------------- 召喚物 ----------------
-// 召喚師在前線叫出來的奇異生物：自己找最近的怪去打，有血量，被打倒就不會回來
+// 召喚師在野區叫出來的奇異生物：自己找最近的怪去打，有血量，被打倒就不會回來
 const summons = [];
 let summonSeq = 0;
 function summonState(sm) {
@@ -1019,7 +1033,7 @@ function tickSummon(sm, now) {
   if (!owner) return removeSummon(sm);
   const def = STATS.SUMMONS[sm.kind];
   // 找最近的敵人：小怪或颱風
-  // 整個前線都找得到，離最近的那隻走過去打
+  // 整個野區都找得到，離最近的那隻走過去打
   let foe = null, isBoss = false, fd = 1600;
   const box = DG.boxAt(sm.x, sm.y); // 在副本裡：只找同一關的怪，也不會走出這一關
   if (box) {
@@ -1037,7 +1051,7 @@ function tickSummon(sm, now) {
   });
   if (monster.alive && !box) { const d = dist(monster.x, monster.y, sm.x, sm.y); if (d < fd) { fd = d; foe = monster; isBoss = true; } }
   let tx, ty, stop;
-  if (foe) { tx = foe.x; ty = foe.y; stop = isBoss ? 110 : STATS.MOBS[foe.kind].boss ? 90 : 60; }
+  if (foe) { tx = foe.x; ty = foe.y; stop = isBoss ? 110 : STATS.MOBS[foe.kind].boss || STATS.MOBS[foe.kind].elite ? 90 : 60; }
   else if (box ? DG.boxAt(owner.x, owner.y) === box : inField(owner)) { tx = owner.x + 50; ty = owner.y + 10; stop = 40; }
   else { tx = sm.x; ty = sm.y; stop = 1e9; }
   const d = dist(sm.x, sm.y, tx, ty);
@@ -1047,8 +1061,8 @@ function tickSummon(sm, now) {
       sm.x = clamp(sm.x + (tx - sm.x) / d * step, box.x1 + 20, box.x2 - 20);
       sm.y = clamp(sm.y + (ty - sm.y) / d * step, box.y1 + 30, box.y2 - 10);
     } else {
-      sm.x = clamp(sm.x + (tx - sm.x) / d * step, Z.x1 - 3 * T, Z.x2 + 3 * T);
-      sm.y = clamp(sm.y + (ty - sm.y) / d * step, 32 * T, Z.y2 + T);
+      sm.x = clamp(sm.x + (tx - sm.x) / d * step, MAP.FIELD_BOX.x1 + T, MAP.FIELD_BOX.x2 - T);
+      sm.y = clamp(sm.y + (ty - sm.y) / d * step, MAP.FIELD_BOX.y1 + T, MAP.FIELD_BOX.y2 - T);
     }
   }
   if (foe && d <= stop + 20 && now >= sm.nextHit) {
@@ -1122,7 +1136,7 @@ function giveDecor(p) {
 // 這格能不能擺家具：要在室內、不能是牆或門、不能擋到東西
 function canDecorate(tx, ty) {
   const room = MAP.roomAt((tx + 0.5) * T, (ty + 0.5) * T);
-  if (!room || room.id === 'front' || room.dungeon || room.lobby) return false;
+  if (!room || room.field || room.dungeon || room.lobby) return false;
   const ch = MAP.tiles[ty] && MAP.tiles[ty][tx];
   return !!ch && !MAP.BLOCKING.has(ch) && ch !== '=' && ch !== ',';
 }
@@ -1426,7 +1440,7 @@ io.on('connection', (socket) => {
     if (now - lastAction < 300 || now < (p.cooldowns[skillId] || 0)) return ack({ ok: false });
     // 插畫結界師的城牆：target 是畫出來的線
     const line = skill.wall ? wallLine(p, target && target.pts, skill.wall.len) : null;
-    if (skill.wall && !line) return ack({ ok: false, error: '要在 🌀 颱風前線、自己附近畫一條線' });
+    if (skill.wall && !line) return ack({ ok: false, error: '要在野區、自己附近畫一條線' });
     if (skill.wall) target = 'boss';
     const isBoss = !target || target === 'boss';
     const foe = isBoss ? monster : mobs.find(m => m.id === target) || DG.foe(target);
@@ -1438,7 +1452,7 @@ io.on('connection', (socket) => {
     if (p.mp < skill.mp) return ack({ ok: false, error: '魔力不夠' });
     let kind = null;
     if (skill.summon) {
-      if (!inField(p) && !DG.inFight(p)) return ack({ ok: false, error: '要在 🌀 颱風前線或副本裡才能召喚' });
+      if (!inField(p) && !DG.inFight(p)) return ack({ ok: false, error: '要在野區或副本裡才能召喚' });
       if (summons.filter(sm => sm.owner === p.id).length >= STATS.SUMMON_MAX) return ack({ ok: false, error: `最多同時召喚 ${STATS.SUMMON_MAX} 隻` });
       kind = pickSummonKind();
     }
@@ -1512,16 +1526,16 @@ io.on('connection', (socket) => {
     }
     if (skill.weaken) hits.forEach(([f]) => { f.weakUntil = now + skill.weaken; });
     if (skill.freeze) hits.forEach(([f]) => { f.frozenUntil = now + skill.freeze; });
-    // 震飛：從自己的位置往外推，推到前線的邊邊就停
+    // 震飛：從自己的位置往外推，推到那一區的邊邊就停
     if (skill.knock) {
       fx.knock = [];
       hits.forEach(([f, b]) => {
-        if (skill.knock.noBoss && (b || STATS.MOBS[f.kind].boss)) return; // 這招撞不動頭目
+        if (skill.knock.noBoss && (b || STATS.MOBS[f.kind].boss || STATS.MOBS[f.kind].elite)) return; // 這招撞不動頭目
         const d = Math.max(1, dist(f.x, f.y, p.x, p.y)), push = b ? skill.knock.boss : skill.knock.mob;
         const ux = d > 5 ? (f.x - p.x) / d : (Math.random() < 0.5 ? -1 : 1), uy = d > 5 ? (f.y - p.y) / d : 0;
-        const B = f.dg ? DG.boundsOf(f) : Z, pad = f.dg ? T : 0;
+        const B = f.dg ? DG.boundsOf(f) : zoneOf(f), pad = f.dg ? T : 0;
         let nx = clamp(f.x + ux * push, B.x1 + pad, B.x2 - pad), ny = clamp(f.y + uy * push, B.y1 + pad, B.y2 - pad);
-        if (f.dg && MAP.isBlocked(nx, ny)) { nx = f.x; ny = f.y; } // 副本裡撞到岩壁就不推
+        if (MAP.isBlocked(nx, ny)) { nx = f.x; ny = f.y; } // 撞到岩壁、辦公桌就不推
         f.x = nx; f.y = ny;
         f.tx = f.x; f.ty = f.y;
         f.stunUntil = now + skill.knock.stun;

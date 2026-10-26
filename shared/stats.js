@@ -18,11 +18,11 @@
     skater: { name: '陵媒', icon: '⛸️', role: '控場', base: { maxMp: 70, atk: 11 }, skills: ['kick', 'skate', 'icicle'],
       desc: '冰上起舞的嬪妃，繞著颱風溜一圈就能把它凍住。' },
     summoner: { name: '召喚師', icon: '🛸', role: '召喚', base: { maxHp: 95, maxMp: 90, atk: 9 }, skills: ['ray', 'summon', 'mothership'],
-      desc: '跟外星朋友很熟的人。在颱風前線召喚奇異生物，牠們會自己去打怪。' },
+      desc: '跟外星朋友很熟的人。在野區召喚奇異生物，牠們會自己去打怪。' },
     singer: { name: '靈魂歌姬', icon: '🎤', role: '刺客', base: { maxHp: 85, maxMp: 70, atk: 15 }, skills: ['note', 'noteBlade', 'anthem'],
       desc: '一開口就讓颱風安靜下來的歌姬。唱出來的音符會變成刀，爆擊特別高；也能唱歌幫全隊加攻擊。' },
     painter: { name: '插畫結界師', icon: '🎨', role: '控場', base: { maxHp: 95, maxMp: 90, atk: 10 }, skills: ['paint', 'fireWall', 'iceWall'],
-      desc: '畫什麼就具現化成什麼的插畫結界師。在颱風前線畫一條線，就變成擋住怪物的火牆或冰牆。' },
+      desc: '畫什麼就具現化成什麼的插畫結界師。在野區畫一條線，就變成擋住怪物的火牆或冰牆。' },
   };
 
   // power：傷害倍率；mp：消耗魔力；cooldown：毫秒；range：離颱風多近才能放
@@ -64,7 +64,7 @@
     skate: { name: '冰嬉', icon: '❄️', mp: 30, cooldown: 9000, power: 2.5, range: 260, aoe: 260, freeze: 4000,
       desc: '在自己身邊溜冰一大圈，範圍裡的颱風和小怪全部冰凍 4 秒（不會動也不會攻擊），每隻都受到普攻 2.5 倍傷害。' },
     summon: { name: '召喚奇異生物', icon: '👽', mp: 35, cooldown: 8000, power: 0, support: true, summon: true,
-      desc: '在颱風前線召喚一隻隨機的奇異生物（共五種，有強有弱），牠會自己去打怪。最多同時 3 隻，被打倒就不會回來。' },
+      desc: '在野區召喚一隻隨機的奇異生物（共五種，有強有弱），牠會自己去打怪。最多同時 3 隻，被打倒就不會回來。' },
   };
 
   // 第二招（L 鍵）。aoe：以自己為中心的範圍；aoeAt：以目標為中心的範圍
@@ -91,10 +91,10 @@
       desc: '唱一首振奮人心的歌，身邊隊友（包含自己）攻擊力 +30%，持續 12 秒。哪裡都能用。' },
     fireWall: { name: '火焰城牆', icon: '🔥', mp: 25, cooldown: 9000, power: 0, support: true,
       wall: { kind: 'fire', ms: 10000, len: 700, burn: 0.5 },
-      desc: '在颱風前線拖曳畫一條線（最長 700），變成 10 秒的火牆：怪物過不去，碰到還會被燒（每秒普攻 0.5 倍）。跟冰牆交叉圍成一圈，圈裡會落雷、颳龍捲風。' },
+      desc: '在野區拖曳畫一條線（最長 700），變成 10 秒的火牆：怪物過不去，碰到還會被燒（每秒普攻 0.5 倍）。跟冰牆交叉圍成一圈，圈裡會落雷、颳龍捲風。' },
     iceWall: { name: '冰霜城牆', icon: '🧊', mp: 25, cooldown: 9000, power: 0, support: true,
       wall: { kind: 'ice', ms: 10000, len: 700, freeze: 2000 },
-      desc: '在颱風前線拖曳畫一條線（最長 700），變成 10 秒的冰牆：怪物過不去，第一次碰到會被凍住 2 秒。跟火牆交叉圍成一圈，圈裡會落雷、颳龍捲風。' },
+      desc: '在野區拖曳畫一條線（最長 700），變成 10 秒的冰牆：怪物過不去，第一次碰到會被凍住 2 秒。跟火牆交叉圍成一圈，圈裡會落雷、颳龍捲風。' },
     mothership: { name: '母艦光束', icon: '🛸', mp: 30, cooldown: 10000, power: 1.8, range: 420, aoeAt: 220, weaken: 5000,
       desc: '呼叫外星母艦從天上照下一道光束，目標附近的怪都受到普攻 1.8 倍傷害，並被削弱 5 秒。' },
   });
@@ -161,7 +161,11 @@
     fireworkLv: 5, // 幾等才能放煙火
   };
 
-  // 野外的小怪：在颱風前線晃來晃去，靠太近會被打
+  // 颱風薔琵（野區的大頭目）先收起來：程式都還在，下次有颱風把這個打開就會回來
+  const FIELD_BOSS = false;
+
+  // 野外的小怪：在野區晃來晃去，靠太近會被打
+  // 蔣不聽、徐小心是颱風版本的怪，現在不會生成（FIELD_MOBS 裡沒有它們），留著下次用
   const MOBS = {
     chiang: { name: '蔣不聽', level: 12, hp: 900, dmg: [10, 16], range: 90, speed: 55, exp: 150,
       say: ['我聽不到～', '不聽不聽！', '再說一次？', '🙉'] },
@@ -193,6 +197,35 @@
       gap: { half: 70, top: 170, bottom: 18 }, phase2: { name: '狂風天龍王', level: 75 }, phase3: { name: '暴走天龍王', level: 80 },
       say: ['天龍國是我的！', '你住哪一區？', '這裡不歡迎你', '看我的龍捲風！'] },
   });
+  // 野區三區的怪（zone 對應 map.js 的 FIELD）：職場怪和台灣民間傳說的怪，圖在 public/field-mobs.js
+  // elite：區域頭目，比較大、比較硬，重生比較慢（respawnMs），震飛和龍捲風推不動
+  // drops：打倒後噴在地上的東西（n 個；food／decor／gear 是抽到那一類的權重，剩下的算空；rare 只掉 SR 以上）
+  Object.assign(MOBS, {
+    sticky: { name: '便利貼精', zone: 'walk', level: 8, hp: 600, dmg: [6, 10], range: 85, speed: 60, exp: 90,
+      say: ['記得喔～', '這個也要', '待辦加一', '貼你！'], drops: { n: [0, 2], food: 30, decor: 20, gear: 4 } },
+    seen: { name: '已讀飄飄', zone: 'walk', level: 12, hp: 800, dmg: [8, 13], range: 90, speed: 55, exp: 120,
+      say: ['已讀', '……', '嗯', '晚點回你'], drops: { n: [0, 2], food: 30, decor: 22, gear: 5 } },
+    wok: { name: '甩鍋鍋', zone: 'walk', level: 16, hp: 1000, dmg: [10, 16], range: 90, speed: 65, exp: 160,
+      say: ['不是我喔～', '這鍋給你', '我只是路過', '問他啦'], drops: { n: [0, 2], food: 32, decor: 22, gear: 6 } },
+    octo: { name: '會議章魚', zone: 'office', level: 24, hp: 1500, dmg: [16, 24], range: 95, speed: 55, exp: 220,
+      say: ['我們對齊一下', '再開一個會', '會後再議', '先拉個群組'], drops: { n: [0, 2], food: 30, decor: 22, gear: 7 } },
+    clock: { name: '加班鬧鐘', zone: 'office', level: 30, hp: 1900, dmg: [20, 30], range: 90, speed: 70, exp: 280,
+      say: ['叮鈴鈴！', '再五分鐘', '還沒下班喔', '加班囉～'], drops: { n: [0, 2], food: 30, decor: 22, gear: 8 } },
+    boss: { name: '急件老闆', zone: 'office', elite: true, level: 35, hp: 9000, dmg: [30, 42], range: 110, speed: 50, exp: 1200,
+      scale: 0.82, gap: { half: 46, top: 150, bottom: 14 }, barY: -178, respawnMs: 3 * 60 * 1000,
+      say: ['這個很簡單吧', '下班前給我就好', '急件！', '明天早上要', '順便一下'], drops: { n: [1, 3], food: 20, decor: 20, gear: 30, rare: true } },
+    monkey: { name: '燈猴', zone: 'temple', level: 38, hp: 2200, dmg: [26, 36], range: 90, speed: 70, exp: 320,
+      say: ['點燈囉～', '不要熄燈', '亮晶晶', '福氣來'], drops: { n: [0, 2], food: 28, decor: 24, gear: 9 } },
+    lion: { name: '石獅仔', zone: 'temple', level: 42, hp: 2800, dmg: [30, 40], range: 90, speed: 45, exp: 360,
+      say: ['吼～', '守門中', '這是我的球', '不要摸我的頭'], drops: { n: [0, 2], food: 28, decor: 24, gear: 10 } },
+    imp: { name: '小魔神仔', zone: 'temple', level: 46, hp: 2400, dmg: [32, 44], range: 90, speed: 95, exp: 400,
+      say: ['來呀～', '跟我走', '雞腿給你', '這邊這邊'], drops: { n: [0, 2], food: 28, decor: 24, gear: 10 } },
+    tiger: { name: '虎姑婆婆', zone: 'temple', elite: true, level: 50, hp: 16000, dmg: [45, 60], range: 115, speed: 50, exp: 2000,
+      scale: 0.82, gap: { half: 50, top: 150, bottom: 14 }, barY: -178, respawnMs: 4 * 60 * 1000,
+      say: ['乖乖睡喔', '吃糖糖', '虎姑婆婆來囉', '誰還沒睡？', '糖給你一顆'], drops: { n: [1, 3], food: 20, decor: 20, gear: 35, rare: true } },
+  });
+  // 野區每一種怪要生成幾隻
+  const FIELD_MOBS = { sticky: 3, seen: 3, wok: 3, octo: 3, clock: 3, boss: 1, monkey: 3, lion: 3, imp: 3, tiger: 1 };
   const MOB_RESPAWN_MS = 45000;
 
   // 現在的普通攻擊：有拿武器就用武器的打法
@@ -227,7 +260,7 @@
   }
 
   const stats = { BASE, CLASSES, SKILLS, SUMMONS, SUMMON_MAX, SUMMON_HIT_MS, FOODS, REGEN, MONSTER, MONSTER2, RESPAWN_MS, WEAKEN, LEVEL,
-    MOBS, MOB_RESPAWN_MS, statsFor, reduce, boost, bonusDef, foeGap, basicOf, skillsOf };
+    MOBS, FIELD_MOBS, FIELD_BOSS, MOB_RESPAWN_MS, statsFor, reduce, boost, bonusDef, foeGap, basicOf, skillsOf };
   if (typeof module !== 'undefined' && module.exports) module.exports = stats;
   else root.HQ_STATS = stats;
 })(this);

@@ -9,7 +9,8 @@
   const TDX = LX + 14; // 台北101副本區最左邊那一格
   const TLX = TDX + 24; // 101 大廳候位區最左邊那一格
   const W = TLX + 12;
-  const H = 46;
+  const DH = 46; // 副本區的高度（總部以南的野區比較長，下面的副本區就只是虛空）
+  const H = 86;
   const TILE = 48;
 
   // 圖例
@@ -26,8 +27,12 @@
   // 台北101：g  玻璃帷幕牆  k  天空         p  信義廣場地磚  f  阻尼球層的鋼板地
   //         c  控制台（踩上去）            o  觀景台地板    A  觀景台的大柱子
   //         h  101 大廳大理石地            U  101 電梯小姐（站在指揮中心）
+  // 野區：  a  下班路上的人行道  l  路燈        s  區域路牌
+  //         e  打卡大樓的地毯    D  辦公桌      j  盆栽
+  //         r  廟口老街的紅磚    z  香爐        i  燈籠柱
+  //         v  分隔兩區的矮樹籬（中間留通道）
   const BLOCKING = new Set(['#', 'T', 'B', 'K', 'M', 'P', 'S', 'F', 'G', 'N', 'W', 'R', 'J', 'L', 'I', ' ', 'Y', 'Z', 'E', 'Q', 'H',
-    'g', 'k', 'A', 'U']);
+    'g', 'k', 'A', 'U', 'l', 's', 'D', 'j', 'z', 'i', 'v']);
 
   const g = [];
   for (let y = 0; y < H; y++) g.push(new Array(W).fill(','));
@@ -93,12 +98,30 @@
   [[8, 26], [9, 26], [9, 27], [15, 26], [33, 28], [34, 28], [38, 23], [1, 6], [2, 6]]
     .forEach(([x, y]) => set(x, y, '~'));
 
-  // 颱風前線：圍欄以南，中間留一個出口
-  rect(0, 31, MW - 1, H - 1, ':');
+  // 野區：圍欄以南，中間留一個出口；往南依序是下班路上 → 打卡大樓 → 廟口老街，每區之間隔一排矮樹籬
+  const FIELD = [
+    { id: 'walk', name: '下班路上', y1: 31, y2: 46, floor: 'a' },
+    { id: 'office', name: '打卡大樓', y1: 48, y2: 64, floor: 'e' },
+    { id: 'temple', name: '廟口老街', y1: 66, y2: H - 1, floor: 'r' },
+  ];
+  FIELD.forEach(z => rect(0, z.y1, MW - 1, z.y2, z.floor));
   rect(0, 30, MW - 1, 30, 'F');
   rect(26, 30, 29, 30, ',');
-  [[4, 35], [5, 35], [33, 40], [34, 41], [10, 43], [30, 34]].forEach(([x, y]) => set(x, y, '~'));
-  [[1, 33], [38, 33], [2, 44], [37, 44]].forEach(([x, y]) => set(x, y, 'T'));
+  [[47, 'a'], [65, 'e']].forEach(([y, c]) => { rect(0, y, MW - 1, y, 'v'); rect(17, y, 22, y, c); });
+  // 每區入口的路牌
+  set(14, 32, 's'); set(14, 49, 's'); set(14, 67, 's');
+  // 下班路上：路燈、水窪、行道樹
+  [[4, 33], [35, 33], [9, 41], [30, 41], [20, 44]].forEach(([x, y]) => set(x, y, 'l'));
+  [[4, 37], [5, 37], [33, 40], [34, 41], [12, 44], [28, 35]].forEach(([x, y]) => set(x, y, '~'));
+  [[1, 33], [38, 33], [2, 45], [37, 45], [17, 36], [24, 39]].forEach(([x, y]) => set(x, y, 'T'));
+  // 打卡大樓：一排排辦公桌（兩格寬）和盆栽
+  [[4, 51], [10, 51], [26, 51], [32, 51], [4, 56], [10, 56], [26, 56], [32, 56], [6, 61], [30, 61], [14, 59], [22, 54]]
+    .forEach(([x, y]) => rect(x, y, x + 1, y, 'D'));
+  [[1, 49], [38, 49], [1, 63], [38, 63], [18, 57], [21, 57], [8, 53], [30, 53]].forEach(([x, y]) => set(x, y, 'j'));
+  // 廟口老街：中間一座香爐，兩旁燈籠柱，角落有樹
+  set(19, 74, 'z');
+  [[12, 69], [27, 69], [12, 79], [27, 79], [5, 74], [34, 74], [19, 83]].forEach(([x, y]) => set(x, y, 'i'));
+  [[1, 67], [38, 67], [2, 84], [37, 84], [8, 82], [31, 70]].forEach(([x, y]) => set(x, y, 'T'));
 
   // ---------------- 花蓮副本 ----------------
   // 一關接一關往下走：七星潭 → 太魯閣九曲洞 → 清水斷崖，關卡之間的石門解開謎題才會打開
@@ -312,7 +335,8 @@
     { id: 'storage', name: '📦 物資倉庫', x1: 5, y1: 15, x2: 19, y2: 23 },
     { id: 'kitchen', name: '🍜 煮泡麵區', x1: 30, y1: 20, x2: 34, y2: 23 },
     { id: 'lounge', name: '🛋️ 休息區', x1: 21, y1: 15, x2: 34, y2: 23 },
-    { id: 'front', name: '🌀 颱風前線', x1: 0, y1: 31, x2: MW - 1, y2: H - 1 },
+    // 野區的三區：field 標記可以打怪、畫城牆、召喚
+    ...FIELD.map(z => ({ id: z.id, name: z.name, field: true, x1: 0, y1: z.y1 - (z.id === 'walk' ? 0 : 1), x2: MW - 1, y2: z.y2 })),
     { id: 'lobby', name: '🏯 古城候位區', lobby: 'hualien', ...LOBBY },
     { id: 'd1', name: '🌊 七星潭', dungeon: 'hualien', x1: DX + 1, y1: 3, x2: DX + 20, y2: 12 },
     { id: 'd2', name: '🪨 太魯閣九曲洞', dungeon: 'hualien', x1: DX + 1, y1: 14, x2: DX + 20, y2: 28 },
@@ -322,13 +346,17 @@
     { id: 't2', name: '87 樓阻尼球', dungeon: 'taipei', x1: TDX + 1, y1: 14, x2: TDX + 20, y2: 28 },
     { id: 't3', name: '101 觀景台', dungeon: 'taipei', boss: true, x1: TDX + 1, y1: 30, x2: TDX + 20, y2: 44 },
   ];
-  // 颱風怪物活動的範圍（像素）
-  const MONSTER_ZONE = { x1: 4 * TILE, y1: 34 * TILE, x2: (MW - 4) * TILE, y2: (H - 3) * TILE };
+  // 颱風怪物活動的範圍（像素）：下班路上那一區
+  const MONSTER_ZONE = { x1: 4 * TILE, y1: 34 * TILE, x2: (MW - 4) * TILE, y2: 44 * TILE };
+  // 每一區小怪活動的範圍（像素），和整個野區的範圍
+  const FIELD_ZONES = {};
+  FIELD.forEach(z => { FIELD_ZONES[z.id] = { x1: 2 * TILE, y1: (z.y1 + 1.5) * TILE, x2: (MW - 2) * TILE, y2: (z.y2 - 1) * TILE }; });
+  const FIELD_BOX = { x1: 0, y1: 31 * TILE, x2: MW * TILE, y2: H * TILE };
 
   // 會變動的擋路格子（關著的石門、九曲洞的大理石）：'tx,ty'
   const dyn = new Set();
   const map = {
-    W, H, MW, DX, LX, TDX, TLX, TILE, BLOCKING, ROOMS, ITEMS, BAG_SLOTS, CRATES, MONSTER_ZONE, DUNGEON, DUNGEONS, DG_LIST, LOBBY, dyn,
+    W, H, DH, MW, DX, LX, TDX, TLX, TILE, BLOCKING, ROOMS, ITEMS, BAG_SLOTS, CRATES, MONSTER_ZONE, FIELD, FIELD_ZONES, FIELD_BOX, DUNGEON, DUNGEONS, DG_LIST, LOBBY, dyn,
     portal: DUNGEON.portal,
     mentor: { x: (MENTOR_TILE.x + 0.5) * TILE, y: (MENTOR_TILE.y + 0.5) * TILE },
     guard: DUNGEON.npc,

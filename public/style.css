@@ -49,6 +49,8 @@ label, .label { display: block; font-weight: 700; font-size: 15px; }
 input { width: 100%; font: 500 17px var(--display); padding: 10px 14px; border-radius: 12px; border: 2px solid var(--line);
   background: var(--paper); margin-top: 6px; outline: none; color: inherit; }
 input:focus { border-color: var(--accent); }
+/* 拉桿不要套到上面輸入框的 padding 跟邊框，不然圓點拉不到兩端 */
+input[type=range] { height: 28px; padding: 0; border: 0; border-radius: 0; background: none; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .chips button { font: 500 14px var(--display); border: 1.5px solid var(--line); background: var(--paper);
   border-radius: 999px; padding: 6px 14px; cursor: pointer; color: inherit; }

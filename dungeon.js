@@ -289,7 +289,7 @@ function createDungeon(ctx, D, region) {
     st.foes.filter(h => h !== f && h.alive).forEach(h => { h.alive = false; io.emit('mob', mobState(h)); });
     st.phase = 'clear';
     st.endAt = now0() + CLEAR_SHOW_MS;
-    // 寶物噴在頭目倒下的地方，大家搶：隊伍裡每個人各抽一次武器（可能沒有），再加一些補品；離開副本前沒撿就沒了
+    // 寶物噴在頭目倒下的地方，大家搶：隊伍裡每個人各抽一次武器（可能沒有），再加一些補品和扭蛋券；離開副本前沒撿就沒了
     const pile = [];
     memberList().forEach(q => {
       gainExp(q, region.clearExp);
@@ -297,6 +297,8 @@ function createDungeon(ctx, D, region) {
       if (id) pile.push({ kind: 'gear', k: id });
       pile.push(...ctx.loot().roll({ n: [1, 2], food: 100 }));
     });
+    // 有出力的人各擲一次扭蛋券
+    pile.push(...ctx.ticketRolls(f.damage));
     ctx.loot().scatter(pile, f.x, f.y, D.id, 150);
     const weapons = pile.filter(l => l.kind === 'gear').map(l => `【${GEAR.GEAR[l.k].rarity}】${GEAR.GEAR[l.k].name}`);
     say(weapons.length ? `${bossName}掉了 ${weapons.join('、')}，快去撿！` : `${bossName}這次沒有掉武器……下次再來！`);

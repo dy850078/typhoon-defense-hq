@@ -39,9 +39,10 @@
   //         籬  分隔兩區的矮樹籬（中間留通道）
   //         （野區用中文字當代號，免得和副本、副本大廳的英文字母撞在一起）
   // 花園：  圃  花圃（一格一株，擋路）    箱  種子認養箱
+  // 物資倉庫：扭  扭蛋機（一格，畫出來有兩格高，靠著上面的牆）
   const BLOCKING = new Set(['#', 'T', 'B', 'K', 'M', 'P', 'S', 'F', 'G', 'N', 'W', 'R', 'J', 'L', 'I', ' ', 'Y', 'Z', 'E', 'Q', 'H',
     'g', 'k', 'A', 'U', 'w', 'b', 'D', 's', 'v',
-    '燈', '牌', '桌', '盆', '爐', '籠', '籬', '圃', '箱']);
+    '燈', '牌', '桌', '盆', '爐', '籠', '籬', '圃', '箱', '扭']);
 
   const g = [];
   for (let y = 0; y < H; y++) g.push(new Array(W).fill(','));
@@ -83,6 +84,9 @@
   rect(6, 16, 7, 17, 'K'); rect(6, 20, 8, 22, 'K');
   rect(16, 16, 18, 17, 'K'); rect(15, 21, 18, 22, 'K');
   rect(10, 16, 12, 17, 'K');
+  // 扭蛋機：從上面的門進來右手邊，靠著牆
+  const GACHA_TILE = { x: 14, y: 15 };
+  set(GACHA_TILE.x, GACHA_TILE.y, '扭');
   // 休息區：沙發
   rect(23, 17, 26, 17, 'S'); rect(30, 17, 33, 17, 'S');
   rect(23, 21, 25, 21, 'S');
@@ -482,6 +486,8 @@
     gemRuby: { name: '紅寶石', icon: '', garden: true, gem: true, bag: 'gem' },
     gemSapphire: { name: '藍寶石', icon: '', garden: true, gem: true, bag: 'gem' },
     gemEmerald: { name: '綠寶石', icon: '', garden: true, gem: true, bag: 'gem' },
+    // 扭蛋券：打倒頭目才會掉，跟寶石一起收在小口袋（不佔格子）；ticket 的不會從箱子、小怪掉出來
+    gachaTicket: { name: '扭蛋券', icon: '', ticket: true, bag: 'gem' },
   };
   const CRATES = [
     { label: '泡麵', item: 'noodle', x1: 6, y1: 16, x2: 7, y2: 17 },
@@ -628,6 +634,10 @@
     nearPlot(i, px, py) {
       const p = PLOTS[i];
       return !!p && Math.hypot(px - (p.x + 0.5) * TILE, py - (p.y + 0.5) * TILE) < 1.7 * TILE;
+    },
+    gacha: { x: (GACHA_TILE.x + 0.5) * TILE, y: (GACHA_TILE.y + 0.5) * TILE },
+    nearGacha(px, py) {
+      return Math.hypot(px - this.gacha.x, py - this.gacha.y) < 1.8 * TILE;
     },
     seedBox: { x: (SEEDBOX_TILE.x + 0.5) * TILE, y: (SEEDBOX_TILE.y + 0.5) * TILE },
     nearSeedBox(px, py) {

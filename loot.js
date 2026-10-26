@@ -96,9 +96,8 @@ module.exports = function createLoot(ctx) {
     if (!BAG.canAdd(p, l.kind, l.k)) return { ok: false, error: `背包的${BAG.SECTIONS[BAG.secOf(l.kind, l.k)].name}區滿了` };
     remove(id, p.id);
     give(p, l.kind, l.k);
-    if (l.kind === 'gear' && GEAR.GEAR[l.k].rarity !== 'R') {
-      const g = GEAR.GEAR[l.k];
-      ctx.pushChat({ system: true, text: `${p.name} 撿到了【${g.rarity}】${g.name}！`, t: Date.now() });
+    if (l.kind === 'gear' && GEAR.GEAR[l.k].rarity === 'SSR') {
+      ctx.pushChat({ system: true, text: `${p.name} 撿到了【SSR】${GEAR.GEAR[l.k].name}！`, t: Date.now() });
     }
     return { ok: true, kind: l.kind, k: l.k };
   }

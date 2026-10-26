@@ -416,6 +416,8 @@
   socket.on('drawUndo', (id) => DRAW.undo(id));
   socket.on('songState', (st) => SONG.onState(st));
   socket.on('songLog', (l) => SONG.log(l));
+  // 只跟自己（或自己的副本隊伍）有關的系統訊息：字比較多的停久一點
+  socket.on('sysToast', (m) => toast(m.text, null, Math.min(7000, 2600 + m.text.length * 60)));
   socket.on('chat', (msg) => {
     addMessage(msg);
     if (!msg.system && scene) scene.showBubble(msg.id, msg.text);
@@ -474,6 +476,19 @@
     if (open) { $('chat-dot').hidden = true; $('chat-peek').classList.remove('show'); }
   };
   $('chat-toggle').addEventListener('click', () => setChat($('chat').classList.contains('collapsed')));
+  // 系統訊息開關：關掉就只看大家聊天，設定記在自己的瀏覽器
+  const setSys = (on, say) => {
+    $('messages').classList.toggle('no-sys', !on);
+    const b = $('chat-sys'), label = on ? '系統訊息：開著（點一下關掉）' : '系統訊息：關著（點一下打開）';
+    if (window.HQ_ICONS) b.replaceChildren(HQ_ICONS.el(on ? 'btn-sys' : 'btn-sys-off', '')); else b.textContent = on ? '系統' : '關';
+    b.title = label; b.setAttribute('aria-label', label); b.setAttribute('aria-pressed', String(on));
+    try { localStorage.setItem('hq-sys', on ? 'on' : 'off'); } catch (e) {}
+    if (say) toast(on ? '系統訊息打開了' : '系統訊息關掉了，聊天區只留大家說的話');
+  };
+  let sysPref = 'on';
+  try { sysPref = localStorage.getItem('hq-sys') || 'on'; } catch (e) {}
+  setSys(sysPref !== 'off');
+  $('chat-sys').addEventListener('click', () => setSys($('messages').classList.contains('no-sys'), true));
   if (window.innerWidth < 600 || window.innerHeight < 520) $('chat').classList.add('collapsed');
 
   // ---------------- 視訊 ----------------
@@ -2984,11 +2999,11 @@
     '颱風天也要記得許願喔',
   ];
   // iconKey：手繪 icon 的 key（public/icons.js、icons-more.js），放在文字前面
-  function toast(text, iconKey) {
+  function toast(text, iconKey, ms) {
     const t = el('div', 'toast', plain(text));
     if (iconKey && window.HQ_ICONS && HQ_ICONS.url(iconKey)) t.prepend(icon(iconKey, ''), ' ');
     $('toasts').appendChild(t);
-    setTimeout(() => t.remove(), 2600);
+    setTimeout(() => t.remove(), ms || 2600);
   }
   $('basic-btn').addEventListener('click', () => {
     if (!scene || !scene.me) return;

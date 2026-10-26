@@ -85,25 +85,25 @@ const R = {
     const { st } = a, now = a.now0();
     const kill = (kind) => st.foes.filter(f => f.kind === kind && f.alive).forEach(f => { f.alive = false; a.io.emit('mob', a.mobState(f)); });
     if (i === PLAZA) {
-      a.say(`✨ 三波都擋下來了！電梯面板壞掉了……答對 ${a.D.quiz.need} 題，電梯才會往上開`);
+      a.say(`三波都擋下來了！電梯面板壞掉了……答對 ${a.D.quiz.need} 題，電梯才會往上開`);
       nextQuestion(a);
     }
     if (i === SHAFT) {
       kill('sign');
-      a.say('✨ 電梯修好了，往上到 87 樓……阻尼球身上會閃顏色，照那個順序點亮控制台');
+      a.say('電梯修好了，往上到 87 樓……阻尼球身上會閃顏色，照那個順序點亮控制台');
       st.ballT0 = now; st.nextBlackout = now + 4000;
       st.order = [0, 1, 2, 3].sort(() => Math.random() - 0.5);
     }
     if (i === DAMPER) {
       kill('blackout');
-      a.say('✨ 阻尼球停下來了！電梯把大家送到 91 樓戶外觀景台……把五根避雷針全部點亮');
+      a.say('阻尼球停下來了！電梯把大家送到 91 樓戶外觀景台……把五根避雷針全部點亮');
       st.ballT0 = 0;
       // 一開始亮兩根（不會全亮）
       const k = Math.floor(Math.random() * 5);
       st.rods = [0, 1, 2, 3, 4].map(j => j === k || j === (k + 2) % 5);
       st.nextGustAt = now + 9000; st.nextBoltAt = now + 6000;
     }
-    if (i === DECK) a.say('✨ 五根避雷針都亮了，雷雲散開！觀景台的門打開……天龍王在等你們');
+    if (i === DECK) a.say('五根避雷針都亮了，雷雲散開！觀景台的門打開……天龍王在等你們');
   },
 
   tick(a, now) {
@@ -136,8 +136,8 @@ const R = {
     if (want === 3) { f.nextWhirl = now + 3000; f.nextStorm = now + 8000; f.nextGust = Math.max(f.nextGust, now + 12000); }
     a.io.emit('mob', a.mobState(f));
     a.say(want === 2
-      ? `🌪️ ${def.name}召來強風，變成「${def.phase2.name}」！紅色區域會被風吹走，頭上有紅圈的人要大家一起分擔`
-      : `⚡ ${def.name}暴走成「${def.phase3.name}」！小風窩會讓天龍暴風更痛，暴風來的時候躲到柱子後面`);
+      ? `${def.name}召來強風，變成「${def.phase2.name}」！紅色區域會被風吹走，頭上有紅圈的人要大家一起分擔`
+      : `${def.name}暴走成「${def.phase3.name}」！小風窩會讓天龍暴風更痛，暴風來的時候躲到柱子後面`);
   },
 
   tickBoss(a, f, now) {
@@ -215,7 +215,7 @@ function tickPlaza(a, now) {
     st.waveAt = 0;
     WAVES[st.wave].forEach(([kind, n]) => { for (let i = 0; i < n; i++) { const s = spot(a, 0, 240); a.spawnFoe(kind, s.x, s.y, 0, mobHp(kind, a)); } });
     st.wave++;
-    a.say(`📢 信義廣場第 ${st.wave} 波！${st.wave === WAVES.length ? '飛天機車來了，看到地上的線快閃開' : '颱風把招牌和機車都吹過來了'}`);
+    a.say(`信義廣場第 ${st.wave} 波！${st.wave === WAVES.length ? '飛天機車來了，看到地上的線快閃開' : '颱風把招牌和機車都吹過來了'}`);
     a.emit();
   }
   if (!st.waveAt && !st.foes.some(f => f.stage === 0 && f.alive)) {
@@ -254,7 +254,7 @@ function tickDamper(a, now) {
     st.onConsole.set(p.id, i);
     if (st.order[pos] === i) { st.lit[i] = now + litMs(a); pos++; return; }
     st.lit = [0, 0, 0, 0]; pos = 0;
-    a.say(`💥 ${p.name} 踩到${COLOR_NAMES[i]}色控制台，順序錯了！控制台全部熄掉，看清楚阻尼球閃的顏色`);
+    a.say(`${p.name} 踩到${COLOR_NAMES[i]}色控制台，順序錯了！控制台全部熄掉，看清楚阻尼球閃的顏色`);
     if (st.foes.filter(f => f.kind === 'blackout' && f.alive).length < 5) { const s = spot(a, DAMPER, 200); a.spawnFoe('blackout', s.x, s.y, DAMPER, mobHp('blackout', a)); }
   });
   const key = st.lit.map(t => (t > now ? 1 : 0)).join('');
@@ -312,9 +312,9 @@ function tickShaft(a, now) {
     if (ok) {
       st.qDone++;
       if (st.qDone >= Q.need) { st.quiz = null; return a.clearStage(SHAFT); }
-      a.say(`✅ 答對了！「${q.q}」答案是 ${q.a}（${st.qDone}/${Q.need}）`);
+      a.say(`答對了！「${q.q}」答案是 ${q.a}（${st.qDone}/${Q.need}）`);
     } else {
-      a.say(`❌ 答錯了……「${q.q}」不是 ${q.opts[pick]}。電梯晃了一下，招牌掉下來了！換一題`);
+      a.say(`答錯了……「${q.q}」不是 ${q.opts[pick]}。電梯晃了一下，招牌掉下來了！換一題`);
       for (let k = 0; k < 2; k++) { const s = spot(a, SHAFT, 200); a.spawnFoe('sign', s.x, s.y, SHAFT, mobHp('sign', a)); }
     }
     return nextQuestion(a);

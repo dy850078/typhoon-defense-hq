@@ -141,15 +141,15 @@ const R = {
   onStageClear(a, i) {
     const { st, D, T } = a, now = a.now0();
     const kill = (kind) => st.foes.filter(f => f.kind === kind).forEach(f => { f.alive = false; f.respawnAt = 0; a.io.emit('mob', a.mobState(f)); });
-    if (i === STONES) { kill('crab'); a.say('✨ 七顆星都對上了！七星潭的石門打開，前往太魯閣九曲洞'); }
+    if (i === STONES) { kill('crab'); a.say('七顆星都對上了！七星潭的石門打開，前往太魯閣九曲洞'); }
     if (i === CAVE) {
       kill('rock');
-      a.say('✨ 四顆大理石都推進凹槽了！石門打開，前面是燕子口……兩塊踏板要同時有人踩住');
+      a.say('四顆大理石都推進凹槽了！石門打開，前面是燕子口……兩塊踏板要同時有人踩住');
       [[5, 33], [16, 33], [10, 39]].forEach(([x, y]) => a.spawnFoe('swallow', (D.dx + x + 0.5) * T, (y + 0.5) * T, GORGE));
     }
     if (i === GORGE) {
       kill('swallow');
-      a.say('✨ 燕子口的石門轟隆隆打開，立霧溪的水把大家沖到了砂卡礑步道！把泉水接到水車');
+      a.say('燕子口的石門轟隆隆打開，立霧溪的水把大家沖到了砂卡礑步道！把泉水接到水車');
       st.pipes = makePipes(D.pipes);
       st.pipeFlow = flow(D.pipes, st.pipes).cells;
       st.nextFlood = now + D.flood.every;
@@ -157,7 +157,7 @@ const R = {
     }
     if (i === TRAIL) {
       kill('monkey');
-      a.say('✨ 水車轉起來了！砂卡礑的石門打開……清水斷崖上有一個黑色的身影');
+      a.say('水車轉起來了！砂卡礑的石門打開……清水斷崖上有一個黑色的身影');
     }
   },
 
@@ -203,7 +203,7 @@ const R = {
       if (busy) return { ok: false, error: '有人站在大理石原本的位置上，先讓開' };
       st.resetAt = now + 5000;
       placeBlocks(a, st.stage);
-      a.say(`🔄 ${p.name} 把大理石排回原位了`);
+      a.say(`${p.name} 把大理石排回原位了`);
       a.emit();
       return { ok: true };
     },
@@ -243,7 +243,7 @@ const R = {
     f.transformUntil = now + 2200;
     f.nextAttack = now + 3500; f.nextHorse = now + 4000;
     a.io.emit('mob', a.mobState(f));
-    a.say(`🌑 ${def.name}黑化了，變成「${def.phase2.name}」！出招更快，還會叫出黑馬分身，小心！`);
+    a.say(`${def.name}黑化了，變成「${def.phase2.name}」！出招更快，還會叫出黑馬分身，小心！`);
   },
 
   // ---------------- 最終頭目：花蓮王 ----------------
@@ -367,7 +367,7 @@ function tickTrail(a, now) {
   const { st, D, T } = a, P = D.pipes, C = P.xs.length;
   if (st.flood < D.flood.max && now >= st.nextFlood) {
     st.flood++; st.nextFlood = now + D.flood.every;
-    a.say(st.flood === 1 ? '🌊 砂卡礑溪的水開始漲了！泡到水的地方會走得很慢' : `🌊 溪水又漲了（${st.flood}/${D.flood.max}）`);
+    a.say(st.flood === 1 ? '砂卡礑溪的水開始漲了！泡到水的地方會走得很慢' : `溪水又漲了（${st.flood}/${D.flood.max}）`);
     a.emit();
   }
   a.activeMembers().forEach(p => {

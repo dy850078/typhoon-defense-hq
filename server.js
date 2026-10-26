@@ -171,6 +171,24 @@ function failed(req) {
   const ip = ipOf(req), f = failures.get(ip);
   failures.set(ip, f && f.until > Date.now() ? { n: f.n + 1, until: f.until } : { n: 1, until: Date.now() + 10 * 60 * 1000 });
 }
+// 登入失敗記到終端機和 data/login.log，查「為什麼登不進去」用；密碼本身不記，只記長度和幾個常見打錯的特徵
+const LOGIN_LOG = path.join(DATA_DIR, 'login.log');
+function logLogin(req, username, why, pw) {
+  const s = String(pw == null ? '' : pw), hints = [];
+  if (s) {
+    hints.push(s.length + ' 個字');
+    if (/[A-Z]/.test(s)) hints.push('有大寫');
+    if (/[\uFF01-\uFF5E\u3000]/.test(s)) hints.push('有全形字');
+    if (s !== s.trim()) hints.push('前後有空白');
+  }
+  const ua = String(req.headers['user-agent'] || '').slice(0, 160);
+  const line = `${new Date().toISOString()} ${ipOf(req)} 帳號「${String(username || '').slice(0, 30)}」${why}${hints.length ? '（密碼' + hints.join('、') + '）' : ''} ${ua}`;
+  console.log('🔑 登入失敗', line);
+  fs.stat(LOGIN_LOG, (err, st) => {
+    if (!err && st.size > 2 * 1024 * 1024) return;
+    fs.appendFile(LOGIN_LOG, line + '\n', () => {});
+  });
+}
 const bearer = (req) => String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
 const meOf = (u) => ({ ok: true, username: u.username, save: u.save, since: u.created || 0 });
 app.post('/api/register', (req, res) => {
@@ -180,10 +198,10 @@ app.post('/api/register', (req, res) => {
   res.json(Object.assign(meOf(r.user), { token: r.token }));
 });
 app.post('/api/login', (req, res) => {
-  if (tooMany(req)) return res.status(429).json({ ok: false, error: '試太多次了，10 分鐘後再試' });
   const b = req.body || {};
+  if (tooMany(req)) { logLogin(req, b.username, '被鎖住（這個 IP 錯太多次）'); return res.status(429).json({ ok: false, error: '試太多次了，10 分鐘後再試' }); }
   const r = accounts.login(b.username, b.password);
-  if (r.error) { failed(req); return res.status(400).json({ ok: false, error: r.error }); }
+  if (r.error) { failed(req); logLogin(req, b.username, r.why, b.password); return res.status(400).json({ ok: false, error: r.error }); }
   // 這台裝置上有沒登入時玩的角色：把進度併進帳號，不會被帳號裡的舊資料蓋掉
   if (b.local && typeof b.local === 'object') mergeGuest(r.user, sanitizeSave(b.local));
   res.json(Object.assign(meOf(r.user), { token: r.token }));
@@ -2378,6 +2396,12 @@ function removePlayer(id) {
   io.emit('playerLeft', id);
   pushChat({ system: true, text: `${p.name} 離開了總部`, t: Date.now() });
 }
+
+// 登入請求連進到程式之前就被擋掉（例如這台裝置送上來的角色資料太大），也記一筆
+app.use((err, req, res, next) => {
+  if (req.path === '/api/login') logLogin(req, '', '請求被擋掉：' + (err.type || err.message));
+  next(err);
+});
 
 server.listen(PORT, () => {
   iceServers(); // 先拿一次 TURN 通行證，第一個進小樹屋的人就不用等

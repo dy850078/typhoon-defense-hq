@@ -49,7 +49,7 @@ module.exports = function createLoot(ctx) {
     const n = lo + Math.floor(Math.random() * (hi - lo + 1));
     for (let i = 0; i < n; i++) {
       let x = Math.random() * Math.max(100, (t.food || 0) + (t.decor || 0) + (t.gear || 0));
-      if ((x -= t.food || 0) < 0) { const ks = Object.keys(MAP.ITEMS).filter(k => !MAP.ITEMS[k].garden); out.push({ kind: 'food', k: ks[Math.floor(Math.random() * ks.length)] }); continue; }
+      if ((x -= t.food || 0) < 0) { const ks = Object.keys(MAP.ITEMS).filter(k => !MAP.ITEMS[k].garden && !MAP.ITEMS[k].ticket); out.push({ kind: 'food', k: ks[Math.floor(Math.random() * ks.length)] }); continue; }
       if ((x -= t.decor || 0) < 0) { out.push({ kind: 'decor', k: DECOR.roll() }); continue; }
       if ((x -= t.gear || 0) < 0) { const id = GEAR.rollDrop({ rare: t.rare, series: t.series }); if (id) out.push({ kind: 'gear', k: id }); }
     }

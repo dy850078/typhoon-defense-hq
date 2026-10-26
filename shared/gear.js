@@ -670,7 +670,7 @@
     wzWand: { cape(ctx, C, r, p) {
       const WOOD = '#c39a5f', GRAIN = '#6b4a32';
       // 杖的座標：杖頭朝上、原點在杖身中段；斜斜背在背後，杖尖露在身體左下外面
-      ctx.save(); ctx.translate(31.9, 47.9); ctx.rotate(0.9); ctx.scale(1.25, 1.25); ctx.translate(0, 16);
+      ctx.save(); WAND.place(ctx);
       // 杖身：左右兩條邊歪歪扭扭，最下面收成一個尖；上面接進杖頭裡
       const shaft = () => {
         ctx.beginPath(); ctx.moveTo(-5.5, -40);
@@ -698,33 +698,54 @@
         C.stroke(ctx, r, 0.9, GRAIN);
       });
       ctx.restore();
-      // 祖母綠寶珠：浮在月牙的缺口裡，沒碰到木頭；p.spin（0～1）是轉到哪裡，經線跟著跑看起來就在轉
-      const ox = 7, oy = -52.5, R = 4.6, t = p && p.spin || 0;
-      const g = ctx.createRadialGradient(ox, oy, R * 0.8, ox, oy, R * 2.2); g.addColorStop(0, 'rgba(90,240,170,0.5)'); g.addColorStop(1, 'rgba(90,240,170,0)');
-      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(ox, oy, R * 2.2, 0, Math.PI * 2); ctx.fill();
-      const og = ctx.createRadialGradient(ox - 1.5, oy - 1.5, 0.5, ox, oy, R); og.addColorStop(0, '#5fe0a8'); og.addColorStop(0.6, '#13a06a'); og.addColorStop(1, '#0b6b47');
-      ctx.beginPath(); ctx.arc(ox, oy, R, 0, Math.PI * 2); ctx.fillStyle = og; ctx.fill();
-      ctx.save(); ctx.beginPath(); ctx.arc(ox, oy, R, 0, Math.PI * 2); ctx.clip();
-      for (let i = 0; i < 3; i++) {
-        const ang = (t + i / 3) * Math.PI * 2, sx = Math.sin(ang);
-        if (Math.cos(ang) <= 0) continue;
-        ctx.beginPath(); ctx.ellipse(ox, oy, Math.max(0.2, R * Math.abs(sx)), R, 0, -Math.PI / 2, Math.PI / 2, sx < 0);
-        ctx.strokeStyle = 'rgba(200,255,230,0.55)'; ctx.lineWidth = 0.7; ctx.stroke();
-      }
-      ctx.restore();
-      ctx.beginPath(); ctx.arc(ox, oy, R, 0, Math.PI * 2); C.stroke(ctx, r, 1.6);
-      C.blob(ctx, ox - 1.6, oy - 1.8, 1.2, 0.8, r, 0.1, 8); ctx.fillStyle = 'rgba(255,255,255,0.9)'; ctx.fill();
-      // 一顆小亮光斜斜地繞著寶珠轉圈；轉到後面時變小變淡
-      const sa = t * Math.PI * 2 * 2, front = Math.sin(sa) > 0;
-      const sx = ox + Math.cos(sa) * R * 1.9, sy = oy + Math.sin(sa) * R * 0.7 - Math.cos(sa) * R * 0.5;
-      ctx.save(); ctx.globalAlpha = front ? 1 : 0.45;
-      const sg = ctx.createRadialGradient(sx, sy, 0, sx, sy, 3.2); sg.addColorStop(0, 'rgba(60,220,150,0.7)'); sg.addColorStop(1, 'rgba(60,220,150,0)');
-      ctx.fillStyle = sg; ctx.beginPath(); ctx.arc(sx, sy, 3.2, 0, Math.PI * 2); ctx.fill();
-      sparkle(ctx, sx, sy, front ? 1.4 : 0.9, '#ffffff'); ctx.restore();
+      // 祖母綠寶珠：浮在月牙的缺口裡，沒碰到木頭（遊戲裡另外疊一張會轉的上去，見 WAND）
+      ctx.translate(WAND.orb[0], WAND.orb[1]); wandOrb(ctx, C, r, p && p.spin, p && p.spin != null);
       ctx.restore();
       [[77, 14, 1.8], [60, 6, 1.3]].forEach(([x, y, s]) => sparkle(ctx, x, y, s, '#b8ffe0'));
     } },
   });
+  // 古木魔杖的祖母綠寶珠，畫在 (0, 0)：t（0～1）是轉到哪裡，經線跟著跑看起來就在轉；spark 要不要畫繞著轉的小亮光
+  // noGlow：不畫外面那圈光（遊戲裡疊上去的那張用，底圖已經有光了）
+  function wandOrb(ctx, C, r, t, spark, noGlow) {
+    const R = 4.6;
+    t = t || 0;
+    if (!noGlow) {
+      const g = ctx.createRadialGradient(0, 0, R * 0.8, 0, 0, R * 2.2); g.addColorStop(0, 'rgba(90,240,170,0.5)'); g.addColorStop(1, 'rgba(90,240,170,0)');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, R * 2.2, 0, Math.PI * 2); ctx.fill();
+    }
+    const og = ctx.createRadialGradient(-1.5, -1.5, 0.5, 0, 0, R); og.addColorStop(0, '#5fe0a8'); og.addColorStop(0.6, '#13a06a'); og.addColorStop(1, '#0b6b47');
+    ctx.beginPath(); ctx.arc(0, 0, R, 0, Math.PI * 2); ctx.fillStyle = og; ctx.fill();
+    ctx.save(); ctx.beginPath(); ctx.arc(0, 0, R, 0, Math.PI * 2); ctx.clip();
+    for (let i = 0; i < 3; i++) {
+      const ang = (t + i / 3) * Math.PI * 2, sx = Math.sin(ang);
+      if (Math.cos(ang) <= 0) continue;
+      ctx.beginPath(); ctx.ellipse(0, 0, Math.max(0.2, R * Math.abs(sx)), R, 0, -Math.PI / 2, Math.PI / 2, sx < 0);
+      ctx.strokeStyle = 'rgba(200,255,230,0.55)'; ctx.lineWidth = 0.7; ctx.stroke();
+    }
+    ctx.restore();
+    ctx.beginPath(); ctx.arc(0, 0, R, 0, Math.PI * 2); C.stroke(ctx, r, 1.6);
+    C.blob(ctx, -1.6, -1.8, 1.2, 0.8, r, 0.1, 8); ctx.fillStyle = 'rgba(255,255,255,0.9)'; ctx.fill();
+    if (!spark) return;
+    // 一顆小亮光斜斜地繞著寶珠轉圈；轉到後面時變小變淡
+    const sa = t * Math.PI * 2 * 2, front = Math.sin(sa) > 0;
+    const sx = Math.cos(sa) * R * 1.9, sy = Math.sin(sa) * R * 0.7 - Math.cos(sa) * R * 0.5;
+    ctx.save(); ctx.globalAlpha = front ? 1 : 0.45;
+    const sg = ctx.createRadialGradient(sx, sy, 0, sx, sy, 3.2); sg.addColorStop(0, 'rgba(60,220,150,0.7)'); sg.addColorStop(1, 'rgba(60,220,150,0)');
+    ctx.fillStyle = sg; ctx.beginPath(); ctx.arc(sx, sy, 3.2, 0, Math.PI * 2); ctx.fill();
+    sparkle(ctx, sx, sy, front ? 1.4 : 0.9, '#ffffff'); ctx.restore();
+  }
+  // 古木魔杖背在背上的位置（人物框座標）；orb 是寶珠在魔杖自己座標裡的位置
+  // 遊戲裡在寶珠的位置疊一張會轉的小圖（draw 畫一格），at 是寶珠在人物框裡的中心
+  const WAND = {
+    orb: [7, -52.5],
+    place(ctx) { ctx.translate(31.9, 47.9); ctx.rotate(0.9); ctx.scale(1.25, 1.25); ctx.translate(0, 16); },
+    // 畫一格會轉的寶珠：ctx 的原點要先移到寶珠中心
+    frame(ctx, C, t) { ctx.save(); ctx.rotate(0.9); ctx.scale(1.25, 1.25); wandOrb(ctx, C, C.rng(5), t, true, true); ctx.restore(); },
+  };
+  {
+    const a = 0.9, k = 1.25, x = WAND.orb[0] * k, y = (WAND.orb[1] + 16) * k;
+    WAND.at = [31.9 + x * Math.cos(a) - y * Math.sin(a), 47.9 + x * Math.sin(a) + y * Math.cos(a)];
+  }
   // 魔法少女的緞帶翅膀（右邊那片，左邊鏡像）：上面一大片、下面一小片，緞帶尾巴吊著星星
   function ribbonWing(ctx, C, r) {
     ctx.beginPath(); ctx.moveTo(38, 46); ctx.bezierCurveTo(44, 22, 64, 8, 75, 13); ctx.bezierCurveTo(80, 24, 66, 40, 40, 50); ctx.closePath();
@@ -961,7 +982,7 @@
     return SERIES[sid] && SERIES[sid].fx && ids.every(id => GEAR[id].series === sid) ? sid : null;
   }
 
-  const gear = { RARITY, SLOTS, LOOK_SLOTS, SERIES, GEAR, setOf, DROP, DROP_ITEMS, roll, rollWeapon, rollDrop, hasLayer, drawLayer, LAYERS: ['cape', 'back', 'front', 'head', 'over', 'hand'] };
+  const gear = { RARITY, SLOTS, LOOK_SLOTS, SERIES, GEAR, WAND, setOf, DROP, DROP_ITEMS, roll, rollWeapon, rollDrop, hasLayer, drawLayer, LAYERS: ['cape', 'back', 'front', 'head', 'over', 'hand'] };
   if (typeof module !== 'undefined' && module.exports) module.exports = gear;
   else root.HQ_GEAR = gear;
 })(this);

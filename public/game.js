@@ -185,7 +185,7 @@
   function doJoin() {
     const vip = savedJson('hq-vip', null);
     const data = Object.assign({}, profile, { level: Number(saved('hq-level')) || 1, exp: Number(saved('hq-exp')) || 0, vip,
-      owned: myOwned, gear: myGear, seen: mySeen, equip: myEquip, furn: myFurn, inv: savedJson('hq-inv', {}), token: ACC.token(), rk: RK });
+      owned: myOwned, gear: myGear, seen: mySeen, equip: myEquip, furn: myFurn, inv: savedJson('hq-inv', {}), gachaPity: Number(saved('hq-gacha')) || 0, token: ACC.token(), rk: RK });
     // 斷線太久（或伺服器重開）重新加入：從剛剛站的地方繼續，不會被送回出生點
     if (scene && scene.me) Object.assign(data, { x: Math.round(scene.me.x), y: Math.round(scene.me.y) });
     joinedToken = data.token;
@@ -195,6 +195,7 @@
       me = res.you;
       setBag({ gear: res.you.gear || {}, seen: res.you.seen || [], owned: res.you.owned || [], furn: res.you.furn || {} });
       myEquip = res.you.equip || {};
+      GACHA_UI.setPity(res.you.gachaPity);
       $('join').hidden = true;
       $('hud').hidden = false;
       $('messages').innerHTML = '';
@@ -1174,9 +1175,10 @@
     bubbletea: { desc: `全糖去冰！補 ${ST.FOODS.bubbletea.hp} 血、${ST.FOODS.bubbletea.mp} 魔力，在哪裡都能喝。`, use: '喝一杯' },
     chicken: { desc: `大大一片、不要切不要辣。補 ${ST.FOODS.chicken.hp} 血、${ST.FOODS.chicken.mp} 魔力，在哪裡都能吃。`, use: '吃一片' },
     twig: { desc: '拔掉枯草拿到的枯枝，現在還沒什麼用。', use: null },
-    gemRuby: { desc: '在公共花園的土裡挖到的，沉甸甸的，好像有什麼用途……', use: null },
-    gemSapphire: { desc: '在公共花園的土裡挖到的，沉甸甸的，好像有什麼用途……', use: null },
-    gemEmerald: { desc: '在公共花園的土裡挖到的，沉甸甸的，好像有什麼用途……', use: null },
+    gemRuby: { desc: '在公共花園的土裡挖到的。拿到物資倉庫的扭蛋機，一顆可以換 3 張扭蛋券。', use: null },
+    gemSapphire: { desc: '在公共花園的土裡挖到的。拿到物資倉庫的扭蛋機，一顆可以換 3 張扭蛋券。', use: null },
+    gemEmerald: { desc: '在公共花園的土裡挖到的。拿到物資倉庫的扭蛋機，一顆可以換 3 張扭蛋券。', use: null },
+    gachaTicket: { desc: '打倒頭目有機會掉。拿到物資倉庫的扭蛋機投一張，扭一件扭蛋限定的裝備。', use: null },
   };
   // 公共花園的種子和水果
   Object.keys(GD.PLANTS).forEach(k => {
@@ -1193,7 +1195,7 @@
     const box = $('inventory');
     box.innerHTML = '';
     // 物資都收在背包裡，按鈕上的小數字是總共有幾個
-    const total = Object.keys(MAP.ITEMS).reduce((n, k) => n + (MAP.ITEMS[k].gem ? 0 : myInv[k] || 0), 0);
+    const total = Object.keys(MAP.ITEMS).reduce((n, k) => n + (MAP.ITEMS[k].bag === 'gem' ? 0 : myInv[k] || 0), 0);
     const bag = el('button', 'inv-item bag-btn');
     bag.append(icon('btn-bag', '🎒'), ' 背包');
     if (total) bag.appendChild(el('span', 'bag-n', String(total > 99 ? '99+' : total)));
@@ -1774,7 +1776,7 @@
     if (bagSel != null && !cells[bagSel]) bagSel = null;
     if (bagSel == null && cells.length) bagSel = 0;
     const grid = el('div', 'bag-grid');
-    // 寶石不佔格子：排在 cells 最後面，畫在格子下面的寶石袋
+    // 寶石、扭蛋券不佔格子：排在 cells 最後面，畫在格子下面的小口袋
     const nGrid = cells.filter(c => !c.gem).length;
     const setup = (cell, c, i) => {
       cell.appendChild(icon(bagIcon(c.kind, c.k), c.kind === 'food' ? MAP.ITEMS[c.k].icon : ''));
@@ -1800,10 +1802,10 @@
       grid.appendChild(cell);
     }
     box.appendChild(grid);
-    // 寶石袋：寶石不佔背包格子，有挖到才會出現（在雜物頁）
+    // 小口袋：寶石、扭蛋券不佔背包格子，有東西才會出現（在雜物頁）
     if (cells.length > nGrid) {
       const gb = el('div', 'gem-bag');
-      gb.appendChild(el('span', 'gem-bag-t', '寶石袋'));
+      gb.appendChild(el('span', 'gem-bag-t', '小口袋'));
       for (let i = nGrid; i < cells.length; i++) {
         const cell = el('button', 'bag-cell gem' + (i === bagSel ? ' on' : ''));
         cell.type = 'button';
@@ -1844,6 +1846,166 @@
     box.appendChild(el('p', 'bag-slots mono', `${S.name} ${BAG.used({ inv: myInv, furn: myFurn, gear: myGear }, bagTab)} / ${S.slots} 格・按住拖到格子外面，就丟在地上給別人撿`));
     openModal('bag', '背包', box);
   }
+  // ---------------- 扭蛋機（物資倉庫） ----------------
+  // 投一張扭蛋券扭一次：轉把轉一圈 → 蛋從出蛋口滾出來 → 蛋放大晃一晃、打開 → 裝備跳出來
+  // 規則在 shared/gacha.js；扭到的東西在伺服器抽，這裡只負責播動畫
+  const GACHA_UI = (() => {
+    const GC = window.HQ_GACHA, GA = window.HQ_GACHA_ART;
+    let pity = 0, busy = false;
+    const setPity = (n) => { pity = Math.max(0, Math.floor(Number(n)) || 0); store('hq-gacha', String(pity)); };
+    setPity(saved('hq-gacha'));
+    const tickets = () => myInv[GC.TICKET] || 0;
+    const gems = () => Object.keys(MAP.ITEMS).filter(k => MAP.ITEMS[k].gem).reduce((n, k) => n + (myInv[k] || 0), 0);
+    const ease = (t) => 1 - Math.pow(1 - t, 3);
+    // 用 requestAnimationFrame 播一段 ms 長的動畫，每一格呼叫 step(0～1)
+    const play = (ms, step) => new Promise(done => {
+      const t0 = performance.now();
+      const f = (now) => { const t = Math.min(1, (now - t0) / ms); step(t); if (t < 1) requestAnimationFrame(f); else done(); };
+      requestAnimationFrame(f);
+    });
+    function paint(cv, draw) {
+      const ctx = cv.getContext('2d');
+      ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, cv.width, cv.height);
+      draw(ctx);
+    }
+    function drawMachine(cv, o) {
+      paint(cv, (ctx) => { const k = cv.width / 64; ctx.scale(k, k); GA.machine(ctx, CR.rng(11), o); });
+    }
+
+    function open() {
+      if (!GC || !GA) return;
+      const box = el('div', 'gacha');
+      const top = el('div', 'gacha-top');
+      const cv = el('canvas', 'gacha-machine');
+      cv.width = 64 * 4; cv.height = 108 * 4;
+      drawMachine(cv, {});
+      top.appendChild(cv);
+      const side = el('div', 'gacha-side');
+      const tix = el('div', 'gacha-tix');
+      tix.append(icon('item-gachaTicket', ''), el('b', null, `扭蛋券 × ${tickets()}`));
+      side.appendChild(tix);
+      const left = GC.PITY - pity;
+      side.appendChild(el('p', 'gacha-pity', left <= 1 ? '下一次一定是 SSR！' : `再扭 ${left} 次內一定出 SSR`));
+      const go = el('button', 'hud-btn gacha-go', tickets() ? '投一張券，扭一次' : '沒有扭蛋券');
+      go.type = 'button';
+      go.disabled = !tickets();
+      go.onclick = () => spin(cv);
+      side.appendChild(go);
+      side.appendChild(el('p', 'gacha-rates mono', `R ${GC.RATES.R}%・SR ${GC.RATES.SR}%・SSR ${GC.RATES.SSR}%`));
+      // 重複的扭蛋裝備兩件換一張券；花園寶石一顆換三張
+      const nSpare = GC.spares(myGear).length;
+      const rec = el('button', 'hud-btn tiny', `重複的 ${GC.RECYCLE} 件換 1 張券（有 ${nSpare} 件）`);
+      rec.type = 'button';
+      rec.disabled = nSpare < GC.RECYCLE;
+      rec.onclick = () => trade('gachaRecycle', (res) => `回收 ${res.used.map(id => GR.GEAR[id].name).join('、')}，換到 1 張扭蛋券`);
+      const gem = el('button', 'hud-btn tiny', `寶石 1 顆換 ${GC.GEM_TICKETS} 張券（有 ${gems()} 顆）`);
+      gem.type = 'button';
+      gem.disabled = !gems();
+      gem.onclick = () => trade('gachaGem', (res) => `用一顆${MAP.ITEMS[res.gem].name}換到 ${GC.GEM_TICKETS} 張扭蛋券`);
+      const ex = el('div', 'gacha-ex');
+      ex.append(rec, gem);
+      side.appendChild(ex);
+      if (!tickets()) side.appendChild(el('p', 'gacha-hint', '打倒頭目（急件老闆、虎姑婆婆、副本頭目）有機會掉扭蛋券，有出力的人各自有機會。'));
+      top.appendChild(side);
+      box.appendChild(top);
+      // 裡面有什麼：扭蛋限定的裝備，有的亮著、沒有的灰色
+      box.appendChild(el('h3', 'gacha-h', '扭蛋機裡有'));
+      const grid = el('div', 'gacha-pool');
+      const order = ['SSR', 'SR', 'R'];
+      GC.pool().sort((a, b) => GR.GEAR[a].series.localeCompare(GR.GEAR[b].series) || order.indexOf(GR.GEAR[a].rarity) - order.indexOf(GR.GEAR[b].rarity)).forEach(id => {
+        const g = GR.GEAR[id], n = myGear[id] || 0;
+        const cell = el('div', `gear-item r-${g.rarity}${n ? '' : ' locked'}`);
+        cell.appendChild(el('span', 'gear-rar', g.rarity));
+        cell.appendChild(el('span', 'gear-part', GR.SERIES[g.series].name));
+        cell.appendChild(icon('gear-' + id, '', 'gear-ic'));
+        cell.appendChild(el('span', 'gear-name', g.name));
+        cell.appendChild(el('span', 'gear-act', n ? (n > 1 ? `有 ${n} 件` : '有了') : '還沒有'));
+        grid.appendChild(cell);
+      });
+      box.appendChild(grid);
+      box.appendChild(el('p', 'gacha-foot muted', `穿齊同一個系列有套裝特效。連續 ${GC.PITY} 次沒有 SSR，第 ${GC.PITY} 次一定是你還沒有的 SSR。`));
+      openModal('gacha', '扭蛋機', box);
+    }
+
+    function trade(ev, msg) {
+      if (busy) return;
+      busy = true;
+      socket.emit(ev, (res) => {
+        busy = false;
+        if (!res || !res.ok) { if (res && res.error) toast(res.error); return; }
+        renderInventory(res.inv);
+        toast(msg(res), 'item-gachaTicket');
+        if (modalKind === 'gacha') open();
+      });
+    }
+
+    function spin(cv) {
+      if (busy) return;
+      busy = true;
+      const go = document.querySelector('.gacha-go');
+      if (go) go.disabled = true;
+      socket.emit('gachaSpin', async (res) => {
+        if (!res || !res.ok) { busy = false; if (res && res.error) toast(res.error); if (go) go.disabled = false; return; }
+        const g = GR.GEAR[res.item], rar = g.rarity;
+        // 1. 轉把轉一圈半，蛋從出蛋口滾出來
+        await play(900, (t) => drawMachine(cv, { turn: ease(t) * Math.PI * 3 }));
+        await play(250, (t) => drawMachine(cv, { turn: Math.PI * 3, egg: t > 0.3 ? rar : null }));
+        // 2. 蛋放大到畫面中間，晃一晃再打開
+        await reveal(res, g);
+        busy = false;
+        renderInventory(res.inv);
+        setPity(res.pity);
+        if (res.dropped) toast(`背包的裝備區滿了，${g.name}掉在你腳邊`);
+      });
+    }
+
+    function reveal(res, g) {
+      return new Promise(done => {
+        const card = document.querySelector('#modal .modal-card');
+        if (!card || modalKind !== 'gacha') { toast(`扭到【${g.rarity}】${g.name}！`, 'gear-' + res.item); done(); return; }
+        const stage = el('div', 'gacha-stage r-' + g.rarity);
+        const egg = el('canvas', 'gacha-egg');
+        egg.width = 320; egg.height = 320;
+        stage.appendChild(egg);
+        card.appendChild(stage);
+        stage.scrollIntoView({ block: 'nearest' });
+        const R = 70, drawEgg = (wob, openT) => paint(egg, (ctx) => {
+          ctx.translate(160, 170); ctx.rotate(wob); GA.capsule(ctx, CR.rng(3), 0, 0, R, g.rarity, 5, openT);
+        });
+        let skip = false;
+        stage.onclick = () => { skip = true; };
+        (async () => {
+          await play(skip ? 1 : 260, (t) => paint(egg, (ctx) => { const k = 0.3 + ease(t) * 0.7; ctx.translate(160, 170); ctx.scale(k, k); GA.capsule(ctx, CR.rng(3), 0, 0, R, g.rarity, 5); }));
+          await play(skip ? 1 : 900, (t) => drawEgg(Math.sin(t * Math.PI * 6) * 0.22 * (1 - t * 0.5), 0));
+          await play(skip ? 1 : 320, (t) => drawEgg(0, ease(t)));
+          // 3. 裝備跳出來
+          egg.remove();
+          const out = el('div', 'gacha-out');
+          out.appendChild(el('span', 'gacha-new', res.pityHit ? '保底！' : res.fresh ? '新的！' : '重複了'));
+          out.appendChild(icon('gear-' + res.item, '', 'gacha-out-ic'));
+          out.appendChild(el('b', 'gacha-out-name', `【${g.rarity}】${g.name}`));
+          out.appendChild(el('span', 'gacha-out-sub', `${GR.SERIES[g.series].name}・${GR.SLOTS[g.slot]}` + (res.fresh ? '' : `・重複的 ${GC.RECYCLE} 件可以換 1 張券`)));
+          const row = el('div', 'gacha-out-acts');
+          const wear = el('button', 'hud-btn', '穿上');
+          wear.type = 'button';
+          wear.disabled = !!res.dropped;
+          wear.onclick = (e) => { e.stopPropagation(); equipGear(g.slot, res.item); toast(`穿上了${g.name}`, 'gear-' + res.item); open(); };
+          const again = el('button', 'hud-btn', tickets() > 0 || res.inv[GC.TICKET] > 0 ? '再扭一次' : '好');
+          again.type = 'button';
+          again.onclick = (e) => { e.stopPropagation(); open(); if (res.inv[GC.TICKET] > 0) { const c2 = document.querySelector('.gacha-machine'); if (c2) spin(c2); } };
+          row.append(wear, again);
+          out.appendChild(row);
+          stage.onclick = null;
+          stage.appendChild(out);
+          if (scene && scene.me) scene.burst(scene.me.x, scene.me.y - 40, g.rarity === 'SSR' ? 24 : 12, g.rarity === 'SSR' ? 0xe46bd6 : g.rarity === 'SR' ? 0xffb020 : 0x7fb2e5);
+          done();
+        })();
+      });
+    }
+
+    return { open, setPity, get pity() { return pity; } };
+  })();
+
   function eat(k) {
     if (k === 'water') return drink();
     if (!myInv[k]) { toast(GD.PLANTS[k] ? `沒有${MAP.ITEMS[k].name}了` : `沒有${MAP.ITEMS[k].name}了，去物資倉庫敲「台灣小吃」箱子`); return; }
@@ -3206,7 +3368,7 @@
     crate: ['act-crate', '敲箱子'], cook: ['act-cook', '煮泡麵'], mentor: ['act-mentor', '轉職'],
     loot: ['', '撿起來'], guard: ['act-guard', '前往花蓮'], elevator: ['act-elevator', '前往 101'], portal: ['act-portal', '進入副本大廳'], hubExit: ['act-home', '回總部'], dj: ['btn-song', '點歌'], tv: ['act-tv', '視訊／遊戲'], well: ['wish-coin', '許個願'], greek: ['act-greek', '說話'],
     gplant: ['act-plant', '種下'], gwater: ['act-water', '澆水'], gharvest: ['act-harvest', '收成'], gpull: ['item-twig', '拔掉'],
-    glook: ['act-plant', '看看'], seedbox: ['act-seedbox', '領種子'],
+    glook: ['act-plant', '看看'], seedbox: ['act-seedbox', '領種子'], gacha: ['act-gacha', '扭蛋'],
   };
   // tail：尖角朝哪邊（down＝紙條在東西上面；left／right＝紙條在旁邊，上面被介面擋住的時候用）
   // 地上的東西（loot）名字每次不一樣：圖示和字放在 act 裡，鍵帽是 Z
@@ -3268,11 +3430,15 @@
     return c;
   }
   // 套裝特效用哪張圖、多久飄一個（key 對應 shared/gear.js 的 SERIES[].fx）
+  const WAND_FRAMES = 24;
   const SET_FX = {
     heart: { kind: 'heart', every: 420, ring: 0xff7ab0, tint: [0xff8fb8, 0xffb3d1, 0xff6b9a] },
     redPacket: { kind: 'redPacket', every: 700, ring: 0xffb020 },
     petal: { kind: 'petal', every: 260, ring: 0xffd0e2, tint: [0xffffff, 0xffd0e2, 0xffb3c8, 0xfff4f8] },
     butterfly: { kind: 'butterfly', every: 1100, ring: 0x9be7c4, tint: [0xffffff, 0xffe0f0, 0xd8ffe9] },
+    // 扭蛋限定：魔法少女（腳下魔法陣、走路留下星星）、小巫師（身邊飄書頁和符文）
+    starTrail: { kind: 'starTrail', every: 160, ring: 0xff8fc8, circle: 'fx-magic', tint: [0xffffff, 0xffd0e8, 0xffe27a, 0xd8c4ff] },
+    rune: { kind: 'rune', every: 650, ring: 0x9b8cff, tint: [0xb8a5ff, 0x8fe8c8, 0xffe27a] },
   };
   const FX = {
     // NPC 頭上的對話泡泡（自己畫，不用系統 emoji）
@@ -4180,6 +4346,10 @@
           if (at(x - 1, y) !== '圃') wood(px + 2, py + 2, px + 2, py + T - 2);
           if (at(x + 1, y) !== '圃') wood(px + T - 2, py + 2, px + T - 2, py + T - 2);
           else CR.line(ctx, px + T, py + 6, px + T, py + T - 6, r, 1.2, 'rgba(110,76,44,0.5)', 0.6);
+        } else if (ch === '扭') {
+          // 扭蛋機：一格寬，往上畫到牆上，像是靠牆放著
+          ctx.fillStyle = 'rgba(19,26,40,0.18)'; ctx.beginPath(); ctx.ellipse(px + 24, py + 44, 20, 4, 0, 0, Math.PI * 2); ctx.fill();
+          if (window.HQ_GACHA_ART) { ctx.save(); ctx.translate(px + 24 - 32 * 0.72, py + 46 - 104 * 0.72); ctx.scale(0.72, 0.72); HQ_GACHA_ART.machine(ctx, CR.rng(11)); ctx.restore(); }
         } else if (ch === '箱') {
           // 種子認養箱
           ctx.fillStyle = 'rgba(19,26,40,0.16)'; ctx.beginPath(); ctx.ellipse(px + 24, py + 42, 18, 4, 0, 0, Math.PI * 2); ctx.fill();
@@ -4519,6 +4689,13 @@
       this.textures.addCanvas('crate-empty', empty);
       this.textures.addCanvas('bolt', drawBolt());
       Object.entries(FX).forEach(([k, f]) => this.textures.addCanvas('fx-' + k, f()));
+      // 扭蛋限定裝備的特效小圖，和古木魔杖會轉的寶珠（一圈 24 格）
+      if (window.HQ_GACHA_ART) Object.entries(HQ_GACHA_ART.fx).forEach(([k, f]) => this.textures.addCanvas('fx-' + k, f()));
+      for (let i = 0; i < WAND_FRAMES; i++) {
+        const c = document.createElement('canvas'); c.width = 72; c.height = 72;
+        const x = c.getContext('2d'); x.scale(2, 2); x.translate(18, 18); GR.WAND.frame(x, CR, i / WAND_FRAMES);
+        this.textures.addCanvas('wand-orb-' + i, c);
+      }
       // 召喚物、家具（畫成兩倍大）
       Object.keys(ST.SUMMONS).forEach(k => {
         const c = document.createElement('canvas');
@@ -4799,6 +4976,7 @@
     applyGlow(c) {
       this.applyPrada(c);
       this.applySet(c);
+      this.applyWand(c);
       const img = c.body_;
       if (c.glowTween) { c.glowTween.stop(); c.glowTween = null; }
       c.glowFx = null;
@@ -4865,9 +5043,14 @@
         if (fx) {
           c.setTimer = this.time.addEvent({ delay: fx.every, loop: true, callback: () => this.setPuff(c, fx) });
           // 腳下的光圈：一張柔光圖壓扁成橢圓，慢慢一明一暗
-          c.setRing = this.add.image(0, -2, 'fx-glow').setScale(1.5, 0.5).setTint(fx.ring).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.5);
+          // 魔法少女的是一個魔法陣，比較大、比較淡，站著的時候才亮
+          c.setRing = fx.circle
+            ? this.add.image(0, -2, fx.circle).setScale(0.62, 0.22).setTint(fx.ring).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.45)
+            : this.add.image(0, -2, 'fx-glow').setScale(1.5, 0.5).setTint(fx.ring).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.5);
           c.addAt(c.setRing, 0);
-          c.setRingTween = this.tweens.add({ targets: c.setRing, alpha: 0.95, scaleX: 1.7, scaleY: 0.56, duration: 1100, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+          c.setRingTween = fx.circle
+            ? this.tweens.add({ targets: c.setRing, alpha: 0.9, scaleX: 0.7, scaleY: 0.25, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' })
+            : this.tweens.add({ targets: c.setRing, alpha: 0.95, scaleX: 1.7, scaleY: 0.56, duration: 1100, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
           if (!c.setHooked) {
             c.setHooked = true;
             c.once('destroy', () => { if (c.setTimer) c.setTimer.remove(); if (c.setRingTween) c.setRingTween.stop(); });
@@ -4876,6 +5059,12 @@
       }
       // 全身 SSR 已經有彩虹光圈，就不再疊一圈
       if (c.setRing) c.setRing.setVisible(!c.prada);
+    }
+    // 古木魔杖：在寶珠的位置疊一張會轉的寶珠（每格換一張貼圖，位置在 update 裡跟著人物跳）
+    applyWand(c) {
+      const on = c.look.equip && c.look.equip.cape === 'wzWand';
+      if (on && !c.orb) { c.orb = this.add.image(0, 0, 'wand-orb-0').setScale(0.5); c.add(c.orb); }
+      else if (!on && c.orb) { c.orb.destroy(); c.orb = null; }
     }
     // 一個會發光的小東西：後面墊一圈柔光（一明一暗），前面是圖，兩個一起移動、一起淡掉
     setGlowItem(x, y, tex, scale, tint, glowTint, glowScale) {
@@ -4929,6 +5118,30 @@
         this.tweens.add({ targets: img, y: c.y + 6, x: x + sway, rotation: img.rotation + (Math.random() < 0.5 ? -2.5 : 2.5),
           alpha: { from: 1, to: 0 }, duration: 2000, ease: 'Sine.easeIn', onComplete: () => img.destroy() });
         if (Math.random() < 0.35) this.setTwinkle(c.x + (Math.random() - 0.5) * 130, c.y - Math.random() * 56, pick([0xffe27a, 0xffffff]));
+      } else if (fx.kind === 'starTrail') {
+        // 走路：腳後面一路掉下小星星；站著：魔法陣旁邊偶爾冒出一兩顆往上飄的星光
+        if (c.moving) {
+          const st = this.add.image(c.x - (c.dir || 1) * (10 + Math.random() * 12), c.y - 4 - Math.random() * 18, 'fx-star').setDepth(c.depth - 1)
+            .setScale(0.3 + Math.random() * 0.25).setTint(pick(fx.tint)).setRotation(Math.random() * Math.PI);
+          this.tweens.add({ targets: st, y: st.y + 6, alpha: 0, scale: st.scale * 0.4, rotation: st.rotation + 1.5, duration: 900, ease: 'Sine.easeIn', onComplete: () => st.destroy() });
+          if (Math.random() < 0.3) this.setTwinkle(st.x + (Math.random() - 0.5) * 14, st.y - 6, pick(fx.tint), 0.35);
+        } else if (tick % 4 === 0) {
+          const objs = this.setGlowItem(c.x + side * (16 + Math.random() * 24), c.y - 2, 'fx-star', 0.3 + Math.random() * 0.15, pick(fx.tint), 0xff8fc8, 0.5);
+          this.tweens.add({ targets: objs, y: c.y - 40 - Math.random() * 20, duration: 1500, ease: 'Sine.easeOut' });
+          this.time.delayedCall(900, () => fade(objs, 600));
+        }
+      } else if (fx.kind === 'rune') {
+        // 一頁小書頁或一個發光符文，從身邊慢慢浮上去、左右晃，最後淡掉
+        const page = Math.random() < 0.45;
+        const objs = page
+          ? this.setGlowItem(x, y, 'fx-page', 0.42 + Math.random() * 0.12, null, 0xb8a5ff, 0.5)
+          : this.setGlowItem(x, y, 'fx-rune', 0.4 + Math.random() * 0.15, pick(fx.tint), 0x9b8cff, 0.55);
+        objs[1].setRotation((Math.random() - 0.5) * 0.6);
+        if (!page) objs[1].setBlendMode(Phaser.BlendModes.ADD);
+        this.tweens.add({ targets: objs, y: y - 36 - Math.random() * 14, x: x + sway, duration: 2000, ease: 'Sine.easeOut' });
+        this.tweens.add({ targets: objs[1], rotation: objs[1].rotation + (Math.random() < 0.5 ? -0.5 : 0.5), duration: 2000 });
+        this.time.delayedCall(1300, () => fade(objs, 700));
+        if (Math.random() < 0.3) this.setTwinkle(c.x + (Math.random() - 0.5) * 120, c.y - Math.random() * 60, pick(fx.tint));
       } else if (fx.kind === 'butterfly') {
         // 蝴蝶：一上一下拍著翅膀往旁邊飛，飛過的地方留下一串發光的小亮點
         const dir = side; // 往外飛，不會橫越頭頂
@@ -6327,6 +6540,8 @@
       const pi = MAP.plotAt(tx, ty);
       if (pi >= 0 && MAP.nearPlot(pi, this.me.x, this.me.y)) return this.plotAction(pi);
       if (MAP.tiles[ty] && MAP.tiles[ty][tx] === '箱' && MAP.nearSeedBox(this.me.x, this.me.y)) return { type: 'seedbox', tx, ty };
+      // 扭蛋機畫得比一格高，點上面那半也算
+      if (Math.hypot(x - MAP.gacha.x, y - (MAP.gacha.y - 20)) < 44 && MAP.nearGacha(this.me.x, this.me.y)) return { type: 'gacha' };
       return null;
     }
 
@@ -6355,6 +6570,7 @@
       if (act.type === 'tv') return { x: Phaser.Math.Clamp(this.me.x, 23.5 * T, 32.5 * T), top: 4 * T + 6, y: 4.5 * T, half: T / 2 };
       if (act.type === 'greek') { const ny = MAP.greek.y + 18; return { x: MAP.greek.x, top: ny - 110, y: ny - 38, half: 30 }; }
       if (act.type === 'well') return { x: MAP.well.x, top: MAP.well.y - 60, y: MAP.well.y, half: 44 };
+      if (act.type === 'gacha') return { x: MAP.gacha.x, top: MAP.gacha.y - 56, y: MAP.gacha.y - 10, half: 22 };
       let tx = act.tx, ty = act.ty;
       if (act.type === 'cook') {
         const cx = Math.floor(this.me.x / T), cy = Math.floor(this.me.y / T);
@@ -6443,6 +6659,7 @@
         });
         if (best) return best;
       }
+      if (!best && MAP.nearGacha(this.me.x, this.me.y)) return { type: 'gacha' };
       if (!best && MAP.nearStove(this.me.x, this.me.y, 1.8 * T)) return { type: 'cook' };
       if (!best && MAP.nearMentor(this.me.x, this.me.y)) return { type: 'mentor' };
       if (!best && MAP.nearGuard(this.me.x, this.me.y)) return { type: 'guard' };
@@ -6494,6 +6711,8 @@
         WISH.open();
       } else if (act.type[0] === 'g' && act.i != null) {
         GARDEN_UI.act(act);
+      } else if (act.type === 'gacha') {
+        GACHA_UI.open();
       } else if (act.type === 'seedbox') {
         socket.emit('gardenSeed', {}, (res) => {
           if (!res || !res.ok) { if (res && res.error) toast(res.error); return; }
@@ -7823,6 +8042,12 @@
       const all = all0;
       all.forEach(c => {
         c.body_.y = c.moving ? -Math.abs(Math.sin(time / 90)) * 5 : 0;
+        if (c.orb) {
+          const fl = c.body_.flipX;
+          c.orb.setVisible(!c.body_.angle).setFlipX(fl).setTexture('wand-orb-' + (Math.floor(time / 70) % WAND_FRAMES));
+          c.orb.x = c.body_.x + (fl ? -1 : 1) * (GR.WAND.at[0] - 32);
+          c.orb.y = c.body_.y + GR.WAND.at[1] + FRAME.oy - AV_ORIGIN_Y * FRAME.h;
+        }
         if (c.hat) c.hat.y = -60 + c.body_.y;
         if (c.cake) c.cake.y = -6 + c.body_.y;
         c.setDepth(c.y);

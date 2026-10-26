@@ -119,14 +119,16 @@ function addTurnUsage(bytes) {
 }
 const turnOver = () => turnUsage.month === monthNow() && turnUsage.bytes >= TURN_LIMIT;
 const turnState = () => ({ provider: TURN_PROVIDER, month: monthNow(), gb: turnUsage.month === monthNow() ? turnUsage.bytes / 1e9 : 0, limitGb: TURN_LIMIT / 1e9, over: turnOver() });
+// Cloudflare 通行證 6 小時就過期：到上限停發之後，最晚 6 小時所有中繼都會停（走中繼連續講超過 6 小時的那對會斷，要重進小樹屋）
+const CF_TTL = 6 * 3600;
 async function fetchTurn() {
   if (TURN_PROVIDER === 'Cloudflare') {
     const r = await fetch(`https://rtc.live.cloudflare.com/v1/turn/keys/${CF_TURN_ID}/credentials/generate-ice-servers`, {
       method: 'POST', headers: { Authorization: `Bearer ${CF_TURN_TOKEN}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ttl: 86400 }), signal: AbortSignal.timeout(5000),
+      body: JSON.stringify({ ttl: CF_TTL }), signal: AbortSignal.timeout(5000),
     });
     if (!r.ok) throw new Error('HTTP ' + r.status);
-    return { list: (await r.json()).iceServers, ms: 86400e3 };
+    return { list: (await r.json()).iceServers, ms: CF_TTL * 1000 };
   }
   const r = await fetch(TURN_API_URL, { signal: AbortSignal.timeout(5000) });
   if (!r.ok) throw new Error('HTTP ' + r.status);
@@ -135,7 +137,8 @@ async function fetchTurn() {
 }
 async function iceServers() {
   if (!TURN_PROVIDER || turnOver()) return ICE_SERVERS;
-  if (turnIce && Date.now() < turnIceUntil - 2 * 3600e3) return turnIce;
+  // 同一張通行證最多發一小時，之後換新的，保證拿到的人至少還能用 5 小時（Metered 是 12 小時的，就留 2 小時）
+  if (turnIce && Date.now() < turnIceUntil - (TURN_PROVIDER === 'Cloudflare' ? 5 : 2) * 3600e3) return turnIce;
   turnIceP = turnIceP || (async () => {
     try {
       const { list, ms } = await fetchTurn();

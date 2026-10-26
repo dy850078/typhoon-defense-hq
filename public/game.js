@@ -2073,7 +2073,15 @@
     box.appendChild(top);
     // 套裝狀態和收集說明放在人物圖和欄位下面，人物圖才能跟四個欄位上下對齊
     if (setId) box.appendChild(el('p', 'gear-set-on', `套裝效果發動中：${GR.SERIES[setId].name}`));
-    box.appendChild(el('p', 'modal-hint', `圖鑑 ${mySeen.filter(id => GR.GEAR[id]).length} / ${Object.keys(GR.GEAR).length} 件。頭飾、服裝、披風都穿同一個系列，就會發動套裝特效。野外的怪會噴裝備在地上，走過去按 Z 或點一下撿；到戰情室玩你畫我猜，猜對也會拿到新裝備；女僕咖啡廳系列要在廚房煮泡麵才會掉。武器在副本裡（指揮中心的副本傳送門到副本大廳找 NPC），打倒最終頭目會噴在地上。拿到的裝備都放在背包的裝備區。`));
+    // 上面只留一行簡單說明，怎麼拿裝備收在 i 圖示裡，點了才展開
+    const intro = box.appendChild(el('div', 'gear-intro'));
+    intro.appendChild(el('span', null, `圖鑑 ${mySeen.filter(id => GR.GEAR[id]).length} / ${Object.keys(GR.GEAR).length} 件　同系列的頭飾、服裝、披風穿齊會發動套裝特效`));
+    const info = intro.appendChild(el('button', 'gear-info'));
+    info.type = 'button'; info.title = '怎麼拿裝備';
+    info.appendChild(icon('btn-info', 'i'));
+    const more = box.appendChild(el('p', 'modal-hint gear-more', '野外的怪會噴裝備在地上，走過去按 Z 或點一下撿；到戰情室玩你畫我猜，猜對也會拿到新裝備；女僕咖啡廳系列要在廚房煮泡麵才會掉。武器在副本裡（指揮中心的副本傳送門到副本大廳找 NPC），打倒最終頭目會噴在地上。拿到的裝備都放在背包的裝備區。'));
+    more.hidden = true;
+    info.onclick = () => { more.hidden = !more.hidden; info.classList.toggle('on', !more.hidden); };
     // 照部位分頁，最後一頁看套裝；記住上次看哪一頁
     const order = Object.keys(GR.SERIES);
     const all = Object.keys(GR.GEAR).sort((a, b) => order.indexOf(GR.GEAR[a].series) - order.indexOf(GR.GEAR[b].series));

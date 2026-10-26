@@ -91,8 +91,8 @@ body {
 .row2 { display: flex; align-items: baseline; gap: clamp(10px, 2.5vw, 24px); }
 .icon { width: clamp(52px, 15vw, 190px); height: auto; flex-shrink: 0; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-#hero-word { display: inline-block; }
-#hero-word.out { opacity: 0; transform: translateY(0.18em); }
+#hero-word, #hero-en { display: inline-block; }
+#hero-word.out, #hero-en.out { opacity: 0; transform: translateY(0.18em); }
 .hero-lede { margin: clamp(14px, 2.4vw, 26px) 0 0; font-size: clamp(17px, 2.2vw, 22px); line-height: 1.7; color: var(--muted); max-width: 30em; text-wrap: pretty; }
 .hero-lede b { color: var(--ink); }
 @media (prefers-reduced-motion: no-preference) {
@@ -100,7 +100,7 @@ body {
   .icon .star { transform-origin: 120px 120px; animation: pulse 3.2s ease-in-out infinite; }
 }
 @media (prefers-reduced-motion: no-preference) {
-  #hero-word { transition: opacity 0.35s ease, transform 0.35s ease; }
+  #hero-word, #hero-en { transition: opacity 0.35s ease, transform 0.35s ease; }
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes pulse { 50% { transform: scale(1.12); } }
@@ -301,7 +301,7 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outlin
 
 <main class="sheet">
   <header class="meta">
-    <div class="left">THIS IS NOT<br>JUST A PARTY</div>
+    <div class="left">THIS IS NOT<br><span id="hero-en">A PARTY</span></div>
     <div class="right">EP.02<br>COMING SOON</div>
   </header>
 
@@ -605,13 +605,18 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outlin
     b.addEventListener('click', function () { $('f-drink').value = b.textContent; $('f-drink').focus(); });
   });
 
-  /* ---------- 標題「這不是一個單純的＿＿」輪流換字 ---------- */
+  /* ---------- 標題「這不是一個單純的＿＿」輪流換字，左上角的英文跟著換 ---------- */
   (function () {
-    var words = ['派對', '遊戲', '讀書會', '聊天室', '辦公室'], i = 0, w = $('hero-word');
+    var words = [['派對', 'A PARTY'], ['遊戲', 'A GAME'], ['讀書會', 'A BOOK CLUB'], ['聊天室', 'A CHAT ROOM'], ['辦公室', 'AN OFFICE']];
+    var i = 0, w = $('hero-word'), en = $('hero-en');
     if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     setInterval(function () {
-      w.classList.add('out');
-      setTimeout(function () { i = (i + 1) % words.length; w.textContent = words[i]; w.classList.remove('out'); }, 350);
+      w.classList.add('out'); en.classList.add('out');
+      setTimeout(function () {
+        i = (i + 1) % words.length;
+        w.textContent = words[i][0]; en.textContent = words[i][1];
+        w.classList.remove('out'); en.classList.remove('out');
+      }, 350);
     }, 2600);
   })();
 

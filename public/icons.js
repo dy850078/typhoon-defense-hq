@@ -368,6 +368,33 @@
       C.line(x, 24, 34, 24, 42, r, 2.2); C.line(x, 16, 42, 32, 42, r, 2.4);
       C.line(x, 8, 6, 40, 40, r, 4.4, '#fbf6e9'); C.line(x, 8, 6, 40, 40, r, 2.8, '#ef4b5c');
     },
+    // 視訊：小攝影機，旁邊一個鏡頭
+    'btn-cam'(x, r) {
+      C.rect(x, 5, 14, 26, 20, r, 0.6); C.fill(x, '#8ec5ff', r, [5, 14, 26, 20]); C.stroke(x, r, 2.4);
+      x.beginPath(); x.moveTo(31, 21); x.lineTo(43, 14); x.lineTo(43, 34); x.lineTo(31, 27); x.closePath();
+      C.fill(x, '#4f7cc2', r, [31, 14, 12, 20]); C.stroke(x, r, 2.2);
+      C.blob(x, 12, 20, 2.6, 2.4, r, 0.1); C.fill(x, '#ef4b5c', r, null); C.stroke(x, r, 1.2);
+    },
+    'btn-cam-off'(x, r) {
+      C.rect(x, 5, 14, 26, 20, r, 0.6); C.fill(x, '#c6cbd6', r, [5, 14, 26, 20]); C.stroke(x, r, 2.4);
+      x.beginPath(); x.moveTo(31, 21); x.lineTo(43, 14); x.lineTo(43, 34); x.lineTo(31, 27); x.closePath();
+      C.fill(x, '#9aa3b2', r, [31, 14, 12, 20]); C.stroke(x, r, 2.2);
+      C.line(x, 7, 6, 41, 42, r, 4.4, '#fbf6e9'); C.line(x, 7, 6, 41, 42, r, 2.8, '#ef4b5c');
+    },
+    // 分享螢幕：一台螢幕，畫面上一支往上的箭頭
+    'btn-screen'(x, r) {
+      C.rect(x, 4, 7, 40, 27, r, 0.6); C.fill(x, '#fbf6e9', r, [4, 7, 40, 27]); C.stroke(x, r, 2.4);
+      C.line(x, 24, 34, 24, 41, r, 2.2); C.line(x, 14, 42, 34, 42, r, 2.4);
+      C.line(x, 24, 29, 24, 13, r, 2.6, '#3c8a66');
+      x.beginPath(); x.moveTo(17, 19); x.lineTo(24, 12); x.lineTo(31, 19); C.stroke(x, r, 2.6, '#3c8a66');
+    },
+    // 大畫面：一個畫面，四個角往外撐
+    'btn-stage'(x, r) {
+      C.rect(x, 12, 14, 24, 20, r, 0.6); C.fill(x, '#8ec5ff', r, [12, 14, 24, 20]); C.stroke(x, r, 2.2);
+      [[4, 6, 1, 1], [44, 6, -1, 1], [4, 42, 1, -1], [44, 42, -1, -1]].forEach(([cx, cy, dx, dy]) => {
+        x.beginPath(); x.moveTo(cx, cy + 9 * dy); x.lineTo(cx, cy); x.lineTo(cx + 9 * dx, cy); C.stroke(x, r, 2.8, '#3c8a66');
+      });
+    },
     // 許願池：「做好了」的紅色印章（字另外疊上去）
     'wish-stamp'(x, r) {
       C.blob(x, 24, 24, 21, 21, r, 0.05, 28); C.stroke(x, r, 3, '#d8323f');

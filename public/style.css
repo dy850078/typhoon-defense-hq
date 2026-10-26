@@ -196,10 +196,23 @@ button.inv-item:hover { border-color: var(--accent); }
 .video-form { display: flex; gap: 8px; align-items: center; }
 .video-form input { flex: 1; min-width: 0; margin: 0; }
 /* 小樹屋語音 */
-.tree-btn.on { border-color: #3c8a66; background: #e6f6ee; }
-.tree-mic { padding: 1px 6px; line-height: 0; }
-.tree-mic .hq-icon { width: 22px; height: 22px; }
-.tree-mic.off { background: #fde8ea; border-color: #ef4b5c; }
+/* 工具列上的小樹屋膠囊：按鈕＋麥克風、視訊、分享螢幕 */
+.tree-group { display: inline-flex; align-items: stretch; }
+.tree-group.in { background: #fbf6e9; border: 2px solid #3c8a66; border-radius: 999px; overflow: hidden; }
+.tree-group.in .tree-btn { border: 0; border-radius: 0; background: #e6f6ee; color: #23784a; }
+.tree-group .tree-sw { border: 0; border-left: 1.5px solid #9fd3b7; background: none; padding: 1px 7px; line-height: 0; cursor: pointer; }
+.tree-group .tree-sw .hq-icon { width: 22px; height: 22px; }
+.tree-group .tree-sw.on { background: #c9efd9; }
+.tree-group .tree-sw.off { background: #e4e6ea; }
+.tree-group .tree-sw.off .hq-icon { opacity: .7; }
+/* 卡片上那排有字的開關 */
+.tree-ctrl { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.tree-ctrl .tree-sw { display: inline-flex; align-items: center; gap: 4px; font: 700 13px var(--display); border: 2px solid var(--line);
+  background: var(--silver); color: var(--muted); border-radius: 999px; padding: 3px 12px 3px 6px; cursor: pointer; }
+.tree-ctrl .tree-sw .hq-icon { width: 22px; height: 22px; }
+.tree-ctrl .tree-sw.on { background: #dff4e8; border-color: #3c8a66; color: #23784a; }
+.tree-ctrl .stage-sw { background: var(--paper); color: var(--ink); border-color: var(--ink); }
+.tree-ctrl .stage-sw:disabled { opacity: .45; cursor: default; }
 .tree-list { display: flex; flex-direction: column; gap: 10px; }
 .tree-empty { margin: 0; padding: 14px; text-align: center; color: var(--muted); background: var(--note); border-radius: var(--note-radius); }
 .tree-card { background: var(--paper); border: 2px solid var(--line); border-radius: 14px; padding: 10px 12px; }
@@ -734,7 +747,7 @@ button.inv-item:hover { border-color: var(--accent); }
 /* 工具包：背包、裝備、家具、點歌收在一顆按鈕裡；桌機一排、往左展開，手機往下展開 */
 .kit-btn { order: 9; display: inline-flex; align-items: center; }
 .kit-btn .kit-label { display: none; }
-#inventory.folded > :not(.kit-btn):not(.tree-mic) { display: none; }
+#inventory.folded > :not(.kit-btn):not(.tree-tool) { display: none; }
 #inventory.folded .kit-btn .kit-label { display: inline; margin-left: 2px; }
 #inventory:not(.folded) .kit-btn .bag-n { display: none; }
 @media (max-width: 600px) {
@@ -835,3 +848,50 @@ button.inv-item:hover { border-color: var(--accent); }
 .tree-st.wait { background: var(--silver); color: var(--muted); }
 .tree-st.ok { background: #dff4e8; color: #23784a; }
 .tree-st.bad { background: #fde3e5; color: #c02a3a; }
+
+/* 小樹屋視訊小窗 */
+.tree-video { position: fixed; z-index: 6; top: 110px; right: 12px; width: 220px; background: var(--navy); color: var(--navy-fg);
+  border: 2px solid #131a28; border-radius: 14px; padding: 6px; box-shadow: var(--note-shadow); }
+.tree-video[hidden] { display: none; }
+.tv-head { display: flex; align-items: center; gap: 6px; padding: 0 2px 6px; cursor: move; touch-action: none; user-select: none; }
+.tv-head b { flex: 1; min-width: 0; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tv-stage-btn { background: var(--note); color: var(--note-ink); border: 0; border-radius: 6px; font: 700 11px var(--display, inherit);
+  padding: 2px 8px; cursor: pointer; }
+.tree-video.stage { inset: 3vh 3vw !important; width: auto !important; z-index: 40; display: flex; flex-direction: column;
+  box-shadow: 0 0 0 100vmax rgba(19,26,40,.55); }
+.tree-video.stage .tv-head { cursor: default; }
+.tree-video.stage .tv-head b { font-size: 14px; }
+.tree-video.stage .tv-fold { display: none; }
+.tree-video.stage .tv-grid { flex: 1; min-height: 0; max-height: none; overflow: hidden; }
+.tree-video.stage .tv-tile { aspect-ratio: auto; min-height: 0; }
+.tree-video.stage .tv-tile video { object-fit: contain; }
+.tree-video.stage .tv-name { font-size: 13px; }
+.tv-tile.face { display: flex; align-items: center; justify-content: center; background: #24304a; cursor: default; }
+.tv-face { height: min(62%, 180px); max-width: 80%; aspect-ratio: 1; flex-shrink: 0; border-radius: 50%; border: 3px solid var(--ink); background: var(--paper); overflow: hidden;
+  display: flex; align-items: center; justify-content: center; }
+.tv-face img { width: 100%; height: 100%; display: block; object-fit: cover; }
+.tv-face .hq-icon { width: 70%; height: 70%; }
+.tv-fold { background: none; border: 0; color: inherit; font-size: 14px; cursor: pointer; padding: 0 4px; }
+.tree-video.folded .tv-grid { display: none; }
+.tree-video.folded .tv-head { padding-bottom: 0; }
+.tv-grid { display: grid; grid-template-columns: 1fr; gap: 6px; max-height: calc(100vh - 180px); overflow-y: auto; }
+.tv-tile { position: relative; background: #131a28; border-radius: 10px; overflow: hidden; aspect-ratio: 4 / 3; cursor: zoom-in; }
+.tv-tile.screen { aspect-ratio: 16 / 10; }
+.tv-tile video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.tv-tile.screen video { object-fit: contain; }
+.tv-tile.mirror video { transform: scaleX(-1); }
+.tv-tile.talk { box-shadow: inset 0 0 0 3px #7fd1a8; }
+.tv-name { position: absolute; left: 6px; bottom: 6px; max-width: calc(100% - 12px); background: var(--note); color: var(--note-ink);
+  font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tv-tile.big { position: fixed; z-index: 40; inset: 6vh 6vw; aspect-ratio: auto; cursor: zoom-out; border: 2px solid #131a28;
+  box-shadow: 0 0 0 100vmax rgba(19,26,40,.6); }
+.tv-tile.big video { object-fit: contain; }
+.tree-face .tree-vid { position: absolute; left: -7px; bottom: -7px; width: 22px; height: 22px; background: var(--paper); border-radius: 50%; border: 1.5px solid var(--ink); }
+@media (max-width: 600px) {
+  .tree-video { top: 100px; left: 12px; right: auto; width: 140px; }
+  .tv-tile.big { inset: 10vh 3vw; }
+}
+
+.tree-line { display: flex; align-items: center; gap: 3px; min-width: 0; }
+.tree-line b { min-width: 0; }
+.tree-flag.hq-icon { width: 18px; height: 18px; flex-shrink: 0; }

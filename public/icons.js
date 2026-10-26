@@ -88,6 +88,12 @@
       C.line(x, 15, 21, 33, 21, r, 1.8);
       C.blob(x, 24, 32, 2.4, 2.4, r, 0.1); C.fill(x, '#ffd23f', r, null); C.stroke(x, r, 1.4);
     },
+    // 說明：藍色圓圈裡一個 i
+    'btn-info'(x, r) {
+      C.blob(x, 24, 24, 18, 18, r, 0.05); C.fill(x, '#7fb2e5', r, [6, 6, 36, 36]); C.stroke(x, r, 2.4);
+      C.blob(x, 24, 14.5, 3, 3, r, 0.1); C.fill(x, '#fbfbf8', r, null); C.stroke(x, r, 1.4);
+      C.rect(x, 21, 20, 6, 15, r, 0.5); C.fill(x, '#fbfbf8', r, [21, 20, 6, 15]); C.stroke(x, r, 1.6);
+    },
     // 裝備：小洋裝
     'btn-gear'(x, r) {
       x.beginPath(); x.moveTo(18, 5); x.lineTo(30, 5); x.lineTo(31, 15); x.lineTo(28, 20); x.lineTo(41, 42); x.lineTo(7, 42); x.lineTo(20, 20); x.lineTo(17, 15); x.closePath();

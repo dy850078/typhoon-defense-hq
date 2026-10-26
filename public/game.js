@@ -78,12 +78,14 @@
       skin: localStorage.getItem('hq-skin') || AV.SKINS[0],
       outfit: localStorage.getItem('hq-outfit') || AV.OUTFITS[0],
       glasses: localStorage.getItem('hq-glasses') || '1',
+      face: localStorage.getItem('hq-face') || '',
       cls: localStorage.getItem('hq-cls') || 'staff',
     });
     // 舊版存的是動物的顏色，對不上就換回預設
     if (!AV.HAIRS[profile.hair]) profile.hair = 'short';
     if (!AV.OUTFITS.includes(profile.outfit)) profile.outfit = AV.OUTFITS[0];
     if (!ST.CLASSES[profile.cls]) profile.cls = 'staff';
+    if (!Object.prototype.hasOwnProperty.call(AV.FACES, profile.face)) profile.face = '';
   }
   readProfile();
 
@@ -118,6 +120,7 @@
     buildPicker($('skins'), AV.SKINS.map(c => [c]), 'skin', swatch);
     buildPicker($('outfits'), AV.OUTFITS.map(c => [c]), 'outfit', swatch);
     buildPicker($('glasses'), [['1', AV.GLASSES[1]], ['0', AV.GLASSES[0]]], 'glasses', (b, v, l) => { b.textContent = l; });
+    buildPicker($('faces'), [['', '抖抖嘴'], ...Object.entries(AV.FACES)], 'face', (b, v, l) => { b.textContent = l; });
     $('name').value = profile.name;
     renderPreview();
   }
@@ -4741,7 +4744,7 @@
       cont.tag = tag;
       cont.name_ = p.name;
       cont.pid = p.id;
-      cont.look = { hair: p.hair, hairColor: p.hairColor, skin: p.skin, outfit: p.outfit, glasses: p.glasses, equip: p.equip || {} };
+      cont.look = { hair: p.hair, hairColor: p.hairColor, skin: p.skin, outfit: p.outfit, glasses: p.glasses, face: p.face || '', equip: p.equip || {} };
       cont.texKey = key;
       cont.cakeUntil = 0; cont.hatUntil = 0;
       this.applyGlow(cont);

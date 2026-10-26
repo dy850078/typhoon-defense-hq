@@ -117,6 +117,18 @@ td.wish p { white-space: pre-wrap; margin: 6px 0 0; color: var(--muted); }
     </section>
 
     <section class="card">
+      <h2 style="margin: 0">公共花園</h2>
+      <p class="note" style="margin: 4px 0 12px">物資倉庫後門外的 12 格花圃。有人亂種或卡住的時候，可以把那格清空（植物直接消失，不會還種子）。</p>
+      <p class="msg" id="garden-msg"></p>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>格</th><th>植物</th><th>種的人</th><th>階段</th><th></th></tr></thead>
+          <tbody id="garden-rows"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
       <div class="row" style="justify-content: space-between; align-items: center">
         <h2 style="margin: 0">帳號（<span id="count">0</span>）</h2>
         <button type="button" class="small" id="reload">重新整理</button>
@@ -231,6 +243,7 @@ td.wish p { white-space: pre-wrap; margin: 6px 0 0; color: var(--muted); }
       giftUsers(r.accounts);
       showNotice(r.notice);
       renderWishes(r.wishes || []);
+      renderGarden(r.garden || []);
       showTurn(r.turn);
     });
   }
@@ -357,6 +370,33 @@ td.wish p { white-space: pre-wrap; margin: 6px 0 0; color: var(--muted); }
         });
       };
       act.appendChild(del); tr.appendChild(act);
+      tb.appendChild(tr);
+    });
+  }
+  // 公共花園：每格種了什麼，可以清空
+  var PLANT_NAME = { tomato: '小番茄', guava: '芭樂', apple: '蘋果', pineapple: '鳳梨' };
+  var STAGE_NAME = ['種子', '發芽', '長大', '開花', '結果', '枯萎'];
+  function renderGarden(list) {
+    var tb = $('garden-rows'); tb.textContent = '';
+    list.forEach(function (g) {
+      var tr = document.createElement('tr');
+      tr.appendChild(td(String(g.i + 1)));
+      tr.appendChild(td(g.kind ? PLANT_NAME[g.kind] || g.kind : '（空）'));
+      tr.appendChild(td(g.by || ''));
+      tr.appendChild(td(g.kind ? STAGE_NAME[g.stage] : ''));
+      var act = document.createElement('td');
+      if (g.kind) {
+        var del = document.createElement('button'); del.type = 'button'; del.className = 'small danger'; del.textContent = '清空';
+        del.onclick = function () {
+          if (!confirm('確定要清空第 ' + (g.i + 1) + ' 格？')) return;
+          api('/api/admin/garden', { i: g.i }).then(function (r) {
+            say('garden-msg', r.ok ? '已清空第 ' + (g.i + 1) + ' 格' : (r.error || '失敗了'), r.ok);
+            if (r.ok) renderGarden(r.garden);
+          });
+        };
+        act.appendChild(del);
+      }
+      tr.appendChild(act);
       tb.appendChild(tr);
     });
   }

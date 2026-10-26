@@ -11,6 +11,8 @@ const DECOR = require('./shared/decor');
 const BAG = require('./shared/bag');
 const ACCOUNTS = require('./accounts');
 const WISHES = require('./wishes');
+const GARDEN = require('./garden');
+const G = require('./shared/garden');
 const createDungeons = require('./dungeon');
 const createLoot = require('./loot');
 
@@ -68,6 +70,9 @@ function partyInfo() {
 
 const accounts = ACCOUNTS.create(DATA_DIR);
 const wishes = WISHES.create(DATA_DIR);
+const garden = GARDEN.create(DATA_DIR, { speed: process.env.GARDEN_SPEED });
+const CRATE_SEED_RATE = 0.08; // 敲物資箱順便掉種子的機率
+const MOB_SEED_RATE = 0.1; // 打倒小怪掉種子的機率
 const WISH_CAT = { bug: 'Bug 回報', feature: '新功能', improve: '功能優化', other: '其他' };
 
 const app = express();
@@ -261,7 +266,7 @@ app.post('/api/admin/login', (req, res) => {
 app.get('/api/admin/state', (req, res) => {
   if (!isAdmin(req)) return res.status(401).json({ ok: false });
   const online = new Set([...players.values()].map(p => p.account && p.account.username));
-  res.json({ ok: true, party: partyInfo(), notice: noticeState(), wishes: wishes.all(), turn: turnState(), accounts: accounts.list().map(a => Object.assign(a, { online: online.has(a.username) })) });
+  res.json({ ok: true, party: partyInfo(), notice: noticeState(), wishes: wishes.all(), garden: garden.list(), turn: turnState(), accounts: accounts.list().map(a => Object.assign(a, { online: online.has(a.username) })) });
 });
 app.post('/api/admin/settings', (req, res) => {
   if (!isAdmin(req)) return res.status(401).json({ ok: false });
@@ -297,6 +302,7 @@ app.post('/api/admin/announce', (req, res) => {
     players.forEach(snapshot);
     accounts.flush();
   wishes.flush();
+    garden.flush();
     notice.ready = true;
     io.emit('notice', noticeState());
   }, minutes * 60000);
@@ -354,6 +360,14 @@ app.post('/api/admin/delete', (req, res) => {
 });
 
 // 許願池：改處理狀態（待處理／評估中／處理中／已完成／不處理）或刪掉，總部裡開著許願板的人會馬上看到
+// 清空一格花圃（有人亂種或卡住的時候用）
+app.post('/api/admin/garden', (req, res) => {
+  if (!isAdmin(req)) return res.status(401).json({ ok: false });
+  const r = garden.reset(Math.floor(Number((req.body || {}).i)));
+  if (r.error) return res.status(400).json({ ok: false, error: r.error });
+  io.emit('garden', garden.state());
+  res.json({ ok: true, garden: garden.list() });
+});
 app.post('/api/admin/wish', (req, res) => {
   if (!isAdmin(req)) return res.status(401).json({ ok: false });
   const b = req.body || {}, id = Number(b.id);
@@ -978,6 +992,7 @@ function damageFoe(p, foe, isBoss, dmg, crit, skillId, hitBy) {
     gainExp(p, STATS.MOBS[foe.kind].exp);
     pushChat({ system: true, text: `👏 ${p.name} 打倒了${STATS.MOBS[foe.kind].name}！`, t: now });
     LOOT.fromFoe(foe);
+    if (Math.random() < MOB_SEED_RATE) LOOT.scatter([{ kind: 'food', k: GARDEN.rollSeed() }], foe.x, foe.y); // 種子也噴在地上
     return;
   }
   io.emit('monsterHit', { id: hitBy || p.id, dmg, crit, hp: monster.hp, skill: skillId, phase: monster.phase });
@@ -1146,6 +1161,18 @@ function canDecorate(tx, ty) {
 // 角色存檔：外觀、職業、等級、裝備、家具、邀請函。總部加入時和帳號存檔都用這個檢查
 const INV_MAX = 99; // 每種物資最多存幾個
 const EAT_CD_MS = STATS.EAT_CD_MS; // 隨身吃喝（礦泉水、珍奶、雞排）共用的冷卻
+// 背包裝不裝得下一個 k（種子、枯枝算雜物區，寶石收在寶石袋，見 shared/bag.js）
+const fits = (p, k) => BAG.canAdd(p, 'food', k);
+// 花園用來認人的 key：有帳號用帳號，沒有就用名字
+const gardenKey = (p) => p.account ? 'u:' + p.account.username.toLowerCase() : 'n:' + p.name;
+// 送一包隨機種子；背包裝不下就算了。notify：要不要跳提示（敲箱子的時候畫面自己會講）
+function giveSeed(p, notify) {
+  const k = GARDEN.rollSeed();
+  if (!fits(p, k)) return null;
+  p.inv[k]++;
+  if (notify) io.to(p.id).emit('seedGot', { item: k, inv: p.inv });
+  return k;
+}
 function sanitizeSave(data) {
   data = data && typeof data === 'object' ? data : {};
   const name = clean(data.name, 12);
@@ -1218,6 +1245,21 @@ function snapshot(p) {
     cls: p.cls, level: p.level, exp: p.exp, owned: p.owned, gear: p.gear, seen: p.seen, equip: p.equip, furn: p.furn, inv: p.inv, vip: p.vip });
 }
 setInterval(() => players.forEach(snapshot), 20000);
+
+// 公共花園：每 10 秒算一次，畫面有變才廣播；植物熟了、口渴了、枯了就通知種的人（在線上的話）
+const GARDEN_NOTE = {
+  ripe: (n) => `你種的${n}熟了！大家都能收，快去公共花園`,
+  dry: (n) => `你種的${n}口渴了，去公共花園澆個水吧`,
+  dead: (n) => `你種的${n}太久沒澆水，枯掉了…`,
+  rot: (n) => `你種的${n}熟太久沒人收，爛掉了`,
+};
+garden.start((st) => io.emit('garden', st), (note) => {
+  const pl = garden.state()[note.i];
+  if (!pl) return;
+  players.forEach(q => {
+    if (gardenKey(q) === note.key) io.to(q.id).emit('gardenNote', { text: GARDEN_NOTE[note.what](G.PLANTS[pl.kind].name), icon: 'item-' + pl.kind });
+  });
+});
 
 function publicPlayer(p) {
   const { cooldowns, buffs, atkBuff, regenMs, cooking, eatAt, vip, owned, gear, seen, inv, cakeUntil, furn, account, photoHd, rk, ...rest } = p;
@@ -1387,7 +1429,7 @@ io.on('connection', (socket) => {
     growMonster();
     ack({ ok: true, you: Object.assign(publicPlayer(p), { owned: p.owned, gear: p.gear, seen: p.seen, furn: p.furn, inv: p.inv }), loot: LOOT.list(), players: [...players.values()].map(publicPlayer), history,
       monster: monsterState(), mobs: mobs.map(mobState).concat(DG.allFoes().map(mobState)), emptyCrates: emptyCrates(), dungeon: DG.state(),
-      summons: summons.map(summonState), decor: decorList(),
+      summons: summons.map(summonState), decor: decorList(), garden: garden.state(),
       walls: walls.map(w => ({ id: w.id, kind: w.kind, pts: w.pts, ms: w.until - Date.now() })), storms: storms.map(stormState), music: musicState() });
     socket.broadcast.emit('playerJoined', publicPlayer(p));
     pushChat({ system: true, text: `${p.name} 進入了防衛總部 🌀`, t: Date.now() });
@@ -1423,7 +1465,7 @@ io.on('connection', (socket) => {
     if (c.emptyUntil > now) return ack({ ok: false, empty: true });
     // 背包的補品區放不下的箱子不讓敲（shared/bag.js）
     const pile = MAP.CRATES[ci].item;
-    const pool = (Array.isArray(pile) ? pile : pile ? [pile] : Object.keys(MAP.ITEMS)).filter(k => BAG.canAdd(p, 'food', k));
+    const pool = (Array.isArray(pile) ? pile : pile ? [pile] : Object.keys(MAP.ITEMS).filter(k => !MAP.ITEMS[k].garden)).filter(k => BAG.canAdd(p, 'food', k));
     if (!pool.length) return ack({ ok: false, full: true });
     lastAction = now;
     io.emit('crateHit', { tx, ty, id: p.id });
@@ -1437,7 +1479,9 @@ io.on('connection', (socket) => {
     io.emit('itemGot', { id: p.id, item });
     io.emit('crateEmpty', { tx, ty });
     setTimeout(() => io.emit('crateRestock', { tx, ty }), CRATE_RESTOCK_MS);
-    ack({ ok: true, item, inv: p.inv });
+    // 偶爾箱底還黏著一包種子
+    const seed = Math.random() < CRATE_SEED_RATE ? giveSeed(p) : null;
+    ack({ ok: true, item, seed, inv: p.inv });
   });
 
   // 放技能：skillId 對應 shared/stats.js 的 SKILLS；普通攻擊也走這裡
@@ -1662,12 +1706,87 @@ io.on('connection', (socket) => {
     if (!p || p.dead || !food || !['bubbletea', 'chicken'].includes(item) || p.inv[item] < 1) return ack({ ok: false });
     if (Date.now() < (p.eatAt || 0) + EAT_CD_MS) return ack({ ok: false, cd: true });
     p.eatAt = Date.now();
+    if (!p || p.dead || !food || !['bubbletea', 'chicken', ...Object.keys(G.PLANTS)].includes(item) || p.inv[item] < 1) return ack({ ok: false });
     p.inv[item]--;
     p.hp = Math.min(p.maxHp, p.hp + (food.hp || 0));
     p.mp = Math.min(p.maxMp, p.mp + (food.mp || 0));
     sendStats(p);
     io.emit('itemGot', { id: p.id, item });
     ack({ ok: true, inv: p.inv, food: food.name, hp: food.hp || 0, mp: food.mp || 0 });
+  });
+
+  // ---------- 公共花園 ----------
+  // 每個事件都是 (m, ack)：m.i 是第幾格花圃，要站在旁邊才算
+  let lastGarden = 0;
+  const onGarden = (ev, fn) => socket.on(ev, (m, ack) => {
+    const p = players.get(socket.id);
+    if (!p || typeof ack !== 'function' || !m || typeof m !== 'object' || p.dead) return;
+    const now = Date.now();
+    if (now - lastGarden < 300) return ack({ ok: false });
+    const i = Math.floor(Number(m.i));
+    if (ev !== 'gardenSeed' && !MAP.nearPlot(i, p.x, p.y)) return ack({ ok: false, error: '走近一點' });
+    lastGarden = now;
+    const r = fn(p, i, m, now);
+    ack(r.error ? { ok: false, error: r.error } : Object.assign({ ok: true, inv: p.inv }, r));
+  });
+  const changed = () => io.emit('garden', garden.state());
+  onGarden('gardenInfo', (p, i) => ({ info: garden.info(i) }));
+  onGarden('gardenPlant', (p, i, m) => {
+    const kind = String(m.kind), seed = G.PLANTS[kind] && G.seedOf(kind);
+    if (!seed || !(p.inv[seed] > 0)) return { error: '沒有這種種子' };
+    const r = garden.plant(i, kind, gardenKey(p), p.name);
+    if (r.error) return r;
+    p.inv[seed]--;
+    changed();
+    io.emit('gardenFx', { i, id: p.id, what: 'plant' });
+    return { kind };
+  });
+  onGarden('gardenWater', (p, i, m, now) => {
+    const r = garden.water(i, gardenKey(p), p.name, now);
+    if (r.error) return r;
+    if (r.exp) gainExp(p, r.exp);
+    changed();
+    io.emit('gardenFx', { i, id: p.id, what: 'water' });
+    return { exp: r.exp };
+  });
+  onGarden('gardenHarvest', (p, i) => {
+    const r = garden.peekHarvest(i);
+    if (r.error) return r;
+    const fruit = r.kind;
+    if (!fits(p, fruit)) return { error: '背包滿了，先用掉一些再來收' };
+    const h = garden.harvest(i);
+    p.inv[fruit] = Math.min(INV_MAX, p.inv[fruit] + r.n);
+    if (h.gem) {
+      p.inv[h.gem] = Math.min(INV_MAX, p.inv[h.gem] + 1);
+      pushChat({ system: true, text: `${p.name} 在公共花園挖到一顆${MAP.ITEMS[h.gem].name}！`, t: Date.now() });
+    }
+    // 幫忙澆過水的人（在線上的）都拿一點經驗當謝禮
+    players.forEach(q => {
+      if (q === p || !h.helpers.includes(gardenKey(q))) return;
+      gainExp(q, G.THANKS_EXP);
+      io.to(q.id).emit('gardenNote', { text: `${p.name} 收成了你幫忙澆過水的${G.PLANTS[fruit].name}，經驗 +${G.THANKS_EXP}`, icon: 'item-' + fruit });
+    });
+    changed();
+    io.emit('gardenFx', { i, id: p.id, what: 'harvest', item: fruit });
+    return { item: fruit, n: r.n, gem: h.gem };
+  });
+  onGarden('gardenClear', (p, i) => {
+    const r = garden.clear(i);
+    if (r.error) return r;
+    const twig = fits(p, 'twig');
+    if (twig) p.inv.twig++;
+    changed();
+    return { twig };
+  });
+  // 種子認養箱：每人每天送一包
+  onGarden('gardenSeed', (p, i, m, now) => {
+    if (!MAP.nearSeedBox(p.x, p.y)) return { error: '走近一點' };
+    if (!garden.hasDaily(gardenKey(p), now)) return { error: '今天已經領過了，明天再來' };
+    const k = GARDEN.rollSeed();
+    if (!fits(p, k)) return { error: '背包滿了，先用掉一些再來領' };
+    garden.claimDaily(gardenKey(p), now);
+    p.inv[k]++;
+    return { item: k };
   });
 
   // 擺家具：擺在自己腳下那一格
@@ -2276,5 +2395,6 @@ server.listen(PORT, () => {
   players.forEach(snapshot);
   accounts.flush();
   wishes.flush();
+  garden.flush();
   process.exit(0);
 }));

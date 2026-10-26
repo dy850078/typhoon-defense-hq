@@ -49,7 +49,7 @@ module.exports = function createLoot(ctx) {
     const n = lo + Math.floor(Math.random() * (hi - lo + 1));
     for (let i = 0; i < n; i++) {
       let x = Math.random() * Math.max(100, (t.food || 0) + (t.decor || 0) + (t.gear || 0));
-      if ((x -= t.food || 0) < 0) { const ks = Object.keys(MAP.ITEMS); out.push({ kind: 'food', k: ks[Math.floor(Math.random() * ks.length)] }); continue; }
+      if ((x -= t.food || 0) < 0) { const ks = Object.keys(MAP.ITEMS).filter(k => !MAP.ITEMS[k].garden); out.push({ kind: 'food', k: ks[Math.floor(Math.random() * ks.length)] }); continue; }
       if ((x -= t.decor || 0) < 0) { out.push({ kind: 'decor', k: DECOR.roll() }); continue; }
       if ((x -= t.gear || 0) < 0) { const id = GEAR.rollDrop({ rare: t.rare, series: t.series }); if (id) out.push({ kind: 'gear', k: id }); }
     }
@@ -93,7 +93,7 @@ module.exports = function createLoot(ctx) {
     if (!l) return { ok: false, error: '被別人撿走了' };
     if (p.dead) return { ok: false };
     if (Math.hypot(p.x - l.x, p.y - l.y) > REACH) return { ok: false, far: true };
-    if (!BAG.canAdd(p, l.kind, l.k)) return { ok: false, error: `背包的${BAG.SECTIONS[BAG.SECTION_OF[l.kind]].name}區滿了` };
+    if (!BAG.canAdd(p, l.kind, l.k)) return { ok: false, error: `背包的${BAG.SECTIONS[BAG.secOf(l.kind, l.k)].name}區滿了` };
     remove(id, p.id);
     give(p, l.kind, l.k);
     if (l.kind === 'gear' && GEAR.GEAR[l.k].rarity !== 'R') {

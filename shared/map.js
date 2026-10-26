@@ -38,9 +38,10 @@
   //         磚  廟口老街的紅磚    爐  香爐        籠  燈籠柱
   //         籬  分隔兩區的矮樹籬（中間留通道）
   //         （野區用中文字當代號，免得和副本、副本大廳的英文字母撞在一起）
+  // 花園：  圃  花圃（一格一株，擋路）    箱  種子認養箱
   const BLOCKING = new Set(['#', 'T', 'B', 'K', 'M', 'P', 'S', 'F', 'G', 'N', 'W', 'R', 'J', 'L', 'I', ' ', 'Y', 'Z', 'E', 'Q', 'H',
     'g', 'k', 'A', 'U', 'w', 'b', 'D', 's', 'v',
-    '燈', '牌', '桌', '盆', '爐', '籠', '籬']);
+    '燈', '牌', '桌', '盆', '爐', '籠', '籬', '圃', '箱']);
 
   const g = [];
   for (let y = 0; y < H; y++) g.push(new Array(W).fill(','));
@@ -100,8 +101,13 @@
   set(GREEK_TILE.x, GREEK_TILE.y, 'I');
   [[2, 2], [37, 2], [1, 12], [38, 10], [2, 26], [37, 27], [12, 27], [18, 28], [36, 18], [1, 19]]
     .forEach(([x, y]) => set(x, y, 'T'));
-  [[8, 26], [9, 26], [9, 27], [15, 26], [33, 28], [34, 28], [38, 23], [1, 6], [2, 6]]
+  [[15, 26], [33, 28], [34, 28], [38, 23], [1, 6], [2, 6]]
     .forEach(([x, y]) => set(x, y, '~'));
+  // 公共花園：物資倉庫後門出去左手邊，兩排各 6 格花圃，中間那排是走道；右上角是種子認養箱
+  const PLOTS = [];
+  [26, 28].forEach(y => { for (let x = 4; x <= 9; x++) { set(x, y, '圃'); PLOTS.push({ x, y }); } });
+  const SEEDBOX_TILE = { x: 10, y: 26 };
+  set(SEEDBOX_TILE.x, SEEDBOX_TILE.y, '箱');
 
   // 野區：圍欄以南，中間留一個出口；往南依序是下班路上 → 打卡大樓 → 廟口老街，每區之間隔一排矮樹籬
   const FIELD = [
@@ -462,6 +468,20 @@
     veggie: { name: '蔬菜', icon: '🥬' },
     bubbletea: { name: '台灣珍奶', icon: '🧋' },
     chicken: { name: '台灣雞排', icon: '🍗' },
+    // 公共花園：種子、果實、枯枝（garden 的不會從「綜合」箱子掉出來）
+    seedTomato: { name: '小番茄種子', icon: '', garden: true, bag: 'misc' },
+    seedGuava: { name: '芭樂種子', icon: '', garden: true, bag: 'misc' },
+    seedApple: { name: '蘋果種子', icon: '', garden: true, bag: 'misc' },
+    seedPineapple: { name: '鳳梨種子', icon: '', garden: true, bag: 'misc' },
+    tomato: { name: '小番茄', icon: '', garden: true },
+    guava: { name: '芭樂', icon: '', garden: true },
+    apple: { name: '蘋果', icon: '', garden: true },
+    pineapple: { name: '鳳梨', icon: '', garden: true },
+    twig: { name: '枯枝', icon: '', garden: true, bag: 'misc' },
+    // bag：放在背包哪一區（shared/bag.js），沒寫的是補品；種子、枯枝是雜物，寶石收在寶石袋，不佔背包格子
+    gemRuby: { name: '紅寶石', icon: '', garden: true, gem: true, bag: 'gem' },
+    gemSapphire: { name: '藍寶石', icon: '', garden: true, gem: true, bag: 'gem' },
+    gemEmerald: { name: '綠寶石', icon: '', garden: true, gem: true, bag: 'gem' },
   };
   const CRATES = [
     { label: '泡麵', item: 'noodle', x1: 6, y1: 16, x2: 7, y2: 17 },
@@ -503,7 +523,7 @@
   // 會變動的擋路格子（關著的石門、九曲洞的大理石）：'tx,ty'
   const dyn = new Set();
   const map = {
-    W, H, MW, DX, LX, TDX, TLX, HX, HUB, TILE, BLOCKING, ROOMS, ITEMS, CRATES, MONSTER_ZONE, DUNGEON, DUNGEONS, DG_LIST, LOBBY, dyn,
+    W, H, MW, DX, LX, TDX, TLX, HX, HUB, DH, TILE, BLOCKING, ROOMS, ITEMS, CRATES, MONSTER_ZONE, FIELD, FIELD_ZONES, FIELD_BOX, DUNGEON, DUNGEONS, DG_LIST, LOBBY, dyn, PLOTS,
     portal: DUNGEON.portal,
     // 指揮中心的副本傳送門、副本大廳回總部的出口、還沒開放的台座（像素）
     hqPortal: { x: (HQ_PORTAL_TILE.x + 0.5) * TILE, y: (HQ_PORTAL_TILE.y + 0.5) * TILE },
@@ -599,6 +619,19 @@
     },
     nearMentor(px, py) {
       return Math.hypot(px - this.mentor.x, py - this.mentor.y) < 2 * TILE;
+    },
+    // (tx, ty) 是第幾格花圃，不是就回傳 -1
+    plotAt(tx, ty) {
+      return PLOTS.findIndex(p => p.x === tx && p.y === ty);
+    },
+    // 站在 (px, py) 夠不夠近第 i 格花圃
+    nearPlot(i, px, py) {
+      const p = PLOTS[i];
+      return !!p && Math.hypot(px - (p.x + 0.5) * TILE, py - (p.y + 0.5) * TILE) < 1.7 * TILE;
+    },
+    seedBox: { x: (SEEDBOX_TILE.x + 0.5) * TILE, y: (SEEDBOX_TILE.y + 0.5) * TILE },
+    nearSeedBox(px, py) {
+      return Math.hypot(px - this.seedBox.x, py - this.seedBox.y) < 1.7 * TILE;
     },
     roomAt(px, py) {
       const tx = Math.floor(px / TILE);

@@ -6,6 +6,7 @@
   const GR = HQ_GEAR;
   const DC = HQ_DECOR;
   const BAG = HQ_BAG;
+  const GD = HQ_GARDEN;
   // iOS 不理 viewport 的 user-scalable，手指捏合會放大，這裡擋掉；連點兩下靠 CSS 的 touch-action
   ['gesturestart', 'gesturechange'].forEach(t => document.addEventListener(t, e => e.preventDefault(), { passive: false }));
   document.addEventListener('dblclick', e => e.preventDefault(), { passive: false });
@@ -386,6 +387,10 @@
   socket.on('summonHurt', (h) => scene && scene.onSummonHurt(h));
   socket.on('summonGone', (g) => scene && scene.onSummonGone(g));
   socket.on('decor', (d) => scene && scene.setDecor(d));
+  socket.on('garden', (st) => { if (scene) scene.setGarden(st); if (modalKind === 'plot') GARDEN_UI.refresh(); });
+  socket.on('gardenFx', (f) => scene && scene.gardenFx(f));
+  socket.on('gardenNote', (n) => toast(n.text, n.icon));
+  socket.on('seedGot', (g) => { renderInventory(g.inv); toast(`撿到一包${MAP.ITEMS[g.item].name}！`, 'item-' + g.item); });
   socket.on('wall', (w) => scene && scene.onWall(w));
   socket.on('wallGone', (w) => scene && scene.onWallGone(w.id));
   socket.on('storm', (st) => scene && scene.onStorm(st));
@@ -1150,8 +1155,18 @@
     veggie: { desc: '煮泡麵時會自動加進去，變成蔬菜泡麵，補 65 血。', use: null },
     bubbletea: { desc: `全糖去冰！補 ${ST.FOODS.bubbletea.hp} 血、${ST.FOODS.bubbletea.mp} 魔力，在哪裡都能喝。`, use: '喝一杯' },
     chicken: { desc: `大大一片、不要切不要辣。補 ${ST.FOODS.chicken.hp} 血、${ST.FOODS.chicken.mp} 魔力，在哪裡都能吃。`, use: '吃一片' },
+    twig: { desc: '拔掉枯草拿到的枯枝，現在還沒什麼用。', use: null },
+    gemRuby: { desc: '在公共花園的土裡挖到的，沉甸甸的，好像有什麼用途……', use: null },
+    gemSapphire: { desc: '在公共花園的土裡挖到的，沉甸甸的，好像有什麼用途……', use: null },
+    gemEmerald: { desc: '在公共花園的土裡挖到的，沉甸甸的，好像有什麼用途……', use: null },
   };
-  const EDIBLE = ['water', 'bubbletea', 'chicken'];
+  // 公共花園的種子和水果
+  Object.keys(GD.PLANTS).forEach(k => {
+    const pl = GD.PLANTS[k], f = ST.FOODS[k];
+    ITEM_INFO[GD.seedOf(k)] = { desc: `到物資倉庫後門外的公共花園，找一格空花圃種下。大約 ${pl.hours} 小時會結果，要記得澆水。`, use: null };
+    ITEM_INFO[k] = { desc: `公共花園種出來的${pl.name}。補 ${f.hp} 血${f.mp ? `、${f.mp} 魔力` : ''}，在哪裡都能吃。`, use: '吃一個' };
+  });
+  const EDIBLE = ['water', 'bubbletea', 'chicken', ...Object.keys(GD.PLANTS)];
   let myInv = {};
   let kitFolded = folded('kit', TOUCH);
   function renderInventory(inv) {
@@ -1160,11 +1175,11 @@
     const box = $('inventory');
     box.innerHTML = '';
     // 物資都收在背包裡，按鈕上的小數字是總共有幾個
-    const total = Object.keys(MAP.ITEMS).reduce((n, k) => n + (myInv[k] || 0), 0);
+    const total = Object.keys(MAP.ITEMS).reduce((n, k) => n + (MAP.ITEMS[k].gem ? 0 : myInv[k] || 0), 0);
     const bag = el('button', 'inv-item bag-btn');
     bag.append(icon('btn-bag', '🎒'), ' 背包');
     if (total) bag.appendChild(el('span', 'bag-n', String(total > 99 ? '99+' : total)));
-    bag.title = Object.entries(MAP.ITEMS).map(([k, it]) => `${it.name} × ${myInv[k] || 0}`).join('\n');
+    bag.title = Object.entries(MAP.ITEMS).filter(([k]) => myInv[k] > 0).map(([k, it]) => `${it.name} × ${myInv[k]}`).join('\n');
     bag.onclick = openBag;
     box.appendChild(bag);
     const gear = el('button', 'inv-item bag-btn');
@@ -1626,10 +1641,18 @@
   // 一頁裡的格子：補品一種一格；家具同種疊 10 個一格；裝備一件一格（同一件有兩件就兩格）
   function bagCells(tab) {
     const out = [];
-    if (tab === 'food') Object.keys(MAP.ITEMS).forEach(k => { if (myInv[k] > 0) out.push({ kind: 'food', k, n: myInv[k] }); });
-    if (tab === 'misc') Object.keys(DC.DECOR).forEach(k => {
-      for (let left = myFurn[k] || 0; left > 0; left -= BAG.SECTIONS.misc.stack) out.push({ kind: 'decor', k, n: Math.min(left, BAG.SECTIONS.misc.stack) });
-    });
+    const invOf = (sec) => Object.keys(MAP.ITEMS).filter(k => myInv[k] > 0 && BAG.invSec(k) === sec);
+    if (tab === 'food') invOf('food').forEach(k => out.push({ kind: 'food', k, n: myInv[k] }));
+    if (tab === 'misc') {
+      Object.keys(DC.DECOR).forEach(k => {
+        for (let left = myFurn[k] || 0; left > 0; left -= BAG.SECTIONS.misc.stack) out.push({ kind: 'decor', k, n: Math.min(left, BAG.SECTIONS.misc.stack) });
+      });
+      // 花園的種子、枯枝也算雜物，同種疊 10 個一格
+      invOf('misc').forEach(k => {
+        for (let left = myInv[k]; left > 0; left -= BAG.SECTIONS.misc.stack) out.push({ kind: 'food', k, n: Math.min(left, BAG.SECTIONS.misc.stack) });
+      });
+      invOf('gem').forEach(k => out.push({ kind: 'food', k, n: myInv[k], gem: true }));
+    }
     if (tab === 'gear') {
       const order = ['SSR', 'SR', 'R'];
       Object.keys(myGear).filter(id => GR.GEAR[id] && myGear[id] > 0)
@@ -1642,6 +1665,7 @@
     if (!myInv[k]) return;
     if (EDIBLE.includes(k)) eat(k);
     else if (k === 'noodle') { closeModal(); toast('到休息區右下角的爐台煮'); }
+    else if (k.startsWith('seed')) { closeModal(); toast('到物資倉庫後門外的公共花園，找一格空花圃種下', 'act-plant'); }
     else toast(ITEM_INFO[k].desc);
   }
   // 點兩下：吃喝、擺家具、穿脫裝備
@@ -1727,28 +1751,44 @@
     if (bagSel != null && !cells[bagSel]) bagSel = null;
     if (bagSel == null && cells.length) bagSel = 0;
     const grid = el('div', 'bag-grid');
-    for (let i = 0; i < Math.max(S.slots, cells.length); i++) {
+    // 寶石不佔格子：排在 cells 最後面，畫在格子下面的寶石袋
+    const nGrid = cells.filter(c => !c.gem).length;
+    const setup = (cell, c, i) => {
+      cell.appendChild(icon(bagIcon(c.kind, c.k), c.kind === 'food' ? MAP.ITEMS[c.k].icon : ''));
+      if (c.n > 1 || c.kind === 'food') cell.appendChild(el('span', 'bag-cnt', String(c.n)));
+      if (c.on) cell.appendChild(el('span', 'bag-on', '穿著'));
+      cell.setAttribute('aria-label', `${bagName(c.kind, c.k)} × ${c.n}`);
+      cell.addEventListener('pointerdown', (e) => dragCell(cell, c, grid, e));
+      cell.onclick = () => {
+        if (cell.dataset.dragged) { delete cell.dataset.dragged; return; }
+        const key = c.kind + c.k, now = performance.now(), dbl = bagTap.k === key && now - bagTap.t < 400;
+        bagTap = dbl ? { k: null, t: 0 } : { k: key, t: now };
+        if (dbl) { useCell(c); return; }
+        if (bagSel !== i) trashArm = null;
+        bagSel = i; openBag();
+      };
+    };
+    for (let i = 0; i < Math.max(S.slots, nGrid); i++) {
       const c = cells[i];
       const cell = el('button', 'bag-cell' + (c ? '' : ' empty') + (c && i === bagSel ? ' on' : '') + (c && c.kind === 'gear' ? ' r-' + GR.GEAR[c.k].rarity : '') + (i >= S.slots ? ' over' : ''));
       cell.type = 'button';
-      if (c) {
-        cell.appendChild(icon(bagIcon(c.kind, c.k), c.kind === 'food' ? MAP.ITEMS[c.k].icon : ''));
-        if (c.n > 1 || c.kind === 'food') cell.appendChild(el('span', 'bag-cnt', String(c.n)));
-        if (c.on) cell.appendChild(el('span', 'bag-on', '穿著'));
-        cell.setAttribute('aria-label', `${bagName(c.kind, c.k)} × ${c.n}`);
-        cell.addEventListener('pointerdown', (e) => dragCell(cell, c, grid, e));
-        cell.onclick = () => {
-          if (cell.dataset.dragged) { delete cell.dataset.dragged; return; }
-          const key = c.kind + c.k, now = performance.now(), dbl = bagTap.k === key && now - bagTap.t < 400;
-          bagTap = dbl ? { k: null, t: 0 } : { k: key, t: now };
-          if (dbl) { useCell(c); return; }
-          if (bagSel !== i) trashArm = null;
-          bagSel = i; openBag();
-        };
-      } else cell.disabled = true;
+      if (c) setup(cell, c, i);
+      else cell.disabled = true;
       grid.appendChild(cell);
     }
     box.appendChild(grid);
+    // 寶石袋：寶石不佔背包格子，有挖到才會出現（在雜物頁）
+    if (cells.length > nGrid) {
+      const gb = el('div', 'gem-bag');
+      gb.appendChild(el('span', 'gem-bag-t', '寶石袋'));
+      for (let i = nGrid; i < cells.length; i++) {
+        const cell = el('button', 'bag-cell gem' + (i === bagSel ? ' on' : ''));
+        cell.type = 'button';
+        setup(cell, cells[i], i);
+        gb.appendChild(cell);
+      }
+      box.appendChild(gb);
+    }
     const info = el('div', 'bag-info');
     const c = cells[bagSel];
     if (c) {
@@ -1783,7 +1823,7 @@
   }
   function eat(k) {
     if (k === 'water') return drink();
-    if (!myInv[k]) { toast(`沒有${MAP.ITEMS[k].name}了，去物資倉庫敲「台灣小吃」箱子`); return; }
+    if (!myInv[k]) { toast(GD.PLANTS[k] ? `沒有${MAP.ITEMS[k].name}了` : `沒有${MAP.ITEMS[k].name}了，去物資倉庫敲「台灣小吃」箱子`); return; }
     if (performance.now() < eatUntil) return;
     socket.emit('eat', k, (res) => {
       if (!res || !res.ok) return;
@@ -1844,6 +1884,118 @@
   }) || null;
   Object.entries(QUICK).forEach(([slot, btn]) => $(btn).addEventListener('click', () => useQuick(slot)));
   renderQuick();
+
+  // ---------------- 公共花園 ----------------
+  // 種下、澆水、收成、拔掉；點「看看」開一張小卡片，看是誰種的、還要多久熟、土乾不乾
+  const GARDEN_UI = (() => {
+    let cur = -1;
+    const dur = (ms) => {
+      const m = Math.max(1, Math.ceil(ms / 60000));
+      return m >= 60 ? `${Math.floor(m / 60)} 小時${m % 60 ? ` ${m % 60} 分` : ''}` : `${m} 分鐘`;
+    };
+    const seeds = () => Object.keys(GD.PLANTS).filter(k => myInv[GD.seedOf(k)] > 0);
+    const done = (res) => {
+      if (!res || !res.ok) { if (res && res.error) toast(res.error); return false; }
+      renderInventory(res.inv);
+      return true;
+    };
+    function plant(i, kind) {
+      socket.emit('gardenPlant', { i, kind }, (res) => {
+        if (!done(res)) return;
+        if (modalKind === 'plot') closeModal();
+        toast(`種下${GD.PLANTS[kind].name}了，順便澆了水。大約 ${GD.PLANTS[kind].hours} 小時會結果`, 'act-plant');
+      });
+    }
+    function water(i) {
+      socket.emit('gardenWater', { i }, (res) => {
+        if (done(res)) toast('澆好水了' + (res.exp ? `，經驗 +${res.exp}` : ''), 'act-water');
+      });
+    }
+    function harvest(i) {
+      socket.emit('gardenHarvest', { i }, (res) => {
+        if (!done(res)) return;
+        if (modalKind === 'plot') closeModal();
+        toast(`收成 ${MAP.ITEMS[res.item].name} × ${res.n}！`, 'item-' + res.item);
+        if (res.gem) setTimeout(() => toast(`土裡還挖到一顆${MAP.ITEMS[res.gem].name}！`, 'item-' + res.gem), 700);
+      });
+    }
+    function pull(i) {
+      socket.emit('gardenClear', { i }, (res) => {
+        if (!done(res)) return;
+        if (modalKind === 'plot') closeModal();
+        toast(res.twig ? '拔掉了，拿到一根枯枝' : '拔掉了（背包滿了，枯枝丟掉了）', 'item-twig');
+      });
+    }
+    // 空花圃：只有一種種子就直接種，有好幾種先選
+    function choose(i) {
+      const ks = seeds();
+      if (!ks.length) { toast('沒有種子。花園門口的認養箱每天送一包，敲箱子、打小怪也會掉', 'act-seedbox'); return; }
+      if (ks.length === 1) { plant(i, ks[0]); return; }
+      open(i);
+    }
+    function open(i) {
+      cur = i;
+      socket.emit('gardenInfo', { i }, (res) => {
+        if (!res || !res.ok) { if (res && res.error) toast(res.error); return; }
+        render(i, res.info);
+      });
+    }
+    function render(i, f) {
+      const box = el('div', 'plot-card');
+      const btn = (label, fn, cls) => { const b = el('button', cls || 'primary small', label); b.type = 'button'; b.onclick = fn; return b; };
+      if (f.empty) {
+        box.appendChild(el('p', 'plot-line', '空的花圃。選一種種子種下吧：'));
+        const row = el('div', 'plot-seeds');
+        const ks = seeds();
+        ks.forEach(k => {
+          const b = el('button', 'plot-seed'); b.type = 'button';
+          b.appendChild(icon('item-' + GD.seedOf(k), ''));
+          b.appendChild(el('span', null, `${GD.PLANTS[k].name}（${GD.PLANTS[k].hours} 小時）× ${myInv[GD.seedOf(k)]}`));
+          b.onclick = () => plant(i, k);
+          row.appendChild(b);
+        });
+        if (!ks.length) row.appendChild(el('p', 'plot-line muted', '你沒有種子。花園門口的認養箱每天送一包，敲物資箱、打小怪也有機會掉。'));
+        box.appendChild(row);
+        openModal('plot', `第 ${i + 1} 格花圃`, box);
+        return;
+      }
+      const pl = GD.PLANTS[f.kind];
+      const head = el('div', 'plot-head');
+      head.appendChild(icon(f.stage === GD.DEAD ? 'plant-dead' : `plant-${f.kind}-${f.stage}`, ''));
+      const hd = el('div');
+      hd.appendChild(el('b', null, `${pl.name}・${GD.STAGES[f.stage]}`));
+      hd.appendChild(el('p', 'plot-line muted', `${f.by} 種的`));
+      head.appendChild(hd);
+      box.appendChild(head);
+      const lines = [];
+      if (f.stage === GD.DEAD) lines.push('枯掉了，拔掉之後這格就空出來，大家可以再種。');
+      else if (f.stage === GD.RIPE) lines.push(`熟了！誰都可以收。${dur(f.rotIn)}內沒人收會爛掉。`, `收成可以拿到 ${pl.name} × ${pl.yield}，還有很小的機會挖到寶石。`);
+      else {
+        lines.push(`還要 ${dur(f.ripeIn)} 會結果（土是濕的才會長）。`);
+        lines.push(f.wet ? `土是濕的，還能撐 ${dur(f.wetFor)}。` : `土乾掉了！${dur(f.witherIn)}內沒人澆水就會枯掉。`);
+      }
+      if (f.last && f.stage < GD.RIPE) lines.push(`最後是 ${f.last} 澆的水。`);
+      if (pl.harvests > 1 && f.stage !== GD.DEAD) lines.push(`還可以收 ${f.left} 次。`);
+      lines.forEach(t => box.appendChild(el('p', 'plot-line', t)));
+      const row = el('div', 'plot-btns');
+      if (f.stage === GD.DEAD) row.appendChild(btn('拔掉', () => pull(i)));
+      else if (f.stage === GD.RIPE) row.appendChild(btn('收成', () => harvest(i)));
+      else row.appendChild(btn('澆水', () => water(i)));
+      box.appendChild(row);
+      openModal('plot', `第 ${i + 1} 格花圃`, box);
+    }
+    return {
+      act(a) {
+        if (a.type === 'gplant') choose(a.i);
+        else if (a.type === 'gwater') water(a.i);
+        else if (a.type === 'gharvest') harvest(a.i);
+        else if (a.type === 'gpull') pull(a.i);
+        else open(a.i);
+      },
+      // 花園有變化的時候，開著的卡片跟著更新
+      refresh() { if (cur >= 0) open(cur); },
+    };
+  })();
 
   // ---------------- 裝備欄 ----------------
   // 裝備欄的大張人物圖：量出人物（含頭飾、翅膀、武器）實際的範圍，放大到填滿 w x h 的框，四周至少留 pad
@@ -2994,6 +3146,8 @@
   const HINTS = {
     crate: ['act-crate', '敲箱子'], cook: ['act-cook', '煮泡麵'], mentor: ['act-mentor', '轉職'],
     loot: ['', '撿起來'], guard: ['act-guard', '前往花蓮'], elevator: ['act-elevator', '前往 101'], portal: ['act-portal', '進入副本大廳'], hubExit: ['act-home', '回總部'], dj: ['btn-song', '點歌'], tv: ['act-tv', '視訊／遊戲'], well: ['wish-coin', '許個願'], greek: ['act-greek', '說話'],
+    gplant: ['act-plant', '種下'], gwater: ['act-water', '澆水'], gharvest: ['act-harvest', '收成'], gpull: ['item-twig', '拔掉'],
+    glook: ['act-plant', '看看'], seedbox: ['act-seedbox', '領種子'],
   };
   // tail：尖角朝哪邊（down＝紙條在東西上面；left／right＝紙條在旁邊，上面被介面擋住的時候用）
   // 地上的東西（loot）名字每次不一樣：圖示和字放在 act 裡，鍵帽是 Z
@@ -3689,7 +3843,7 @@
         const z = MAP.FIELD.filter(f => y >= f.y1 - 1).pop();
         return { walk: 'paver', office: 'office', temple: 'brick' }[z.id];
       }
-      if (',T~BFOLI'.includes(ch)) return 'grass';
+      if (',T~BFOLI圃箱'.includes(ch)) return 'grass';
       if (ch === '#') return 'wall';
       if (inKitchen(x, y)) return 'tile';
       return inVideo(x, y) ? 'carpet' : 'wood';
@@ -3956,6 +4110,22 @@
           // 點點虛線外框，像插畫裡的樹
           ctx.save(); ctx.setLineDash([2, 5]);
           CR.blob(ctx, px + 24, py + 16, 20, 18, CR.rng(x + y), 0.08); CR.stroke(ctx, r, 3.2, '#2f6b45'); ctx.restore();
+        } else if (ch === '圃') {
+          // 公共花園的花圃：鬆鬆的乾土，四周用小木條圍起來（澆過水的深色土另外疊上去）
+          ctx.fillStyle = '#b8875a'; ctx.fillRect(px + 1, py + 3, T - 2, T - 6);
+          CR.dots(ctx, px + 4, py + 6, T - 8, T - 12, 9, 'rgba(110,70,38,0.55)', r, 2.4);
+          CR.dots(ctx, px + 4, py + 6, T - 8, T - 12, 5, 'rgba(255,240,210,0.45)', r, 1.6);
+          const wood = (x1, y1, x2, y2) => { CR.line(ctx, x1, y1, x2, y2, r, 5, '#2b2a33', 0.6); CR.line(ctx, x1, y1, x2, y2, r, 3, '#c98a4a', 0.6); };
+          wood(px - 1, py + 3, px + T + 1, py + 3);
+          wood(px - 1, py + T - 3, px + T + 1, py + T - 3);
+          if (at(x - 1, y) !== '圃') wood(px + 2, py + 2, px + 2, py + T - 2);
+          if (at(x + 1, y) !== '圃') wood(px + T - 2, py + 2, px + T - 2, py + T - 2);
+          else CR.line(ctx, px + T, py + 6, px + T, py + T - 6, r, 1.2, 'rgba(110,76,44,0.5)', 0.6);
+        } else if (ch === '箱') {
+          // 種子認養箱
+          ctx.fillStyle = 'rgba(19,26,40,0.16)'; ctx.beginPath(); ctx.ellipse(px + 24, py + 42, 18, 4, 0, 0, Math.PI * 2); ctx.fill();
+          const ic = window.HQ_ICONS && HQ_ICONS.canvas('act-seedbox');
+          if (ic) ctx.drawImage(ic, px - 6, py - 14, T + 12, T + 12);
         } else if (ch === 'B') {
           [[12, 34], [36, 34], [24, 20]].forEach(([dx, dy]) => {
             CR.blob(ctx, px + dx, py + dy, 12, 8, r, 0.1, 14); CR.fill(ctx, '#e8d6ae', r, [px + dx - 12, py + dy - 8, 24, 16]); CR.stroke(ctx, r, 2.2);
@@ -4880,6 +5050,65 @@
       }).setOrigin(0.5).setDepth(y + T);
       if (window.HQ_ICONS && !this.textures.exists('wish-coin')) this.textures.addBase64('wish-coin', HQ_ICONS.url('wish-coin'));
     }
+    // ---------- 公共花園 ----------
+    makeGarden() {
+      if (this.gardenSign) return;
+      const p0 = MAP.PLOTS[0], p1 = MAP.PLOTS[MAP.PLOTS.length - 1];
+      const x = (p0.x + p1.x + 1) / 2 * T, y = p0.y * T - 18;
+      this.gardenSign = this.add.text(x, y, '公共花園', {
+        fontSize: '10px', fontStyle: 'bold', color: INK, fontFamily: FONT,
+        backgroundColor: PAPER, padding: { x: 10, y: 4 },
+      }).setOrigin(0.5).setDepth(y + T);
+      this.garden = MAP.PLOTS.map(() => null);
+      this.plotImgs = MAP.PLOTS.map(() => null);
+      this.plotSoil = MAP.PLOTS.map(() => null);
+    }
+    // 每格花圃：澆過水的土變深色、上面畫植物現在的樣子
+    setGarden(st) {
+      if (!this.garden) return;
+      MAP.PLOTS.forEach((pt, i) => {
+        const g = st[i] || null, old = this.garden[i];
+        this.garden[i] = g;
+        const cx = (pt.x + 0.5) * T, cy = (pt.y + 0.5) * T;
+        const wet = g && g.stage < GD.RIPE ? g.wet : 0;
+        if (this.plotSoil[i]) { this.plotSoil[i].destroy(); this.plotSoil[i] = null; }
+        if (wet) this.plotSoil[i] = this.add.rectangle(cx, cy, T - 6, T - 10, 0x6a4a2a, wet === 2 ? 0.45 : 0.22).setDepth(-9);
+        const key = g ? (g.stage === GD.DEAD ? 'plant-dead' : `plant-${g.kind}-${g.stage}`) : null;
+        const img = this.plotImgs[i];
+        if (img && img.key_ === key) return;
+        if (img) { img.destroy(); this.plotImgs[i] = null; }
+        if (!key) return;
+        const tex = this.iconTexture(key);
+        if (!tex) return;
+        const im = this.add.image(cx, (pt.y + 1) * T + 2, tex).setOrigin(0.5, 1).setDisplaySize(T * 1.15, T * 1.15).setDepth((pt.y + 1) * T - 4);
+        im.key_ = key;
+        this.plotImgs[i] = im;
+        // 長大了輕輕彈一下
+        if (old && old.kind === g.kind && old.stage !== g.stage) {
+          const sy = im.scaleY;
+          this.tweens.add({ targets: im, scaleY: sy * 1.15, duration: 160, yoyo: true });
+        }
+      });
+    }
+    gardenFx(f) {
+      const pt = MAP.PLOTS[f.i];
+      if (!pt || fxOff()) return;
+      const x = (pt.x + 0.5) * T, y = pt.y * T;
+      if (f.what === 'water') {
+        this.floatText(x, y - 6, '', '#ffffff', 22, 'act-water');
+        for (let k = 0; k < 6; k++) {
+          const d = this.add.circle(x - 14 + Math.random() * 28, y + 6, 2.5, 0x4f7cc2).setDepth(2000);
+          this.tweens.add({ targets: d, y: y + 26 + Math.random() * 10, alpha: 0, duration: 420 + k * 60, onComplete: () => d.destroy() });
+        }
+      } else if (f.what === 'harvest') this.floatText(x, y - 6, '', '#ffffff', 26, 'item-' + f.item);
+      else if (f.what === 'plant') this.floatText(x, y - 6, '', '#ffffff', 22, 'act-plant');
+    }
+    // 這格花圃現在可以做什麼
+    plotAction(i) {
+      const g = this.garden && this.garden[i], pt = MAP.PLOTS[i];
+      const type = !g ? 'gplant' : g.stage === GD.DEAD ? 'gpull' : g.stage === GD.RIPE ? 'gharvest' : g.wet < 2 ? 'gwater' : 'glook';
+      return { type, i, tx: pt.x, ty: pt.y };
+    }
     wishCoin(id) {
       const who = id === (me && me.id) ? this.me : this.remotes.get(id);
       const { x, y } = MAP.well;
@@ -4928,6 +5157,8 @@
       (res.loot || []).forEach(l => this.addLoot(l));
       this.makeDj();
       this.makeWell();
+      this.makeGarden();
+      this.setGarden(res.garden || []);
       TREE.refresh();
       MUSIC.set(res.music);
       this.walls.forEach((w, id) => this.onWallGone(id, true));
@@ -6034,6 +6265,9 @@
       if (Math.hypot(x - MAP.fridge.x, y - (MAP.fridge.y - 10)) < 40 && MAP.nearFridge(this.me.x, this.me.y)) return { type: 'fridge' };
       if (MAP.tiles[ty] && MAP.tiles[ty][tx] === 'J' && MAP.nearDj(this.me.x, this.me.y)) return { type: 'dj' };
       if (MAP.tiles[ty] && MAP.tiles[ty][tx] === 'L' && MAP.nearWell(this.me.x, this.me.y)) return { type: 'well' };
+      const pi = MAP.plotAt(tx, ty);
+      if (pi >= 0 && MAP.nearPlot(pi, this.me.x, this.me.y)) return this.plotAction(pi);
+      if (MAP.tiles[ty] && MAP.tiles[ty][tx] === '箱' && MAP.nearSeedBox(this.me.x, this.me.y)) return { type: 'seedbox', tx, ty };
       return null;
     }
 
@@ -6138,6 +6372,18 @@
           if (d < 1.7 * T && d < bd) { bd = d; best = { type: 'crate', tx, ty }; }
         }
       }
+      // 花圃和種子認養箱：挑最近的那個
+      if (!best && this.garden) {
+        if (MAP.nearSeedBox(this.me.x, this.me.y)) {
+          bd = Math.hypot(this.me.x - MAP.seedBox.x, this.me.y - MAP.seedBox.y);
+          best = { type: 'seedbox', tx: Math.floor(MAP.seedBox.x / T), ty: Math.floor(MAP.seedBox.y / T) };
+        }
+        MAP.PLOTS.forEach((pt, i) => {
+          const d = Math.hypot(this.me.x - (pt.x + 0.5) * T, this.me.y - (pt.y + 0.5) * T);
+          if (d < 1.7 * T && d < bd) { bd = d; best = this.plotAction(i); }
+        });
+        if (best) return best;
+      }
       if (!best && MAP.nearStove(this.me.x, this.me.y, 1.8 * T)) return { type: 'cook' };
       if (!best && MAP.nearMentor(this.me.x, this.me.y)) return { type: 'mentor' };
       if (!best && MAP.nearGuard(this.me.x, this.me.y)) return { type: 'guard' };
@@ -6187,6 +6433,14 @@
       } else if (act.type === 'greek') {
         toast(`希臘少女：「${GREEK_LINES[Math.floor(Math.random() * GREEK_LINES.length)]}」`);
         WISH.open();
+      } else if (act.type[0] === 'g' && act.i != null) {
+        GARDEN_UI.act(act);
+      } else if (act.type === 'seedbox') {
+        socket.emit('gardenSeed', {}, (res) => {
+          if (!res || !res.ok) { if (res && res.error) toast(res.error); return; }
+          renderInventory(res.inv);
+          toast(`領到一包${MAP.ITEMS[res.item].name}！明天還可以再來`, 'item-' + res.item);
+        });
       } else if (act.type === 'cook') {
         socket.emit('cook', (res) => {
           if (!res || !res.ok) { if (res && res.error) toast(res.error); return; }
@@ -6200,6 +6454,7 @@
           renderInventory(res.inv);
           const it = MAP.ITEMS[res.item];
           toast(`獲得 ${it.name}！`, 'item-' + res.item);
+          if (res.seed) setTimeout(() => toast(`箱底還黏著一包${MAP.ITEMS[res.seed].name}！`, 'item-' + res.seed), 600);
         });
       }
     }

@@ -1131,6 +1131,7 @@ function canDecorate(tx, ty) {
 // 傳給別人的玩家資料（不含冷卻、增益這些內部狀態）
 // 角色存檔：外觀、職業、等級、裝備、家具、邀請函。總部加入時和帳號存檔都用這個檢查
 const INV_MAX = 99; // 每種物資最多存幾個
+const EAT_CD_MS = STATS.EAT_CD_MS; // 隨身吃喝（礦泉水、珍奶、雞排）共用的冷卻
 function sanitizeSave(data) {
   data = data && typeof data === 'object' ? data : {};
   const name = clean(data.name, 12);
@@ -1205,7 +1206,7 @@ function snapshot(p) {
 setInterval(() => players.forEach(snapshot), 20000);
 
 function publicPlayer(p) {
-  const { cooldowns, buffs, atkBuff, regenMs, cooking, vip, owned, gear, seen, inv, cakeUntil, furn, account, photoHd, rk, ...rest } = p;
+  const { cooldowns, buffs, atkBuff, regenMs, cooking, eatAt, vip, owned, gear, seen, inv, cakeUntil, furn, account, photoHd, rk, ...rest } = p;
   return Object.assign(rest, publicStats(p), { hasVip: !!vip, cakeMs: Math.max(0, cakeUntil - Date.now()) });
 }
 
@@ -1631,6 +1632,8 @@ io.on('connection', (socket) => {
     const p = players.get(socket.id);
     if (typeof ack !== 'function') return;
     if (!p || p.dead || p.inv.water < 1) return ack({ ok: false });
+    if (Date.now() < (p.eatAt || 0) + EAT_CD_MS) return ack({ ok: false, cd: true });
+    p.eatAt = Date.now();
     p.inv.water--;
     p.mp = Math.min(p.maxMp, p.mp + STATS.FOODS.water.mp);
     sendStats(p);
@@ -1643,6 +1646,8 @@ io.on('connection', (socket) => {
     if (typeof ack !== 'function') return;
     const food = STATS.FOODS[item];
     if (!p || p.dead || !food || !['bubbletea', 'chicken'].includes(item) || p.inv[item] < 1) return ack({ ok: false });
+    if (Date.now() < (p.eatAt || 0) + EAT_CD_MS) return ack({ ok: false, cd: true });
+    p.eatAt = Date.now();
     p.inv[item]--;
     p.hp = Math.min(p.maxHp, p.hp + (food.hp || 0));
     p.mp = Math.min(p.maxMp, p.mp + (food.mp || 0));

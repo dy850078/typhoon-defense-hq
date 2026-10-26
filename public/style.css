@@ -845,7 +845,7 @@ button.inv-item:hover { border-color: var(--accent); }
 .bag-ghost { position: fixed; left: 0; top: 0; z-index: 40; width: 52px; height: 52px; pointer-events: none; display: flex; align-items: center; justify-content: center;
   border: 2px solid var(--ink); border-radius: 12px; background: var(--paper); box-shadow: 0 6px 14px rgba(19,26,40,.35); }
 .bag-ghost .hq-icon { width: 40px; height: 40px; }
-.bag-ghost-tip { position: fixed; left: 0; top: 0; z-index: 40; width: 100px; text-align: center; pointer-events: none; font: 700 12px/1.6 var(--mono);
+.bag-ghost-tip { position: fixed; left: 0; top: 0; z-index: 40; width: 130px; text-align: center; pointer-events: none; font: 700 12px/1.6 var(--mono);
   color: var(--ink); background: var(--note); border: 1.5px solid var(--ink); border-radius: 8px; }
 .bag-ghost-tip.out { background: var(--accent); color: #fff; }
 .gear-item.gone { opacity: .55; filter: grayscale(.7); }
@@ -921,3 +921,12 @@ button.inv-item:hover { border-color: var(--accent); }
 .tree-line { display: flex; align-items: center; gap: 3px; min-width: 0; }
 .tree-line b { min-width: 0; }
 .tree-flag.hq-icon { width: 18px; height: 18px; flex-shrink: 0; }
+/* 補品快捷 Q／E：米色底的技能格，右上角剩幾個；空的格子是虛線加號 */
+.sk-btn.quick { background: var(--paper); color: var(--ink); }
+.sk-btn.quick.empty { border-style: dashed; box-shadow: none; }
+.quick-n { position: absolute; left: 3px; top: 2px; font: 700 10px var(--mono); color: var(--ink); text-shadow: 0 0 2px #fff, 0 0 2px #fff; }
+.quick-plus { font: 700 24px var(--mono); color: var(--muted); }
+.bag-acts { gap: 6px; flex-wrap: wrap; }
+.bag-acts .hud-btn.on { opacity: .6; }
+#skillbar.folded.show-quick .quick { display: flex; }
+#skillbar.show-quick { z-index: 25; }

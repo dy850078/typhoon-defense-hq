@@ -1184,6 +1184,7 @@
     kit.onclick = () => { kitFolded = !kitFolded; store('hq-fold-kit', kitFolded ? '1' : '0'); box.classList.toggle('folded', kitFolded); };
     box.appendChild(kit);
     TREE.renderBtn();
+    renderQuick();
     box.classList.toggle('folded', kitFolded);
     if (modalKind === 'bag') openBag();
   }
@@ -1669,7 +1670,7 @@
   function dragCell(cell, c, grid, e) {
     if (e.button > 0) return;
     e.preventDefault(); // 不要讓瀏覽器拖圖片（會把後面的 pointermove 吃掉）
-    const x0 = e.clientX, y0 = e.clientY;
+    const x0 = e.clientX, y0 = e.clientY, canQuick = c.kind === 'food' && EDIBLE.includes(c.k);
     let ghost = null, tip = null;
     const outside = (ev) => { const r = grid.getBoundingClientRect(); return ev.clientX < r.left - 6 || ev.clientX > r.right + 6 || ev.clientY < r.top - 6 || ev.clientY > r.bottom + 6; };
     const move = (ev) => {
@@ -1680,25 +1681,29 @@
         tip = el('div', 'bag-ghost-tip');
         document.body.append(ghost, tip);
         $('modal').classList.add('dragging');
+        if (canQuick) $('skillbar').classList.add('show-quick'); // 技能欄收著也把快捷格露出來，才拖得到
         cell.classList.add('lifted');
         try { cell.setPointerCapture(ev.pointerId); } catch (er) { /* 舊瀏覽器 */ }
       }
       ev.preventDefault();
       ghost.style.transform = `translate(${ev.clientX - 26}px, ${ev.clientY - 26}px)`;
-      const out = outside(ev);
-      tip.textContent = out ? '放開，丟在地上' : '拖到格子外面';
+      const out = outside(ev), q = canQuick && quickAt(ev.clientX, ev.clientY);
+      tip.textContent = q ? `放開，放到 ${q.toUpperCase()} 快捷` : out ? '放開，丟在地上' : '拖到格子外面';
       tip.classList.toggle('out', out);
-      tip.style.transform = `translate(${ev.clientX - 50}px, ${ev.clientY - 62}px)`;
+      tip.style.transform = `translate(${ev.clientX - 65}px, ${ev.clientY - 62}px)`;
     };
     const up = (ev) => {
       removeEventListener('pointermove', move); removeEventListener('pointerup', up); removeEventListener('pointercancel', up);
       if (!ghost) return;
+      const q = canQuick && quickAt(ev.clientX, ev.clientY); // 先量，快捷格收起來就量不到了
       ghost.remove(); tip.remove();
       $('modal').classList.remove('dragging');
+      $('skillbar').classList.remove('show-quick');
       cell.classList.remove('lifted');
       bagTap = { k: null, t: 0 };
       cell.dataset.dragged = '1';
-      if (ev.type === 'pointerup' && outside(ev)) dropCell(c);
+      if (ev.type === 'pointerup' && q) setQuick(q, c.k);
+      else if (ev.type === 'pointerup' && outside(ev)) dropCell(c);
     };
     addEventListener('pointermove', move, { passive: false });
     addEventListener('pointerup', up);
@@ -1755,6 +1760,13 @@
       }
       info.appendChild(el('p', null, desc));
       const row = el('div', 'bag-acts');
+      if (c.kind === 'food' && EDIBLE.includes(c.k)) Object.keys(QUICK).forEach(slot => {
+        const on = quick[slot] === c.k, qb = el('button', 'hud-btn tiny' + (on ? ' on' : ''), on ? `在 ${slot.toUpperCase()} 快捷` : `放到 ${slot.toUpperCase()}`);
+        qb.type = 'button';
+        qb.disabled = on;
+        qb.onclick = () => { setQuick(slot, c.k); openBag(); };
+        row.appendChild(qb);
+      });
       const tr = el('button', 'hud-btn tiny' + (trashArm === bagSel ? ' danger' : ''), trashArm === bagSel ? '確定丟掉？' : '丟掉');
       tr.type = 'button';
       tr.onclick = () => { if (trashArm === bagSel) { trashArm = null; trashCell(c); } else { trashArm = bagSel; openBag(); } };
@@ -1769,20 +1781,66 @@
   function eat(k) {
     if (k === 'water') return drink();
     if (!myInv[k]) { toast(`沒有${MAP.ITEMS[k].name}了，去物資倉庫敲「台灣小吃」箱子`); return; }
+    if (performance.now() < eatUntil) return;
     socket.emit('eat', k, (res) => {
       if (!res || !res.ok) return;
+      eatUntil = performance.now() + ST.EAT_CD_MS;
       renderInventory(res.inv);
       toast(`${res.food}：血量 +${res.hp}、魔力 +${res.mp}`, 'item-' + k);
     });
   }
   function drink() {
     if (!myInv.water) { toast('沒有礦泉水，去物資倉庫敲箱子'); return; }
+    if (performance.now() < eatUntil) return;
     socket.emit('drink', (res) => {
       if (!res || !res.ok) return;
+      eatUntil = performance.now() + ST.EAT_CD_MS;
       renderInventory(res.inv);
       toast(`喝了礦泉水，魔力 +${res.mp} `);
     });
   }
+
+  // ---------------- 補品快捷鍵 Q / E ----------------
+  // 每個人自己挑要放哪個補品：在背包補品頁把東西拖到快捷格，或按說明卡的「放到 Q／E」
+  const QUICK = { q: 'quick-q', e: 'quick-e' };
+  let quick = Object.assign({ q: 'chicken', e: 'water' }, savedJson('hq-quick', {}));
+  let eatUntil = 0; // 隨身吃喝的冷卻（伺服器也會擋）
+  function renderQuick() {
+    Object.entries(QUICK).forEach(([slot, btn]) => {
+      const k = MAP.ITEMS[quick[slot]] && EDIBLE.includes(quick[slot]) ? quick[slot] : null, b = $(btn), n = k ? myInv[k] || 0 : 0, key = slot.toUpperCase();
+      b.innerHTML = '';
+      b.appendChild(el('i', 'cd'));
+      if (k) {
+        b.appendChild(icon('item-' + k, '', 'sk-icon'));
+        b.appendChild(el('span', 'quick-n mono', String(n)));
+      } else b.appendChild(el('span', 'quick-plus', '+'));
+      b.appendChild(el('kbd', null, key));
+      b.classList.toggle('empty', !k);
+      b.classList.toggle('low', !!k && !n);
+      b.setAttribute('aria-label', k ? `${MAP.ITEMS[k].name}（${key}）` : `補品快捷 ${key}`);
+      b.tip = () => k ? [MAP.ITEMS[k].name, `${key} · 剩 ${n} 個 · 冷卻 ${ST.EAT_CD_MS / 1000} 秒`, ITEM_INFO[k].desc + '想換別的：在背包補品頁把東西拖到這格，或按說明卡的「放到 ' + key + '」。']
+        : [`補品快捷 ${key}`, '', '打開背包的補品頁，把礦泉水、珍奶或雞排拖到這格，或按說明卡的「放到 ' + key + '」。'];
+    });
+  }
+  function setQuick(slot, k) {
+    quick[slot] = k;
+    store('hq-quick', quick);
+    renderQuick();
+    toast(`${MAP.ITEMS[k].name} 放到 ${slot.toUpperCase()} 快捷`, 'item-' + k);
+  }
+  function useQuick(slot) {
+    const k = quick[slot];
+    if (!MAP.ITEMS[k] || !EDIBLE.includes(k)) { bagTab = 'food'; bagSel = null; openBag(); return; }
+    if (!myInv[k]) { toast(`沒有${MAP.ITEMS[k].name}了`, 'item-' + k); return; }
+    eat(k);
+  }
+  // 拖曳時，手指在哪一格快捷上面
+  const quickAt = (x, y) => Object.keys(QUICK).find(slot => {
+    const r = $(QUICK[slot]).getBoundingClientRect();
+    return r.width > 0 && x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+  }) || null;
+  Object.entries(QUICK).forEach(([slot, btn]) => $(btn).addEventListener('click', () => useQuick(slot)));
+  renderQuick();
 
   // ---------------- 裝備欄 ----------------
   // 把某個人（套上某些裝備）畫成一張小圖
@@ -3915,6 +3973,9 @@
       // K：職業的招牌技能（花魔力）
       kb.on('keydown-K', (e) => { if (!typing()) { e.preventDefault(); this.useSkill(special()); } });
       kb.on('keydown-L', (e) => { if (!typing()) { e.preventDefault(); this.useSkill(special2()); } });
+      // Q／E：補品快捷
+      kb.on('keydown-Q', (e) => { if (!typing() && $('games').hidden) { e.preventDefault(); useQuick('q'); } });
+      kb.on('keydown-E', (e) => { if (!typing() && $('games').hidden) { e.preventDefault(); useQuick('e'); } });
       // Z：撿地上的東西
       kb.on('keydown-Z', (e) => { if (!typing() && !e.ctrlKey && !e.metaKey && $('games').hidden) { e.preventDefault(); this.pickNearest(); } });
       // 右鍵點人物（手機長按）可以看個人資料
@@ -6964,6 +7025,11 @@
       if (canHit !== this.canHit) { this.canHit = canHit; $('basic-btn').classList.toggle('ready', canHit); }
       // 技能的冷卻遮罩（從下往上退），魔力不夠就變暗
       this.cdPct = this.cdPct || {};
+      const eatPct = Math.round(100 * Math.max(0, eatUntil - performance.now()) / ST.EAT_CD_MS);
+      if (eatPct !== this.cdPct.quick) {
+        this.cdPct.quick = eatPct;
+        Object.values(QUICK).forEach(btn => { const bar = document.querySelector(`#${btn} .cd`); if (bar) bar.style.height = eatPct + '%'; $(btn).classList.toggle('cooling', eatPct > 0); });
+      }
       [['basic-btn', basic()], ['skill-btn', special()], ['skill2-btn', special2()]].forEach(([btn, sp]) => {
         const cdLeft = Math.max(0, (cooldowns[sp] || 0) - performance.now());
         const pct = cdLeft ? Math.round(100 * cdLeft / ST.SKILLS[sp].cooldown) : 0;

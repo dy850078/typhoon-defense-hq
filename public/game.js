@@ -1653,15 +1653,6 @@
   }
 
   // ---------------- 裝備欄 ----------------
-  // 把某個人（套上某些裝備）畫成一張小圖
-  function gearPortrait(equip, scale) {
-    const c = document.createElement('canvas');
-    c.width = FRAME.w * scale; c.height = FRAME.h * scale;
-    const ctx = c.getContext('2d');
-    ctx.scale(scale, scale); ctx.translate(FRAME.ox, FRAME.oy);
-    AV.drawAvatar(ctx, Object.assign({}, profile, { cls: myCls(), equip }));
-    return c;
-  }
   // 裝備欄的大張人物圖：量出人物（含頭飾、翅膀、武器）實際的範圍，放大到填滿 w x h 的框，四周至少留 pad
   // 沒戴什麼的時候人物比較小，最多放大 maxZ 倍，免得大到貼邊
   function gearPortraitFit(equip, w, h, pad, maxZ) {
@@ -1697,6 +1688,25 @@
       if (modalKind === 'gear') openGear();
     });
   }
+  // 一件裝備的格子：手繪圖示＋名字＋稀有度。裝備圖鑑和背包的裝備頁共用
+  // have 身上有（能穿）；seen 拿過但已經不在身上（圖鑑記得，淡淡的）；兩個都沒有就畫成灰色剪影
+  // showSeries 右上角貼系列名小紙條；onClick 給了才能點
+  function gearCell(id, opt) {
+    const o = opt || {}, g = GR.GEAR[id];
+    const gone = !o.have && o.seen, known = o.have || gone;
+    const cell = el('button', `gear-item r-${g.rarity}${known ? '' : ' locked'}${gone ? ' gone' : ''}${o.on ? ' on' : ''}`);
+    cell.type = 'button';
+    cell.appendChild(el('span', 'gear-rar', g.rarity));
+    if (o.showSeries && GR.SERIES[g.series]) cell.appendChild(el('span', 'gear-part', GR.SERIES[g.series].name));
+    cell.appendChild(icon('gear-' + id, '', 'gear-ic'));
+    cell.appendChild(el('span', 'gear-name', known ? g.name : '？？？'));
+    if (gone) cell.appendChild(el('span', 'gear-act', '已經不在身上'));
+    if (o.have && o.onClick) {
+      cell.appendChild(el('span', 'gear-act', o.on ? '穿著中' : '點一下穿上'));
+      cell.onclick = o.onClick;
+    } else cell.disabled = true;
+    return cell;
+  }
   function openGear() {
     const box = el('div', 'gear');
     const top = el('div', 'gear-top');
@@ -1719,47 +1729,66 @@
     // 套裝狀態和收集說明放在人物圖和欄位下面，人物圖才能跟四個欄位上下對齊
     if (setId) box.appendChild(el('p', 'gear-set-on', `套裝效果發動中：${GR.SERIES[setId].name}`));
     box.appendChild(el('p', 'modal-hint', `收集 ${myOwned.length} / ${Object.keys(GR.GEAR).length} 件。頭飾、服裝、披風都穿同一個系列，就會發動套裝特效。到 戰情室玩 你畫我猜，猜對就會拿到新裝備；女僕咖啡廳系列要在廚房煮泡麵才會掉。武器要找指揮中心的 古城守門員進副本，打倒最終頭目才會掉。`));
-    // 依系列分組，每組可以收合；沒點過的話，只展開身上有穿的系列
-    const folds = (() => { try { return JSON.parse(localStorage.getItem('hq-gear-folds')) || {}; } catch (e) { return {}; } })();
-    const worn = new Set(Object.values(myEquip).map(id => GR.GEAR[id] && GR.GEAR[id].series));
-    Object.entries(GR.SERIES).forEach(([sid, S]) => {
-      const items = Object.entries(GR.GEAR).filter(([, g]) => g.series === sid);
-      if (!items.length) return;
-      const got = items.filter(([id]) => myOwned.includes(id)).length;
-      const sec = el('details', 'gear-series' + (sid === setId ? ' set-on' : ''));
-      sec.open = sid in folds ? folds[sid] : worn.has(sid);
-      const sum = el('summary', 'gear-h');
-      sum.appendChild(el('span', 'gear-h-name', S.name));
-      sum.appendChild(el('span', 'gear-h-count', `${got} / ${items.length}`));
-      if (sid === setId) sum.appendChild(el('span', 'gear-h-on', '發動中'));
-      sec.appendChild(sum);
-      sec.appendChild(el('p', 'gear-h-desc', S.desc));
-      sec.ontoggle = () => { folds[sid] = sec.open; store('hq-gear-folds', folds); };
-      const grid = el('div', 'gear-grid');
-      items.forEach(([id, g]) => {
-        const slot = g.slot;
-        const have = myOwned.includes(id), on = myEquip[slot] === id;
-        const cell = el('button', `gear-item r-${g.rarity}${have ? '' : ' locked'}${on ? ' on' : ''}`);
-        cell.type = 'button';
-        cell.appendChild(el('span', 'gear-rar', g.rarity));
-        cell.appendChild(el('span', 'gear-part', GR.SLOTS[slot]));
-        if (have) {
-          const thumb = gearPortrait({ [slot]: id }, 1);
-          thumb.className = 'gear-thumb';
-          cell.appendChild(thumb);
-          cell.appendChild(el('span', 'gear-name', g.name));
-          cell.appendChild(el('span', 'gear-act', on ? '✓ 穿著（點一下脫下）' : '點一下穿上'));
-          cell.onclick = () => equipGear(slot, on ? null : id);
-        } else {
-          cell.appendChild(el('span', 'gear-lock', '？'));
-          cell.appendChild(el('span', 'gear-name', '？？？'));
-          cell.disabled = true;
-        }
-        grid.appendChild(cell);
-      });
-      sec.appendChild(grid);
-      box.appendChild(sec);
+    // 照部位分頁，最後一頁看套裝；記住上次看哪一頁
+    const order = Object.keys(GR.SERIES);
+    const all = Object.keys(GR.GEAR).sort((a, b) => order.indexOf(GR.GEAR[a].series) - order.indexOf(GR.GEAR[b].series));
+    const cellOf = (id, showSeries) => {
+      const slot = GR.GEAR[id].slot, on = myEquip[slot] === id;
+      return gearCell(id, { have: myOwned.includes(id), on, showSeries, onClick: () => equipGear(slot, on ? null : id) });
+    };
+    const pages = Object.entries(GR.SLOTS).map(([slot, label]) => {
+      const ids = all.filter(id => GR.GEAR[id].slot === slot);
+      return { key: slot, label, count: `${ids.filter(id => myOwned.includes(id)).length}/${ids.length}`, build() {
+        const grid = el('div', 'gear-grid');
+        ids.forEach(id => grid.appendChild(cellOf(id, true)));
+        return grid;
+      } };
     });
+    // 套裝頁：一個系列一列，頭飾｜服裝｜披風三欄，一眼看出還缺哪件
+    pages.push({ key: 'set', label: '套裝', build() {
+      const list = el('div', 'gear-sets');
+      Object.entries(GR.SERIES).forEach(([sid, S]) => {
+        const items = all.filter(id => GR.GEAR[id].series === sid && GR.LOOK_SLOTS.includes(GR.GEAR[id].slot));
+        if (!items.length || sid === 'single') return;
+        const got = items.filter(id => myOwned.includes(id)).length;
+        const row = el('div', 'gear-set' + (sid === setId ? ' set-on' : ''));
+        const h = row.appendChild(el('div', 'gear-set-h'));
+        h.appendChild(el('span', 'gear-h-name', S.name));
+        h.appendChild(el('span', 'gear-h-count', `${got} / ${items.length}`));
+        if (sid === setId) h.appendChild(el('span', 'gear-h-on', '發動中'));
+        row.appendChild(el('p', 'gear-h-desc', S.desc));
+        const cols = row.appendChild(el('div', 'gear-set-cols'));
+        GR.LOOK_SLOTS.forEach(slot => {
+          const col = cols.appendChild(el('div', 'gear-set-col'));
+          col.appendChild(el('span', 'gear-set-k', GR.SLOTS[slot]));
+          const ids = items.filter(id => GR.GEAR[id].slot === slot);
+          if (!ids.length) col.appendChild(el('span', 'gear-set-none', '沒有'));
+          ids.forEach(id => col.appendChild(cellOf(id, false)));
+        });
+        list.appendChild(row);
+      });
+      return list;
+    } });
+    const tabs = el('div', 'game-tabs gear-tabs');
+    const body = el('div', 'gear-page');
+    let cur = (() => { try { return localStorage.getItem('hq-gear-tab'); } catch (e) { return null; } })();
+    if (!pages.some(p => p.key === cur)) cur = 'outfit';
+    const show = (key) => {
+      cur = key;
+      try { localStorage.setItem('hq-gear-tab', key); } catch (e) {}
+      [...tabs.children].forEach(b => b.classList.toggle('on', b.dataset.k === key));
+      body.replaceChildren(pages.find(p => p.key === key).build());
+    };
+    pages.forEach(p => {
+      const b = el('button', null, p.label);
+      b.type = 'button'; b.dataset.k = p.key;
+      if (p.count) b.appendChild(el('small', null, p.count));
+      b.onclick = () => show(p.key);
+      tabs.appendChild(b);
+    });
+    box.appendChild(tabs);
+    box.appendChild(body);
+    show(cur);
     openModal('gear', '裝備', box);
     $('modal').classList.add('wide');
   }

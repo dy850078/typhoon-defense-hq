@@ -666,8 +666,8 @@
       [[28, 47], [36, 47]].forEach(([x, y]) => { C.blob(ctx, x, y, 3.6, 2.2, r, 0.1, 10); C.fill(ctx, '#e9e3ff', r, null); C.stroke(ctx, r, 1.2); });
     } },
     // 披風那一格：斜背在身後的古木魔杖，杖頭從右肩後面冒出來，杖尖在左腳邊
-    // 照繪師的草稿：杖頭是一大團漩渦木紋，把一顆深色圓珠包在裡面；杖身扭扭的，往下收成尖尖的
-    wzWand: { cape(ctx, C, r) {
+    // 照繪師的草稿：杖頭的木頭捲成月牙，祖母綠寶珠浮在缺口裡會轉；杖身扭扭的，往下收成尖尖的
+    wzWand: { cape(ctx, C, r, p) {
       const WOOD = '#c39a5f', GRAIN = '#6b4a32';
       // 杖的座標：杖頭朝上、原點在杖身中段；斜放到背後
       ctx.save(); ctx.translate(37.5, 48.5); ctx.rotate(0.8); ctx.scale(1.22, 1.22); ctx.translate(0, 16);
@@ -680,29 +680,38 @@
       [[-0.8, -33, 0.4, -20, -1, -6], [1, -30, 1.6, -16, 0.6, 2]].forEach(([x1, y1, cx, cy, x2, y2]) => {
         ctx.beginPath(); ctx.moveTo(x1, y1); ctx.quadraticCurveTo(cx, cy, x2, y2); C.stroke(ctx, r, 0.9, GRAIN);
       });
-      // 杖頭：一團不規則、像雲一樣起伏的木頭，右下多鼓出一塊
-      const HEAD = [[-10.5, -44], [-11, -49], [-8.5, -53], [-5, -56.5], [-1, -56], [2.5, -58], [7, -56], [10, -53.5], [12.5, -49], [11.5, -45], [13, -41.5], [10, -38], [6.5, -39], [3.5, -36.5], [0, -37.5], [-2.5, -34.5], [-6, -36.5], [-9, -39.5]];
-      C.smooth(ctx, HEAD); C.fill(ctx, WOOD, r, [-11, -58, 24, 24]); C.stroke(ctx, r, 2.2);
-      // 波浪狀的木紋繞著圓珠流動
+      // 杖頭：木頭往上捲成一個月牙，缺口朝右上；下面那個角往右伸出去
+      const HEAD = [[-4.5, -36.5], [-8.5, -41], [-10, -47], [-9, -53.5], [-5.5, -58.5], [-0.5, -61], [3.5, -60.5], [5, -58.5],
+        [2, -56.5], [-0.5, -53], [-1, -48.5], [1, -45], [5, -43.5], [9.5, -44.5], [12.5, -46], [13.5, -42.5], [11, -38.5], [6, -36], [1.5, -35]];
+      C.smooth(ctx, HEAD); C.fill(ctx, WOOD, r, [-10, -61, 24, 26]); C.stroke(ctx, r, 2.2);
+      // 木紋順著月牙彎
       ctx.save(); C.smooth(ctx, HEAD); ctx.clip();
-      [[[-8, -38], [-10, -46], [-7, -51], [-3, -54.5], [3, -55], [8, -52.5]],
-       [[-5, -38.5], [-7.5, -45], [-6, -50.5], [0, -52.5], [5, -51.5], [9.5, -48], [9.5, -43.5], [7, -41]],
-       [[1, -39.5], [5, -41.5], [8, -41], [11, -43]],
-       [[-3, -36.5], [-1.5, -40], [2, -41.5]]].forEach(line => {
+      [[[-2, -37.5], [-7, -44], [-6.5, -53], [-2, -58], [2.5, -59]],
+       [[1, -38], [-3.5, -44], [-4, -51.5], [-1.5, -56.5]],
+       [[3.5, -39], [8, -40.5], [11.5, -42.5]]].forEach(line => {
         ctx.beginPath(); ctx.moveTo(line[0][0], line[0][1]);
-        for (let i = 1; i < line.length; i++) { const [x0, y0] = line[i - 1], [x1, y1] = line[i]; ctx.quadraticCurveTo(x0 + (y1 - y0) * 0.25, y0 - (x1 - x0) * 0.25, x1, y1); }
+        for (let i = 1; i < line.length; i++) { const [x0, y0] = line[i - 1], [x1, y1] = line[i]; ctx.quadraticCurveTo(x0 + (y1 - y0) * 0.2, y0 - (x1 - x0) * 0.2, x1, y1); }
         C.stroke(ctx, r, 0.9, GRAIN);
       });
       ctx.restore();
-      // 圓珠：深藍紫色，外面一圈光，左邊一道月牙亮光
-      const g = ctx.createRadialGradient(-1, -47, 4, -1, -47, 8); g.addColorStop(0, 'rgba(170,150,255,0.35)'); g.addColorStop(1, 'rgba(170,150,255,0)');
-      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(-1, -47, 11, 0, Math.PI * 2); ctx.fill();
-      C.blob(ctx, -1, -47, 4.6, 4.6, r, 0.04, 14); C.fill(ctx, '#3a3f8f', r, null); C.stroke(ctx, r, 1.8);
-      ctx.save(); ctx.beginPath(); ctx.arc(-1, -47, 3.6, 0, Math.PI * 2); ctx.clip();
-      ctx.beginPath(); ctx.arc(-1, -47, 3.6, 0, Math.PI * 2); ctx.arc(0.4, -47.4, 3.2, 0, Math.PI * 2, true); ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.fill('evenodd');
+      // 祖母綠寶珠：浮在月牙的缺口裡，沒碰到木頭；p.spin（0～1）是轉到哪裡，經線跟著跑看起來就在轉
+      const ox = 7, oy = -52.5, R = 4.6, t = p && p.spin || 0;
+      const g = ctx.createRadialGradient(ox, oy, R * 0.8, ox, oy, R * 2.2); g.addColorStop(0, 'rgba(90,240,170,0.5)'); g.addColorStop(1, 'rgba(90,240,170,0)');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(ox, oy, R * 2.2, 0, Math.PI * 2); ctx.fill();
+      const og = ctx.createRadialGradient(ox - 1.5, oy - 1.5, 0.5, ox, oy, R); og.addColorStop(0, '#5fe0a8'); og.addColorStop(0.6, '#13a06a'); og.addColorStop(1, '#0b6b47');
+      ctx.beginPath(); ctx.arc(ox, oy, R, 0, Math.PI * 2); ctx.fillStyle = og; ctx.fill();
+      ctx.save(); ctx.beginPath(); ctx.arc(ox, oy, R, 0, Math.PI * 2); ctx.clip();
+      for (let i = 0; i < 3; i++) {
+        const ang = (t + i / 3) * Math.PI * 2, sx = Math.sin(ang);
+        if (Math.cos(ang) <= 0) continue;
+        ctx.beginPath(); ctx.ellipse(ox, oy, Math.max(0.2, R * Math.abs(sx)), R, 0, -Math.PI / 2, Math.PI / 2, sx < 0);
+        ctx.strokeStyle = 'rgba(200,255,230,0.55)'; ctx.lineWidth = 0.7; ctx.stroke();
+      }
       ctx.restore();
+      ctx.beginPath(); ctx.arc(ox, oy, R, 0, Math.PI * 2); C.stroke(ctx, r, 1.6);
+      C.blob(ctx, ox - 1.6, oy - 1.8, 1.2, 0.8, r, 0.1, 8); ctx.fillStyle = 'rgba(255,255,255,0.9)'; ctx.fill();
       ctx.restore();
-      [[78, 10, 1.8], [56, 2, 1.3]].forEach(([x, y, s]) => sparkle(ctx, x, y, s, '#d8ccff'));
+      [[78, 10, 1.8], [56, 2, 1.3]].forEach(([x, y, s]) => sparkle(ctx, x, y, s, '#b8ffe0'));
     } },
   });
   // 魔法少女的緞帶翅膀（右邊那片，左邊鏡像）：上面一大片、下面一小片，緞帶尾巴吊著星星

@@ -9,6 +9,7 @@ const STATS = require('./shared/stats');
 const GEAR = require('./shared/gear');
 const DECOR = require('./shared/decor');
 const BAG = require('./shared/bag');
+const GACHA = require('./shared/gacha');
 const ACCOUNTS = require('./accounts');
 const WISHES = require('./wishes');
 const GARDEN = require('./garden');
@@ -224,7 +225,7 @@ function mergeGuest(u, g) {
     const s = io.sockets.sockets.get(p.id);
     if (s) { s.emit('kicked', '你的帳號剛合併了另一台裝置的進度，請重新進入總部'); s.disconnect(true); }
   });
-  const patch = { owned, gear, seen, furn, inv, equip: Object.keys(a.equip).length ? a.equip : g.equip };
+  const patch = { owned, gear, seen, furn, inv, equip: Object.keys(a.equip).length ? a.equip : g.equip, gachaPity: Math.max(a.gachaPity, g.gachaPity) };
   if (gHigher) Object.assign(patch, { level: g.level, exp: g.exp, cls: g.cls });
   if (!a.vip && g.vip) Object.assign(patch, { vip: g.vip, photoHd: a.photoHd || g.photoHd });
   accounts.update(u, patch);
@@ -1022,6 +1023,11 @@ function emptyCrates() {
 }
 
 // ---------------- 打怪：扣血、打倒、掉落 ----------------
+// 頭目倒下：每個有出力的人（damage 裡有名字、人還在線上）各擲一次，擲中就多一張扭蛋券噴在地上
+function ticketRolls(damage) {
+  return [...players.values()].filter(q => damage.has(q.name) && Math.random() < GACHA.DROP_RATE)
+    .map(() => ({ kind: 'food', k: GACHA.TICKET }));
+}
 // p 是拿到傷害和經驗的玩家，hitBy 是實際出手的人或召喚物（給畫面用）
 function damageFoe(p, foe, isBoss, dmg, crit, skillId, hitBy) {
   if (foe.dg) return DG.damage(p, foe, dmg, crit, skillId, hitBy);
@@ -1038,6 +1044,7 @@ function damageFoe(p, foe, isBoss, dmg, crit, skillId, hitBy) {
     io.emit('mob', mobState(foe));
     gainExp(p, STATS.MOBS[foe.kind].exp);
     LOOT.fromFoe(foe);
+    if (STATS.MOBS[foe.kind].elite) LOOT.scatter(ticketRolls(foe.damage), foe.x, foe.y, null, 110);
     if (Math.random() < MOB_SEED_RATE) LOOT.scatter([{ kind: 'food', k: GARDEN.rollSeed() }], foe.x, foe.y); // 種子也噴在地上
     return;
   }
@@ -1053,6 +1060,7 @@ function damageFoe(p, foe, isBoss, dmg, crit, skillId, hitBy) {
   helpers.forEach(q => gainExp(q, 400));
   const B = STATS.DROPS.boss, pile = LOOT.roll(Object.assign({}, B, { n: [B.n[0] + helpers.length, B.n[1] + helpers.length] }));
   if (!pile.some(l => l.kind === 'gear')) { const id = GEAR.rollDrop({ rare: true }); if (id) pile.push({ kind: 'gear', k: id }); }
+  pile.push(...ticketRolls(monster.damage));
   LOOT.scatter(pile, monster.x, monster.y, null, 160);
   const mins = Math.round(RESPAWN_MS / 60000);
   const rank = top.length ? ' 輸出排行：' + top.map(([n, d], i) => `${i + 1}. ${n} ${d}`).join('、') : '';
@@ -1149,6 +1157,7 @@ const DG = createDungeons({
   summons: () => summons,
   hurtSummon,
   loot: () => LOOT,
+  ticketRolls: (damage) => ticketRolls(damage),
 });
 // 地上的掉落物（loot.js）
 const LOOT = createLoot({ io, players, MAP, STATS, GEAR, DECOR, BAG, pushChat: (m) => pushChat(m), dgOf: (p) => DG.dgOf(p) });
@@ -1265,6 +1274,8 @@ function sanitizeSave(data) {
     furn: Object.fromEntries(Object.keys(DECOR.DECOR).map(k => [k, clamp(Math.floor(Number(data.furn && data.furn[k])) || 0, 0, 50)])),
     // 背包裡的物資（泡麵、水…）
     inv: Object.fromEntries(Object.keys(MAP.ITEMS).map(k => [k, clamp(Math.floor(Number(data.inv && data.inv[k])) || 0, 0, INV_MAX)])),
+    // 扭蛋機：距離上一次扭到 SSR 已經扭了幾次（保底用）
+    gachaPity: clamp(Math.floor(Number(data.gachaPity)) || 0, 0, GACHA.PITY - 1),
   };
 }
 // 有登入的話，進度以帳號和瀏覽器比較高的那邊為準，舊分頁或別台裝置帶來的舊資料不會把等級拉低
@@ -1283,12 +1294,14 @@ function keepProgress(d, account) {
   if (account.save.gear) d.furn = a.furn;
   else Object.keys(d.furn).forEach(k => { d.furn[k] = Math.max(d.furn[k], a.furn[k]); });
   if (account.save.inv) d.inv = a.inv;
+  if (account.save.gachaPity != null) d.gachaPity = a.gachaPity;
 }
 // 把總部裡的角色狀態存回帳號
 function snapshot(p) {
   if (!p.account) return;
   accounts.update(p.account, { name: p.name, hair: p.hair, skin: p.skin, hairColor: p.hairColor, outfit: p.outfit, glasses: p.glasses, face: p.face,
-    cls: p.cls, level: p.level, exp: p.exp, owned: p.owned, gear: p.gear, seen: p.seen, equip: p.equip, furn: p.furn, inv: p.inv, vip: p.vip });
+    cls: p.cls, level: p.level, exp: p.exp, owned: p.owned, gear: p.gear, seen: p.seen, equip: p.equip, furn: p.furn, inv: p.inv, vip: p.vip,
+    gachaPity: p.gachaPity });
 }
 setInterval(() => players.forEach(snapshot), 20000);
 
@@ -1473,7 +1486,7 @@ io.on('connection', (socket) => {
     players.set(socket.id, p);
 
     growMonster();
-    ack({ ok: true, you: Object.assign(publicPlayer(p), { owned: p.owned, gear: p.gear, seen: p.seen, furn: p.furn, inv: p.inv }), loot: LOOT.list(), players: [...players.values()].map(publicPlayer), history,
+    ack({ ok: true, you: Object.assign(publicPlayer(p), { owned: p.owned, gear: p.gear, seen: p.seen, furn: p.furn, inv: p.inv, gachaPity: p.gachaPity }), loot: LOOT.list(), players: [...players.values()].map(publicPlayer), history,
       monster: monsterState(), mobs: mobs.map(mobState).concat(DG.allFoes().map(mobState)), emptyCrates: emptyCrates(), dungeon: DG.state(),
       summons: summons.map(summonState), decor: decorList(), garden: garden.state(),
       walls: walls.map(w => ({ id: w.id, kind: w.kind, pts: w.pts, ms: w.until - Date.now() })), storms: storms.map(stormState), music: musicState() });
@@ -1511,7 +1524,7 @@ io.on('connection', (socket) => {
     if (c.emptyUntil > now) return ack({ ok: false, empty: true });
     // 背包的補品區放不下的箱子不讓敲（shared/bag.js）
     const pile = MAP.CRATES[ci].item;
-    const pool = (Array.isArray(pile) ? pile : pile ? [pile] : Object.keys(MAP.ITEMS).filter(k => !MAP.ITEMS[k].garden)).filter(k => BAG.canAdd(p, 'food', k));
+    const pool = (Array.isArray(pile) ? pile : pile ? [pile] : Object.keys(MAP.ITEMS).filter(k => !MAP.ITEMS[k].garden && !MAP.ITEMS[k].ticket)).filter(k => BAG.canAdd(p, 'food', k));
     if (!pool.length) return ack({ ok: false, full: true });
     lastAction = now;
     io.emit('crateHit', { tx, ty, id: p.id });
@@ -1882,6 +1895,53 @@ io.on('connection', (socket) => {
     const p = players.get(socket.id);
     if (!p || typeof ack !== 'function' || !BAG_KINDS.includes(kind)) return;
     ack(LOOT.trash(p, kind, String(k)));
+  });
+
+  // ---------------- 扭蛋機（物資倉庫） ----------------
+  // 要站在扭蛋機旁邊；扭一次用一張券，裝備放進背包（裝備區滿了就掉在腳邊）
+  const gachaState = (p) => ({ inv: p.inv, pity: p.gachaPity, spares: GACHA.spares(p.gear).length });
+  socket.on('gachaSpin', (ack) => {
+    const p = players.get(socket.id);
+    if (!p || typeof ack !== 'function' || p.dead) return;
+    if (!MAP.nearGacha(p.x, p.y)) return ack({ ok: false, error: '走到扭蛋機旁邊再扭' });
+    if ((p.inv[GACHA.TICKET] || 0) < 1) return ack({ ok: false, error: '沒有扭蛋券了，打倒頭目有機會掉' });
+    p.inv[GACHA.TICKET]--;
+    const r = GACHA.spin(p.gachaPity, BAG.ownedOf(p.gear));
+    const pityHit = p.gachaPity + 1 >= GACHA.PITY;
+    p.gachaPity = r.pity;
+    const g = GEAR.GEAR[r.id], fresh = !p.gear[r.id];
+    const inBag = LOOT.giveOrDrop(p, 'gear', r.id);
+    if (g.rarity === 'SSR') pushChat({ system: true, text: `${p.name} 在扭蛋機扭到了【SSR】${g.name}！`, t: Date.now() });
+    snapshot(p);
+    ack(Object.assign({ ok: true, item: r.id, fresh, pityHit, dropped: !inBag }, gachaState(p)));
+  });
+  // 回收：兩件重複的扭蛋裝備換一張券（每件都會留一件，從 R 開始拿）
+  socket.on('gachaRecycle', (ack) => {
+    const p = players.get(socket.id);
+    if (!p || typeof ack !== 'function') return;
+    if (!MAP.nearGacha(p.x, p.y)) return ack({ ok: false, error: '走到扭蛋機旁邊再回收' });
+    const sp = GACHA.spares(p.gear).slice(0, GACHA.RECYCLE);
+    if (sp.length < GACHA.RECYCLE) return ack({ ok: false, error: `要有 ${GACHA.RECYCLE} 件重複的扭蛋裝備才能換` });
+    if ((p.inv[GACHA.TICKET] || 0) >= INV_MAX) return ack({ ok: false, error: '扭蛋券已經滿了' });
+    sp.forEach(id => { p.gear[id]--; });
+    p.inv[GACHA.TICKET] = (p.inv[GACHA.TICKET] || 0) + 1;
+    LOOT.sync(p);
+    snapshot(p);
+    ack(Object.assign({ ok: true, used: sp }, gachaState(p)));
+  });
+  // 花園寶石換券：一顆換三張，先用數量最多的那種
+  socket.on('gachaGem', (ack) => {
+    const p = players.get(socket.id);
+    if (!p || typeof ack !== 'function') return;
+    if (!MAP.nearGacha(p.x, p.y)) return ack({ ok: false, error: '走到扭蛋機旁邊再換' });
+    const gem = Object.keys(MAP.ITEMS).filter(k => MAP.ITEMS[k].gem && p.inv[k] > 0).sort((a, b) => p.inv[b] - p.inv[a])[0];
+    if (!gem) return ack({ ok: false, error: '沒有寶石，花園收成時有機會挖到' });
+    if ((p.inv[GACHA.TICKET] || 0) + GACHA.GEM_TICKETS > INV_MAX) return ack({ ok: false, error: '扭蛋券快滿了，先扭掉一些' });
+    p.inv[gem]--;
+    p.inv[GACHA.TICKET] = (p.inv[GACHA.TICKET] || 0) + GACHA.GEM_TICKETS;
+    LOOT.sync(p);
+    snapshot(p);
+    ack(Object.assign({ ok: true, gem }, gachaState(p)));
   });
 
   // ---------------- 副本 ----------------

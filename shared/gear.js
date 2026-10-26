@@ -21,6 +21,8 @@
     typhoon: { name: '防颱', desc: '這個系列沒有披風，純收藏' },
     hualien: { name: '花蓮副本', desc: '打倒花蓮王才會掉的武器' },
     taipei: { name: '台北101副本', desc: '打倒天龍王才會掉的武器' },
+    magical: { name: '魔法少女', fx: 'starTrail', desc: '扭蛋限定。穿齊：走路留下一串星星，站著時腳下亮起魔法陣' },
+    wizard: { name: '小巫師', fx: 'rune', desc: '扭蛋限定。穿齊：身邊飄著發光的小書頁和符文' },
     single: { name: '單品', desc: '不成套，隨你搭' },
   };
 
@@ -68,6 +70,13 @@
     maid: { slot: 'outfit', name: '女僕裝', rarity: 'SR', series: 'maid', icon: '👗', src: 'cook' },
     butler: { slot: 'outfit', name: '執事服', rarity: 'SR', series: 'maid', icon: '🤵', src: 'cook' },
     heartBow: { slot: 'cape', name: '愛心大蝴蝶結', rarity: 'R', series: 'maid', icon: '💗', src: 'cook' },
+    // 第四批：扭蛋機限定（src: 'gacha'）
+    mgBow: { slot: 'head', name: '星月大蝴蝶結', rarity: 'R', series: 'magical', src: 'gacha' },
+    mgDress: { slot: 'outfit', name: '魔法少女蓬蓬裙', rarity: 'SR', series: 'magical', src: 'gacha' },
+    mgWings: { slot: 'cape', name: '緞帶星星翅膀', rarity: 'SSR', series: 'magical', src: 'gacha' },
+    wzHat: { slot: 'head', name: '歪歪巫師帽', rarity: 'R', series: 'wizard', src: 'gacha' },
+    wzRobe: { slot: 'outfit', name: '星空巫師袍', rarity: 'SR', series: 'wizard', src: 'gacha' },
+    wzWand: { slot: 'cape', name: '古木魔杖', rarity: 'SSR', series: 'wizard', src: 'gacha' },
     // 武器：花蓮副本（打倒花蓮王才會掉）
     lilyDart: { slot: 'weapon', name: '金針花標', rarity: 'R', series: 'hualien', icon: '🌼', basic: 'lilyDart', dungeon: 'hualien' },
     qixingStaff: { slot: 'weapon', name: '七星潭法杖', rarity: 'SR', series: 'hualien', icon: '🔮', basic: 'pebbleOrb', dungeon: 'hualien' },
@@ -574,6 +583,204 @@
     } },
   });
 
+  // 第四批：扭蛋機限定（src: 'gacha'，只有扭蛋扭得到）——魔法少女、小巫師
+  Object.assign(DRAW, {
+    mgBow: { head(ctx, C, r) {
+      // 頭頂一個粉紅大蝴蝶結，兩條緞帶垂在頭的兩邊，中間是金色星星釦
+      [-1, 1].forEach(k => {
+        ctx.beginPath(); ctx.moveTo(32 + k * 2, 11); ctx.quadraticCurveTo(32 + k * 10, 15, 32 + k * 13, 22);
+        ctx.lineTo(32 + k * 8, 21.5); ctx.quadraticCurveTo(32 + k * 6, 16, 32, 12.5); ctx.closePath();
+        C.fill(ctx, '#ff7fae', r, null); C.stroke(ctx, r, 1.6);
+      });
+      [-1, 1].forEach(k => {
+        ctx.beginPath(); ctx.moveTo(32, 9);
+        ctx.bezierCurveTo(32 + k * 8, -6, 32 + k * 24, -8, 32 + k * 21, 5);
+        ctx.bezierCurveTo(32 + k * 19, 14, 32 + k * 8, 14, 32, 9); ctx.closePath();
+        C.fill(ctx, '#ff9fc6', r, [8, -8, 48, 24]); C.stroke(ctx, r, W);
+        ctx.beginPath(); ctx.moveTo(32 + k * 5, 7); ctx.quadraticCurveTo(32 + k * 13, -1, 32 + k * 17, 5);
+        C.stroke(ctx, r, 1.3, 'rgba(255,255,255,0.75)');
+      });
+      C.blob(ctx, 32, 9, 5.6, 5.2, r, 0.06, 12); C.fill(ctx, '#ffd23f', r, null); C.stroke(ctx, r, 1.8);
+      moon(ctx, C, r, 31, 9, 3.2, '#fff6c9');
+      [[13, -4, 2.2], [52, -6, 2.6]].forEach(([x, y, s]) => sparkle(ctx, x, y, s, '#ffd23f'));
+    } },
+    mgDress: { front(ctx, C, r, p) {
+      suit(ctx, C, r, p, { body: '#c9a3f0', sleeve: '#fbfbf8', legs: '#fbfbf8', shoes: '#ff7fae', hem: 62 });
+      // 裙子底下露出一圈白色襯裙
+      for (let x = 12; x <= 52; x += 5) { C.blob(ctx, x, 71, 3.4, 2.4, r, 0.12, 10); C.fill(ctx, '#ffffff', r, null); C.stroke(ctx, r, 1); }
+      // 粉紅蓬蓬裙，裙襬一球一球
+      ctx.beginPath(); ctx.moveTo(19, 56); ctx.quadraticCurveTo(32, 53, 45, 56); ctx.quadraticCurveTo(54, 62, 56, 70);
+      for (let i = 0; i < 6; i++) { const x0 = 56 - i * 8, x1 = x0 - 8; ctx.quadraticCurveTo((x0 + x1) / 2, 75, x1, 70); }
+      ctx.quadraticCurveTo(10, 62, 19, 56); ctx.closePath();
+      C.fill(ctx, '#ff9fc6', r, [8, 53, 48, 22], 1.2); C.stroke(ctx, r, W);
+      [[18, 66], [32, 68], [45, 65], [26, 61], [39, 61]].forEach(([x, y], i) => sparkle(ctx, x, y, i % 2 ? 1.1 : 1.5, '#fff6c9'));
+      C.line(ctx, 19, 56.5, 45, 56.5, r, 2.6, '#ffd23f', 0.3);
+      // 泡泡袖
+      [[15, 48.5], [49, 48.5]].forEach(([x, y]) => { C.blob(ctx, x, y, 6.2, 4.8, r, 0.1, 12); C.fill(ctx, '#ff9fc6', r, null); C.stroke(ctx, r, 1.8); });
+      // 胸前的大蝴蝶結和愛心寶石
+      [-1, 1].forEach(k => {
+        ctx.beginPath(); ctx.moveTo(32, 50); ctx.quadraticCurveTo(32 + k * 9, 43, 32 + k * 10, 50); ctx.quadraticCurveTo(32 + k * 9, 56, 32, 50); ctx.closePath();
+        C.fill(ctx, '#ff7fae', r, null); C.stroke(ctx, r, 1.4);
+      });
+      heart(ctx, 32, 51, 4.4); C.fill(ctx, '#ff3f7f', r, null); C.stroke(ctx, r, 1.4);
+      dot(ctx, 30.6, 49.6, 1, 'rgba(255,255,255,0.9)');
+    } },
+    mgWings: { cape(ctx, C, r) {
+      ribbonWing(ctx, C, r);
+      ctx.save(); ctx.translate(64, 0); ctx.scale(-1, 1); ribbonWing(ctx, C, r); ctx.restore();
+    } },
+    wzHat: { head(ctx, C, r) {
+      // 寬帽簷、帽尖軟軟地垂向右邊，金色帽帶上一個月亮釦，帽尖吊一顆小星星；整頂往下壓，戴得低低的
+      ctx.save(); ctx.translate(0, HAT_DOWN);
+      C.blob(ctx, 32, 11, 26, 6, r, 0.05); C.fill(ctx, '#3b4785', r, [6, 5, 52, 12]); C.stroke(ctx, r, W);
+      ctx.beginPath(); ctx.moveTo(18, 10); ctx.quadraticCurveTo(23, -6, 33, -16);
+      ctx.quadraticCurveTo(41, -24, 49, -20); ctx.quadraticCurveTo(56, -16, 57, -8);
+      ctx.quadraticCurveTo(51, -13, 45, -11); ctx.quadraticCurveTo(43, 0, 46, 10); ctx.closePath();
+      C.fill(ctx, '#3b4785', r, [18, -24, 40, 34]); C.stroke(ctx, r, W);
+      ctx.beginPath(); ctx.moveTo(19.5, 4.5); ctx.quadraticCurveTo(32, 7.5, 45, 4.5); ctx.lineTo(46, 10); ctx.quadraticCurveTo(32, 13, 18, 10); ctx.closePath();
+      C.fill(ctx, '#ffd23f', r, null); C.stroke(ctx, r, 1.6);
+      moon(ctx, C, r, 32, 8, 3.6, '#fff6c9');
+      [[27, -4], [37, -12], [40, 0]].forEach(([x, y], i) => sparkle(ctx, x, y, i ? 1.7 : 2.2, '#ffd23f'));
+      C.line(ctx, 57, -8, 57.5, -2, r, 1.2);
+      star(ctx, C, r, 57.5, 0.5, 3.6, '#ffd23f');
+      ctx.restore();
+    } },
+    wzRobe: { front(ctx, C, r, p) {
+      suit(ctx, C, r, p, { body: '#2c3768', sleeve: '#2c3768', legs: '#2c3768', shoes: '#6b4a32', hem: 73 });
+      // 喇叭袖口，鑲金邊
+      [[13, -1], [51, 1]].forEach(([x, k]) => {
+        ctx.beginPath(); ctx.moveTo(x - 4, 57); ctx.lineTo(x + 4, 57); ctx.lineTo(x + 5 + k, 63); ctx.quadraticCurveTo(x, 64.5, x - 5 + k, 63); ctx.closePath();
+        C.fill(ctx, '#2c3768', r, null); C.stroke(ctx, r, 1.8);
+        ctx.beginPath(); ctx.moveTo(x - 5 + k, 63); ctx.quadraticCurveTo(x, 64.5, x + 5 + k, 63); C.stroke(ctx, r, 1.6, '#ffd23f');
+      });
+      // 前面開襟露出淡紫色內襯，腰間一條金色細繩打個結
+      ctx.beginPath(); ctx.moveTo(29, 48); ctx.lineTo(35, 48); ctx.lineTo(37, 74); ctx.lineTo(27, 74); ctx.closePath();
+      C.fill(ctx, '#8f86d6', r, null); C.stroke(ctx, r, 1.4);
+      C.line(ctx, 29, 48, 27, 74, r, 1.4, '#ffd23f', 0.3); C.line(ctx, 35, 48, 37, 74, r, 1.4, '#ffd23f', 0.3);
+      ctx.beginPath(); ctx.moveTo(19, 57); ctx.quadraticCurveTo(32, 60, 45, 57); C.stroke(ctx, r, 1.6, '#ffd23f');
+      C.blob(ctx, 32, 59, 2.2, 2, r, 0.1, 10); C.fill(ctx, '#ffd23f', r, null); C.stroke(ctx, r, 1);
+      C.line(ctx, 31.5, 60.5, 30, 66, r, 1.2, '#ffd23f', 0.3); C.line(ctx, 32.5, 60.5, 34, 66, r, 1.2, '#ffd23f', 0.3);
+      // 長袍上的星星和月亮
+      [[23, 51], [42, 52], [22, 67], [43, 69]].forEach(([x, y], i) => sparkle(ctx, x, y, i % 2 ? 1.4 : 1.8, '#ffd23f'));
+      [[24, 61], [41, 62], [19, 72], [46, 74]].forEach(([x, y]) => dot(ctx, x, y, 0.9, '#ffffff'));
+      moon(ctx, C, r, 42, 61, 2.6, '#ffd23f');
+      // 白色小立領
+      [[28, 47], [36, 47]].forEach(([x, y]) => { C.blob(ctx, x, y, 3.6, 2.2, r, 0.1, 10); C.fill(ctx, '#e9e3ff', r, null); C.stroke(ctx, r, 1.2); });
+    } },
+    // 披風那一格：斜背在身後的古木魔杖，杖頭從右肩後面冒出來，杖尖在左腳邊
+    // 照繪師給的參考圖：上半段是一截扭來扭去的老木頭，頂端捲成問號，祖母綠寶珠浮在問號的圈圈裡會轉；
+    // 下半段是細細直直的深色杖身，靠近尾巴有一圈銀環，最下面是金屬尖頭
+    wzWand: { cape(ctx, C, r, p) {
+      const WOOD = '#b98a52', DARK = '#5a3a24', GRAIN = '#6b4a32';
+      // 杖的座標：杖頭朝上、原點在杖身中段；斜斜背在背後，杖尖露在身體左下外面
+      ctx.save(); WAND.place(ctx);
+      // 一條開放的曲線，經過中點用二次曲線連起來
+      const path = (pts) => {
+        ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]);
+        for (let i = 1; i < pts.length - 1; i++) ctx.quadraticCurveTo(pts[i][0], pts[i][1], (pts[i][0] + pts[i + 1][0]) / 2, (pts[i][1] + pts[i + 1][1]) / 2);
+        const e = pts[pts.length - 1]; ctx.lineTo(e[0], e[1]);
+      };
+      // 扭扭的木頭：從杖身頂端往上左右彎，最上面往左繞一圈、從右邊彎下來收進圈裡，像一個問號
+      const TWIST = [[0, -24], [0.5, -27], [-2.8, -30.5], [2.6, -34.5], [-2.6, -38.5], [1.6, -42], [-3.5, -45.5],
+        [-8.5, -50], [-9.5, -57.5], [-5.5, -64], [1.5, -66], [8.5, -63], [11.5, -56], [9.8, -50.5], [7.8, -48.6]];
+      const SHAFT = [[0, -26], [0, 12]];
+      ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+      // 一體成型：先把黑邊（比木頭粗一圈）全部畫完，再把顏色蓋上去，接縫就不會有線
+      path(TWIST); C.stroke(ctx, r, 6.2); path(SHAFT); C.stroke(ctx, r, 4.2);
+      // 金屬尖頭
+      ctx.beginPath(); ctx.moveTo(-1.6, 11); ctx.lineTo(0, 17); ctx.lineTo(1.6, 11); ctx.closePath();
+      C.fill(ctx, '#c9ced8', r, null); C.stroke(ctx, r, 1.1);
+      path(SHAFT); C.stroke(ctx, r, 2, DARK);
+      path(TWIST); C.stroke(ctx, r, 3.7, WOOD);
+      // 木頭的節：轉彎的地方鼓起來一點
+      [[-2.4, -30.6, 2.3], [2.2, -34.5, 2.2], [-2.2, -38.5, 2.2]].forEach(([x, y, s]) => {
+        C.blob(ctx, x, y, s, s * 0.9, r, 0.12, 9); C.fill(ctx, WOOD, r, null);
+      });
+      // 木紋：沿著木頭畫幾條細細的深色線
+      [[[-0.6, -29.5], [-1.6, -31.5], [0.6, -34]], [[-0.8, -37.5], [-0.2, -41]], [[-8.3, -53], [-7.4, -59], [-4, -63.6]], [[4.5, -64.6], [9.4, -60]]].forEach(l => {
+        path(l); C.stroke(ctx, r, 0.8, GRAIN);
+      });
+      // 銀環：杖身靠近尾巴的地方，還有木頭接杖身的地方一圈深色的綁繩
+      ctx.beginPath(); ctx.rect(-1.9, 6.5, 3.8, 2.2); C.fill(ctx, '#eef1f5', r, null); C.stroke(ctx, r, 0.9);
+      ctx.beginPath(); ctx.rect(-2, -25.5, 4, 2); C.fill(ctx, '#3d2817', r, null);
+      // 祖母綠寶珠：浮在問號的圈圈裡，沒碰到木頭（遊戲裡另外疊一張會轉的上去，見 WAND）
+      ctx.translate(WAND.orb[0], WAND.orb[1]); wandOrb(ctx, C, r, p && p.spin, p && p.spin != null);
+      ctx.restore();
+      [[77, 14, 1.8], [60, 6, 1.3]].forEach(([x, y, s]) => sparkle(ctx, x, y, s, '#b8ffe0'));
+    } },
+  });
+  // 古木魔杖的祖母綠寶珠，畫在 (0, 0)：t（0～1）是轉到哪裡，經線跟著跑看起來就在轉；spark 要不要畫繞著轉的小亮光
+  // noGlow：不畫外面那圈光（遊戲裡疊上去的那張用，底圖已經有光了）
+  function wandOrb(ctx, C, r, t, spark, noGlow) {
+    const R = 4.6;
+    t = t || 0;
+    if (!noGlow) {
+      const g = ctx.createRadialGradient(0, 0, R * 0.8, 0, 0, R * 2.2); g.addColorStop(0, 'rgba(90,240,170,0.5)'); g.addColorStop(1, 'rgba(90,240,170,0)');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, R * 2.2, 0, Math.PI * 2); ctx.fill();
+    }
+    const og = ctx.createRadialGradient(-1.5, -1.5, 0.5, 0, 0, R); og.addColorStop(0, '#5fe0a8'); og.addColorStop(0.6, '#13a06a'); og.addColorStop(1, '#0b6b47');
+    ctx.beginPath(); ctx.arc(0, 0, R, 0, Math.PI * 2); ctx.fillStyle = og; ctx.fill();
+    ctx.save(); ctx.beginPath(); ctx.arc(0, 0, R, 0, Math.PI * 2); ctx.clip();
+    for (let i = 0; i < 3; i++) {
+      const ang = (t + i / 3) * Math.PI * 2, sx = Math.sin(ang);
+      if (Math.cos(ang) <= 0) continue;
+      ctx.beginPath(); ctx.ellipse(0, 0, Math.max(0.2, R * Math.abs(sx)), R, 0, -Math.PI / 2, Math.PI / 2, sx < 0);
+      ctx.strokeStyle = 'rgba(200,255,230,0.55)'; ctx.lineWidth = 0.7; ctx.stroke();
+    }
+    ctx.restore();
+    ctx.beginPath(); ctx.arc(0, 0, R, 0, Math.PI * 2); C.stroke(ctx, r, 1.6);
+    C.blob(ctx, -1.6, -1.8, 1.2, 0.8, r, 0.1, 8); ctx.fillStyle = 'rgba(255,255,255,0.9)'; ctx.fill();
+    if (!spark) return;
+    // 一顆小亮光斜斜地繞著寶珠轉圈；轉到後面時變小變淡
+    const sa = t * Math.PI * 2 * 2, front = Math.sin(sa) > 0;
+    const sx = Math.cos(sa) * R * 1.9, sy = Math.sin(sa) * R * 0.7 - Math.cos(sa) * R * 0.5;
+    ctx.save(); ctx.globalAlpha = front ? 1 : 0.45;
+    const sg = ctx.createRadialGradient(sx, sy, 0, sx, sy, 3.2); sg.addColorStop(0, 'rgba(60,220,150,0.7)'); sg.addColorStop(1, 'rgba(60,220,150,0)');
+    ctx.fillStyle = sg; ctx.beginPath(); ctx.arc(sx, sy, 3.2, 0, Math.PI * 2); ctx.fill();
+    sparkle(ctx, sx, sy, front ? 1.4 : 0.9, '#ffffff'); ctx.restore();
+  }
+  // 古木魔杖背在背上的位置（人物框座標）；orb 是寶珠在魔杖自己座標裡的位置
+  // 遊戲裡在寶珠的位置疊一張會轉的小圖（draw 畫一格），at 是寶珠在人物框裡的中心
+  const HAT_DOWN = 5;
+  const WAND = {
+    orb: [1, -55.5],
+    place(ctx) { ctx.translate(31.9, 47.9); ctx.rotate(0.9); ctx.scale(1.25, 1.25); ctx.translate(0, 16); },
+    // 畫一格會轉的寶珠：ctx 的原點要先移到寶珠中心
+    frame(ctx, C, t) { ctx.save(); ctx.rotate(0.9); ctx.scale(1.25, 1.25); wandOrb(ctx, C, C.rng(5), t, true, true); ctx.restore(); },
+  };
+  {
+    const a = 0.9, k = 1.25, x = WAND.orb[0] * k, y = (WAND.orb[1] + 16) * k;
+    WAND.at = [31.9 + x * Math.cos(a) - y * Math.sin(a), 47.9 + x * Math.sin(a) + y * Math.cos(a)];
+  }
+  // 魔法少女的緞帶翅膀（右邊那片，左邊鏡像）：上面一大片、下面一小片，緞帶尾巴吊著星星
+  function ribbonWing(ctx, C, r) {
+    ctx.beginPath(); ctx.moveTo(38, 46); ctx.bezierCurveTo(44, 22, 64, 8, 75, 13); ctx.bezierCurveTo(80, 24, 66, 40, 40, 50); ctx.closePath();
+    C.fill(ctx, '#fde7f3', r, [38, 8, 42, 42]); C.stroke(ctx, r, W);
+    ctx.beginPath(); ctx.moveTo(42, 46); ctx.bezierCurveTo(50, 30, 63, 18, 71, 16.5); C.stroke(ctx, r, 1.6, '#ff8fb8');
+    ctx.beginPath(); ctx.moveTo(40, 50); ctx.bezierCurveTo(56, 45, 70, 49, 70, 59); ctx.bezierCurveTo(62, 63, 50, 58, 40, 53); ctx.closePath();
+    C.fill(ctx, '#e6d6ff', r, null); C.stroke(ctx, r, W);
+    ctx.beginPath(); ctx.moveTo(41, 52); ctx.bezierCurveTo(52, 62, 58, 69, 66, 71); C.stroke(ctx, r, 2.4, '#ff8fb8');
+    star(ctx, C, r, 67, 72, 4.4, '#ffd23f');
+    sparkle(ctx, 76, 6, 2.4, '#ffd23f');
+  }
+  // 月亮：外圈減掉往右上偏的內圈
+  function moon(ctx, C, r, x, y, R, color) {
+    ctx.save(); ctx.beginPath(); ctx.arc(x, y, R, 0, Math.PI * 2); ctx.clip();
+    ctx.beginPath(); ctx.arc(x, y, R, 0, Math.PI * 2); ctx.arc(x + R * 0.55, y - R * 0.3, R * 0.85, 0, Math.PI * 2, true);
+    ctx.fillStyle = color; ctx.fill('evenodd'); C.stroke(ctx, r, 1.1); ctx.restore();
+  }
+  // 四角的小亮光
+  function sparkle(ctx, x, y, s, color) {
+    ctx.save(); ctx.fillStyle = color; ctx.beginPath();
+    ctx.moveTo(x, y - s * 2); ctx.quadraticCurveTo(x, y, x + s * 2, y); ctx.quadraticCurveTo(x, y, x, y + s * 2); ctx.quadraticCurveTo(x, y, x - s * 2, y); ctx.quadraticCurveTo(x, y, x, y - s * 2);
+    ctx.fill(); ctx.restore();
+  }
+  function heart(ctx, cx, cy, s) {
+    ctx.beginPath(); ctx.moveTo(cx, cy + s);
+    ctx.bezierCurveTo(cx - s * 1.6, cy, cx - s, cy - s * 1.3, cx, cy - s * 0.4);
+    ctx.bezierCurveTo(cx + s, cy - s * 1.3, cx + s * 1.6, cy, cx, cy + s); ctx.closePath();
+  }
+
   function star(ctx, C, r, x, y, rr, color) {
     ctx.save(); ctx.translate(x, y); ctx.beginPath();
     for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + (i * Math.PI) / 5, k = i % 2 ? rr * 0.45 : rr; ctx.lineTo(Math.cos(a) * k, Math.sin(a) * k); }
@@ -781,7 +988,7 @@
     return SERIES[sid] && SERIES[sid].fx && ids.every(id => GEAR[id].series === sid) ? sid : null;
   }
 
-  const gear = { RARITY, SLOTS, LOOK_SLOTS, SERIES, GEAR, setOf, DROP, DROP_ITEMS, roll, rollWeapon, rollDrop, hasLayer, drawLayer, LAYERS: ['cape', 'back', 'front', 'head', 'over', 'hand'] };
+  const gear = { RARITY, SLOTS, LOOK_SLOTS, SERIES, GEAR, WAND, setOf, DROP, DROP_ITEMS, roll, rollWeapon, rollDrop, hasLayer, drawLayer, LAYERS: ['cape', 'back', 'front', 'head', 'over', 'hand'] };
   if (typeof module !== 'undefined' && module.exports) module.exports = gear;
   else root.HQ_GEAR = gear;
 })(this);

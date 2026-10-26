@@ -259,6 +259,10 @@ button.inv-item:hover { border-color: var(--accent); }
 #chat.collapsed #chat-toggle span { display: inline-block; transform: rotate(180deg); }
 #messages { height: 170px; overflow-y: auto; font-size: 14px; line-height: 1.55; padding: 0 4px 6px; }
 #messages .sys { color: var(--muted); }
+#messages.no-sys .sys { display: none; }
+#chat-sys { position: absolute; top: 3px; right: 30px; width: 26px; height: 24px; padding: 0; border: 0; background: none; cursor: pointer; }
+#chat-sys img { width: 22px; height: 22px; display: block; margin: auto; }
+#chat.collapsed #chat-sys { display: none; }
 #messages b { color: var(--accent-ink); }
 #chat-input { margin: 0; padding: 8px 12px; font-size: 15px; }
 #help { right: 12px; bottom: 12px; background: var(--note); color: var(--note-ink); border: 2px solid var(--note-ink);

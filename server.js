@@ -349,7 +349,7 @@ app.post('/api/admin/gift', (req, res) => {
     });
     sent++;
   });
-  if (sent) pushChat({ system: true, text: `🎁 管理員送出了【${g.rarity}】${g.icon ? g.icon + ' ' : ''}${g.name}${all ? '給大家' : `給 ${users[0].save.name || users[0].username}`}！`, t: Date.now() });
+  if (sent) pushChat({ system: true, text: `管理員送出了【${g.rarity}】${g.name}${all ? '給大家' : `給 ${users[0].save.name || users[0].username}`}！`, t: Date.now() });
   res.json({ ok: true, sent, had });
 });
 app.post('/api/admin/delete', (req, res) => {
@@ -536,7 +536,7 @@ function spawnMonster() {
   monster.damage.clear();
   pickMonsterTarget();
   io.emit('monster', monsterState());
-  pushChat({ system: true, text: `🌀 颱風${STATS.MONSTER.name}又生成了！大家快到颱風前線集合！`, t: Date.now() });
+  pushChat({ system: true, text: `颱風${STATS.MONSTER.name}又生成了！大家快到颱風前線集合！`, t: Date.now() });
 }
 
 // 有新玩家進來時，颱風的血量上限跟著變高（不會變低）
@@ -717,6 +717,8 @@ function pushChat(msg) {
   if (history.length > HISTORY_SIZE) history.shift();
   io.emit('chat', msg);
 }
+// 只跟某個人有關的系統訊息：在他自己畫面上跳小提示，不進聊天區
+function tell(id, text) { io.to(id).emit('sysToast', { text }); }
 
 // ---------------- 角色數值 ----------------
 // 防禦力 = 職業的防禦 + 還沒過期的增益
@@ -752,8 +754,9 @@ function levelUp(p, byTime) {
   if (!p.dead) { p.hp = p.maxHp; p.mp = p.maxMp; } // 升等順便補滿
   sendStats(p);
   io.emit('levelUp', { id: p.id, level: p.level });
-  const extra = p.level === STATS.LEVEL.fireworkLv ? '，可以放慶祝煙火了 🎆' : '';
-  pushChat({ system: true, text: `⭐ ${p.name} 升到 Lv.${p.level}${byTime ? '（陪大家 10 分鐘）' : ''}${extra}`, t: Date.now() });
+  // 升到等級上限才廣播給大家，其他時候只跟自己說
+  if (p.level === STATS.LEVEL.max) pushChat({ system: true, text: `${p.name} 升到 Lv.${p.level}，登上最高等級了！`, t: Date.now() });
+  else tell(p.id, `升到 Lv.${p.level}${byTime ? '（陪大家 10 分鐘）' : ''}${p.level === STATS.LEVEL.fireworkLv ? '，可以放慶祝煙火了' : ''}`);
 }
 
 function hurt(p, raw, by) {
@@ -763,7 +766,7 @@ function hurt(p, raw, by) {
   p.dead = true;
   sendStats(p);
   if (DG.isMember(p)) return DG.onDeath(p, by); // 副本裡倒下：在這一關的起點復活
-  pushChat({ system: true, text: `💫 ${p.name} 被${by}打倒了，${STATS.RESPAWN_MS / 1000} 秒後回到總部`, t: Date.now() });
+  tell(p.id, `被${by}打倒了，${STATS.RESPAWN_MS / 1000} 秒後回到總部`);
   setTimeout(() => {
     if (!players.has(p.id)) return;
     p.dead = false;
@@ -923,7 +926,6 @@ function tryStorm(p, w, o, now) {
     nextBolt: now + 300, nextTwist: now + STORM.twisterHitMs, twisters };
   storms.push(s);
   io.emit('storm', stormState(s));
-  pushChat({ system: true, text: `${p.name} 讓冰與火交會，召喚出雷暴圈！`, t: now });
 }
 const stormState = (s) => ({ id: s.id, x: s.x, y: s.y, r: s.r, ms: s.until - Date.now(), tw: s.twisters.map(t => [Math.round(t.x), Math.round(t.y)]) });
 function tickStorms(now) {
@@ -990,7 +992,6 @@ function damageFoe(p, foe, isBoss, dmg, crit, skillId, hitBy) {
     foe.respawnAt = now + STATS.MOB_RESPAWN_MS;
     io.emit('mob', mobState(foe));
     gainExp(p, STATS.MOBS[foe.kind].exp);
-    pushChat({ system: true, text: `👏 ${p.name} 打倒了${STATS.MOBS[foe.kind].name}！`, t: now });
     LOOT.fromFoe(foe);
     if (Math.random() < MOB_SEED_RATE) LOOT.scatter([{ kind: 'food', k: GARDEN.rollSeed() }], foe.x, foe.y); // 種子也噴在地上
     return;
@@ -1009,8 +1010,8 @@ function damageFoe(p, foe, isBoss, dmg, crit, skillId, hitBy) {
   if (!pile.some(l => l.kind === 'gear')) { const id = GEAR.rollDrop({ rare: true }); if (id) pile.push({ kind: 'gear', k: id }); }
   LOOT.scatter(pile, monster.x, monster.y, null, 160);
   const mins = Math.round(RESPAWN_MS / 60000);
-  pushChat({ system: true, text: `🎉 ${p.name} 打出最後一擊，${STATS.MONSTER2.name}被擊退了！${mins} 分鐘後會再生成。`, t: now });
-  if (top.length) pushChat({ system: true, text: '🏅 輸出排行：' + top.map(([n, d], i) => `${i + 1}. ${n} ${d}`).join('、'), t: now });
+  const rank = top.length ? ' 輸出排行：' + top.map(([n, d], i) => `${i + 1}. ${n} ${d}`).join('、') : '';
+  pushChat({ system: true, text: `${p.name} 打出最後一擊，${STATS.MONSTER2.name}被擊退了！${mins} 分鐘後會再生成。${rank}`, t: now });
 }
 
 // 第一次被打倒：原地變身成第二階段，血量重新補滿（而且更多），變身的幾秒內打不動也不出招
@@ -1019,7 +1020,7 @@ function transformMonster(p, now) {
   Object.assign(monster, { phase: 2, hp, maxHp: hp, transformUntil: now + M2.transformMs, frozenUntil: 0, weakUntil: 0,
     nextAttack: now + M2.transformMs + 1500 });
   io.emit('monster', monsterState());
-  pushChat({ system: true, text: `🌪️ ${p.name} 打倒了颱風${STATS.MONSTER.name}……但它變身成「${M2.name}」了！更大、更強，還會放龍捲風和冰雹，小心！`, t: now });
+  pushChat({ system: true, text: `${p.name} 打倒了颱風${STATS.MONSTER.name}……但它變身成「${M2.name}」了！更大、更強，還會放龍捲風和冰雹，小心！`, t: now });
 }
 
 // ---------------- 召喚物 ----------------
@@ -1047,7 +1048,7 @@ function hurtSummon(sm, dmg, by) {
   io.emit('summonHurt', { id: sm.id, hp: sm.hp, dmg });
   if (sm.hp > 0) return;
   removeSummon(sm, true);
-  pushChat({ system: true, text: `💫 ${sm.ownerName} 的${STATS.SUMMONS[sm.kind].name}被${by}打倒了`, t: Date.now() });
+  tell(sm.owner, `你的${STATS.SUMMONS[sm.kind].name}被${by}打倒了`);
 }
 function tickSummon(sm, now) {
   const owner = players.get(sm.owner);
@@ -1097,7 +1098,7 @@ function tickSummon(sm, now) {
 
 // ---------------- 副本（dungeon.js：花蓮、台北101） ----------------
 const DG = createDungeons({
-  io, players, MAP, STATS, GEAR, pushChat, sendStats, gainExp, TICK, wallBlocks, behindWall,
+  io, players, MAP, STATS, GEAR, pushChat, tell, sendStats, gainExp, TICK, wallBlocks, behindWall,
   hurtPlayer: (p, dmg, by) => hurt(p, dmg, by),
   isAway: (p) => awayTimers.has(p.id),
   summons: () => summons,
@@ -1145,7 +1146,6 @@ function cleanDecor(p) {
     back.delete(q.name);
     io.to(q.id).emit('furnSync', { furn: q.furn, by: p.id });
   });
-  pushChat({ system: true, text: `🧹 ${p.name} 把總部的家具都收乾淨了（${n} 件）`, t: Date.now() });
   return { ok: true, clean: n };
 }
 const decorList = () => [...decor.entries()].map(([key, d]) => ({ key, k: d.k, by: d.by }));
@@ -1273,7 +1273,7 @@ function giveGear(p, rare, src) {
   if (!id) return null;
   const g = GEAR.GEAR[id];
   if (LOOT.giveOrDrop(p, 'gear', id)) io.to(p.id).emit('gearGot', { item: id });
-  pushChat({ system: true, text: `🎁 ${p.name} 獲得了【${g.rarity}】${g.icon ? g.icon + ' ' : ''}${g.name}！`, t: Date.now() });
+  if (g.rarity === 'SSR') pushChat({ system: true, text: `${p.name} 獲得了【SSR】${g.name}！`, t: Date.now() });
   return id;
 }
 
@@ -1432,7 +1432,7 @@ io.on('connection', (socket) => {
       summons: summons.map(summonState), decor: decorList(), garden: garden.state(),
       walls: walls.map(w => ({ id: w.id, kind: w.kind, pts: w.pts, ms: w.until - Date.now() })), storms: storms.map(stormState), music: musicState() });
     socket.broadcast.emit('playerJoined', publicPlayer(p));
-    pushChat({ system: true, text: `${p.name} 進入了防衛總部 🌀`, t: Date.now() });
+    pushChat({ system: true, text: `${p.name} 進入了防衛總部`, t: Date.now() });
   });
 
   socket.on('move', (m) => {
@@ -1561,7 +1561,6 @@ io.on('connection', (socket) => {
         atk: Math.round(def.atk * boost), nextHit: now + 800 };
       summons.push(sm);
       io.emit('summon', summonState(sm));
-      pushChat({ system: true, text: `👽 ${p.name} 召喚了${def.name}！`, t: now });
       support += 20;
     }
     // 範圍技能：身邊範圍內的颱風和小怪全部打到
@@ -1640,7 +1639,6 @@ io.on('connection', (socket) => {
     p.cooldowns = {};
     sendStats(p);
     ack({ ok: true });
-    pushChat({ system: true, text: `✨ ${p.name} 轉職成為 ${STATS.CLASSES[cls].icon} ${STATS.CLASSES[cls].name}！`, t: Date.now() });
   });
 
   // 慶祝煙火：在自己頭上炸出輸入的文字，大家都看得到
@@ -1656,7 +1654,7 @@ io.on('connection', (socket) => {
     if (now - lastFirework < FIREWORK_MS) return ack({ ok: false, error: '煙火還在裝填，等幾秒再放' });
     lastFirework = now;
     io.emit('firework', { id: p.id, text: t, x: Math.round(p.x), y: Math.round(p.y) });
-    pushChat({ system: true, text: `🎆 ${p.name} 放了煙火：「${t}」`, t: now });
+    pushChat({ system: true, text: `${p.name} 放了煙火：「${t}」`, t: now });
     ack({ ok: true });
   });
 
@@ -1758,7 +1756,6 @@ io.on('connection', (socket) => {
     p.inv[fruit] = Math.min(INV_MAX, p.inv[fruit] + r.n);
     if (h.gem) {
       p.inv[h.gem] = Math.min(INV_MAX, p.inv[h.gem] + 1);
-      pushChat({ system: true, text: `${p.name} 在公共花園挖到一顆${MAP.ITEMS[h.gem].name}！`, t: Date.now() });
     }
     // 幫忙澆過水的人（在線上的）都拿一點經驗當謝禮
     players.forEach(q => {
@@ -1916,7 +1913,7 @@ io.on('connection', (socket) => {
     const fresh = p.cakeUntil < Date.now();
     p.cakeUntil = Date.now() + CAKE_MS;
     io.emit('cake', { id: p.id, ms: CAKE_MS });
-    if (fresh) pushChat({ system: true, text: `🎂 ${p.name} 拿出了蛋糕！靠過去一起慶祝吧`, t: Date.now() });
+    if (fresh) pushChat({ system: true, text: `${p.name} 拿出了蛋糕！靠過去一起慶祝吧`, t: Date.now() });
     ack({ ok: true, ms: CAKE_MS });
   });
   socket.on('cakeDown', () => {
@@ -2121,7 +2118,7 @@ io.on('connection', (socket) => {
     const r = addVideoRoom(code, clean(data && data.name, 16) || `${p.name} 的房間`, p.name);
     p.video = code;
     io.emit('videoRooms', videoList());
-    pushChat({ system: true, text: `📹 ${p.name} 開了視訊房間「${r.name}」（房號 ${code}），到戰情室按「加入視訊」就能進去`, t: Date.now() });
+    pushChat({ system: true, text: `${p.name} 開了視訊房間「${r.name}」（房號 ${code}），到戰情室按「加入視訊」就能進去`, t: Date.now() });
     ack({ ok: true, code });
   });
   // 加入房間（也可以直接輸入別人給的房號，沒在列表上就順便加進去）

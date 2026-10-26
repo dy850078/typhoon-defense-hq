@@ -154,6 +154,20 @@
       C.fill(x, '#cfd5e0', r, [6, 9, 19, 30]); C.stroke(x, r, 2.4);
       C.line(x, 31, 17, 43, 31, r, 2.8, '#ef4b5c'); C.line(x, 43, 17, 31, 31, r, 2.8, '#ef4b5c');
     },
+    // 聊天區的系統訊息開關：小對話框，裡面一個驚嘆號
+    'btn-sys'(x, r) {
+      x.beginPath(); x.moveTo(8, 8); x.lineTo(40, 8); x.lineTo(40, 32); x.lineTo(22, 32); x.lineTo(12, 41); x.lineTo(14, 32); x.lineTo(8, 32); x.closePath();
+      C.fill(x, '#ffd23f', r, [8, 8, 32, 33]); C.stroke(x, r, 2.4);
+      C.line(x, 24, 13, 24, 23, r, 3.2);
+      C.blob(x, 24, 28, 1.8, 1.8, r, 0.05); x.fillStyle = '#2b2a33'; x.fill();
+    },
+    'btn-sys-off'(x, r) {
+      x.beginPath(); x.moveTo(8, 8); x.lineTo(40, 8); x.lineTo(40, 32); x.lineTo(22, 32); x.lineTo(12, 41); x.lineTo(14, 32); x.lineTo(8, 32); x.closePath();
+      C.fill(x, '#cfd5e0', r, [8, 8, 32, 33]); C.stroke(x, r, 2.4);
+      C.line(x, 24, 13, 24, 23, r, 3.2);
+      C.blob(x, 24, 28, 1.8, 1.8, r, 0.05); x.fillStyle = '#2b2a33'; x.fill();
+      C.line(x, 6, 6, 42, 40, r, 4.4, '#fbf6e9'); C.line(x, 6, 6, 42, 40, r, 2.8, '#ef4b5c');
+    },
     // ---- 你畫我猜的畫筆工具 ----
     'tool-pen'(x, r) {
       x.save(); x.translate(24, 24); x.rotate(0.8);

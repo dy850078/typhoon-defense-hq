@@ -5,7 +5,7 @@
 const REGIONS = { hualien: require('./dungeon-hualien'), taipei: require('./dungeon-taipei') };
 
 function createDungeon(ctx, D, region) {
-  const { io, players, MAP, STATS, GEAR, pushChat, sendStats, gainExp, hurtPlayer, isAway, wallBlocks, behindWall, TICK } = ctx;
+  const { io, players, MAP, STATS, GEAR, pushChat, tell, sendStats, gainExp, hurtPlayer, isAway, wallBlocks, behindWall, TICK } = ctx;
   const T = MAP.TILE;
   const CLEAR_SHOW_MS = 30000; // 打倒頭目後還能在裡面待多久（撿地上的寶物）
   const dist = (ax, ay, bx, by) => Math.hypot(ax - bx, ay - by);
@@ -38,7 +38,9 @@ function createDungeon(ctx, D, region) {
   const emit = () => io.emit('dungeon', publicState());
   const memberList = () => [...st.members].map(id => players.get(id)).filter(Boolean);
   const activeMembers = () => memberList().filter(p => !p.dead && !isAway(p));
-  const say = (text) => pushChat({ system: true, text, t: now0() });
+  // say：副本裡的進度只給隊員看（小提示）；announce：要大家知道的（出發召集、通關）才進聊天區
+  const say = (text) => memberList().forEach(p => tell(p.id, text));
+  const announce = (text) => pushChat({ system: true, text, t: now0() });
   function teleport(p, x, y) {
     p.x = x; p.y = y;
     io.emit('playerMoved', { id: p.id, x, y, dir: p.dir, moving: false, teleport: true });
@@ -92,12 +94,12 @@ function createDungeon(ctx, D, region) {
     st.phase = 'countdown';
     st.countdownAt = now0() + D.countdownMs;
     emit();
-    say(`🌀 ${p.name} 按下了出發！${D.countdownMs / 1000} 秒後前往${D.name}副本，想去的人快從指揮中心的副本傳送門到副本大廳找${D.npcName}，到${D.lobbyName}集合（最多 ${D.maxPlayers} 人${D.minLevel ? `，要 Lv.${D.minLevel} 以上` : ''}）`);
+    announce(`${p.name} 按下了出發！${D.countdownMs / 1000} 秒後前往${D.name}副本，想去的人快從指揮中心的副本傳送門到副本大廳找${D.npcName}，到${D.lobbyName}集合（最多 ${D.maxPlayers} 人${D.minLevel ? `，要 Lv.${D.minLevel} 以上` : ''}）`);
     return { ok: true };
   }
   function launch() {
     const list = [...players.values()].filter(p => !p.dead && !isAway(p) && inLobby(p) && p.level >= D.minLevel).slice(0, D.maxPlayers);
-    if (!list.length) { st.phase = 'idle'; emit(); say(`🌀 ${D.lobbyName}沒有人，副本取消出發`); return; }
+    if (!list.length) { st.phase = 'idle'; emit(); announce(`${D.lobbyName}沒有人，副本取消出發`); return; }
     closeAll();
     Object.assign(st, { phase: 'run', stage: 0, startedAt: now0() });
     st.members = new Set(list.map(p => p.id));
@@ -109,7 +111,7 @@ function createDungeon(ctx, D, region) {
       io.to(p.id).emit('dgEnter', { title: D.title, region: D.id });
     });
     emit();
-    say(`🚩 ${list.map(p => p.name).join('、')} 出發前往${D.title}！副本入口鎖上了，限時 ${D.timeLimitMs / 60000} 分鐘`);
+    say(`${list.map(p => p.name).join('、')} 出發前往${D.title}！副本入口鎖上了，限時 ${D.timeLimitMs / 60000} 分鐘`);
   }
 
   function finish(text) {
@@ -134,14 +136,14 @@ function createDungeon(ctx, D, region) {
     const s = lobbySpot(0);
     teleport(p, s.x, s.y);
     sendStats(p);
-    if (!st.members.size) finish(`🚪 大家都離開${D.name}副本了，入口重新開放`);
-    else { say(`🚪 ${p.name} 離開了${D.name}副本`); emit(); }
+    if (!st.members.size) finish(`大家都離開${D.name}副本了，入口重新開放`);
+    else { say(`${p.name} 離開了${D.name}副本`); emit(); }
     return { ok: true };
   }
   function remove(id) {
     if (!st.members.delete(id)) return;
     region.leave && region.leave(api, id);
-    if (!st.members.size) finish(`🚪 大家都離開${D.name}副本了，入口重新開放`);
+    if (!st.members.size) finish(`大家都離開${D.name}副本了，入口重新開放`);
     else emit();
   }
 
@@ -165,9 +167,9 @@ function createDungeon(ctx, D, region) {
 
   // ---------------- 倒下、復活 ----------------
   function onDeath(p, by) {
-    say(`💫 ${p.name} 在副本裡被${by}打倒了，${D.respawnMs / 1000} 秒後在這一關的起點復活`);
+    say(`${p.name} 在副本裡被${by}打倒了，${D.respawnMs / 1000} 秒後在這一關的起點復活`);
     if (!activeMembers().length) {
-      setTimeout(() => { if (st.phase === 'run' && !activeMembers().length) finish(`💀 全隊倒下了……${D.name}副本挑戰失敗，大家被送回入口`); }, 2500);
+      setTimeout(() => { if (st.phase === 'run' && !activeMembers().length) finish(`全隊倒下了……${D.name}副本挑戰失敗，大家被送回入口`); }, 2500);
       return;
     }
     setTimeout(() => {
@@ -287,7 +289,6 @@ function createDungeon(ctx, D, region) {
     st.foes.filter(h => h !== f && h.alive).forEach(h => { h.alive = false; io.emit('mob', mobState(h)); });
     st.phase = 'clear';
     st.endAt = now0() + CLEAR_SHOW_MS;
-    say(`🎉 ${p.name} 打出最後一擊，${bossName}被擊敗了！${D.title}副本通關！`);
     // 寶物噴在頭目倒下的地方，大家搶：隊伍裡每個人各抽一次武器（可能沒有），再加一些補品；離開副本前沒撿就沒了
     const pile = [];
     memberList().forEach(q => {
@@ -298,10 +299,11 @@ function createDungeon(ctx, D, region) {
     });
     ctx.loot().scatter(pile, f.x, f.y, D.id, 150);
     const weapons = pile.filter(l => l.kind === 'gear').map(l => `【${GEAR.GEAR[l.k].rarity}】${GEAR.GEAR[l.k].name}`);
-    say(weapons.length ? `⚔️ ${bossName}掉了 ${weapons.join('、')}，快去撿！` : `🍃 ${bossName}這次沒有掉武器……下次再來！`);
+    say(weapons.length ? `${bossName}掉了 ${weapons.join('、')}，快去撿！` : `${bossName}這次沒有掉武器……下次再來！`);
     const drops = pile.length;
     const top = [...f.damage.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3);
-    if (top.length) say('🏅 輸出排行：' + top.map(([n, d], i) => `${i + 1}. ${n} ${d}`).join('、'));
+    const rank = top.length ? ' 輸出排行：' + top.map(([n, d], i) => `${i + 1}. ${n} ${d}`).join('、') : '';
+    announce(`${p.name} 打出最後一擊，${bossName}被擊敗了！${D.title}副本通關！${rank}`);
     io.emit('dgClear', { id: D.id, drops, ms: CLEAR_SHOW_MS });
     emit();
   }
@@ -309,9 +311,9 @@ function createDungeon(ctx, D, region) {
   // ---------------- 每 100 毫秒 ----------------
   function tick(now) {
     if (st.phase === 'countdown') { if (now >= st.countdownAt) launch(); return; }
-    if (st.phase === 'clear') { if (now >= st.endAt) finish(`🏁 ${D.title}副本結束，入口重新開放`); return; }
+    if (st.phase === 'clear') { if (now >= st.endAt) finish(`${D.title}副本結束，入口重新開放`); return; }
     if (st.phase !== 'run') return;
-    if (now >= st.startedAt + D.timeLimitMs) { finish(`⏰ 時間到！${D.name}副本挑戰失敗，大家被送回入口`); return; }
+    if (now >= st.startedAt + D.timeLimitMs) { finish(`時間到！${D.name}副本挑戰失敗，大家被送回入口`); return; }
     region.tick(api, now);
     st.foes.forEach(f => { if (f.kind === region.boss) { if (f.alive) region.tickBoss(api, f, now); } else tickChaser(f, now); });
   }

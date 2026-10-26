@@ -357,6 +357,11 @@ button.inv-item:hover { border-color: var(--accent); }
 .gear-slot-k { font: 700 12px var(--mono); color: var(--muted); width: 32px; }
 .gear-h { margin: 14px 0 8px; font-size: 16px; }
 .gear > .modal-hint { margin-bottom: 12px; }
+.gear-intro { display: flex; align-items: center; gap: 8px; margin: 6px 0 10px; font-size: 13px; color: var(--muted); }
+.gear-info { flex: none; display: inline-flex; padding: 0; border: 0; background: none; cursor: pointer; border-radius: 999px; }
+.gear-info .hq-icon { width: 22px; height: 22px; }
+.gear-info.on { box-shadow: 0 0 0 2px var(--accent); }
+.gear > .gear-more { margin-top: -4px; }
 /* 照部位分頁：頭飾｜服裝｜披風｜武器｜套裝 */
 .gear-tabs { flex-wrap: wrap; }
 .gear-tabs button small { margin-left: 6px; font: 700 11px var(--mono); opacity: .7; }

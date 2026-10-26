@@ -410,6 +410,7 @@ function videoList() {
 // 目前全場只有一台；想改回每個房間一台，讓這裡回傳房間 id 就好
 const musicArea = () => 'all';
 const MUSIC_MAX_QUEUE = 20;
+const MUSIC_MAX_LEN = 3 * 3600; // 超過 3 小時的長度當作不知道
 const music = {}; // area -> { now: { vid, title, by, byName, startedAt }, queue: [...], skips: Set }
 const musicOf = (area) => music[area] || (music[area] = { now: null, queue: [], skips: new Set() });
 // 支援 youtu.be/ID、watch?v=ID、shorts/ID、embed/ID、music.youtube.com，或直接貼 11 碼 ID
@@ -476,11 +477,37 @@ function musicState() {
   return out;
 }
 const emitMusic = () => io.emit('music', musicState());
+// 「3:45」「1:02:03」→ 秒數
+function lenSec(t) {
+  const parts = String(t || '').split(':').map(Number);
+  if (!parts.length || parts.some(n => !Number.isFinite(n) || n < 0)) return 0;
+  return parts.reduce((a, n) => a * 60 + n, 0);
+}
+// 搜尋過的歌，長度在搜尋結果裡就有
+function cachedLen(vid) {
+  for (const { list } of searchCache.values()) {
+    const hit = list.find(v => v.vid === vid);
+    if (hit) return lenSec(hit.len);
+  }
+  return 0;
+}
+// 知道歌長就自己倒數，時間到就換下一首；不用等有人的播放器回報播完
+// （大家都鎖螢幕或還沒按開始聽的時候，沒人會回報，歌就會卡著一直被重播）
+function musicTimer(area) {
+  const m = musicOf(area);
+  clearTimeout(m.timer);
+  if (!m.now || !m.now.len) return;
+  const vid = m.now.vid, startedAt = m.now.startedAt;
+  m.timer = setTimeout(() => {
+    if (m.now && m.now.vid === vid && m.now.startedAt === startedAt) musicNext(area);
+  }, Math.max(0, startedAt + (m.now.len + 3) * 1000 - Date.now()));
+}
 function musicNext(area) {
   const m = musicOf(area);
   const n = m.queue.shift();
   m.now = n ? Object.assign(n, { startedAt: Date.now() + 1500 }) : null; // 留一點時間讓大家載入
   m.skips = new Set();
+  musicTimer(area);
   emitMusic();
 }
 
@@ -2242,7 +2269,8 @@ io.on('connection', (socket) => {
     if (info.error) return ack({ ok: false, error: info.error });
     if (info.title === 'YouTube 影片' && req && req.title) info.title = clean(req.title, 80);
     if (!players.has(socket.id)) return;
-    m.queue.push({ vid, title: info.title, by: p.id, byName: p.name });
+    const len = cachedLen(vid);
+    m.queue.push({ vid, title: info.title, by: p.id, byName: p.name, len: len > 0 && len <= MUSIC_MAX_LEN ? len : 0 });
     if (!m.now) musicNext(area); else emitMusic();
     ack({ ok: true, title: info.title, area });
     io.emit('toastArea', { area, text: `🎵 ${p.name} 點了「${info.title}」` });
@@ -2280,6 +2308,16 @@ io.on('connection', (socket) => {
     if (!p) return;
     const area = musicArea(p), m = musicOf(area);
     if (m.now && m.now.vid === vid && Date.now() - m.now.startedAt > 5000) musicNext(area);
+  });
+  // 貼連結點的歌不知道多長，第一個載入的播放器會回報
+  socket.on('musicLen', (vid, sec) => {
+    const p = players.get(socket.id);
+    if (!p) return;
+    const area = musicArea(p), m = musicOf(area);
+    sec = Math.round(Number(sec));
+    if (!m.now || m.now.vid !== vid || m.now.len || !(sec > 0 && sec <= MUSIC_MAX_LEN)) return;
+    m.now.len = sec;
+    musicTimer(area);
   });
 
   // ---------- 許願池 ----------

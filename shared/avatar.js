@@ -20,6 +20,8 @@
   const HAIR_COLORS = ['#2b2a33', '#6b4a32', '#c9772f', '#9aa3b5'];
   const OUTFITS = ['#ff7a2f', '#4f7cc2', '#aeb6c4', '#2f3b55', '#f2c14e', '#6baf7b'];
   const GLASSES = { 1: '戴眼鏡', 0: '不戴' };
+  // 聊天框旁的表情按鈕：選了之後角色換臉幾秒再變回來
+  const FACES = { smile: '微笑', grin: '開心笑', cat: '貓咪嘴', wink: '眨眼吐舌', wow: '驚訝', love: '愛心眼', star: '星星眼', grr: '不爽', cry: '哭哭' };
 
   function seedOf(str) {
     let h = 2166136261;
@@ -202,9 +204,9 @@
     ctx.fillStyle = 'rgba(244,120,120,0.45)';
     [[21, 35], [43, 35]].forEach(([x, y]) => { ctx.beginPath(); ctx.ellipse(x, y, 4.5, 3, 0, 0, Math.PI * 2); ctx.fill(); });
 
-    // 小豆豆眼
-    ctx.fillStyle = C.INK;
-    [[26, 28.5], [38, 28.5]].forEach(([x, y]) => { ctx.beginPath(); ctx.ellipse(x, y, 1.7, 2, 0, 0, Math.PI * 2); ctx.fill(); });
+    // 眼睛：平常是小豆豆眼，做表情的時候換掉（p.face，見 FACES）
+    const face = Object.prototype.hasOwnProperty.call(FACES, p.face) ? p.face : '';
+    drawEyes(ctx, C, r, face);
 
     // 圓眼鏡
     if (String(p.glasses) === '1') {
@@ -218,10 +220,8 @@
     // 紅鼻子
     C.blob(ctx, 32, 34, 3.6, 3, r, 0.1, 12); C.fill(ctx, '#f28b82', r, null); C.stroke(ctx, r, 1.6);
 
-    // 抖抖的嘴巴
-    ctx.beginPath(); ctx.moveTo(27.5, 40); ctx.quadraticCurveTo(29.5, 39, 31, 40.5);
-    ctx.quadraticCurveTo(33, 41.5, 34.5, 40); ctx.quadraticCurveTo(35.5, 39.5, 36.5, 40.5);
-    C.stroke(ctx, r, 1.5);
+    // 嘴巴：平常是抖抖的嘴巴
+    drawMouth(ctx, C, r, face);
 
     // NPC 的小特徵
     if (p.npc === 'shen') {
@@ -271,6 +271,75 @@
   }
 
   // 副本頭目花蓮王：往旁邊梳的黑色短髮、圓臉大笑、黑色盔甲；舉拳（p.fist）是衝鋒前的預告
+  // 眼睛：face 是空字串就是平常的小豆豆眼
+  function drawEyes(ctx, C, r, face) {
+    const dot = (x, y) => { ctx.fillStyle = C.INK; ctx.beginPath(); ctx.ellipse(x, y, 1.7, 2, 0, 0, Math.PI * 2); ctx.fill(); };
+    const arcUp = (x, y) => { ctx.beginPath(); ctx.moveTo(x - 2.6, y + 1); ctx.quadraticCurveTo(x, y - 2.6, x + 2.6, y + 1); C.stroke(ctx, r, 1.7); };
+    const L = [26, 28.5], R = [38, 28.5];
+    if (face === 'grin') { arcUp(...L); arcUp(...R); return; }
+    if (face === 'wink') { dot(...L); arcUp(...R); return; }
+    if (face === 'wow') { [L, R].forEach(([x, y]) => { ctx.fillStyle = C.INK; ctx.beginPath(); ctx.ellipse(x, y, 2, 2.5, 0, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(x - 0.6, y - 0.8, 0.7, 0, Math.PI * 2); ctx.fill(); }); return; }
+    if (face === 'love') {
+      [L, R].forEach(([x, y]) => {
+        ctx.beginPath(); ctx.moveTo(x, y + 2.6);
+        ctx.bezierCurveTo(x - 4, y - 0.2, x - 2.2, y - 3.4, x, y - 1.2);
+        ctx.bezierCurveTo(x + 2.2, y - 3.4, x + 4, y - 0.2, x, y + 2.6); ctx.closePath();
+        C.fill(ctx, '#e8384f', r, null); C.stroke(ctx, r, 1.2);
+      });
+      return;
+    }
+    if (face === 'star') {
+      [L, R].forEach(([x, y]) => {
+        ctx.beginPath();
+        for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? 1.6 : 3.8; ctx.lineTo(x + Math.cos(a) * rr, y + 0.3 + Math.sin(a) * rr); }
+        ctx.closePath(); C.fill(ctx, '#ffd23f', r, null); C.stroke(ctx, r, 1.2);
+      });
+      return;
+    }
+    if (face === 'cry') {
+      [L, R].forEach(([x, y]) => { ctx.beginPath(); ctx.moveTo(x - 2.6, y - 0.6); ctx.quadraticCurveTo(x, y + 2.2, x + 2.6, y - 0.6); C.stroke(ctx, r, 1.7); });
+      [[23.5, 31], [40.5, 31]].forEach(([x, y]) => { ctx.beginPath(); ctx.moveTo(x, y); ctx.quadraticCurveTo(x - 2, y + 4, x, y + 5); ctx.quadraticCurveTo(x + 2, y + 4, x, y); C.fill(ctx, '#8fd0f2', r, null); C.stroke(ctx, r, 1); });
+      return;
+    }
+    dot(...L); dot(...R);
+    if (face === 'grr') {
+      ctx.beginPath(); ctx.moveTo(22.5, 23.5); ctx.lineTo(28.5, 25.5); ctx.moveTo(41.5, 23.5); ctx.lineTo(35.5, 25.5); C.stroke(ctx, r, 1.8);
+    }
+  }
+
+  // 嘴巴：face 是空字串就是平常的抖抖嘴
+  function drawMouth(ctx, C, r, face) {
+    if (!face || face === 'cry') {
+      ctx.beginPath(); ctx.moveTo(27.5, 40); ctx.quadraticCurveTo(29.5, 39, 31, 40.5);
+      ctx.quadraticCurveTo(33, 41.5, 34.5, 40); ctx.quadraticCurveTo(35.5, 39.5, 36.5, 40.5);
+      C.stroke(ctx, r, 1.5); return;
+    }
+    if (face === 'smile' || face === 'love') {
+      ctx.beginPath(); ctx.moveTo(27.5, 39.2); ctx.quadraticCurveTo(32, 43.6, 36.5, 39.2); C.stroke(ctx, r, 1.6); return;
+    }
+    if (face === 'cat') {
+      ctx.beginPath(); ctx.moveTo(27.5, 39.5); ctx.quadraticCurveTo(29.75, 42.6, 32, 39.8); ctx.quadraticCurveTo(34.25, 42.6, 36.5, 39.5); C.stroke(ctx, r, 1.5); return;
+    }
+    if (face === 'grin' || face === 'star') {
+      // 張嘴笑：D 字形，裡面深色＋粉紅舌頭
+      const D = () => { ctx.beginPath(); ctx.moveTo(27, 38.8); ctx.quadraticCurveTo(32, 39.6, 37, 38.8); ctx.quadraticCurveTo(36.5, 45, 32, 45); ctx.quadraticCurveTo(27.5, 45, 27, 38.8); ctx.closePath(); };
+      D(); C.fill(ctx, '#7a2b35', r, null);
+      ctx.save(); ctx.clip(); ctx.fillStyle = '#f48aa0'; ctx.beginPath(); ctx.ellipse(32, 45, 3.4, 2.4, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+      D(); C.stroke(ctx, r, 1.4); return;
+    }
+    if (face === 'wink') {
+      ctx.beginPath(); ctx.moveTo(27.5, 39.2); ctx.quadraticCurveTo(32, 43, 36.5, 39.2); C.stroke(ctx, r, 1.5);
+      ctx.beginPath(); ctx.moveTo(32.5, 41.4); ctx.quadraticCurveTo(33, 44.6, 35, 44); ctx.quadraticCurveTo(36, 42.6, 35.6, 40.6); ctx.closePath();
+      C.fill(ctx, '#f48aa0', r, null); C.stroke(ctx, r, 1.1); return;
+    }
+    if (face === 'wow') {
+      C.blob(ctx, 32, 41.5, 2.2, 2.8, r, 0.08, 12); C.fill(ctx, '#7a2b35', r, null); C.stroke(ctx, r, 1.4); return;
+    }
+    if (face === 'grr') {
+      ctx.beginPath(); ctx.moveTo(28, 41.5); ctx.quadraticCurveTo(32, 39, 36, 41.5); C.stroke(ctx, r, 1.6); return;
+    }
+  }
+
   function drawFu(ctx, C, r, p, W, skin) {
     ctx.beginPath();
     ctx.moveTo(14.5, 28); ctx.quadraticCurveTo(12.5, 7.5, 32, 8); ctx.quadraticCurveTo(51, 7.5, 50.5, 26);
@@ -466,7 +535,7 @@
     }
   }
 
-  const avatar = { HAIRS, SKINS, HAIR_COLORS, OUTFITS, GLASSES, COSTUMES, drawAvatar, WIDTH: 64, HEIGHT: 80 };
+  const avatar = { HAIRS, SKINS, HAIR_COLORS, OUTFITS, GLASSES, FACES, COSTUMES, drawAvatar, WIDTH: 64, HEIGHT: 80 };
   if (typeof module !== 'undefined' && module.exports) module.exports = avatar;
   else root.HQ_AVATAR = avatar;
 })(this);

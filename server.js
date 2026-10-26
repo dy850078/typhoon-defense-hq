@@ -2375,6 +2375,17 @@ io.on('connection', (socket) => {
     pushChat({ id: p.id, name: p.name, text: t, t: now });
   });
 
+  // 表情：角色換臉幾秒，大家都看得到（變回來由前端自己計時）
+  let lastEmote = 0;
+  socket.on('emote', (face) => {
+    const p = players.get(socket.id);
+    if (!p || !Object.prototype.hasOwnProperty.call(AVATAR.FACES, face)) return;
+    const now = Date.now();
+    if (now - lastEmote < 600) return;
+    lastEmote = now;
+    io.emit('emote', { id: p.id, face });
+  });
+
   socket.on('disconnect', (reason) => {
     if (process.env.DEBUG) console.log('disconnect', socket.id, reason);
     const p = players.get(socket.id);

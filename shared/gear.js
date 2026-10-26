@@ -760,6 +760,19 @@
     return pool.length ? pool[Math.floor(Math.random() * pool.length)] : null;
   }
 
+  // 野外打怪掉的裝備：可以抽到已經有的（掉在地上，不要可以不撿）
+  // 不會掉副本武器和指定來源的裝備（女僕咖啡廳只在廚房掉）；series 限定系列，rare 只抽 SR、SSR
+  function rollDrop(opt) {
+    opt = opt || {};
+    const pool = Object.keys(GEAR).filter(id => !GEAR[id].dungeon && !GEAR[id].src && (!opt.rare || GEAR[id].rarity !== 'R') &&
+      (!opt.series || opt.series.includes(GEAR[id].series)));
+    if (!pool.length) return null;
+    const total = pool.reduce((s, id) => s + RARITY[GEAR[id].rarity].weight, 0);
+    let x = Math.random() * total;
+    for (const id of pool) { x -= RARITY[GEAR[id].rarity].weight; if (x <= 0) return id; }
+    return pool[pool.length - 1];
+  }
+
   // 身上穿齊哪個系列（三格同系列、系列有特效），沒有就是 null
   function setOf(equip) {
     const ids = LOOK_SLOTS.map(s => equip && equip[s]);
@@ -768,7 +781,7 @@
     return SERIES[sid] && SERIES[sid].fx && ids.every(id => GEAR[id].series === sid) ? sid : null;
   }
 
-  const gear = { RARITY, SLOTS, LOOK_SLOTS, SERIES, GEAR, setOf, DROP, DROP_ITEMS, roll, rollWeapon, hasLayer, drawLayer, LAYERS: ['cape', 'back', 'front', 'head', 'over', 'hand'] };
+  const gear = { RARITY, SLOTS, LOOK_SLOTS, SERIES, GEAR, setOf, DROP, DROP_ITEMS, roll, rollWeapon, rollDrop, hasLayer, drawLayer, LAYERS: ['cape', 'back', 'front', 'head', 'over', 'hand'] };
   if (typeof module !== 'undefined' && module.exports) module.exports = gear;
   else root.HQ_GEAR = gear;
 })(this);

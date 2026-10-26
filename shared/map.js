@@ -2,14 +2,17 @@
 (function (root) {
   // 總部本體 40 格寬；右邊隔兩格空地（走不過去）是花蓮副本區，再隔兩格是古城候位區；
   // 再往右隔兩格是台北101副本區和 101 大廳候位區
-  // 副本區和候位區都走不過去，只能找指揮中心的 NPC 傳送
+  // 最右邊再隔兩格是副本大廳（指揮中心的副本傳送門通到這裡，各副本的 NPC 站在大廳裡）
+  // 副本區、候位區、副本大廳都走不過去，只能傳送
   const MW = 40;
   const DX = 42; // 花蓮副本區最左邊那一格
-  const LX = DX + 24; // 古城候位區最左邊那一格
+  const LX = DX + 46; // 古城候位區最左邊那一格（花蓮副本有兩欄，各 22 格寬）
   const TDX = LX + 14; // 台北101副本區最左邊那一格
-  const TLX = TDX + 24; // 101 大廳候位區最左邊那一格
-  const W = TLX + 12;
-  const H = 46;
+  const TLX = TDX + 46; // 101 大廳候位區最左邊那一格（台北副本也有兩欄）
+  const HX = TLX + 14; // 副本大廳最左邊那一格
+  const W = HX + 16;
+  const DH = 46; // 副本區的高度（總部以南的野區比較長，下面的副本區就只是虛空）
+  const H = 86;
   const TILE = 48;
 
   // 圖例
@@ -22,12 +25,23 @@
   // 副本區：(空白) 虛空    Y  峽谷岩壁    Z  深海       y  七星潭礫石灘
   //         u  洞穴地板    x  大理石要推到的凹槽         n  斷崖上的草地
   //         X  關卡之間的石門（關著的時候擋路）          E  七星潭石碑
-  // 候位區：Q  古城石牆    q  古城石板地    H  古城守門員（站在指揮中心）
+  //         a  燕子口的步道  m  砂卡礑步道  s  砂卡礑的泉水  v  砂卡礑的水車
+  // 候位區：Q  古城石牆    q  古城石板地    H  古城守門員（站在副本大廳）
   // 台北101：g  玻璃帷幕牆  k  天空         p  信義廣場地磚  f  阻尼球層的鋼板地
   //         c  控制台（踩上去）            o  觀景台地板    A  觀景台的大柱子
-  //         h  101 大廳大理石地            U  101 電梯小姐（站在指揮中心）
+  //         h  101 大廳大理石地            U  101 電梯小姐（站在副本大廳）
+  //         i  電梯井的地板  l  91 樓戶外觀景台的地板
+  // 副本傳送門：e  指揮中心的副本傳送門（不擋路）
+  // 副本大廳：w  大廳的牆     j  大廳地板    b  副本告示板    D  還沒開放的空台座（敬請期待）
+  // 野區：  人  下班路上的人行道  燈  路燈        牌  區域路牌
+  //         毯  打卡大樓的地毯    桌  辦公桌      盆  盆栽
+  //         磚  廟口老街的紅磚    爐  香爐        籠  燈籠柱
+  //         籬  分隔兩區的矮樹籬（中間留通道）
+  //         （野區用中文字當代號，免得和副本、副本大廳的英文字母撞在一起）
+  // 花園：  圃  花圃（一格一株，擋路）    箱  種子認養箱
   const BLOCKING = new Set(['#', 'T', 'B', 'K', 'M', 'P', 'S', 'F', 'G', 'N', 'W', 'R', 'J', 'L', 'I', ' ', 'Y', 'Z', 'E', 'Q', 'H',
-    'g', 'k', 'A', 'U']);
+    'g', 'k', 'A', 'U', 'w', 'b', 'D', 's', 'v',
+    '燈', '牌', '桌', '盆', '爐', '籠', '籬', '圃', '箱']);
 
   const g = [];
   for (let y = 0; y < H; y++) g.push(new Array(W).fill(','));
@@ -58,12 +72,9 @@
   // 轉職導師站在螢幕牆右邊
   const MENTOR_TILE = { x: 17, y: 6 };
   set(MENTOR_TILE.x, MENTOR_TILE.y, 'N');
-  // 古城守門員站在螢幕牆左邊，跟他說話就送你去副本的候位區
-  const GUARD_TILE = { x: 6, y: 6 };
-  set(GUARD_TILE.x, GUARD_TILE.y, 'H');
-  // 101 電梯小姐站在指揮中心左下角，跟她說話就送你去 101 大廳候位區
-  const ELEVATOR_TILE = { x: 6, y: 11 };
-  set(ELEVATOR_TILE.x, ELEVATOR_TILE.y, 'U');
+  // 螢幕牆左邊的副本傳送門：走進去就到副本大廳，在大廳裡找各副本的 NPC
+  const HQ_PORTAL_TILE = { x: 6, y: 7 };
+  set(HQ_PORTAL_TILE.x, HQ_PORTAL_TILE.y, 'e');
   // 戰情室：電視牆、長會議桌、兩排椅子
   rect(23, 4, 32, 4, 'W');
   rect(24, 8, 31, 9, 'M');
@@ -90,18 +101,42 @@
   set(GREEK_TILE.x, GREEK_TILE.y, 'I');
   [[2, 2], [37, 2], [1, 12], [38, 10], [2, 26], [37, 27], [12, 27], [18, 28], [36, 18], [1, 19]]
     .forEach(([x, y]) => set(x, y, 'T'));
-  [[8, 26], [9, 26], [9, 27], [15, 26], [33, 28], [34, 28], [38, 23], [1, 6], [2, 6]]
+  [[15, 26], [33, 28], [34, 28], [38, 23], [1, 6], [2, 6]]
     .forEach(([x, y]) => set(x, y, '~'));
+  // 公共花園：物資倉庫後門出去左手邊，兩排各 6 格花圃，中間那排是走道；右上角是種子認養箱
+  const PLOTS = [];
+  [26, 28].forEach(y => { for (let x = 4; x <= 9; x++) { set(x, y, '圃'); PLOTS.push({ x, y }); } });
+  const SEEDBOX_TILE = { x: 10, y: 26 };
+  set(SEEDBOX_TILE.x, SEEDBOX_TILE.y, '箱');
 
-  // 颱風前線：圍欄以南，中間留一個出口
-  rect(0, 31, MW - 1, H - 1, ':');
+  // 野區：圍欄以南，中間留一個出口；往南依序是下班路上 → 打卡大樓 → 廟口老街，每區之間隔一排矮樹籬
+  const FIELD = [
+    { id: 'walk', name: '下班路上', y1: 31, y2: 46, floor: '人' },
+    { id: 'office', name: '打卡大樓', y1: 48, y2: 64, floor: '毯' },
+    { id: 'temple', name: '廟口老街', y1: 66, y2: H - 1, floor: '磚' },
+  ];
+  FIELD.forEach(z => rect(0, z.y1, MW - 1, z.y2, z.floor));
   rect(0, 30, MW - 1, 30, 'F');
   rect(26, 30, 29, 30, ',');
-  [[4, 35], [5, 35], [33, 40], [34, 41], [10, 43], [30, 34]].forEach(([x, y]) => set(x, y, '~'));
-  [[1, 33], [38, 33], [2, 44], [37, 44]].forEach(([x, y]) => set(x, y, 'T'));
+  [[47, '人'], [65, '毯']].forEach(([y, c]) => { rect(0, y, MW - 1, y, '籬'); rect(17, y, 22, y, c); });
+  // 每區入口的路牌
+  set(14, 32, '牌'); set(14, 49, '牌'); set(14, 67, '牌');
+  // 下班路上：路燈、水窪、行道樹
+  [[4, 33], [35, 33], [9, 41], [30, 41], [20, 44]].forEach(([x, y]) => set(x, y, '燈'));
+  [[4, 37], [5, 37], [33, 40], [34, 41], [12, 44], [28, 35]].forEach(([x, y]) => set(x, y, '~'));
+  [[1, 33], [38, 33], [2, 45], [37, 45], [17, 36], [24, 39]].forEach(([x, y]) => set(x, y, 'T'));
+  // 打卡大樓：一排排辦公桌（兩格寬）和盆栽
+  [[4, 51], [10, 51], [26, 51], [32, 51], [4, 56], [10, 56], [26, 56], [32, 56], [6, 61], [30, 61], [14, 59], [22, 54]]
+    .forEach(([x, y]) => rect(x, y, x + 1, y, '桌'));
+  [[1, 49], [38, 49], [1, 63], [38, 63], [18, 57], [21, 57], [8, 53], [30, 53]].forEach(([x, y]) => set(x, y, '盆'));
+  // 廟口老街：中間一座香爐，兩旁燈籠柱，角落有樹
+  set(19, 74, '爐');
+  [[12, 69], [27, 69], [12, 79], [27, 79], [5, 74], [34, 74], [19, 83]].forEach(([x, y]) => set(x, y, '籠'));
+  [[1, 67], [38, 67], [2, 84], [37, 84], [8, 82], [31, 70]].forEach(([x, y]) => set(x, y, 'T'));
 
   // ---------------- 花蓮副本 ----------------
-  // 一關接一關往下走：七星潭 → 太魯閣九曲洞 → 清水斷崖，關卡之間的石門解開謎題才會打開
+  // 兩欄：左欄由上往下 七星潭 → 太魯閣九曲洞 → 燕子口，過了燕子口被溪水送到右欄最上面的砂卡礑步道，
+  // 再往下走到清水斷崖打花蓮王；關卡之間的石門解開謎題才會打開
   rect(MW, 0, W - 1, H - 1, ' ');
   const HUALIEN = [
     // 第一關：七星潭（上面三排是海）
@@ -119,24 +154,74 @@
     'YyyyyyyyyyyyyyyyyyyyyY',
     'YyyyyyyyyyyyyyyyyyyyyY',
     'YYYYYYYYYYXXYYYYYYYYYY',
-    // 第二關：太魯閣九曲洞（把三顆大理石推進凹槽）
+    // 第二關：太魯閣九曲洞（把四顆大理石推進凹槽，推錯地方會卡住）
     'YuuuuuuuuuuuuuuuuuuuuY',
     'YuuuuuuuuuuuuuuuuuuuuY',
     'YuuuYYuuuuuuuuuuYYuuuY',
     'YuuuYYuuuuuuuuuuYYuuuY',
     'YuuuuuuuuuuuuuuuuuuuuY',
-    'YuuuuuuuuuuuuuuuuuuuuY',
+    'YuuuuuuuYuuuuYuuuuuuuY',
     'YYYYYYYuuuuuuuuYYYYYYY',
     'YuuuuuuuuuuuuuuuuuuuuY',
     'YuuuuuuuuuuuuuuuuuuuuY',
+    'YuuuYYuuuuYYuuuuYYuuuY',
+    'YxuuuuuuuuuuuuuuuuuuxY',
+    'YYYuuuuuYuuuuYuuuuYYYY',
+    'YuuuuuuuYuuuuYuuuuuuuY',
     'YuuuYYuuuuuuuuuuYYuuuY',
-    'YuuuuuuuuuuuuuuuuuuuuY',
-    'YuuuuuuuuuuuuuuuuuuuuY',
-    'YuuuxuuuuuxuuuuuuxuuuY',
-    'YuuuuuuuuuuuuuuuuuuuuY',
-    'YuuuuuuuuuuuuuuuuuuuuY',
+    'YuuuuuuuuxYYxuuuuuuuuY',
     'YYYYYYYYYYXXYYYYYYYYYY',
-    // 第三關：清水斷崖（右邊是太平洋）
+    // 第三關：燕子口（兩塊踏板要同時有人踩，下面三排是立霧溪）
+    'YaaaaaaaaaaaaaaaaaaaaY',
+    'YaaaaaaaaaaaaaaaaaaaaY',
+    'YaaaYYaaaaaaaaaaYYaaaY',
+    'YaaaYYaaaaaaaaaaYYaaaY',
+    'YaaaaaaaaaaaaaaaaaaaaY',
+    'YaaaaaaaaaaaaaaaaaaaaY',
+    'YaaaaaaaaaaaaaaaaaaaaY',
+    'YaaaaaaaYaaaaYaaaaaaaY',
+    'YaaaaaaaYaaaaYaaaaaaaY',
+    'YaaaaaaaaaaaaaaaaaaaaY',
+    'YaaaaaaaaaaaaaaaaaaaaY',
+    'YaaaaaaaaaaaaaaaaaaaaY',
+    'ZZZZZZZZZZZZZZZZZZZZZZ',
+    'ZZZZZZZZZZZZZZZZZZZZZZ',
+    'ZZZZZZZZZZZZZZZZZZZZZZ',
+    'YYYYYYYYYYYYYYYYYYYYYY',
+  ];
+  const HUALIEN_R = [
+    // 第四關：砂卡礑步道（左邊的泉水接到右邊的水車）
+    'YYYYYYYYYYYYYYYYYYYYYY',
+    'YYYYYYYYYYYYYYYYYYYYYY',
+    'YYYYYYYYYYYYYYYYYYYYYY',
+    'YmmmmmmmmmmmmmmmmmmmmY',
+    'YmmmmmmmmmmmmmmmmmmmmY',
+    'YmmmmmmmmmmmmmmmmmmmmY',
+    'YmmmmmmmmmmmmmmmmmmmmY',
+    'YmmmmmmmmmmmmmmmmmmmmY',
+    'YmmmmmmmmmmmmmmmmmmmmY',
+    'YmmmmmmmmmmmmmmmmmmmmY',
+    'YmmmmmmmmmmmmmmmmmmmmY',
+    'YmmmmmmmmmmmmmmmmmmmmY',
+    'YmmmmmmmmmmmmmmmmmmmmY',
+    'YsmmmmmmmmmmmmmmmmmmvY',
+    'YmmmmmmmmmmmmmmmmmmmmY',
+    'YmmmmmmmmmmmmmmmmmmmmY',
+    'YmmmmmmmmmmmmmmmmmmmmY',
+    'YmmmmmmmmmmmmmmmmmmmmY',
+    'YmmmmmmmmmmmmmmmmmmmmY',
+    'YmmmmmmmmmmmmmmmmmmmmY',
+    'YmmmmmmmmmmmmmmmmmmmmY',
+    'YmmmmmmmmmmmmmmmmmmmmY',
+    'YmmmmmmmmmmmmmmmmmmmmY',
+    'YmmmmmmmmmmmmmmmmmmmmY',
+    'YmmmmmmmmmmmmmmmmmmmmY',
+    'YmmmmmmmmmmmmmmmmmmmmY',
+    'YmmmmmmmmmmmmmmmmmmmmY',
+    'YmmmmmmmmmmmmmmmmmmmmY',
+    'YmmmmmmmmmmmmmmmmmmmmY',
+    'YYYYYYYYYYXXYYYYYYYYYY',
+    // 第五關：清水斷崖（右邊是太平洋）
     'YnnnnnnnnnnnnnnnnnZZZY',
     'YnnnnnnnnnnnnnnnnnnZZY',
     'YnnnnnnnnnnnnnnnnnnZZY',
@@ -155,9 +240,11 @@
     'YYYYYYYYYYYYYYYYYYYYYY',
   ];
   HUALIEN.forEach((row, y) => [...row].forEach((c, x) => set(DX + x, y, c)));
+  HUALIEN_R.forEach((row, y) => [...row].forEach((c, x) => set(DX + 22 + x, y, c)));
 
   // ---------------- 台北101副本 ----------------
-  // 一樣一關接一關往下走：信義廣場（打三波怪）→ 87 樓阻尼球（四個控制台）→ 觀景台打天龍王
+  // 兩欄：左欄由上往下 信義廣場（打三波怪）→ 101 電梯井（答題）→ 87 樓阻尼球（照顏色順序點控制台），
+  // 過了被電梯送到右欄最上面的 91 樓戶外觀景台（避雷針），再往下走到觀景台打天龍王
   const TAIPEI = [
     // 第一關：信義廣場（上面三排是 101 的玻璃帷幕）
     'gggggggggggggggggggggg',
@@ -174,24 +261,74 @@
     'gppppppppppppppppppppg',
     'gppppppppppppppppppppg',
     'ggggggggggXXgggggggggg',
-    // 第二關：87～92 樓阻尼球（球在中間左右盪，四個角落有控制台）
-    'gffffffffffffffffffffg',
-    'gfcffffffffffffffffcfg',
-    'gffffffffffffffffffffg',
-    'gffffffffffffffffffffg',
-    'gffffffffffffffffffffg',
-    'gffffffffffffffffffffg',
-    'gffffffffffffffffffffg',
-    'gffffffffffffffffffffg',
-    'gffffffffffffffffffffg',
-    'gffffffffffffffffffffg',
-    'gffffffffffffffffffffg',
-    'gffffffffffffffffffffg',
-    'gffffffffffffffffffffg',
-    'gfcffffffffffffffffcfg',
-    'gffffffffffffffffffffg',
+    // 第二關：101 電梯井（地上四顆樓層按鈕，站上去答題）
+    'giiiiiiiiiiiiiiiiiiiig',
+    'giiiiiiiiiiiiiiiiiiiig',
+    'giiiiiiiiiiiiiiiiiiiig',
+    'giiiiiiiiiiiiiiiiiiiig',
+    'giiiiiiiiiiiiiiiiiiiig',
+    'giiiiiiiiiiiiiiiiiiiig',
+    'giiiiiiiiiiiiiiiiiiiig',
+    'giiiiiiiiiiiiiiiiiiiig',
+    'giiiiiiiiiiiiiiiiiiiig',
+    'giiiiiiiiiiiiiiiiiiiig',
+    'giiiiiiiiiiiiiiiiiiiig',
+    'giiiiiiiiiiiiiiiiiiiig',
+    'giiiiiiiiiiiiiiiiiiiig',
+    'giiiiiiiiiiiiiiiiiiiig',
+    'giiiiiiiiiiiiiiiiiiiig',
     'ggggggggggXXgggggggggg',
-    // 第三關：101 樓頂觀景台（右邊是天空，四根大柱子可以躲天龍暴風）
+    // 第三關：87～92 樓阻尼球（球在中間左右盪，四個角落有控制台）
+    'gffffffffffffffffffffg',
+    'gfcffffffffffffffffcfg',
+    'gffffffffffffffffffffg',
+    'gffffffffffffffffffffg',
+    'gffffffffffffffffffffg',
+    'gffffffffffffffffffffg',
+    'gffffffffffffffffffffg',
+    'gffffffffffffffffffffg',
+    'gffffffffffffffffffffg',
+    'gffffffffffffffffffffg',
+    'gffffffffffffffffffffg',
+    'gffffffffffffffffffffg',
+    'gffffffffffffffffffffg',
+    'gfcffffffffffffffffcfg',
+    'gffffffffffffffffffffg',
+    'gggggggggggggggggggggg',
+  ];
+  const TAIPEI_R = [
+    // 第四關：91 樓戶外觀景台（右邊是天空，五根避雷針）
+    'gggggggggggggggggggggg',
+    'gggggggggggggggggggggg',
+    'gggggggggggggggggggggg',
+    'glllllllllllllllllllkk',
+    'glllllllllllllllllllkk',
+    'gllllllllllllllllllllk',
+    'gllllllllllllllllllllk',
+    'gllllllllllllllllllllk',
+    'gllllllllllllllllllllk',
+    'gllllllllllllllllllllk',
+    'gllllllllllllllllllllk',
+    'gllllllllllllllllllllk',
+    'gllllllllllllllllllllk',
+    'gllllllllllllllllllllk',
+    'gllllllllllllllllllllk',
+    'gllllllllllllllllllllk',
+    'gllllllllllllllllllllk',
+    'gllllllllllllllllllllk',
+    'gllllllllllllllllllllk',
+    'gllllllllllllllllllllk',
+    'gllllllllllllllllllllk',
+    'gllllllllllllllllllllk',
+    'gllllllllllllllllllllk',
+    'gllllllllllllllllllllk',
+    'gllllllllllllllllllllk',
+    'gllllllllllllllllllllk',
+    'gllllllllllllllllllllk',
+    'glllllllllllllllllllkk',
+    'glllllllllllllllllllkk',
+    'ggggggggggXXgggggggggg',
+    // 第五關：101 樓頂觀景台（右邊是天空，四根大柱子可以躲天龍暴風）
     'gooooooooooooooooookkg',
     'gooooooooooooooooookkg',
     'goooooooooooooooooookg',
@@ -210,6 +347,7 @@
     'gggggggggggggggggggggg',
   ];
   TAIPEI.forEach((row, y) => [...row].forEach((c, x) => set(TDX + x, y, c)));
+  TAIPEI_R.forEach((row, y) => [...row].forEach((c, x) => set(TDX + 22 + x, y, c)));
 
   // ---------------- 候位區 ----------------
   // 古城候位區：四面石牆圍起來的前庭，上面是通往花蓮副本的古城門；站在裡面按「出發」
@@ -226,6 +364,23 @@
   set(TPORTAL_TILE.x, TPORTAL_TILE.y, 'O');
   const TLOBBY = { x1: TLX + 1, y1: 3, x2: TLX + 10, y2: 14 };
 
+  // ---------------- 副本大廳 ----------------
+  // 上面牆上掛告示板（每個副本現在的狀態），中間一排台座站著各副本的 NPC，
+  // 空台座留給之後的副本；下面中間是回總部的傳送門
+  rect(HX, 2, HX + 15, 15, 'w');
+  rect(HX + 1, 3, HX + 14, 14, 'j');
+  rect(HX + 5, 3, HX + 10, 3, 'b');
+  const PEDESTALS = [3, 6, 9, 12].map(dx => ({ x: HX + dx, y: 7 }));
+  const GUARD_TILE = PEDESTALS[0], ELEVATOR_TILE = PEDESTALS[1];
+  set(GUARD_TILE.x, GUARD_TILE.y, 'H');
+  set(ELEVATOR_TILE.x, ELEVATOR_TILE.y, 'U');
+  // 還沒開放的副本：之後新增的時候換成那個副本 NPC 的格子
+  const SOON = [{ name: '阿里山', ...PEDESTALS[2] }, { name: '台南', ...PEDESTALS[3] }];
+  SOON.forEach(p => set(p.x, p.y, 'D'));
+  const HUB_EXIT_TILE = { x: HX + 7, y: 13 };
+  set(HUB_EXIT_TILE.x, HUB_EXIT_TILE.y, 'O');
+  const HUB = { x1: HX + 1, y1: 3, x2: HX + 14, y2: 14 };
+
   const px = (x) => (DX + x + 0.5) * TILE, py = (y) => (y + 0.5) * TILE;
   const tpx = (x) => (TDX + x + 0.5) * TILE;
   // 三關的範圍都一樣：第 1 關 3～12 排、第 2 關 14～28 排、第 3 關 30～44 排
@@ -236,18 +391,24 @@
   ];
   const gates = (dx) => [[[dx + 10, 13], [dx + 11, 13]], [[dx + 10, 29], [dx + 11, 29]]];
   const hb = boxes(DX, 20), tb = boxes(TDX, 20);
+  const rpx = (x) => (DX + 22 + x + 0.5) * TILE; // 花蓮右欄
+  const hr = boxes(DX + 22, 20), tr = boxes(TDX + 22, 20);
+  const trx = (x) => (TDX + 22 + x + 0.5) * TILE; // 台北右欄
+  hr[0].y1 = 3 * TILE; // 砂卡礑步道從第 3 排一直到第 28 排
   const DUNGEON = {
     id: 'hualien', name: '花蓮', title: '花蓮・太魯閣峽谷', dx: DX, lx: LX, lobby: LOBBY, npcName: '古城守門員', lobbyName: '古城候位區',
-    portalName: '古城門・花蓮副本', minLevel: 0,
-    maxPlayers: 6, countdownMs: 10000, timeLimitMs: 20 * 60 * 1000, respawnMs: 10000,
-    // 每一關的起點（倒下也是在這裡復活）和範圍（像素）
+    portalName: '古城門・花蓮副本', minLevel: 0, cols: 2,
+    maxPlayers: 6, countdownMs: 10000, timeLimitMs: 30 * 60 * 1000, respawnMs: 10000,
+    // 每一關的起點（倒下也是在這裡復活）和範圍（像素）；warp：前一關過了就把大家傳送過去（換欄）
     stages: [
       { id: 'd1', name: '七星潭', start: { x: px(10.5), y: py(11) }, box: hb[0] },
       { id: 'd2', name: '太魯閣九曲洞', start: { x: px(10.5), y: py(14.6) }, box: hb[1] },
-      { id: 'd3', name: '清水斷崖', start: { x: px(10.5), y: py(30.6) }, box: hb[2] },
+      { id: 'd3', name: '燕子口', start: { x: px(10.5), y: py(30.6) }, box: hb[2] },
+      { id: 'd4', name: '砂卡礑步道', start: { x: rpx(10.5), y: py(4) }, box: { x1: hr[0].x1, y1: 3 * TILE, x2: hr[0].x2, y2: 29 * TILE }, warp: true },
+      { id: 'd5', name: '清水斷崖', start: { x: rpx(10.5), y: py(30.6) }, box: hr[2] },
     ],
-    // 關卡之間的石門：第 n 關過了就打開第 n 道
-    gates: gates(DX),
+    // 關卡之間的石門：第 n 關過了就打開第 n 道（燕子口到砂卡礑是傳送，沒有門）
+    gates: [...gates(DX), [], [[DX + 32, 29], [DX + 33, 29]]],
     // 七星潭的七顆彩色石頭（七種顏色），石碑上會畫出要踩的順序
     stones: [
       { x: px(4), y: py(6), color: '#e8384f', name: '紅' },
@@ -259,28 +420,39 @@
       { x: px(16), y: py(9), color: '#fbfbf8', name: '白' },
     ],
     stele: { x: (DX + 11) * TILE, y: 3 * TILE + 16 }, // 石碑上畫順序的位置
-    seqLen: 5,
-    // 九曲洞：三顆大理石的起點（格子座標）
-    blocks: [[DX + 6, 18], [DX + 15, 18], [DX + 10, 23]],
-    boss: { x: px(10), y: py(38) },
+    seqLen: 7, seqShowMs: 8000,
+    // 大理石的起點（格子座標）和在第幾關：九曲洞四顆、燕子口一顆（一個人玩的時候拿來壓踏板）
+    blocks: [[DX + 6, 17, 1], [DX + 15, 17, 1], [DX + 9, 22, 1], [DX + 12, 22, 1], [DX + 10, 35, 2]],
+    // 燕子口的兩塊踏板（格子座標）
+    plates: [[DX + 3, 36], [DX + 18, 36]], holdMs: 5000,
+    // 砂卡礑：5x3 塊會轉的水道石板（格子座標），泉水從左邊中間那排進來，水車在右邊中間那排
+    pipes: { xs: [4, 7, 10, 13, 16].map(x => DX + 22 + x), ys: [9, 13, 17], src: 1, dst: 1 },
+    flood: { y: 28, every: 50000, rows: 3, max: 4 }, // 溪水每 50 秒漲 3 排，最多漲 4 次
+    boss: { x: rpx(10), y: py(38) },
   };
   const TAIPEI_DG = {
     id: 'taipei', name: '台北101', title: '台北101・天龍之巔', dx: TDX, lx: TLX, lobby: TLOBBY, npcName: '101 電梯小姐', lobbyName: '101 大廳候位區',
-    portalName: '101 直達電梯・台北副本', minLevel: 50,
-    maxPlayers: 6, countdownMs: 10000, timeLimitMs: 15 * 60 * 1000, respawnMs: 20000,
+    portalName: '101 直達電梯・台北副本', minLevel: 50, cols: 2,
+    maxPlayers: 6, countdownMs: 10000, timeLimitMs: 25 * 60 * 1000, respawnMs: 20000,
     stages: [
       { id: 't1', name: '信義廣場', start: { x: tpx(10.5), y: py(4) }, box: tb[0] },
-      { id: 't2', name: '87 樓阻尼球', start: { x: tpx(10.5), y: py(14.6) }, box: tb[1] },
-      { id: 't3', name: '101 觀景台', start: { x: tpx(10.5), y: py(30.6) }, box: tb[2] },
+      { id: 't2', name: '101 電梯井', start: { x: tpx(10.5), y: py(14.6) }, box: tb[1] },
+      { id: 't3', name: '87 樓阻尼球', start: { x: tpx(10.5), y: py(30.6) }, box: tb[2] },
+      { id: 't4', name: '91 樓戶外觀景台', start: { x: trx(10.5), y: py(4) }, box: { x1: tr[0].x1, y1: 3 * TILE, x2: tr[0].x2, y2: 29 * TILE }, warp: true },
+      { id: 't5', name: '101 觀景台', start: { x: trx(10.5), y: py(30.6) }, box: tr[2] },
     ],
-    gates: gates(TDX),
-    // 阻尼球層四個角落的控制台（像素）
-    consoles: [[2, 15], [19, 15], [2, 27], [19, 27]].map(([x, y]) => ({ x: tpx(x), y: py(y) })),
-    // 阻尼球在第 21 排左右盪：x 在 x1～x2 之間，period 毫秒來回一次
-    ball: { x1: tpx(2.5), x2: tpx(18.5), y: py(21), r: 64, period: 4200 },
+    gates: [...gates(TDX), [], [[TDX + 32, 29], [TDX + 33, 29]]],
+    // 電梯井：題目牌的位置、地上四顆答案按鈕（像素）
+    quiz: { board: { x: tpx(10), y: py(16.5) }, buttons: [[8, 20], [13, 20], [8, 24], [13, 24]].map(([x, y]) => ({ x: tpx(x), y: py(y) })), holdMs: 1500, need: 3 },
+    // 阻尼球層四個角落的控制台（像素），每個一個顏色
+    consoles: [[2, 31], [19, 31], [2, 43], [19, 43]].map(([x, y], i) => ({ x: tpx(x), y: py(y), color: ['#e8384f', '#ffd23f', '#6baf7b', '#4f7cc2'][i] })),
+    // 阻尼球在第 37 排左右盪：x 在 x1～x2 之間，period 毫秒來回一次
+    ball: { x1: tpx(2.5), x2: tpx(18.5), y: py(37), r: 64, period: 3400 },
+    // 91 樓：五根避雷針圍成一圈（碰一根，它和左右兩根一起亮或暗）
+    rods: [0, 1, 2, 3, 4].map(k => { const a = -Math.PI / 2 + k * Math.PI * 2 / 5; return { x: trx(10) + Math.cos(a) * 6 * TILE, y: py(15.5) + Math.sin(a) * 6 * TILE }; }),
     // 觀景台的四根柱子（天龍暴風的時候躲在後面）
-    pillars: [[6, 34], [14, 34], [6, 40], [14, 40]].map(([x, y]) => ({ x: tpx(x), y: py(y) })),
-    boss: { x: tpx(10), y: py(37) },
+    pillars: [[6, 34], [14, 34], [6, 40], [14, 40]].map(([x, y]) => ({ x: trx(x), y: py(y) })),
+    boss: { x: trx(10), y: py(37) },
   };
   const DUNGEONS = { hualien: DUNGEON, taipei: TAIPEI_DG };
   const DG_LIST = [DUNGEON, TAIPEI_DG];
@@ -296,8 +468,21 @@
     veggie: { name: '蔬菜', icon: '🥬' },
     bubbletea: { name: '台灣珍奶', icon: '🧋' },
     chicken: { name: '台灣雞排', icon: '🍗' },
+    // 公共花園：種子、果實、枯枝（garden 的不會從「綜合」箱子掉出來）
+    seedTomato: { name: '小番茄種子', icon: '', garden: true, bag: 'misc' },
+    seedGuava: { name: '芭樂種子', icon: '', garden: true, bag: 'misc' },
+    seedApple: { name: '蘋果種子', icon: '', garden: true, bag: 'misc' },
+    seedPineapple: { name: '鳳梨種子', icon: '', garden: true, bag: 'misc' },
+    tomato: { name: '小番茄', icon: '', garden: true },
+    guava: { name: '芭樂', icon: '', garden: true },
+    apple: { name: '蘋果', icon: '', garden: true },
+    pineapple: { name: '鳳梨', icon: '', garden: true },
+    twig: { name: '枯枝', icon: '', garden: true, bag: 'misc' },
+    // bag：放在背包哪一區（shared/bag.js），沒寫的是補品；種子、枯枝是雜物，寶石收在寶石袋，不佔背包格子
+    gemRuby: { name: '紅寶石', icon: '', garden: true, gem: true, bag: 'gem' },
+    gemSapphire: { name: '藍寶石', icon: '', garden: true, gem: true, bag: 'gem' },
+    gemEmerald: { name: '綠寶石', icon: '', garden: true, gem: true, bag: 'gem' },
   };
-  const BAG_SLOTS = 25; // 背包格數：一種物資佔一格
   const CRATES = [
     { label: '泡麵', item: 'noodle', x1: 6, y1: 16, x2: 7, y2: 17 },
     { label: '礦泉水', item: 'water', x1: 6, y1: 20, x2: 8, y2: 22 },
@@ -312,24 +497,39 @@
     { id: 'storage', name: '📦 物資倉庫', x1: 5, y1: 15, x2: 19, y2: 23 },
     { id: 'kitchen', name: '🍜 煮泡麵區', x1: 30, y1: 20, x2: 34, y2: 23 },
     { id: 'lounge', name: '🛋️ 休息區', x1: 21, y1: 15, x2: 34, y2: 23 },
-    { id: 'front', name: '🌀 颱風前線', x1: 0, y1: 31, x2: MW - 1, y2: H - 1 },
+    // 野區的三區：field 標記可以打怪、畫城牆、召喚
+    ...FIELD.map(z => ({ id: z.id, name: z.name, field: true, x1: 0, y1: z.y1 - (z.id === 'walk' ? 0 : 1), x2: MW - 1, y2: z.y2 })),
     { id: 'lobby', name: '🏯 古城候位區', lobby: 'hualien', ...LOBBY },
     { id: 'd1', name: '🌊 七星潭', dungeon: 'hualien', x1: DX + 1, y1: 3, x2: DX + 20, y2: 12 },
     { id: 'd2', name: '🪨 太魯閣九曲洞', dungeon: 'hualien', x1: DX + 1, y1: 14, x2: DX + 20, y2: 28 },
-    { id: 'd3', name: '⚔️ 清水斷崖', dungeon: 'hualien', boss: true, x1: DX + 1, y1: 30, x2: DX + 20, y2: 44 },
+    { id: 'd3', name: '燕子口', dungeon: 'hualien', x1: DX + 1, y1: 30, x2: DX + 20, y2: 44 },
+    { id: 'd4', name: '砂卡礑步道', dungeon: 'hualien', x1: DX + 23, y1: 3, x2: DX + 42, y2: 28 },
+    { id: 'd5', name: '⚔️ 清水斷崖', dungeon: 'hualien', boss: true, x1: DX + 23, y1: 30, x2: DX + 42, y2: 44 },
     { id: 'tlobby', name: '101 大廳候位區', lobby: 'taipei', ...TLOBBY },
+    { id: 'hub', name: '副本大廳', ...HUB },
     { id: 't1', name: '信義廣場', dungeon: 'taipei', x1: TDX + 1, y1: 3, x2: TDX + 20, y2: 12 },
-    { id: 't2', name: '87 樓阻尼球', dungeon: 'taipei', x1: TDX + 1, y1: 14, x2: TDX + 20, y2: 28 },
-    { id: 't3', name: '101 觀景台', dungeon: 'taipei', boss: true, x1: TDX + 1, y1: 30, x2: TDX + 20, y2: 44 },
+    { id: 't2', name: '101 電梯井', dungeon: 'taipei', x1: TDX + 1, y1: 14, x2: TDX + 20, y2: 28 },
+    { id: 't3', name: '87 樓阻尼球', dungeon: 'taipei', x1: TDX + 1, y1: 30, x2: TDX + 20, y2: 44 },
+    { id: 't4', name: '91 樓戶外觀景台', dungeon: 'taipei', x1: TDX + 23, y1: 3, x2: TDX + 42, y2: 28 },
+    { id: 't5', name: '101 觀景台', dungeon: 'taipei', boss: true, x1: TDX + 23, y1: 30, x2: TDX + 42, y2: 44 },
   ];
-  // 颱風怪物活動的範圍（像素）
-  const MONSTER_ZONE = { x1: 4 * TILE, y1: 34 * TILE, x2: (MW - 4) * TILE, y2: (H - 3) * TILE };
+  // 颱風怪物活動的範圍（像素）：下班路上那一區
+  const MONSTER_ZONE = { x1: 4 * TILE, y1: 34 * TILE, x2: (MW - 4) * TILE, y2: 44 * TILE };
+  // 每一區小怪活動的範圍（像素），和整個野區的範圍
+  const FIELD_ZONES = {};
+  FIELD.forEach(z => { FIELD_ZONES[z.id] = { x1: 2 * TILE, y1: (z.y1 + 1.5) * TILE, x2: (MW - 2) * TILE, y2: (z.y2 - 1) * TILE }; });
+  const FIELD_BOX = { x1: 0, y1: 31 * TILE, x2: MW * TILE, y2: H * TILE };
 
   // 會變動的擋路格子（關著的石門、九曲洞的大理石）：'tx,ty'
   const dyn = new Set();
   const map = {
-    W, H, MW, DX, LX, TDX, TLX, TILE, BLOCKING, ROOMS, ITEMS, BAG_SLOTS, CRATES, MONSTER_ZONE, DUNGEON, DUNGEONS, DG_LIST, LOBBY, dyn,
+    W, H, MW, DX, LX, TDX, TLX, HX, HUB, DH, TILE, BLOCKING, ROOMS, ITEMS, CRATES, MONSTER_ZONE, FIELD, FIELD_ZONES, FIELD_BOX, DUNGEON, DUNGEONS, DG_LIST, LOBBY, dyn, PLOTS,
     portal: DUNGEON.portal,
+    // 指揮中心的副本傳送門、副本大廳回總部的出口、還沒開放的台座（像素）
+    hqPortal: { x: (HQ_PORTAL_TILE.x + 0.5) * TILE, y: (HQ_PORTAL_TILE.y + 0.5) * TILE },
+    hubExit: { x: (HUB_EXIT_TILE.x + 0.5) * TILE, y: (HUB_EXIT_TILE.y + 0.5) * TILE },
+    hubBoard: { x: (HX + 8) * TILE, y: 3 * TILE },
+    soon: SOON.map(p => ({ name: p.name, x: (p.x + 0.5) * TILE, y: (p.y + 0.5) * TILE })),
     mentor: { x: (MENTOR_TILE.x + 0.5) * TILE, y: (MENTOR_TILE.y + 0.5) * TILE },
     guard: DUNGEON.npc,
     elevator: TAIPEI_DG.npc,
@@ -355,15 +555,22 @@
       const d = this.dungeonAt(px);
       return d ? d.stages.findIndex(s => px >= s.box.x1 && px < s.box.x2 && py >= s.box.y1 && py < s.box.y2) : -1;
     },
-    // 這個位置在哪一區：總部 hq、副本 dungeon、候位區 lobby（各區之間走不過去，只能傳送）
+    // 這個位置在哪一區：總部 hq、副本 dungeon、候位區 lobby、副本大廳 hub（各區之間走不過去，只能傳送）
     zoneOf(px) {
+      if (px >= HX * TILE) return 'hub';
       const d = this.dungeonAt(px);
       return !d ? 'hq' : px < d.lx * TILE ? 'dungeon' : 'lobby';
     },
     // 區域加上是哪個副本，例如 'lobby:taipei'（不同副本的候位區也不能直接走過去）
     areaOf(px) {
       const d = this.dungeonAt(px);
-      return d ? this.zoneOf(px) + ':' + d.id : 'hq';
+      return d ? this.zoneOf(px) + ':' + d.id : this.zoneOf(px);
+    },
+    nearHqPortal(px, py) { return Math.hypot(px - this.hqPortal.x, py - this.hqPortal.y) < 1.6 * TILE; },
+    nearHubExit(px, py) { return Math.hypot(px - this.hubExit.x, py - this.hubExit.y) < 1.6 * TILE; },
+    inHub(px, py) {
+      const tx = Math.floor(px / TILE), ty = Math.floor(py / TILE);
+      return tx >= HUB.x1 && tx <= HUB.x2 && ty >= HUB.y1 && ty <= HUB.y2;
     },
     nearNpc(d, px, py) {
       return Math.hypot(px - d.npc.x, py - d.npc.y) < 2 * TILE;
@@ -412,6 +619,19 @@
     },
     nearMentor(px, py) {
       return Math.hypot(px - this.mentor.x, py - this.mentor.y) < 2 * TILE;
+    },
+    // (tx, ty) 是第幾格花圃，不是就回傳 -1
+    plotAt(tx, ty) {
+      return PLOTS.findIndex(p => p.x === tx && p.y === ty);
+    },
+    // 站在 (px, py) 夠不夠近第 i 格花圃
+    nearPlot(i, px, py) {
+      const p = PLOTS[i];
+      return !!p && Math.hypot(px - (p.x + 0.5) * TILE, py - (p.y + 0.5) * TILE) < 1.7 * TILE;
+    },
+    seedBox: { x: (SEEDBOX_TILE.x + 0.5) * TILE, y: (SEEDBOX_TILE.y + 0.5) * TILE },
+    nearSeedBox(px, py) {
+      return Math.hypot(px - this.seedBox.x, py - this.seedBox.y) < 1.7 * TILE;
     },
     roomAt(px, py) {
       const tx = Math.floor(px / TILE);

@@ -1,4 +1,4 @@
-/* 配色跟報名頁的邀請函一致：灰銀、午夜藍、橘 */
+/* 配色跟報名頁的識別證一致：灰銀、午夜藍、橘 */
 /* 手機、平板連點不會放大畫面（畫畫板、拉桿另外設 none） */
 html, body, * { touch-action: manipulation; }
 /* 平板、手機往下拉不會整頁重新整理，捲到底也不會帶動後面的畫面 */
@@ -266,12 +266,12 @@ button.inv-item:hover { border-color: var(--accent); }
   padding: 6px 14px; font-size: 12px; }
 
 
-/* 個人資料：跟報名頁同一張 VIP Pass（樣式從 index.html 搬過來，字級縮小放進視窗） */
+/* 個人資料：跟報名頁同一張識別證（樣式從 index.html 搬過來，字級縮小放進視窗） */
 #modal .vip { --navy-bg: #131A28; --navy-fg: #F2F4F8; --navy-dim: #9AA3B5; --navy-dot: rgba(255,255,255,0.08);
   --navy-line: rgba(255,255,255,0.14); --navy-perf: rgba(255,255,255,0.26); --navy-hot: #FF7A2F; --navy-face: #2A3244;
   --silver-bg: #D6DAE1; --silver-fg: #141923; --silver-dim: #4E5566; --silver-dot: rgba(20,25,35,0.10);
   --silver-line: rgba(20,25,35,0.16); --silver-perf: rgba(20,25,35,0.30); --silver-hot: #B23F00; --silver-face: #BFC4CD; }
-/* VIP pass */
+/* 識別證 */
 .vip {
   --c-bg: var(--navy-bg); --c-fg: var(--navy-fg); --c-dim: var(--navy-dim); --c-dot: var(--navy-dot);
   --c-line: var(--navy-line); --c-perf: var(--navy-perf); --c-hot: var(--navy-hot); --c-face: var(--navy-face);
@@ -356,29 +356,41 @@ button.inv-item:hover { border-color: var(--accent); }
 .gear-slot b { flex: 1; font-size: 15px; }
 .gear-slot-k { font: 700 12px var(--mono); color: var(--muted); width: 32px; }
 .gear-h { margin: 14px 0 8px; font-size: 16px; }
-/* 依系列分組：點標題收合 */
-.gear-series { border-top: 2px dashed var(--line); padding-bottom: 6px; }
-.gear-series[open] { padding-bottom: 16px; }
 .gear > .modal-hint { margin-bottom: 12px; }
-.gear-series:last-child { border-bottom: 2px dashed var(--line); }
-.gear-series > summary { display: flex; align-items: baseline; gap: 10px; cursor: pointer; list-style: none; font-weight: 900; padding: 14px 2px 10px; margin: 0; }
-.gear-series > summary::-webkit-details-marker { display: none; }
-.gear-series > summary::before { content: '▸'; color: var(--muted); font-size: 13px; transition: transform .15s; }
-.gear-series[open] > summary::before { transform: rotate(90deg); }
+/* 照部位分頁：頭飾｜服裝｜披風｜武器｜套裝 */
+.gear-tabs { flex-wrap: wrap; }
+.gear-tabs button small { margin-left: 6px; font: 700 11px var(--mono); opacity: .7; }
+.gear-h-name { font-weight: 900; }
 .gear-h-count { font: 700 12px var(--mono); color: var(--muted); }
 .gear-h-on { font-size: 12px; font-weight: 900; color: #fff; background: #ff6b9a; border-radius: 999px; padding: 1px 9px; }
-.gear-h-desc { margin: 0 0 12px 22px; font-size: 13px; color: var(--muted); }
-.gear-series:not([open]) .gear-h-desc { display: none; }
+.gear-h-desc { margin: 2px 0 10px; font-size: 13px; color: var(--muted); }
+/* 套裝頁：一個系列一列，三欄 */
+.gear-set { border-top: 2px dashed var(--line); padding: 12px 2px 14px; }
+.gear-set:last-child { border-bottom: 2px dashed var(--line); }
+.gear-set.set-on .gear-h-name { color: #e0457f; }
+.gear-set-h { display: flex; align-items: baseline; gap: 10px; }
+.gear-set-cols { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.gear-set-col { display: flex; flex-wrap: wrap; justify-content: center; align-content: flex-start; gap: 6px; min-width: 0; }
+/* 套裝頁每格固定大小：有沒有拿到、有沒有「點一下穿上」那行都一樣大 */
+.gear-set-col .gear-item { flex: 0 0 auto; box-sizing: border-box; width: min(104px, 100%); height: 124px; justify-content: flex-start; }
+.gear-set-k { flex-basis: 100%; font: 700 12px var(--mono); color: var(--muted); text-align: center; }
+.gear-set-none { flex: 0 0 auto; box-sizing: border-box; width: min(104px, 100%); height: 124px; display: flex; align-items: center; justify-content: center; border: 2px dashed var(--line); border-radius: 14px; font-size: 12px; color: var(--muted); }
+.gear-set-col .gear-item .gear-ic { width: 44px; height: 44px; }
+.gear-set-col .gear-item .gear-name { font-size: 12px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gear-set-col .gear-item .gear-act { font-size: 11px; }
 .gear-set-on { margin: 0; font-weight: 900; font-size: 14px; color: #e0457f; }
-.gear-part { position: absolute; top: 6px; right: 6px; font-size: 11px; color: var(--muted); background: var(--silver); border-radius: 999px; padding: 1px 7px; }
-.gear-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 8px; }
-.gear-item { position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 6px 8px;
+.gear-part { position: absolute; top: 6px; right: 6px; max-width: 58%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; color: var(--muted); background: #fdf6e3; border-radius: 3px; padding: 1px 6px; box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+.gear-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(108px, 1fr)); gap: 8px; }
+.gear-item { position: relative; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 6px 8px;
   background: var(--paper); border: 2px solid var(--line); border-radius: 14px; cursor: pointer; font-family: var(--display); color: var(--ink); }
 .gear-item:hover:not(:disabled) { border-color: var(--accent); }
 .gear-item.on { border-color: var(--accent); background: #fff4ec; }
-.gear-item.locked { cursor: default; opacity: .55; }
-.gear-thumb { width: 96px; height: 112px; }
-.gear-lock { width: 96px; height: 112px; display: flex; align-items: center; justify-content: center; font: 900 40px var(--display); color: var(--line); }
+.gear-item.locked { cursor: default; }
+.gear-item.locked .gear-name { color: var(--muted); }
+.gear-item.gone { cursor: default; opacity: .55; filter: grayscale(.7); }
+.gear-ic { width: 64px; height: 64px; margin-top: 16px; }
+/* 沒拿到：灰色剪影 */
+.gear-item.locked .gear-ic { filter: brightness(0); opacity: .16; }
 .gear-name { font-weight: 900; font-size: 14px; }
 .gear-act { font-size: 12px; color: var(--muted); }
 .gear-rar { position: absolute; top: 6px; left: 6px; font: 700 11px var(--mono); padding: 1px 7px; border-radius: 999px; color: #fff; background: #7fb2e5; }
@@ -505,7 +517,13 @@ button.inv-item:hover { border-color: var(--accent); }
 @media (max-width: 600px) {
   .gear-top { flex-direction: column; align-items: center; }
   .gear-me { width: 144px; height: 168px; }
-  .gear-grid { grid-template-columns: repeat(2, 1fr); }
+  .gear-grid { grid-template-columns: repeat(3, 1fr); }
+  .gear-set-col .gear-item .gear-rar { display: none; }
+  .gear-tabs { gap: 5px; }
+  .gear-tabs button { font-size: 14px; padding: 6px 11px; }
+  .gear-tabs button small { margin-left: 3px; }
+  .gear-set-col .gear-item .gear-ic { margin-top: 4px; }
+  .gear-set-col .gear-item, .gear-set-none { height: 104px; }
   .create { flex-direction: column; align-items: center; }
   #messages { height: 90px; font-size: 13px; }
   #help { display: none; }
@@ -823,6 +841,32 @@ button.inv-item:hover { border-color: var(--accent); }
 .bag-info p { margin: 3px 0 0; font-size: 13px; line-height: 1.5; }
 .bag-slots { text-align: center; margin: 8px 0 0; font-size: 12px; color: var(--muted); }
 #modal-body .bag { min-width: min(320px, calc(100vw - 80px)); }
+/* 背包分頁：補品｜雜物｜裝備，右邊小字是用了幾格 */
+.bag-tabs { display: flex; gap: 6px; max-width: 280px; margin: 0 auto 10px; }
+.bag-tab { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 5px 0 4px; border: 2px solid var(--ink); border-radius: 10px;
+  background: var(--paper); color: var(--ink); font: 700 14px var(--font, inherit); cursor: pointer; }
+.bag-tab.on { background: var(--ink); color: var(--paper); }
+.bag-tab-n { font-size: 10px; opacity: .75; }
+.bag-cell { touch-action: none; user-select: none; -webkit-user-select: none; }
+.bag-cell img { -webkit-user-drag: none; pointer-events: none; }
+.bag-cell.r-SR { border-color: #ffb020; box-shadow: inset 0 0 0 1px #ffd27a; }
+.bag-cell.r-SSR { border-color: #e46bd6; box-shadow: inset 0 0 0 1px #f2c4ff; }
+.bag-cell.on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+.bag-cell.over { border-style: dotted; }
+.bag-cell.lifted { opacity: .3; }
+.bag-on { position: absolute; left: 2px; top: 2px; padding: 0 3px; border-radius: 4px; background: var(--accent); color: #fff; font: 700 9px/13px var(--mono); }
+.bag-acts { display: flex; justify-content: flex-end; margin-top: 6px; }
+.hud-btn.danger { background: #ef4b5c; border-color: #b8323f; color: #fff; }
+/* 拖曳：背包變透明看得到地圖，手指下面跟著一個圖示 */
+#modal.dragging { background: transparent; }
+#modal.dragging .modal-card { opacity: .35; transition: opacity .15s; }
+.bag-ghost { position: fixed; left: 0; top: 0; z-index: 40; width: 52px; height: 52px; pointer-events: none; display: flex; align-items: center; justify-content: center;
+  border: 2px solid var(--ink); border-radius: 12px; background: var(--paper); box-shadow: 0 6px 14px rgba(19,26,40,.35); }
+.bag-ghost .hq-icon { width: 40px; height: 40px; }
+.bag-ghost-tip { position: fixed; left: 0; top: 0; z-index: 40; width: 130px; text-align: center; pointer-events: none; font: 700 12px/1.6 var(--mono);
+  color: var(--ink); background: var(--note); border: 1.5px solid var(--ink); border-radius: 8px; }
+.bag-ghost-tip.out { background: var(--accent); color: #fff; }
+.gear-item.gone { opacity: .55; filter: grayscale(.7); }
 /* 記分板前三名：金銀銅小圓章 */
 .game-scores li .rk.rk1, .game-scores li .rk.rk2, .game-scores li .rk.rk3 { width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--ink);
   font: 900 11px/16px var(--mono); color: var(--ink); }
@@ -895,3 +939,29 @@ button.inv-item:hover { border-color: var(--accent); }
 .tree-line { display: flex; align-items: center; gap: 3px; min-width: 0; }
 .tree-line b { min-width: 0; }
 .tree-flag.hq-icon { width: 18px; height: 18px; flex-shrink: 0; }
+/* 補品快捷 Q／E：米色底的技能格，右上角剩幾個；空的格子是虛線加號 */
+.sk-btn.quick { background: var(--paper); color: var(--ink); }
+.sk-btn.quick.empty { border-style: dashed; box-shadow: none; }
+.quick-n { position: absolute; left: 3px; top: 2px; font: 700 10px var(--mono); color: var(--ink); text-shadow: 0 0 2px #fff, 0 0 2px #fff; }
+.quick-plus { font: 700 24px var(--mono); color: var(--muted); }
+.bag-acts { gap: 6px; flex-wrap: wrap; }
+.bag-acts .hud-btn.on { opacity: .6; }
+#skillbar.folded.show-quick .quick { display: flex; }
+#skillbar.show-quick { z-index: 25; }
+/* 背包裡的寶石袋 */
+.gem-bag { display: flex; align-items: center; gap: 6px; max-width: 280px; margin: 8px auto 0; padding: 5px 8px; border: 2px dashed var(--line); border-radius: 10px; }
+.gem-bag-t { font-size: 12px; font-weight: 700; color: var(--muted); margin-right: auto; }
+.gem-bag .bag-cell { width: 44px; flex: 0 0 44px; }
+/* 公共花園：花圃小卡片 */
+.plot-card { min-width: min(300px, calc(100vw - 80px)); max-width: 340px; }
+.plot-head { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.plot-head .hq-icon { width: 64px; height: 64px; background: var(--paper); border: 2px solid var(--ink); border-radius: 12px; }
+.plot-head b { font-size: 16px; }
+.plot-line { margin: 4px 0; font-size: 14px; line-height: 1.5; }
+.plot-line.muted, .plot-head .muted { color: var(--muted); font-size: 13px; margin: 2px 0 0; }
+.plot-btns { display: flex; gap: 8px; justify-content: flex-end; margin-top: 10px; }
+.plot-seeds { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+.plot-seed { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border: 2px solid var(--ink); border-radius: 10px; background: var(--paper);
+  font: inherit; font-size: 14px; color: var(--ink); cursor: pointer; text-align: left; }
+.plot-seed .hq-icon { width: 32px; height: 32px; }
+.plot-seed:hover { border-color: var(--accent); }

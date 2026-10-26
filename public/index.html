@@ -4,12 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <style>body{margin:0}[hidden]{display:none!important}img{max-width:100%}</style>
-<title>颱風假開趴</title>
-<meta name="description" content="__PARTY_MD__（__PARTY_DOW_ZH__）__PARTY_TIME__ 線上颱風假派對，報名領你的邀請函！">
+<title>這不是一個單純的派對</title>
+<meta name="description" content="開讀書會、玩遊戲、聊天，領一張你的識別證就能進來。">
 <meta property="og:type" content="website">
-<meta property="og:site_name" content="颱風假開趴">
-<meta property="og:title" content="颱風假開趴｜__PARTY_MD__ __PARTY_DOW_EN__ __PARTY_TIME__">
-<meta property="og:description" content="__PARTY_MD__（__PARTY_DOW_ZH__）__PARTY_TIME__ 線上颱風假派對，報名領你的邀請函！">
+<meta property="og:site_name" content="這不是一個">
+<meta property="og:title" content="這不是一個單純的派對">
+<meta property="og:description" content="開讀書會、玩遊戲、聊天，領一張你的識別證就能進來。">
 <meta property="og:url" content="__ORIGIN__/">
 <meta property="og:image" content="__ORIGIN__/og.png">
 <meta property="og:image:width" content="1200">
@@ -25,7 +25,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&family=Space+Mono:wght@400;700&display=swap">
 <style>
-/* Layout: one invitation sheet. Big stacked type on top, sign-up form (or the guest's own invitation) in the middle, program and how-to-join below. Single light look by design. */
+/* Layout: one sheet. Big stacked 「這不是一個／單純的＿＿」 type on top, sign-up form (or the member's own staff badge) in the middle, what-you-can-do and how-to-join below. Single light look by design. */
 :root {
   --ground: #FAFAF7;
   --paper: #FFFFFF;
@@ -85,14 +85,22 @@ body {
 /* hero */
 .hero { display: flex; flex-direction: column; gap: 6px; }
 .row { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
-.big { margin: 0; font-size: clamp(76px, 22vw, 240px); font-weight: 900; line-height: 0.92; letter-spacing: -0.04em; }
+.big { margin: 0; white-space: nowrap; font-size: clamp(42px, 13vw, 150px); font-weight: 900; line-height: 1; letter-spacing: -0.04em; }
 .big.soft { color: var(--soft); }
 .big.hot { color: var(--accent); }
 .row2 { display: flex; align-items: baseline; gap: clamp(10px, 2.5vw, 24px); }
-.icon { width: clamp(84px, 21vw, 230px); height: auto; flex-shrink: 0; }
+.icon { width: clamp(52px, 15vw, 190px); height: auto; flex-shrink: 0; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+#hero-word { display: inline-block; }
+#hero-word.out { opacity: 0; transform: translateY(0.18em); }
+.hero-lede { margin: clamp(14px, 2.4vw, 26px) 0 0; font-size: clamp(17px, 2.2vw, 22px); line-height: 1.7; color: var(--muted); max-width: 30em; text-wrap: pretty; }
+.hero-lede b { color: var(--ink); }
 @media (prefers-reduced-motion: no-preference) {
   .icon .spin { transform-origin: 120px 120px; animation: spin 40s linear infinite; }
   .icon .star { transform-origin: 120px 120px; animation: pulse 3.2s ease-in-out infinite; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  #hero-word { transition: opacity 0.35s ease, transform 0.35s ease; }
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes pulse { 50% { transform: scale(1.12); } }
@@ -174,7 +182,7 @@ body {
 a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
 .note-sm { color: var(--muted); font-size: 13px; line-height: 1.6; margin: 0; }
 
-/* VIP pass */
+/* 識別證 (staff badge) */
 .vip {
   --c-bg: var(--navy-bg); --c-fg: var(--navy-fg); --c-dim: var(--navy-dim); --c-dot: var(--navy-dot);
   --c-line: var(--navy-line); --c-perf: var(--navy-perf); --c-hot: var(--navy-hot); --c-face: var(--navy-face);
@@ -250,7 +258,6 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outlin
 .program { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-top: 6px solid var(--accent); border-bottom: 6px solid var(--accent); }
 .item { padding: 22px 0; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .item + .item { padding-left: 28px; border-left: 2px solid var(--ink); }
-.item.wide { grid-column: span 2; }
 .num { font: 700 clamp(14px, 1.8vw, 18px) var(--mono); color: var(--accent); }
 .name { font-size: clamp(24px, 3.2vw, 34px); font-weight: 900; }
 .note { font-size: clamp(15px, 1.8vw, 18px); color: var(--muted); }
@@ -284,7 +291,6 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outlin
   .vip-stub::after { top: -16px; bottom: auto; left: auto; right: -15px; }
   .vip-bar { flex: 1 1 100%; }
   .program { grid-template-columns: 1fr; }
-  .item.wide { grid-column: auto; }
   .item + .item { padding-left: 0; border-left: 0; border-top: 2px solid var(--ink); }
   .join { grid-template-columns: 1fr; }
   .rules { text-align: left; }
@@ -295,13 +301,14 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outlin
 
 <main class="sheet">
   <header class="meta">
-    <div class="left">TYPHOON DAY<br>ONLINE PARTY</div>
-    <div class="right"><time datetime="__PARTY_ISO__">__PARTY_DATE_DOT__</time><br>__PARTY_DOW_EN__. __PARTY_TIME__</div>
+    <div class="left">THIS IS NOT<br>JUST A PARTY</div>
+    <div class="right">EP.02<br>COMING SOON</div>
   </header>
 
-  <section class="hero" aria-label="颱風假開趴">
-    <div class="row">
-      <h1 class="big">颱風</h1>
+  <section class="hero">
+    <h1 class="sr">這不是一個單純的派對</h1>
+    <div class="row" aria-hidden="true">
+      <span class="big">這不是一個</span>
       <svg class="icon" viewBox="0 0 240 240" aria-hidden="true">
         <g class="spin">
           <circle cx="120" cy="120" r="108" fill="none" stroke="#B5B5BA" stroke-width="6" stroke-linecap="round" stroke-dasharray="0 13"></circle>
@@ -320,16 +327,17 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outlin
       </svg>
     </div>
     <div class="row2" aria-hidden="true">
-      <span class="big soft">假</span>
-      <span class="big hot">開趴</span>
+      <span class="big soft">單純的</span>
+      <span class="big hot" id="hero-word">派對</span>
     </div>
+    <p class="hero-lede">在這裡開讀書會、玩遊戲、聊天，或是做事的時候上來掛著。</p>
   </section>
 
   <!-- Log in -->
   <section id="login" hidden aria-labelledby="login-title">
     <p class="eyebrow">WELCOME BACK / 登入</p>
-    <h2 class="h2" id="login-title">已經有 VIP Pass？直接登入</h2>
-    <p class="lede">登入就能拿回你的邀請函，總部裡的角色、等級、裝備和家具也都跟著帳號走，換手機或換電腦都一樣。</p>
+    <h2 class="h2" id="login-title">已經有識別證？直接登入</h2>
+    <p class="lede">登入就能拿回你的識別證，總部裡的角色、等級、裝備和家具也都跟著帳號走，換手機或換電腦都一樣。</p>
     <div style="height: 20px"></div>
     <form class="form login-form" id="login-form" novalidate>
       <div class="fields">
@@ -349,16 +357,16 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outlin
     </form>
     <div class="first">
       <b>第一次來？</b>
-      <span id="first-txt">回答四個小問題，就會生成你專屬的邀請函，同時建立帳號。</span>
-      <button type="button" class="btn" id="to-reg">報名領邀請函</button>
+      <span id="first-txt">回答四個小問題，就會生成你專屬的識別證，同時建立帳號。</span>
+      <button type="button" class="btn" id="to-reg">報到領識別證</button>
     </div>
   </section>
 
   <!-- Sign-up -->
   <section id="register" hidden aria-labelledby="reg-title">
-    <p class="eyebrow">STEP 01 / 報名入場</p>
-    <h2 class="h2" id="reg-title">先報到，才拿得到邀請函</h2>
-    <p class="lede" id="reg-lede">設定帳號密碼、填好下面四項，就會生成你專屬的邀請函，派對入口也只有報到後才會出現。邀請函和總部裡的角色會存在派對的伺服器上，下次用帳號登入就能拿回來。</p>
+    <p class="eyebrow">STEP 01 / 報到</p>
+    <h2 class="h2" id="reg-title">先報到，領一張識別證</h2>
+    <p class="lede" id="reg-lede">設定帳號密碼、填好下面四項，就會生成你專屬的識別證，總部入口也只有報到後才會出現。識別證和總部裡的角色會存在伺服器上，下次用帳號登入就能拿回來。</p>
     <p class="who" id="to-login-row">已經有帳號了？<button type="button" class="linkish" id="to-login">直接登入</button></p>
     <div style="height: 20px"></div>
     <form class="form" id="reg-form" novalidate>
@@ -390,19 +398,19 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outlin
           <input type="text" id="f-song" maxlength="40" placeholder="KTV 必點的那一首">
         </div>
         <div class="field">
-          <label for="f-drink">今晚要喝的酒<span class="req">必填</span></label>
-          <input type="text" id="f-drink" maxlength="24" placeholder="例如：台啤、梅酒、威士忌 highball">
+          <label for="f-drink">最常喝的飲料<span class="req">必填</span></label>
+          <input type="text" id="f-drink" maxlength="24" placeholder="例如：美式、珍奶、台啤">
           <div class="chips" id="drink-chips" aria-label="快速選擇">
+            <button type="button" class="chip">冰美式</button>
+            <button type="button" class="chip">珍珠奶茶</button>
+            <button type="button" class="chip">無糖綠茶</button>
             <button type="button" class="chip">台灣啤酒</button>
-            <button type="button" class="chip">水果調酒</button>
-            <button type="button" class="chip">紅酒</button>
             <button type="button" class="chip">Highball</button>
-            <button type="button" class="chip">梅酒</button>
-            <button type="button" class="chip">不喝酒，喝茶</button>
+            <button type="button" class="chip">白開水</button>
           </div>
         </div>
         <fieldset class="field" style="border: 0; padding: 0; margin: 0">
-          <legend class="label-txt" style="padding: 0; margin-bottom: 8px">VIP 卡顏色<span class="req">選一個</span></legend>
+          <legend class="label-txt" style="padding: 0; margin-bottom: 8px">識別證顏色<span class="req">選一個</span></legend>
           <div class="themes">
             <label class="theme-opt"><input type="radio" name="theme" id="t-navy" value="n" checked><span class="swatch navy"></span><span><b>午夜藍黑</b><small>MIDNIGHT</small></span></label>
             <label class="theme-opt"><input type="radio" name="theme" id="t-silver" value="s"><span class="swatch silver"></span><span><b>霧面銀</b><small>SILVER</small></span></label>
@@ -410,7 +418,7 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outlin
         </fieldset>
         <p class="err" id="form-err" role="alert"></p>
         <div class="submit-row">
-          <button type="submit" class="btn primary" id="f-submit">生成我的邀請函</button>
+          <button type="submit" class="btn primary" id="f-submit">生成我的識別證</button>
         </div>
       </div>
     </form>
@@ -418,14 +426,14 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outlin
 
   <!-- Personal invitation -->
   <section id="invite" hidden aria-labelledby="inv-title">
-    <p class="eyebrow">STEP 02 / 你的邀請函</p>
-    <h2 class="h2" id="inv-title">報到成功，派對見！</h2>
+    <p class="eyebrow">STEP 02 / 你的識別證</p>
+    <h2 class="h2" id="inv-title">報到成功，總部見！</h2>
     <p class="who" id="who" hidden>已登入：<b id="who-name"></b>・<button type="button" class="linkish" id="logout-btn">登出</button></p>
     <div style="height: 20px"></div>
-    <article class="vip" id="card" aria-label="VIP 邀請函">
+    <article class="vip" id="card" aria-label="識別證">
       <div class="vip-main">
         <div class="vip-top">
-          <span class="vip-brand">TYPHOON DAY · VIP PASS</span>
+          <span class="vip-brand">THIS IS NOT A · STAFF BADGE</span>
           <svg class="vip-spark" viewBox="0 0 28 28" aria-hidden="true"><path d="M14 0 C15.5 10 18 12.5 28 14 C18 15.5 15.5 18 14 28 C12.5 18 10 15.5 0 14 C10 12.5 12.5 10 14 0 Z" fill="currentColor"></path></svg>
         </div>
         <div class="vip-id">
@@ -441,9 +449,9 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outlin
             <img id="c-photo" alt="">
           </div>
           <div class="vip-who">
-            <span class="vip-tier"><span class="vip-hq">防颱總部</span><span id="c-tier"></span></span>
+            <span class="vip-tier" id="c-tier-box"><span class="vip-hq" id="c-lv"></span><span id="c-tier"></span></span>
             <span class="vip-name" id="c-name"></span>
-            <span class="vip-sub">特約職員・__PARTY_MD__ 颱風假開趴</span>
+            <span class="vip-sub" id="c-sub"></span>
           </div>
         </div>
         <div class="vip-facts">
@@ -452,17 +460,17 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outlin
             <span class="vip-v" id="c-song"></span>
           </div>
           <div class="vip-fact">
-            <span class="vip-k"><span id="c-drink-ico" style="display: inline-flex"></span>TONIGHT'S POUR</span>
+            <span class="vip-k"><span id="c-drink-ico" style="display: inline-flex"></span>GO-TO DRINK</span>
             <span class="vip-v" id="c-drink"></span>
           </div>
         </div>
       </div>
       <div class="vip-stub">
-        <span class="vip-k">GUEST NO.</span>
+        <span class="vip-k">STAFF NO.</span>
         <span class="vip-no" id="c-no">000</span>
-        <span class="vip-k">__PARTY_DATE_DOT__ / __PARTY_TIME__</span>
+        <span class="vip-k" id="c-since"></span>
         <div class="vip-bar" id="c-bar" aria-hidden="true"></div>
-        <span class="vip-k">ADMIT ONE · ALL ACCESS</span>
+        <span class="vip-k">ALL ACCESS · 24/7</span>
       </div>
     </article>
     <div style="height: 24px"></div>
@@ -475,40 +483,46 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outlin
     </div>
   </section>
 
-  <section aria-label="活動內容">
+  <section aria-label="在這裡可以做什麼">
     <div class="program">
       <div class="item">
         <span class="num">01</span>
-        <span class="name">猜歌遊戲</span>
-        <span class="note">魔王不敢玩</span>
+        <span class="name">開讀書會</span>
+        <span class="note">戰情室開視訊，一起讀書做事</span>
       </div>
-      <div class="item wide">
-        <span class="num">02 — ??</span>
-        <span class="name">？？？</span>
-        <span class="note">我們還不知道～</span>
+      <div class="item">
+        <span class="num">02</span>
+        <span class="name">玩遊戲</span>
+        <span class="note">你畫我猜、猜歌、出門打怪</span>
+      </div>
+      <div class="item">
+        <span class="num">03</span>
+        <span class="name">聊天</span>
+        <span class="note">打字、小樹屋語音，或只是掛著</span>
       </div>
     </div>
   </section>
 
   <section id="join" hidden aria-labelledby="join-title">
-    <p class="eyebrow">HOW TO JOIN / 怎麼進派對</p>
+    <p class="eyebrow">HOW TO JOIN / 怎麼進總部</p>
     <h2 class="h2" id="join-title" style="margin-bottom: 18px">點下去就能進來</h2>
     <div class="join">
       <a class="door" href="hq.html">
         <span class="pill alt">角色自動存檔</span>
         <span class="door-title">進入颱風天防衛總部</span>
-        <span class="door-sub">用你的角色在總部走來走去、聊天、敲物資箱、出門打颱風，走進「戰情室」就能一起視訊。手機電腦都能玩，等級和裝備會存到你的帳號。</span>
+        <span class="door-sub">用你的角色在總部走來走去、聊天、出門打怪，走進「戰情室」就能一起視訊。手機電腦都能玩，等級和裝備會存到你的帳號，識別證上的職業和等級也會跟著更新。</span>
       </a>
     </div>
   </section>
 
   <footer class="details">
-    <div class="time"><span class="k">TIME</span><span>__PARTY_MD__（__PARTY_DOW_ZH__）__PARTY_TIME__ 開始</span></div>
-    <p class="rules">穿著舒適，不要露點<br>自備零食與酒水</p>
+    <div class="time"><span class="k">OPEN</span><span>24/7，想上來就上來</span></div>
+    <p class="rules">做事的時候也歡迎掛著<br>自備零食與飲料</p>
   </footer>
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/mp4-muxer@5.2.2/build/mp4-muxer.js"></script>
+<script src="/shared/stats.js"></script>
 <script src="account.js"></script>
 <script>
 (function () {
@@ -591,13 +605,28 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outlin
     b.addEventListener('click', function () { $('f-drink').value = b.textContent; $('f-drink').focus(); });
   });
 
-  var TIERS = ['泡麵戰略儲備官', '超市搶菜特派員', '家裡蹲首席執行長', '沙發守護隊長', '追劇值勤員', '零食補給官', '窗戶膠帶工程師', '停班停課等待員', '行動電源備援官', '棉被結界師'];
+  /* ---------- 標題「這不是一個單純的＿＿」輪流換字 ---------- */
+  (function () {
+    var words = ['派對', '遊戲', '讀書會', '聊天室', '辦公室'], i = 0, w = $('hero-word');
+    if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    setInterval(function () {
+      w.classList.add('out');
+      setTimeout(function () { i = (i + 1) % words.length; w.textContent = words[i]; w.classList.remove('out'); }, 350);
+    }, 2600);
+  })();
+
+  // 識別證上的職業和等級跟著總部裡的角色走；舊的分享連結沒有這些資料就不顯示
+  var CLS = (window.HQ_STATS && window.HQ_STATS.CLASSES) || {};
+  function badgeOf(mine) {
+    if (!mine) return null;
+    var s = ACC.read(), c = CLS[s.cls] || CLS.staff || { name: '防颱職員', role: '新手' };
+    return { lv: 'Lv.' + (Number(s.level) || 1), cls: c.name, sub: '防衛總部職員・' + c.role, since: ACC.since() };
+  }
   function hashOf(str) {
     var h = 2166136261;
     for (var i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
     return h;
   }
-  function tierOf(name) { return TIERS[hashOf(name) % TIERS.length]; }
   function barsOf(name) {
     var seed = hashOf(name) || 1, out = [];
     for (var i = 0; i < 30; i++) { seed = (Math.imul(seed, 1103515245) + 12345) >>> 0; out.push(1 + (seed >>> 16) % 4); }
@@ -625,7 +654,13 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outlin
     $('c-no').textContent = guestNo(d.name);
     $('c-photo').src = mine && photoBig ? photoBig : (d.photo ? 'data:image/jpeg;base64,' + d.photo : '');
     $('c-photo').alt = d.name + ' 的大頭照';
-    $('c-tier').textContent = tierOf(d.name);
+    var b = badgeOf(mine);
+    d.badge = b;
+    $('c-tier-box').hidden = !b;
+    $('c-lv').textContent = b ? b.lv : '';
+    $('c-tier').textContent = b ? b.cls : '';
+    $('c-sub').textContent = b ? b.sub : '防衛總部職員';
+    $('c-since').textContent = b && b.since ? 'SINCE ' + b.since : '';
     $('card').classList.toggle('silver', d.theme === 's');
     $('story-box').hidden = true;
     $('c-drink-ico').innerHTML = DRINK_SVG[drinkKind(d.drink)];
@@ -636,8 +671,8 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outlin
       if (i % 3 === 2) el.style.marginRight = '2px';
       bar.appendChild(el);
     });
-    $('inv-title').textContent = mine ? '報到成功，派對見！' : d.name + ' 的邀請函';
-    $('redo-btn').textContent = mine ? '修改邀請函' : '我也要報名';
+    $('inv-title').textContent = mine ? '報到成功，總部見！' : d.name + ' 的識別證';
+    $('redo-btn').textContent = mine ? '修改識別證' : '我也要報到';
     $('who').hidden = !(mine && ACC.user());
     $('who-name').textContent = ACC.user();
     $('join').hidden = !mine;
@@ -661,7 +696,7 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outlin
     img.src = big || 'data:image/jpeg;base64,' + small; img.alt = '你的大頭照預覽';
     drop.insertBefore(img, drop.firstChild);
   }
-  // 報名表有三種用法：new 新報名、claim 這台裝置上已經有邀請函要建帳號、edit 已登入修改邀請函
+  // 報名表有三種用法：new 新報名、claim 這台裝置上已經有識別證要建帳號、edit 已登入修改識別證
   var formMode = 'new';
   function showForm(mode, v) {
     formMode = mode;
@@ -675,20 +710,20 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outlin
     $('acct-fields').hidden = mode === 'edit';
     $('to-login-row').hidden = mode === 'edit';
     $('reg-lede').hidden = mode === 'edit';
-    $('reg-title').textContent = mode === 'edit' ? '修改你的邀請函' : mode === 'claim' ? '幫你的邀請函建立帳號' : '先報到，才拿得到邀請函';
-    $('f-submit').textContent = mode === 'edit' ? '更新我的邀請函' : mode === 'claim' ? '建立帳號並保存' : '生成我的邀請函';
+    $('reg-title').textContent = mode === 'edit' ? '修改你的識別證' : mode === 'claim' ? '幫你的識別證建立帳號' : '先報到，領一張識別證';
+    $('f-submit').textContent = mode === 'edit' ? '更新我的識別證' : mode === 'claim' ? '建立帳號並保存' : '生成我的識別證';
     show('register');
   }
   // 帳號裡存的清楚版大頭照
   function hdUrl() { var h = ACC.read().photoHd; return h ? 'data:image/jpeg;base64,' + h : null; }
   function localVip() { var v = ACC.read().vip; return v && v.name ? v : null; }
   function showLogin() {
-    // 以前沒有帳號時報名過的人：邀請函還在這台裝置上，建個帳號就能永久保存
+    // 以前沒有帳號時報名過的人：識別證還在這台裝置上，建個帳號就能永久保存
     var v = localVip();
     $('first-txt').textContent = v
-      ? '這台裝置上有「' + v.name + '」的邀請函，設定帳號密碼就能永久保存，角色也會跟著帳號走。'
-      : '回答四個小問題，就會生成你專屬的邀請函，同時建立帳號。';
-    $('to-reg').textContent = v ? '幫它建立帳號' : '報名領邀請函';
+      ? '這台裝置上有「' + v.name + '」的識別證，設定帳號密碼就能永久保存，角色也會跟著帳號走。'
+      : '回答四個小問題，就會生成你專屬的識別證，同時建立帳號。';
+    $('to-reg').textContent = v ? '幫它建立帳號' : '報到領識別證';
     $('login-err').textContent = '';
     show('login');
   }
@@ -734,11 +769,11 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outlin
     }
     if (miss.length) { $('form-err').textContent = '還差：' + miss.join('、'); return; }
     $('form-err').textContent = '';
-    // 邀請函也存一份，進總部後別人點「個人資料」就看得到你的 VIP Pass
+    // 識別證也存一份，進總部後別人點「個人資料」就看得到
     var vip = { name: d.name, song: d.song, drink: d.drink, theme: d.theme, photo: d.photo };
     var save = Object.assign(ACC.read(), { name: d.name.slice(0, 12), vip: vip });
     if (photoHd) save.photoHd = photoHd;
-    // 從邀請函報名進來的新人一律從新手「防颱職員」開始（已經在總部練過等級的就保留原本的職業）
+    // 從報名頁進來的新人一律從新手「防颱職員」開始（已經在總部練過等級的就保留原本的職業）
     if (formMode === 'new' && !(Number(save.level) > 1)) save.cls = 'staff';
     var btn = $('f-submit'), label = btn.textContent;
     btn.disabled = true; btn.textContent = '存檔中…';
@@ -752,7 +787,7 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outlin
     });
   });
   $('redo-btn').addEventListener('click', function () {
-    if ($('redo-btn').textContent === '我也要報名') { if (ACC.user()) showMine(); else showLogin(); return; }
+    if ($('redo-btn').textContent === '我也要報到') { if (ACC.user()) showMine(); else showLogin(); return; }
     showForm('edit', current);
   });
 
@@ -795,24 +830,26 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outlin
     for (var yy = 11; yy < H; yy += 22) for (var xx = 11; xx < W; xx += 22) { x.beginPath(); x.arc(xx, yy, 1.5, 0, 6.2832); x.fill(); }
 
     x.textAlign = 'center'; x.textBaseline = 'alphabetic';
-    x.fillStyle = T.hot; x.font = '700 30px ' + MONO; x.fillText('TYPHOON DAY · VIP PASS', 540, 280);
+    x.fillStyle = T.hot; x.font = '700 30px ' + MONO; x.fillText('THIS IS NOT A · STAFF BADGE', 540, 280);
 
-    var hq = '防颱總部', title = tierOf(d.name);
-    x.font = '700 24px ' + MONO; var hw = x.measureText(hq).width;
-    x.font = '700 36px ' + FAM; var tw = x.measureText(title).width;
-    var pw = hw + tw + 92, px = 540 - pw / 2;
-    roundRectPath(x, px, 930, pw, 72, 36); x.strokeStyle = T.hot; x.lineWidth = 3; x.stroke();
-    x.textAlign = 'left'; x.fillStyle = T.hot;
-    x.font = '700 24px ' + MONO; x.fillText(hq, px + 34, 976);
-    x.font = '700 36px ' + FAM; x.fillText(title, px + 58 + hw, 979);
-    x.textAlign = 'center';
+    var b = d.badge;
+    if (b) {
+      x.font = '700 24px ' + MONO; var hw = x.measureText(b.lv).width;
+      x.font = '700 36px ' + FAM; var tw = x.measureText(b.cls).width;
+      var pw = hw + tw + 92, px = 540 - pw / 2;
+      roundRectPath(x, px, 930, pw, 72, 36); x.strokeStyle = T.hot; x.lineWidth = 3; x.stroke();
+      x.textAlign = 'left'; x.fillStyle = T.hot;
+      x.font = '700 24px ' + MONO; x.fillText(b.lv, px + 34, 976);
+      x.font = '700 36px ' + FAM; x.fillText(b.cls, px + 58 + hw, 979);
+      x.textAlign = 'center';
+    }
 
     x.fillStyle = T.fg; fitFont(x, d.name, '900', 176, 64, 900, FAM); x.fillText(d.name, 540, 1170);
-    x.fillStyle = T.dim; x.font = '500 34px ' + FAM; x.fillText('特約職員・__PARTY_MD__ __PARTY_DOW_EN__ __PARTY_TIME__ 颱風假開趴', 540, 1240);
+    x.fillStyle = T.dim; x.font = '500 34px ' + FAM; x.fillText(b ? b.sub : '防衛總部職員', 540, 1240);
 
     x.fillStyle = T.line; x.fillRect(100, 1300, 880, 2); x.fillRect(539, 1330, 2, 120);
     x.fillStyle = T.dim; x.font = '700 22px ' + MONO;
-    x.fillText('ON REPEAT', 300, 1360); x.fillText("TONIGHT'S POUR", 780, 1360);
+    x.fillText('ON REPEAT', 300, 1360); x.fillText('GO-TO DRINK', 780, 1360);
     x.fillStyle = T.fg;
     fitFont(x, d.song, '900', 46, 22, 400, FAM); x.fillText(d.song, 300, 1425);
     fitFont(x, d.drink, '900', 46, 22, 400, FAM); x.fillText(d.drink, 780, 1425);
@@ -824,7 +861,7 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outlin
     x.beginPath(); x.arc(W, 1500, 30, 0, 6.2832); x.fill();
 
     x.textAlign = 'left';
-    x.fillStyle = T.dim; x.font = '700 22px ' + MONO; x.fillText('GUEST NO.', 110, 1568);
+    x.fillStyle = T.dim; x.font = '700 22px ' + MONO; x.fillText('STAFF NO.', 110, 1568);
     x.fillStyle = T.hot; x.font = '700 76px ' + MONO; x.fillText(guestNo(d.name), 106, 1642);
     var bars = barsOf(d.name), total = 0;
     bars.forEach(function (w, i) { total += w * 3 + 4 + (i % 3 === 2 ? 5 : 0); });
@@ -832,7 +869,7 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outlin
     x.fillStyle = T.fg;
     bars.forEach(function (w, i) { x.fillRect(bx, 1550, w * 3, 92); bx += w * 3 + 4 + (i % 3 === 2 ? 5 : 0); });
     x.textAlign = 'center'; x.fillStyle = T.dim; x.font = '700 22px ' + MONO;
-    x.fillText('ADMIT ONE · ALL ACCESS', 540, 1708);
+    x.fillText(b && b.since ? 'SINCE ' + b.since + ' · ALL ACCESS' : 'ALL ACCESS · 24/7', 540, 1708);
 
     var cx = 540, cy = 610, r = 200, TAU = Math.PI * 2;
     function frame(ctx, t) {
@@ -960,13 +997,13 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outlin
   }
   function fontsFor(d) {
     if (!document.fonts || !document.fonts.load) return Promise.resolve();
-    var t = d.name + d.song + d.drink + tierOf(d.name) + '防颱總部特約職員颱風假開趴';
+    var t = d.name + d.song + d.drink + (d.badge ? d.badge.cls + d.badge.sub : '') + '防衛總部職員';
     return Promise.all([
       document.fonts.load("900 40px 'Noto Sans TC'", t),
       document.fonts.load("500 30px 'Noto Sans TC'", t),
       document.fonts.load("700 24px 'Noto Sans TC'", t),
       document.fonts.load("700 24px 'Space Mono'", 'TYPHOON'),
-      document.fonts.load("400 24px 'Space Mono'", 'GUEST NO. 0123456789')
+      document.fonts.load("400 24px 'Space Mono'", 'STAFF NO. SINCE Lv. 0123456789')
     ]).catch(function () {});
   }
 
@@ -984,11 +1021,11 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outlin
       if (!out || !out.blob) throw { code: 'empty' };
       if (downloads) {
         btn.textContent = '等你確認儲存…';
-        return downloads.save({ filename: '颱風假開趴-' + d.name + '.' + out.ext, data: out.blob }).then(function () {
+        return downloads.save({ filename: '這不是一個-識別證-' + d.name + '.' + out.ext, data: out.blob }).then(function () {
           box.innerHTML = '';
           var h = document.createElement('b'); h.textContent = out.ext === 'png' ? '已存成 9:16 限時動態圖片' : '已存成 9:16 限時動態影片（會動的版本）';
           var ol = document.createElement('ol');
-          ['打開 Instagram，按左上角的「＋」或往右滑進入限時動態', '從相簿選剛剛存的' + (out.ext === 'png' ? '圖片' : '影片'), '加上 #颱風假開趴，分享！'].forEach(function (t) { var li = document.createElement('li'); li.textContent = t; ol.appendChild(li); });
+          ['打開 Instagram，按左上角的「＋」或往右滑進入限時動態', '從相簿選剛剛存的' + (out.ext === 'png' ? '圖片' : '影片'), '加上 #這不是一個，分享！'].forEach(function (t) { var li = document.createElement('li'); li.textContent = t; ol.appendChild(li); });
           box.appendChild(h); box.appendChild(ol);
           if (out.ext === 'png') { var n0 = document.createElement('p'); n0.style.margin = '6px 0 0'; n0.textContent = '這個瀏覽器不支援製作影片，所以只存成靜態圖。用手機最新版的 Safari 或 Chrome 開這頁再存一次，就會是會動的 .mp4。'; box.appendChild(n0); }
           if (out.ext === 'webm') { var w = document.createElement('p'); w.style.margin = '6px 0 0'; w.textContent = '這個瀏覽器只能錄成 .webm，IG 可能讀不到。改用手機上的 Safari 或 Chrome 開這頁再存一次就會是 .mp4。'; box.appendChild(w); }
@@ -998,12 +1035,12 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outlin
         });
       }
       box.innerHTML = '';
-      var fname = '颱風假開趴-' + d.name + '.' + out.ext;
+      var fname = '這不是一個-識別證-' + d.name + '.' + out.ext;
       var url = URL.createObjectURL(out.blob), media;
       var head = document.createElement('b');
       head.textContent = out.ext === 'png' ? '限時動態圖片做好了' : '會動的限時動態影片做好了（9:16 · mp4）';
       box.appendChild(head);
-      if (out.ext === 'png') { media = document.createElement('img'); media.alt = d.name + ' 的限時動態邀請函'; }
+      if (out.ext === 'png') { media = document.createElement('img'); media.alt = d.name + ' 的限時動態識別證'; }
       else { media = document.createElement('video'); media.muted = true; media.loop = true; media.autoplay = true; media.playsInline = true; media.setAttribute('playsinline', ''); }
       media.className = 'story-prev'; media.src = url;
       box.appendChild(media);
@@ -1022,7 +1059,7 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outlin
       box.appendChild(row);
       var tip = document.createElement('p'); tip.style.margin = '10px 0 0';
       tip.textContent = IN_CLAUDE
-        ? '如果按了沒反應，代表這個預覽視窗擋住了存檔，請改用派對的正式網址開這頁。'
+        ? '如果按了沒反應，代表這個預覽視窗擋住了存檔，請改用總部的正式網址開這頁。'
         : '手機按「分享到 IG」後選 Instagram → 限時動態；或先選「儲存影片」，再到 IG 從相簿選。';
       box.appendChild(tip);
       box.hidden = false;
@@ -1038,7 +1075,7 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outlin
     var h = (location.hash || '').slice(1);
     var d = decode(h);
     if (d) { showInvite(d, false); return; }
-    // 沒登入就是登入頁；有登入就先跟伺服器同步，再顯示自己的邀請函
+    // 沒登入就是登入頁；有登入就先跟伺服器同步，再顯示自己的識別證
     if (!ACC.token()) { showLogin(); booted = true; return; }
     if (localVip()) showMine();
     ACC.sync().then(function (r) {

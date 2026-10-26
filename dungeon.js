@@ -7,7 +7,7 @@ const REGIONS = { hualien: require('./dungeon-hualien'), taipei: require('./dung
 function createDungeon(ctx, D, region) {
   const { io, players, MAP, STATS, GEAR, pushChat, sendStats, gainExp, hurtPlayer, isAway, wallBlocks, behindWall, TICK } = ctx;
   const T = MAP.TILE;
-  const CLEAR_SHOW_MS = 20000; // 打倒頭目後還能在裡面待多久
+  const CLEAR_SHOW_MS = 30000; // 打倒頭目後還能在裡面待多久（撿地上的寶物）
   const dist = (ax, ay, bx, by) => Math.hypot(ax - bx, ay - by);
   const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
   const rand = ([lo, hi]) => lo + Math.floor(Math.random() * (hi - lo + 1));
@@ -66,7 +66,7 @@ function createDungeon(ctx, D, region) {
     emit();
   }
 
-  // ---------------- NPC：總部 ⇄ 候位區 ----------------
+  // ---------------- NPC：副本大廳 ⇄ 候位區 ----------------
   function go(p) {
     if (p.dead) return { ok: false };
     if (st.members.has(p.id) && st.phase !== 'idle') return { ok: false };
@@ -92,7 +92,7 @@ function createDungeon(ctx, D, region) {
     st.phase = 'countdown';
     st.countdownAt = now0() + D.countdownMs;
     emit();
-    say(`🌀 ${p.name} 按下了出發！${D.countdownMs / 1000} 秒後前往${D.name}副本，想去的人快找指揮中心的${D.npcName}，到${D.lobbyName}集合（最多 ${D.maxPlayers} 人${D.minLevel ? `，要 Lv.${D.minLevel} 以上` : ''}）`);
+    say(`🌀 ${p.name} 按下了出發！${D.countdownMs / 1000} 秒後前往${D.name}副本，想去的人快從指揮中心的副本傳送門到副本大廳找${D.npcName}，到${D.lobbyName}集合（最多 ${D.maxPlayers} 人${D.minLevel ? `，要 Lv.${D.minLevel} 以上` : ''}）`);
     return { ok: true };
   }
   function launch() {
@@ -121,6 +121,7 @@ function createDungeon(ctx, D, region) {
       sendStats(p);
     });
     if (text) say(text);
+    ctx.loot().clearDg(D.id);
     reset();
   }
 
@@ -151,6 +152,15 @@ function createDungeon(ctx, D, region) {
     if (st.stage === D.stages.length - 1) spawnBoss();
     io.emit('dgStage', { id: D.id, stage: st.stage });
     emit();
+    // 下一關在另一欄（中間沒有門）：等一下把大家傳送過去
+    const next = D.stages[st.stage];
+    if (next && next.warp) {
+      const at = st.startedAt;
+      setTimeout(() => {
+        if (st.phase !== 'run' || st.startedAt !== at || st.stage !== i + 1) return;
+        memberList().filter(p => !p.dead).forEach((p, k) => { const s = jitter(next.start, k); teleport(p, s.x, s.y); });
+      }, 2500);
+    }
   }
 
   // ---------------- 倒下、復活 ----------------
@@ -214,7 +224,7 @@ function createDungeon(ctx, D, region) {
       io.emit('mobAttack', { mid: m.id, id: prey.id, say: def.say[Math.floor(Math.random() * def.say.length)] });
       setTimeout(() => {
         if (!m.alive || now0() < m.frozenUntil || dist(prey.x, prey.y, m.x, m.y) > def.range * 1.3) return;
-        const dmg = Math.round(rand(def.dmg) * (now0() < m.weakUntil ? STATS.WEAKEN.dmgDealt : 1) * (region.dmgMul || 1));
+        const dmg = Math.round(rand(def.dmg) * (now0() < m.weakUntil ? STATS.WEAKEN.dmgDealt : 1) * (region.dmgMul ?? 1));
         if (prey.summon) return ctx.hurtSummon(prey, dmg, def.name);
         if (st.members.has(prey.id)) hurtPlayer(prey, dmg, def.name);
       }, 450);
@@ -238,7 +248,7 @@ function createDungeon(ctx, D, region) {
     setTimeout(() => {
       if (!f.alive || now0() < f.frozenUntil || st.phase !== 'run') return;
       io.emit('dgAttackHit', msg);
-      const b = foeBox(f), weak = (now0() < f.weakUntil ? STATS.WEAKEN.dmgDealt : 1) * (region.dmgMul || 1);
+      const b = foeBox(f), weak = (now0() < f.weakUntil ? STATS.WEAKEN.dmgDealt : 1) * (region.dmgMul ?? 1);
       const victims = activeMembers().filter(p => inBox(b, p.x, p.y) && hit(p));
       if (dmg) {
         victims.forEach(p => hurtPlayer(p, Math.round(dmg(p, victims) * weak), by || STATS.MOBS[f.kind].name));
@@ -269,6 +279,7 @@ function createDungeon(ctx, D, region) {
     io.emit('mob', mobState(f));
     gainExp(p, def.exp);
     if (f.kind === region.boss) return victory(p, f);
+    ctx.loot().fromFoe(f, D.id);
     region.onFoeDead && region.onFoeDead(api, f, now);
   }
 
@@ -277,22 +288,18 @@ function createDungeon(ctx, D, region) {
     st.phase = 'clear';
     st.endAt = now0() + CLEAR_SHOW_MS;
     say(`🎉 ${p.name} 打出最後一擊，${bossName}被擊敗了！${D.title}副本通關！`);
-    const drops = [];
+    // 寶物噴在頭目倒下的地方，大家搶：隊伍裡每個人各抽一次武器（可能沒有），再加一些補品；離開副本前沒撿就沒了
+    const pile = [];
     memberList().forEach(q => {
       gainExp(q, region.clearExp);
-      const id = GEAR.rollWeapon(D.id), g = id && GEAR.GEAR[id];
-      if (!g) { drops.push({ id: q.id, name: q.name, item: null }); say(`🍃 ${q.name} 什麼都沒撿到……下次再來！`); return; }
-      if (q.owned.includes(id)) {
-        gainExp(q, region.dupExp);
-        drops.push({ id: q.id, name: q.name, item: id, dup: true, exp: region.dupExp });
-        say(`🔁 ${q.name} 又撿到了【${g.rarity}】${g.name}，已經有了，換成 ${region.dupExp} 經驗`);
-        return;
-      }
-      q.owned.push(id);
-      io.to(q.id).emit('gearGot', { item: id, owned: q.owned });
-      drops.push({ id: q.id, name: q.name, item: id });
-      say(`⚔️ ${q.name} 獲得了武器【${g.rarity}】${g.name}！`);
+      const id = GEAR.rollWeapon(D.id);
+      if (id) pile.push({ kind: 'gear', k: id });
+      pile.push(...ctx.loot().roll({ n: [1, 2], food: 100 }));
     });
+    ctx.loot().scatter(pile, f.x, f.y, D.id, 150);
+    const weapons = pile.filter(l => l.kind === 'gear').map(l => `【${GEAR.GEAR[l.k].rarity}】${GEAR.GEAR[l.k].name}`);
+    say(weapons.length ? `⚔️ ${bossName}掉了 ${weapons.join('、')}，快去撿！` : `🍃 ${bossName}這次沒有掉武器……下次再來！`);
+    const drops = pile.length;
     const top = [...f.damage.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3);
     if (top.length) say('🏅 輸出排行：' + top.map(([n, d], i) => `${i + 1}. ${n} ${d}`).join('、'));
     io.emit('dgClear', { id: D.id, drops, ms: CLEAR_SHOW_MS });
@@ -322,8 +329,8 @@ function createDungeon(ctx, D, region) {
     go, home, start, leave, remove, onDeath, damage, tick, mobState, isMember,
     action: (name, p, ...args) => (region.actions && region.actions[name] ? region.actions[name](api, p, ...args) : { ok: false }),
     inLobby, nearNpc: (p) => MAP.nearNpc(D, p.x, p.y),
-    // 自己回報的位置：隊員不能跑出副本，也不能跳到還沒開門的關卡（門所在的那一排算進前一關）
-    allowMember: (p, x, y) => MAP.areaOf(x) === 'dungeon:' + D.id && y < D.stages[Math.max(0, st.stage)].box.y2 + T,
+    // 自己回報的位置：隊員不能跑出副本，也不能跳到還沒打到的關卡
+    allowMember: (p, x, y) => MAP.areaOf(x) === 'dungeon:' + D.id && MAP.stageAt(x, y) <= st.stage,
     inFight: (p) => st.members.has(p.id) && MAP.stageAt(p.x, p.y) >= 0,
     foes: () => st.foes.filter(f => f.alive),
     allFoes: () => st.foes,
@@ -353,6 +360,7 @@ module.exports = function createDungeons(ctx) {
     tick: (now) => list.forEach(g => g.tick(now)),
     mobState: (f) => byId(f.dgId).mobState(f),
     isMember: (p) => !!mine(p),
+    dgOf: (p) => { const g = mine(p); return g ? g.D.id : null; },
     // 總部、副本、候位區之間只能靠傳送，不能自己走過去
     allowMove: (p, x, y) => {
       const g = mine(p);

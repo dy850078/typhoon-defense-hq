@@ -77,7 +77,8 @@ function create(dataDir) {
     },
     login(username, password) {
       const u = db.users[key(username)];
-      if (!u || !checkPw(u, password)) return { error: '帳號或密碼不對' };
+      if (!u) return { error: '帳號或密碼不對', why: '找不到這個帳號' };
+      if (!checkPw(u, password)) return { error: '帳號或密碼不對', why: '密碼不對' };
       u.seen = Date.now();
       save();
       return { token: newToken(key(username)), user: u };

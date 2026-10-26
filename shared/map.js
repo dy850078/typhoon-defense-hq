@@ -26,8 +26,9 @@
   // 台北101：g  玻璃帷幕牆  k  天空         p  信義廣場地磚  f  阻尼球層的鋼板地
   //         c  控制台（踩上去）            o  觀景台地板    A  觀景台的大柱子
   //         h  101 大廳大理石地            U  101 電梯小姐（站在指揮中心）
+  // 花園：D  花圃（一格一株，擋路）    b  種子認養箱
   const BLOCKING = new Set(['#', 'T', 'B', 'K', 'M', 'P', 'S', 'F', 'G', 'N', 'W', 'R', 'J', 'L', 'I', ' ', 'Y', 'Z', 'E', 'Q', 'H',
-    'g', 'k', 'A', 'U']);
+    'g', 'k', 'A', 'U', 'D', 'b']);
 
   const g = [];
   for (let y = 0; y < H; y++) g.push(new Array(W).fill(','));
@@ -90,8 +91,13 @@
   set(GREEK_TILE.x, GREEK_TILE.y, 'I');
   [[2, 2], [37, 2], [1, 12], [38, 10], [2, 26], [37, 27], [12, 27], [18, 28], [36, 18], [1, 19]]
     .forEach(([x, y]) => set(x, y, 'T'));
-  [[8, 26], [9, 26], [9, 27], [15, 26], [33, 28], [34, 28], [38, 23], [1, 6], [2, 6]]
+  [[15, 26], [33, 28], [34, 28], [38, 23], [1, 6], [2, 6]]
     .forEach(([x, y]) => set(x, y, '~'));
+  // 公共花園：物資倉庫後門出去左手邊，兩排各 6 格花圃，中間那排是走道；右上角是種子認養箱
+  const PLOTS = [];
+  [26, 28].forEach(y => { for (let x = 4; x <= 9; x++) { set(x, y, 'D'); PLOTS.push({ x, y }); } });
+  const SEEDBOX_TILE = { x: 10, y: 26 };
+  set(SEEDBOX_TILE.x, SEEDBOX_TILE.y, 'b');
 
   // 颱風前線：圍欄以南，中間留一個出口
   rect(0, 31, MW - 1, H - 1, ':');
@@ -296,6 +302,20 @@
     veggie: { name: '蔬菜', icon: '🥬' },
     bubbletea: { name: '台灣珍奶', icon: '🧋' },
     chicken: { name: '台灣雞排', icon: '🍗' },
+    // 公共花園：種子、果實、枯枝（garden 的不會從「綜合」箱子掉出來）
+    seedTomato: { name: '小番茄種子', icon: '', garden: true },
+    seedGuava: { name: '芭樂種子', icon: '', garden: true },
+    seedApple: { name: '蘋果種子', icon: '', garden: true },
+    seedPineapple: { name: '鳳梨種子', icon: '', garden: true },
+    tomato: { name: '小番茄', icon: '', garden: true },
+    guava: { name: '芭樂', icon: '', garden: true },
+    apple: { name: '蘋果', icon: '', garden: true },
+    pineapple: { name: '鳳梨', icon: '', garden: true },
+    twig: { name: '枯枝', icon: '', garden: true },
+    // 寶石：收在寶石袋，不佔背包格子
+    gemRuby: { name: '紅寶石', icon: '', garden: true, gem: true },
+    gemSapphire: { name: '藍寶石', icon: '', garden: true, gem: true },
+    gemEmerald: { name: '綠寶石', icon: '', garden: true, gem: true },
   };
   const BAG_SLOTS = 25; // 背包格數：一種物資佔一格
   const CRATES = [
@@ -328,7 +348,7 @@
   // 會變動的擋路格子（關著的石門、九曲洞的大理石）：'tx,ty'
   const dyn = new Set();
   const map = {
-    W, H, MW, DX, LX, TDX, TLX, TILE, BLOCKING, ROOMS, ITEMS, BAG_SLOTS, CRATES, MONSTER_ZONE, DUNGEON, DUNGEONS, DG_LIST, LOBBY, dyn,
+    W, H, MW, DX, LX, TDX, TLX, TILE, BLOCKING, ROOMS, ITEMS, BAG_SLOTS, CRATES, MONSTER_ZONE, DUNGEON, DUNGEONS, DG_LIST, LOBBY, dyn, PLOTS,
     portal: DUNGEON.portal,
     mentor: { x: (MENTOR_TILE.x + 0.5) * TILE, y: (MENTOR_TILE.y + 0.5) * TILE },
     guard: DUNGEON.npc,
@@ -412,6 +432,23 @@
     },
     nearMentor(px, py) {
       return Math.hypot(px - this.mentor.x, py - this.mentor.y) < 2 * TILE;
+    },
+    // 背包用掉幾格（寶石收在寶石袋，不算）
+    bagUsed(inv) {
+      return Object.keys(inv || {}).filter(k => inv[k] > 0 && ITEMS[k] && !ITEMS[k].gem).length;
+    },
+    // (tx, ty) 是第幾格花圃，不是就回傳 -1
+    plotAt(tx, ty) {
+      return PLOTS.findIndex(p => p.x === tx && p.y === ty);
+    },
+    // 站在 (px, py) 夠不夠近第 i 格花圃
+    nearPlot(i, px, py) {
+      const p = PLOTS[i];
+      return !!p && Math.hypot(px - (p.x + 0.5) * TILE, py - (p.y + 0.5) * TILE) < 1.7 * TILE;
+    },
+    seedBox: { x: (SEEDBOX_TILE.x + 0.5) * TILE, y: (SEEDBOX_TILE.y + 0.5) * TILE },
+    nearSeedBox(px, py) {
+      return Math.hypot(px - this.seedBox.x, py - this.seedBox.y) < 1.7 * TILE;
     },
     roomAt(px, py) {
       const tx = Math.floor(px / TILE);

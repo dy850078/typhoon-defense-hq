@@ -140,6 +140,11 @@
     water: { name: '礦泉水', mp: 25 },
     bubbletea: { name: '台灣珍奶', hp: 25, mp: 35 },
     chicken: { name: '台灣雞排', hp: 70, mp: 10 },
+    // 公共花園種出來的水果
+    tomato: { name: '小番茄', hp: 30, mp: 0 },
+    guava: { name: '芭樂', hp: 60, mp: 20 },
+    apple: { name: '蘋果', hp: 50, mp: 50 },
+    pineapple: { name: '鳳梨', hp: 120, mp: 60 },
   };
 
   // 魔力每秒回 1 點；另外每 8 秒自動回一點點血和魔力（最大值的 4%）

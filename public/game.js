@@ -828,7 +828,7 @@
     }
 
     // 視訊小窗：可以拖、可以收起來；點一下畫面放大
-    let vbox = null, vfold = false;
+    let vbox = null, vfold = false, vstage = false;
     const vpos = savedJson('hq-tree-vpos', null);
     function vpanel() {
       if (vbox) return vbox;
@@ -837,12 +837,15 @@
       head.appendChild(el('b', null, '小樹屋視訊'));
       const fb = el('button', 'tv-fold', '▾'); fb.type = 'button'; fb.title = '收起來';
       fb.onclick = () => { vfold = !vfold; vbox.classList.toggle('folded', vfold); fb.textContent = vfold ? '▴' : '▾'; };
-      head.appendChild(fb);
+      // 大畫面：同一個小窗撐滿畫面，大家排成格子；有人分享螢幕就讓螢幕占大部分
+      const sb = el('button', 'tv-stage-btn', '大畫面'); sb.type = 'button';
+      sb.onclick = () => stage(!vstage);
+      head.append(sb, fb);
       vbox.append(head, el('div', 'tv-grid'));
       if (vpos) { vbox.style.left = vpos.x + 'px'; vbox.style.top = vpos.y + 'px'; vbox.style.right = 'auto'; }
       // 拖標題列移動
       head.addEventListener('pointerdown', (e) => {
-        if (e.target === fb) return;
+        if (e.target === fb || e.target === sb || vstage) return;
         const r = vbox.getBoundingClientRect(), dx = e.clientX - r.left, dy = e.clientY - r.top;
         head.setPointerCapture(e.pointerId);
         const mv = (ev) => {
@@ -858,38 +861,101 @@
       document.body.appendChild(vbox);
       return vbox;
     }
+    function stage(on) {
+      if (!vbox) return;
+      vstage = !!on && !vbox.hidden;
+      vbox.classList.toggle('stage', vstage);
+      vbox.querySelector('.tv-stage-btn').textContent = vstage ? '✕ 縮小' : '大畫面';
+      if (vstage && vfold) vbox.querySelector('.tv-fold').click();
+      tiles(); // 大畫面要多放沒開視訊的人的頭像
+    }
+    addEventListener('keydown', (e) => { if (vstage && e.key === 'Escape') stage(false); });
+    addEventListener('resize', () => { if (vstage) layout(); });
+    // 大畫面的排法：沒人分享螢幕就排成差不多正方形的格子；有的話螢幕放主畫面，其他人排在旁邊（直的螢幕排在下面）
+    function layout() {
+      const grid = vbox && vbox.querySelector('.tv-grid');
+      if (!grid) return;
+      const list = [...tileEls.values()].map(t => t.box);
+      list.forEach(b => { b.style.gridRow = b.style.gridColumn = ''; });
+      if (!vstage) { grid.style.gridTemplateColumns = grid.style.gridTemplateRows = ''; return; }
+      const main = list.find(b => b.classList.contains('screen'));
+      const rest = list.filter(b => b !== main);
+      const tall = innerHeight > innerWidth;
+      if (main) {
+        grid.prepend(main);
+        const k = Math.max(1, rest.length);
+        if (tall) {
+          grid.style.gridTemplateColumns = `repeat(${k}, 1fr)`;
+          grid.style.gridTemplateRows = rest.length ? '1fr 24%' : '1fr';
+          main.style.gridColumn = '1 / -1';
+        } else {
+          grid.style.gridTemplateColumns = rest.length ? '1fr minmax(140px, 22%)' : '1fr';
+          grid.style.gridTemplateRows = `repeat(${k}, 1fr)`;
+          main.style.gridRow = '1 / -1';
+        }
+        return;
+      }
+      const n = list.length;
+      let cols = Math.ceil(Math.sqrt(n));
+      if (tall) cols = n <= 3 ? 1 : 2;
+      grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+      grid.style.gridTemplateRows = `repeat(${Math.ceil(n / cols)}, 1fr)`;
+    }
     const tileEls = new Map(); // id -> { box, video }
     function tiles() {
-      const want = new Map(); // id -> { ms, mode, name }
+      const want = new Map(); // id -> { ms, mode, name } 或 { face: m }（大畫面裡沒開視訊的人放頭像）
       const t = mine();
       if (myTree && vtrack) want.set(me.id, { ms: new MediaStream([vtrack]), mode: vmode, name: '你', self: true });
       if (t) t.members.forEach(m => {
         const pr = peers.get(m.id);
-        if (m.video && pr && pr.video) want.set(m.id, { ms: pr.video, mode: m.video, name: m.name });
+        if (m.id !== me.id && m.video && pr && pr.video) want.set(m.id, { ms: pr.video, mode: m.video, name: m.name });
       });
-      tileEls.forEach((tl, id) => { if (!want.has(id)) { tl.video.srcObject = null; tl.box.remove(); tileEls.delete(id); } });
-      if (!want.size) { if (vbox) vbox.hidden = true; return; }
+      const empty = !want.size;
+      if (!empty && vstage && t) t.members.forEach(m => { if (!want.has(m.id)) want.set(m.id, { face: m, name: m.id === me.id ? '你' : m.name }); });
+      const kindOf = (w) => (w.face ? 'face' : 'video');
+      tileEls.forEach((tl, id) => {
+        const w = want.get(id);
+        if (!w || kindOf(w) !== tl.kind) { if (tl.video) tl.video.srcObject = null; tl.box.remove(); tileEls.delete(id); }
+      });
+      if (empty) {
+        if (vbox) { vbox.hidden = true; if (vstage) { vstage = false; vbox.classList.remove('stage'); vbox.querySelector('.tv-stage-btn').textContent = '大畫面'; } }
+        return;
+      }
       const grid = vpanel().querySelector('.tv-grid');
       vbox.hidden = false;
       want.forEach((w, id) => {
         let tl = tileEls.get(id);
         if (!tl) {
           const box = el('div', 'tv-tile');
-          const v = document.createElement('video');
-          v.autoplay = true; v.playsInline = true; v.muted = true; // 聲音另外走語音那條
-          box.append(v, el('span', 'tv-name'));
-          box.onclick = () => box.classList.toggle('big');
+          let v = null;
+          if (w.face) {
+            box.classList.add('face');
+            const f = el('div', 'tv-face');
+            const u = faceOf(id);
+            if (u) { const i = document.createElement('img'); i.src = u; i.alt = ''; f.appendChild(i); }
+            else f.appendChild(icon('cls-' + (w.face.cls || 'staff'), ''));
+            box.appendChild(f);
+          } else {
+            v = document.createElement('video');
+            v.autoplay = true; v.playsInline = true; v.muted = true; // 聲音另外走語音那條
+            box.appendChild(v);
+            box.onclick = () => box.classList.toggle('big');
+          }
+          box.appendChild(el('span', 'tv-name'));
           grid.appendChild(box);
-          tl = { box, video: v, track: null };
+          tl = { box, video: v, track: null, kind: kindOf(w) };
           tileEls.set(id, tl);
         }
-        const tr = w.ms.getVideoTracks()[0];
-        if (tl.track !== tr) { tl.track = tr; tl.video.srcObject = w.ms; tl.video.play().catch(() => {}); }
+        if (tl.video) {
+          const tr = w.ms.getVideoTracks()[0];
+          if (tl.track !== tr) { tl.track = tr; tl.video.srcObject = w.ms; tl.video.play().catch(() => {}); }
+        }
         tl.box.classList.toggle('mirror', !!w.self && w.mode === 'cam');
         tl.box.classList.toggle('screen', w.mode === 'screen');
         tl.box.classList.toggle('talk', talking.has(id));
         tl.box.querySelector('.tv-name').textContent = w.mode === 'screen' ? `${w.name} 的螢幕` : w.name;
       });
+      layout();
     }
 
     function set(list) {

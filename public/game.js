@@ -94,6 +94,7 @@
     const ctx = c.getContext('2d');
     ctx.clearRect(0, 0, c.width, c.height);
     ctx.save(); ctx.scale(2, 2); AV.drawAvatar(ctx, profile); ctx.restore();
+    document.querySelectorAll('#faces button').forEach(b => b.replaceChildren(faceIcon(b.dataset.face, 40)));
   }
 
   function buildPicker(el, items, key, render) {
@@ -120,7 +121,8 @@
     buildPicker($('skins'), AV.SKINS.map(c => [c]), 'skin', swatch);
     buildPicker($('outfits'), AV.OUTFITS.map(c => [c]), 'outfit', swatch);
     buildPicker($('glasses'), [['1', AV.GLASSES[1]], ['0', AV.GLASSES[0]]], 'glasses', (b, v, l) => { b.textContent = l; });
-    buildPicker($('faces'), [['', '抖抖嘴'], ...Object.entries(AV.FACES)], 'face', (b, v, l) => { b.textContent = l; });
+    // 表情不寫字，直接畫自己角色的臉（換髮型、膚色時在 renderPreview 跟著重畫）
+    buildPicker($('faces'), [['', '抖抖嘴'], ...Object.entries(AV.FACES)], 'face', (b, v, l) => { b.dataset.face = v; b.title = l; b.setAttribute('aria-label', l); });
     $('name').value = profile.name;
     renderPreview();
   }

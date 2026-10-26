@@ -49,11 +49,16 @@ label, .label { display: block; font-weight: 700; font-size: 15px; }
 input { width: 100%; font: 500 17px var(--display); padding: 10px 14px; border-radius: 12px; border: 2px solid var(--line);
   background: var(--paper); margin-top: 6px; outline: none; color: inherit; }
 input:focus { border-color: var(--accent); }
+/* 拉桿不要套到上面輸入框的 padding 跟邊框，不然圓點拉不到兩端 */
+input[type=range] { height: 28px; padding: 0; border: 0; border-radius: 0; background: none; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .chips button { font: 500 14px var(--display); border: 1.5px solid var(--line); background: var(--paper);
   border-radius: 999px; padding: 6px 14px; cursor: pointer; color: inherit; }
 .chips button:hover { border-color: var(--accent); }
 .chips button.on { background: var(--ink); border-color: var(--ink); color: var(--ground); }
+#faces button { padding: 2px; border-radius: 12px; border-width: 2px; }
+#faces button.on { background: var(--paper); border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+#faces canvas { width: 40px; height: 40px; display: block; }
 .swatches { display: flex; flex-wrap: wrap; gap: 8px; }
 .swatches button { width: 28px; height: 28px; border-radius: 50%; border: 3px solid var(--paper);
   box-shadow: 0 0 0 1.5px var(--line); cursor: pointer; }
@@ -267,6 +272,19 @@ button.inv-item:hover { border-color: var(--accent); }
 #chat.collapsed #chat-sys { display: none; }
 #messages b { color: var(--accent-ink); }
 #chat-input { margin: 0; padding: 8px 12px; font-size: 15px; }
+/* 表情按鈕：自己角色的臉；點開是 3x3 的表情選單，浮在聊天框上面 */
+#chat-form { display: flex; gap: 6px; align-items: center; }
+#emote-btn { flex: none; width: 38px; height: 38px; padding: 0; border: 2px solid var(--line); border-radius: 12px; background: var(--paper); cursor: pointer; }
+#emote-btn:hover, #emote-btn[aria-expanded="true"] { border-color: var(--accent); }
+#emote-btn canvas { width: 30px; height: 30px; display: block; margin: auto; }
+#emote-menu { position: absolute; left: 0; bottom: calc(100% + 8px); display: grid; grid-template-columns: repeat(3, 64px); gap: 6px;
+  padding: 8px; background: var(--ground); border: 2px solid var(--ink); border-radius: 12px; box-shadow: 0 6px 20px rgba(0,0,0,.25); }
+#emote-menu[hidden] { display: none; }
+#emote-menu button { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 0 5px; border: 0; border-radius: 10px;
+  background: none; font: 700 11px var(--display); color: var(--ink); cursor: pointer; }
+#emote-menu button:hover { background: var(--silver); }
+#emote-menu canvas { width: 44px; height: 44px; }
+#chat.collapsed #emote-menu { display: none; }
 #help { right: 12px; bottom: 12px; background: var(--note); color: var(--note-ink); border: 2px solid var(--note-ink);
   border-radius: var(--note-radius); box-shadow: var(--note-shadow);
   padding: 6px 14px; font-size: 12px; }

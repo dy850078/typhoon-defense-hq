@@ -1,6 +1,6 @@
 /* 帳號：報名頁和總部共用。角色資料平常存在瀏覽器（localStorage），有登入的話也會存到伺服器上的帳號 */
 (function () {
-  var KEYS = ['name', 'hair', 'hairColor', 'skin', 'outfit', 'glasses', 'cls', 'level', 'exp', 'owned', 'gear', 'seen', 'equip', 'furn', 'inv', 'vip', 'photoHd'];
+  var KEYS = ['name', 'hair', 'hairColor', 'skin', 'outfit', 'glasses', 'face', 'cls', 'level', 'exp', 'owned', 'gear', 'seen', 'equip', 'furn', 'inv', 'vip', 'photoHd'];
   var JSON_KEYS = { owned: 1, gear: 1, seen: 1, equip: 1, furn: 1, inv: 1, vip: 1 };
   function get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
   function set(k, v) { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) { /* 無痕模式 */ } }

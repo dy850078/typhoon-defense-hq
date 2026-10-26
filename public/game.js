@@ -4810,18 +4810,18 @@
       return key;
     }
 
-    // 表情：換上那張臉的貼圖，5 秒後變回平常的臉（who.texKey 一直是平常的臉）
+    // 5 秒表情：換上那張臉的貼圖，時間到換回自己平常的臉（who.texKey 一直是平常的臉，創角選的表情也在裡面）
     onEmote(m) {
       const who = me && m.id === me.id ? this.me : this.remotes.get(m.id);
       if (!who) return;
-      who.face = m.face;
+      who.emote = m.face;
       this.showFace(who);
-      if (who.faceTimer) who.faceTimer.remove();
-      who.faceTimer = this.time.delayedCall(5000, () => { who.face = null; who.faceTimer = null; if (who.body_.scene) this.showFace(who); });
+      if (who.emoteTimer) who.emoteTimer.remove();
+      who.emoteTimer = this.time.delayedCall(5000, () => { who.emote = null; who.emoteTimer = null; if (who.body_.scene) this.showFace(who); });
     }
     showFace(who) {
-      who.body_.setTexture(who.face
-        ? this.avatarKey(Object.assign({}, who.look, { cls: who.stats ? who.stats.cls : 'staff', face: who.face }))
+      who.body_.setTexture(who.emote
+        ? this.avatarKey(Object.assign({}, who.look, { cls: who.stats ? who.stats.cls : 'staff', face: who.emote }))
         : who.texKey);
     }
 

@@ -630,7 +630,8 @@
       ctx.save(); ctx.translate(64, 0); ctx.scale(-1, 1); ribbonWing(ctx, C, r); ctx.restore();
     } },
     wzHat: { head(ctx, C, r) {
-      // 寬帽簷、帽尖軟軟地垂向右邊，金色帽帶上一個月亮釦，帽尖吊一顆小星星
+      // 寬帽簷、帽尖軟軟地垂向右邊，金色帽帶上一個月亮釦，帽尖吊一顆小星星；整頂往下壓，戴得低低的
+      ctx.save(); ctx.translate(0, HAT_DOWN);
       C.blob(ctx, 32, 11, 26, 6, r, 0.05); C.fill(ctx, '#3b4785', r, [6, 5, 52, 12]); C.stroke(ctx, r, W);
       ctx.beginPath(); ctx.moveTo(18, 10); ctx.quadraticCurveTo(23, -6, 33, -16);
       ctx.quadraticCurveTo(41, -24, 49, -20); ctx.quadraticCurveTo(56, -16, 57, -8);
@@ -642,6 +643,7 @@
       [[27, -4], [37, -12], [40, 0]].forEach(([x, y], i) => sparkle(ctx, x, y, i ? 1.7 : 2.2, '#ffd23f'));
       C.line(ctx, 57, -8, 57.5, -2, r, 1.2);
       star(ctx, C, r, 57.5, 0.5, 3.6, '#ffd23f');
+      ctx.restore();
     } },
     wzRobe: { front(ctx, C, r, p) {
       suit(ctx, C, r, p, { body: '#2c3768', sleeve: '#2c3768', legs: '#2c3768', shoes: '#6b4a32', hem: 73 });
@@ -666,39 +668,42 @@
       [[28, 47], [36, 47]].forEach(([x, y]) => { C.blob(ctx, x, y, 3.6, 2.2, r, 0.1, 10); C.fill(ctx, '#e9e3ff', r, null); C.stroke(ctx, r, 1.2); });
     } },
     // 披風那一格：斜背在身後的古木魔杖，杖頭從右肩後面冒出來，杖尖在左腳邊
-    // 照繪師的草稿：杖頭的木頭捲成月牙，祖母綠寶珠浮在缺口裡會轉；杖身扭扭的，往下收成尖尖的
+    // 照繪師給的參考圖：上半段是一截扭來扭去的老木頭，頂端捲成問號，祖母綠寶珠浮在問號的圈圈裡會轉；
+    // 下半段是細細直直的深色杖身，靠近尾巴有一圈銀環，最下面是金屬尖頭
     wzWand: { cape(ctx, C, r, p) {
-      const WOOD = '#c39a5f', GRAIN = '#6b4a32';
+      const WOOD = '#b98a52', DARK = '#5a3a24', GRAIN = '#6b4a32';
       // 杖的座標：杖頭朝上、原點在杖身中段；斜斜背在背後，杖尖露在身體左下外面
       ctx.save(); WAND.place(ctx);
-      // 杖身：左右兩條邊歪歪扭扭，最下面收成一個尖；上面接進杖頭裡
-      const shaft = () => {
-        ctx.beginPath(); ctx.moveTo(-5.5, -40);
-        ctx.quadraticCurveTo(-2, -31, -2.8, -22); ctx.quadraticCurveTo(-3.8, -15, -2.2, -9); ctx.quadraticCurveTo(-1, -3, -1.6, 3);
-        ctx.quadraticCurveTo(-0.6, 9, 1.4, 15);
-        ctx.quadraticCurveTo(2.2, 9, 2.4, 3); ctx.quadraticCurveTo(1.6, -3, 2.8, -9); ctx.quadraticCurveTo(3.6, -16, 2.2, -22); ctx.quadraticCurveTo(1.6, -31, 5.5, -40);
-        ctx.closePath();
+      // 一條開放的曲線，經過中點用二次曲線連起來
+      const path = (pts) => {
+        ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]);
+        for (let i = 1; i < pts.length - 1; i++) ctx.quadraticCurveTo(pts[i][0], pts[i][1], (pts[i][0] + pts[i + 1][0]) / 2, (pts[i][1] + pts[i + 1][1]) / 2);
+        const e = pts[pts.length - 1]; ctx.lineTo(e[0], e[1]);
       };
-      // 杖頭：木頭往上捲成一個月牙，缺口朝右上；下面那個角往右伸出去
-      const HEAD = [[-4.5, -36.5], [-8.5, -41], [-10, -47], [-9, -53.5], [-5.5, -58.5], [-0.5, -61], [3.5, -60.5], [5, -58.5],
-        [2, -56.5], [-0.5, -53], [-1, -48.5], [1, -45], [5, -43.5], [9.5, -44.5], [12.5, -46], [13.5, -42.5], [11, -38.5], [6, -36], [1.5, -35]];
-      // 一體成型：兩塊的外框先畫兩倍粗，再把兩塊都填色蓋上去，接縫的線就被蓋掉，只剩外面一圈
-      shaft(); C.stroke(ctx, r, 4); C.smooth(ctx, HEAD); C.stroke(ctx, r, 4.4);
-      shaft(); C.fill(ctx, WOOD, r, [-6, -40, 12, 55]); C.smooth(ctx, HEAD); C.fill(ctx, WOOD, r, [-10, -61, 24, 26]);
-      [[-0.8, -36, 0.4, -20, -1, -6], [1, -33, 1.6, -16, 0.6, 2]].forEach(([x1, y1, cx, cy, x2, y2]) => {
-        ctx.beginPath(); ctx.moveTo(x1, y1); ctx.quadraticCurveTo(cx, cy, x2, y2); C.stroke(ctx, r, 0.9, GRAIN);
+      // 扭扭的木頭：從杖身頂端往上左右彎，最上面往左繞一圈、從右邊彎下來收進圈裡，像一個問號
+      const TWIST = [[0, -24], [0.5, -27], [-2.8, -30.5], [2.6, -34.5], [-2.6, -38.5], [1.6, -42], [-3.5, -45.5],
+        [-8.5, -50], [-9.5, -57.5], [-5.5, -64], [1.5, -66], [8.5, -63], [11.5, -56], [9.8, -50.5], [7.8, -48.6]];
+      const SHAFT = [[0, -26], [0, 12]];
+      ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+      // 一體成型：先把黑邊（比木頭粗一圈）全部畫完，再把顏色蓋上去，接縫就不會有線
+      path(TWIST); C.stroke(ctx, r, 6.2); path(SHAFT); C.stroke(ctx, r, 4.2);
+      // 金屬尖頭
+      ctx.beginPath(); ctx.moveTo(-1.6, 11); ctx.lineTo(0, 17); ctx.lineTo(1.6, 11); ctx.closePath();
+      C.fill(ctx, '#c9ced8', r, null); C.stroke(ctx, r, 1.1);
+      path(SHAFT); C.stroke(ctx, r, 2, DARK);
+      path(TWIST); C.stroke(ctx, r, 3.7, WOOD);
+      // 木頭的節：轉彎的地方鼓起來一點
+      [[-2.4, -30.6, 2.3], [2.2, -34.5, 2.2], [-2.2, -38.5, 2.2]].forEach(([x, y, s]) => {
+        C.blob(ctx, x, y, s, s * 0.9, r, 0.12, 9); C.fill(ctx, WOOD, r, null);
       });
-      // 木紋順著月牙彎
-      ctx.save(); C.smooth(ctx, HEAD); ctx.clip();
-      [[[-2, -37.5], [-7, -44], [-6.5, -53], [-2, -58], [2.5, -59]],
-       [[1, -38], [-3.5, -44], [-4, -51.5], [-1.5, -56.5]],
-       [[3.5, -39], [8, -40.5], [11.5, -42.5]]].forEach(line => {
-        ctx.beginPath(); ctx.moveTo(line[0][0], line[0][1]);
-        for (let i = 1; i < line.length; i++) { const [x0, y0] = line[i - 1], [x1, y1] = line[i]; ctx.quadraticCurveTo(x0 + (y1 - y0) * 0.2, y0 - (x1 - x0) * 0.2, x1, y1); }
-        C.stroke(ctx, r, 0.9, GRAIN);
+      // 木紋：沿著木頭畫幾條細細的深色線
+      [[[-0.6, -29.5], [-1.6, -31.5], [0.6, -34]], [[-0.8, -37.5], [-0.2, -41]], [[-8.3, -53], [-7.4, -59], [-4, -63.6]], [[4.5, -64.6], [9.4, -60]]].forEach(l => {
+        path(l); C.stroke(ctx, r, 0.8, GRAIN);
       });
-      ctx.restore();
-      // 祖母綠寶珠：浮在月牙的缺口裡，沒碰到木頭（遊戲裡另外疊一張會轉的上去，見 WAND）
+      // 銀環：杖身靠近尾巴的地方，還有木頭接杖身的地方一圈深色的綁繩
+      ctx.beginPath(); ctx.rect(-1.9, 6.5, 3.8, 2.2); C.fill(ctx, '#eef1f5', r, null); C.stroke(ctx, r, 0.9);
+      ctx.beginPath(); ctx.rect(-2, -25.5, 4, 2); C.fill(ctx, '#3d2817', r, null);
+      // 祖母綠寶珠：浮在問號的圈圈裡，沒碰到木頭（遊戲裡另外疊一張會轉的上去，見 WAND）
       ctx.translate(WAND.orb[0], WAND.orb[1]); wandOrb(ctx, C, r, p && p.spin, p && p.spin != null);
       ctx.restore();
       [[77, 14, 1.8], [60, 6, 1.3]].forEach(([x, y, s]) => sparkle(ctx, x, y, s, '#b8ffe0'));
@@ -736,8 +741,9 @@
   }
   // 古木魔杖背在背上的位置（人物框座標）；orb 是寶珠在魔杖自己座標裡的位置
   // 遊戲裡在寶珠的位置疊一張會轉的小圖（draw 畫一格），at 是寶珠在人物框裡的中心
+  const HAT_DOWN = 5;
   const WAND = {
-    orb: [7, -52.5],
+    orb: [1, -55.5],
     place(ctx) { ctx.translate(31.9, 47.9); ctx.rotate(0.9); ctx.scale(1.25, 1.25); ctx.translate(0, 16); },
     // 畫一格會轉的寶珠：ctx 的原點要先移到寶珠中心
     frame(ctx, C, t) { ctx.save(); ctx.rotate(0.9); ctx.scale(1.25, 1.25); wandOrb(ctx, C, C.rng(5), t, true, true); ctx.restore(); },

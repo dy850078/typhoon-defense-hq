@@ -1254,6 +1254,7 @@ function sanitizeSave(data) {
     hairColor: AVATAR.HAIR_COLORS.includes(data.hairColor) ? data.hairColor : AVATAR.HAIR_COLORS[0],
     outfit: AVATAR.OUTFITS.includes(data.outfit) ? data.outfit : AVATAR.OUTFITS[0],
     glasses: String(data.glasses) === '0' ? '0' : '1',
+    face: Object.prototype.hasOwnProperty.call(AVATAR.FACES, data.face) ? data.face : '', // 空字串是抖抖嘴
     cls: STATS.CLASSES[data.cls] ? data.cls : 'staff',
     level: clamp(Math.floor(Number(data.level)) || 1, 1, STATS.LEVEL.max),
     exp: Math.max(0, Math.floor(Number(data.exp)) || 0),
@@ -1286,7 +1287,7 @@ function keepProgress(d, account) {
 // 把總部裡的角色狀態存回帳號
 function snapshot(p) {
   if (!p.account) return;
-  accounts.update(p.account, { name: p.name, hair: p.hair, skin: p.skin, hairColor: p.hairColor, outfit: p.outfit, glasses: p.glasses,
+  accounts.update(p.account, { name: p.name, hair: p.hair, skin: p.skin, hairColor: p.hairColor, outfit: p.outfit, glasses: p.glasses, face: p.face,
     cls: p.cls, level: p.level, exp: p.exp, owned: p.owned, gear: p.gear, seen: p.seen, equip: p.equip, furn: p.furn, inv: p.inv, vip: p.vip });
 }
 setInterval(() => players.forEach(snapshot), 20000);
@@ -2373,6 +2374,17 @@ io.on('connection', (socket) => {
     const t = clean(text, 200);
     if (!t) return;
     pushChat({ id: p.id, name: p.name, text: t, t: now });
+  });
+
+  // 表情：角色換臉幾秒，大家都看得到（變回來由前端自己計時）
+  let lastEmote = 0;
+  socket.on('emote', (face) => {
+    const p = players.get(socket.id);
+    if (!p || !Object.prototype.hasOwnProperty.call(AVATAR.FACES, face)) return;
+    const now = Date.now();
+    if (now - lastEmote < 600) return;
+    lastEmote = now;
+    io.emit('emote', { id: p.id, face });
   });
 
   socket.on('disconnect', (reason) => {

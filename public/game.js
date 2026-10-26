@@ -78,12 +78,14 @@
       skin: localStorage.getItem('hq-skin') || AV.SKINS[0],
       outfit: localStorage.getItem('hq-outfit') || AV.OUTFITS[0],
       glasses: localStorage.getItem('hq-glasses') || '1',
+      face: localStorage.getItem('hq-face') || '',
       cls: localStorage.getItem('hq-cls') || 'staff',
     });
     // 舊版存的是動物的顏色，對不上就換回預設
     if (!AV.HAIRS[profile.hair]) profile.hair = 'short';
     if (!AV.OUTFITS.includes(profile.outfit)) profile.outfit = AV.OUTFITS[0];
     if (!ST.CLASSES[profile.cls]) profile.cls = 'staff';
+    if (!Object.prototype.hasOwnProperty.call(AV.FACES, profile.face)) profile.face = '';
   }
   readProfile();
 
@@ -92,6 +94,7 @@
     const ctx = c.getContext('2d');
     ctx.clearRect(0, 0, c.width, c.height);
     ctx.save(); ctx.scale(2, 2); AV.drawAvatar(ctx, profile); ctx.restore();
+    document.querySelectorAll('#faces button').forEach(b => b.replaceChildren(faceIcon(b.dataset.face, 40)));
   }
 
   function buildPicker(el, items, key, render) {
@@ -118,6 +121,8 @@
     buildPicker($('skins'), AV.SKINS.map(c => [c]), 'skin', swatch);
     buildPicker($('outfits'), AV.OUTFITS.map(c => [c]), 'outfit', swatch);
     buildPicker($('glasses'), [['1', AV.GLASSES[1]], ['0', AV.GLASSES[0]]], 'glasses', (b, v, l) => { b.textContent = l; });
+    // 表情不寫字，直接畫自己角色的臉（換髮型、膚色時在 renderPreview 跟著重畫）
+    buildPicker($('faces'), [['', '抖抖嘴'], ...Object.entries(AV.FACES)], 'face', (b, v, l) => { b.dataset.face = v; b.title = l; b.setAttribute('aria-label', l); });
     $('name').value = profile.name;
     renderPreview();
   }
@@ -421,6 +426,7 @@
   socket.on('songLog', (l) => SONG.log(l));
   // 只跟自己（或自己的副本隊伍）有關的系統訊息：字比較多的停久一點
   socket.on('sysToast', (m) => hint(m.text));
+  socket.on('emote', (m) => scene && scene.onEmote(m));
   socket.on('chat', (msg) => {
     addMessage(msg);
     if (!msg.system && scene) scene.showBubble(msg.id, msg.text);
@@ -493,6 +499,37 @@
   setSys(sysPref !== 'off');
   $('chat-sys').addEventListener('click', () => setSys($('messages').classList.contains('no-sys'), true));
   if (window.innerWidth < 600 || window.innerHeight < 520) $('chat').classList.add('collapsed');
+
+  // ---------------- 表情 ----------------
+  // 聊天框旁的小臉按鈕：選一個表情，自己的角色換臉 5 秒，大家都看得到
+  // 按鈕和選單上的圖都是用自己角色的臉畫的（只畫頭，不畫職業帽和裝備）
+  function faceIcon(face, px) {
+    const k = 2, c = document.createElement('canvas');
+    c.width = c.height = px * k;
+    const ctx = c.getContext('2d');
+    ctx.scale(px * k / 46, px * k / 46); ctx.translate(-9, -4);
+    AV.drawAvatar(ctx, Object.assign({}, profile, { cls: 'staff', equip: {}, face }));
+    return c;
+  }
+  const emoteMenu = $('emote-menu'), emoteBtn = $('emote-btn');
+  const setEmoteMenu = (open) => {
+    emoteMenu.hidden = !open;
+    emoteBtn.setAttribute('aria-expanded', String(open));
+    if (!open) return;
+    emoteMenu.replaceChildren(...Object.entries(AV.FACES).map(([face, label]) => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.setAttribute('role', 'menuitem');
+      b.append(faceIcon(face, 44), label);
+      b.addEventListener('click', () => { socket.emit('emote', face); setEmoteMenu(false); });
+      return b;
+    }));
+  };
+  const drawEmoteBtn = () => emoteBtn.replaceChildren(faceIcon('smile', 30));
+  drawEmoteBtn();
+  emoteBtn.addEventListener('click', () => { drawEmoteBtn(); setEmoteMenu(emoteMenu.hidden); });
+  document.addEventListener('pointerdown', (e) => {
+    if (!emoteMenu.hidden && !emoteMenu.contains(e.target) && !emoteBtn.contains(e.target)) setEmoteMenu(false);
+  });
 
   // ---------------- 視訊 ----------------
   // 按「加入視訊」先打開房間列表：可以開新房間、輸入房號，或直接加入別人開的
@@ -4723,7 +4760,7 @@
       cont.tag = tag;
       cont.name_ = p.name;
       cont.pid = p.id;
-      cont.look = { hair: p.hair, hairColor: p.hairColor, skin: p.skin, outfit: p.outfit, glasses: p.glasses, equip: p.equip || {} };
+      cont.look = { hair: p.hair, hairColor: p.hairColor, skin: p.skin, outfit: p.outfit, glasses: p.glasses, face: p.face || '', equip: p.equip || {} };
       cont.texKey = key;
       cont.cakeUntil = 0; cont.hatUntil = 0;
       this.applyGlow(cont);
@@ -4777,7 +4814,7 @@
     avatarKey(p) {
       const eq = p.equip || {};
       const gear = Object.keys(GR.SLOTS).map(s => eq[s] || '').join('.');
-      const key = `av-${p.hair}-${p.hairColor}-${p.skin}-${p.outfit}-${p.glasses}-${p.cls || 'staff'}-${gear}`;
+      const key = `av-${p.hair}-${p.hairColor}-${p.skin}-${p.outfit}-${p.glasses}-${p.cls || 'staff'}-${gear}${p.face ? '-' + p.face : ''}`;
       if (!this.textures.exists(key)) {
         const c = document.createElement('canvas');
         c.width = FRAME.w * 2; c.height = FRAME.h * 2;
@@ -4787,13 +4824,28 @@
       return key;
     }
 
+    // 5 秒表情：換上那張臉的貼圖，時間到換回自己平常的臉（who.texKey 一直是平常的臉，創角選的表情也在裡面）
+    onEmote(m) {
+      const who = me && m.id === me.id ? this.me : this.remotes.get(m.id);
+      if (!who) return;
+      who.emote = m.face;
+      this.showFace(who);
+      if (who.emoteTimer) who.emoteTimer.remove();
+      who.emoteTimer = this.time.delayedCall(5000, () => { who.emote = null; who.emoteTimer = null; if (who.body_.scene) this.showFace(who); });
+    }
+    showFace(who) {
+      who.body_.setTexture(who.emote
+        ? this.avatarKey(Object.assign({}, who.look, { cls: who.stats ? who.stats.cls : 'staff', face: who.emote }))
+        : who.texKey);
+    }
+
     // 換裝備：重畫貼圖、換光芒
     onGear(g) {
       const who = me && g.id === me.id ? this.me : this.remotes.get(g.id);
       if (!who) return;
       who.look.equip = g.equip || {};
       who.texKey = this.avatarKey(Object.assign({}, who.look, { cls: who.stats ? who.stats.cls : 'staff' }));
-      who.body_.setTexture(who.texKey);
+      this.showFace(who);
       const was = who.prada, wasSet = who.setId;
       this.applyGlow(who);
       if (who.setId && who.setId !== wasSet) {
@@ -5011,7 +5063,7 @@
       else if (st.hp > prev.hp && !prev.dead) this.floatText(who.x, who.y - 60, '+' + (st.hp - prev.hp), '#7be08f', 22);
       if (st.cls && st.cls !== prev.cls) {
         who.texKey = this.avatarKey(Object.assign({}, who.look, { cls: st.cls }));
-        who.body_.setTexture(who.texKey);
+        this.showFace(who);
         if (prev.cls) this.burst(who.x, who.y - 40, 10, 0xffd23f);
       }
       if (st.cls !== prev.cls || st.level !== prev.level) who.tag.setText(this.tagText({ name: who.name_, level: st.level }));

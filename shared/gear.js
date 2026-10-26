@@ -21,6 +21,8 @@
     typhoon: { name: '防颱', desc: '這個系列沒有披風，純收藏' },
     hualien: { name: '花蓮副本', desc: '打倒花蓮王才會掉的武器' },
     taipei: { name: '台北101副本', desc: '打倒天龍王才會掉的武器' },
+    magical: { name: '魔法少女', fx: 'starTrail', desc: '扭蛋限定。穿齊：走路留下一串星星，站著時腳下亮起魔法陣' },
+    wizard: { name: '小巫師', fx: 'rune', desc: '扭蛋限定。穿齊：身邊飄著發光的小書頁和符文' },
     single: { name: '單品', desc: '不成套，隨你搭' },
   };
 
@@ -68,6 +70,13 @@
     maid: { slot: 'outfit', name: '女僕裝', rarity: 'SR', series: 'maid', icon: '👗', src: 'cook' },
     butler: { slot: 'outfit', name: '執事服', rarity: 'SR', series: 'maid', icon: '🤵', src: 'cook' },
     heartBow: { slot: 'cape', name: '愛心大蝴蝶結', rarity: 'R', series: 'maid', icon: '💗', src: 'cook' },
+    // 第四批：扭蛋機限定（src: 'gacha'）
+    mgBow: { slot: 'head', name: '星月大蝴蝶結', rarity: 'R', series: 'magical', src: 'gacha' },
+    mgDress: { slot: 'outfit', name: '魔法少女蓬蓬裙', rarity: 'SR', series: 'magical', src: 'gacha' },
+    mgWings: { slot: 'cape', name: '緞帶星星翅膀', rarity: 'SSR', series: 'magical', src: 'gacha' },
+    wzHat: { slot: 'head', name: '歪歪巫師帽', rarity: 'R', series: 'wizard', src: 'gacha' },
+    wzRobe: { slot: 'outfit', name: '星空巫師袍', rarity: 'SR', series: 'wizard', src: 'gacha' },
+    wzBroom: { slot: 'cape', name: '飛天掃把', rarity: 'SSR', series: 'wizard', src: 'gacha' },
     // 武器：花蓮副本（打倒花蓮王才會掉）
     lilyDart: { slot: 'weapon', name: '金針花標', rarity: 'R', series: 'hualien', icon: '🌼', basic: 'lilyDart', dungeon: 'hualien' },
     qixingStaff: { slot: 'weapon', name: '七星潭法杖', rarity: 'SR', series: 'hualien', icon: '🔮', basic: 'pebbleOrb', dungeon: 'hualien' },
@@ -573,6 +582,133 @@
       });
     } },
   });
+
+  // 第四批：扭蛋機限定（src: 'gacha'，只有扭蛋扭得到）——魔法少女、小巫師
+  Object.assign(DRAW, {
+    mgBow: { head(ctx, C, r) {
+      // 頭頂一個粉紅大蝴蝶結，兩條緞帶垂在頭的兩邊，中間是金色星星釦
+      [-1, 1].forEach(k => {
+        ctx.beginPath(); ctx.moveTo(32 + k * 2, 11); ctx.quadraticCurveTo(32 + k * 10, 15, 32 + k * 13, 22);
+        ctx.lineTo(32 + k * 8, 21.5); ctx.quadraticCurveTo(32 + k * 6, 16, 32, 12.5); ctx.closePath();
+        C.fill(ctx, '#ff7fae', r, null); C.stroke(ctx, r, 1.6);
+      });
+      [-1, 1].forEach(k => {
+        ctx.beginPath(); ctx.moveTo(32, 9);
+        ctx.bezierCurveTo(32 + k * 8, -6, 32 + k * 24, -8, 32 + k * 21, 5);
+        ctx.bezierCurveTo(32 + k * 19, 14, 32 + k * 8, 14, 32, 9); ctx.closePath();
+        C.fill(ctx, '#ff9fc6', r, [8, -8, 48, 24]); C.stroke(ctx, r, W);
+        ctx.beginPath(); ctx.moveTo(32 + k * 5, 7); ctx.quadraticCurveTo(32 + k * 13, -1, 32 + k * 17, 5);
+        C.stroke(ctx, r, 1.3, 'rgba(255,255,255,0.75)');
+      });
+      C.blob(ctx, 32, 9, 5.6, 5.2, r, 0.06, 12); C.fill(ctx, '#ffd23f', r, null); C.stroke(ctx, r, 1.8);
+      moon(ctx, C, r, 31, 9, 3.2, '#fff6c9');
+      [[13, -4, 2.2], [52, -6, 2.6]].forEach(([x, y, s]) => sparkle(ctx, x, y, s, '#ffd23f'));
+    } },
+    mgDress: { front(ctx, C, r, p) {
+      suit(ctx, C, r, p, { body: '#c9a3f0', sleeve: '#fbfbf8', legs: '#fbfbf8', shoes: '#ff7fae', hem: 62 });
+      // 裙子底下露出一圈白色襯裙
+      for (let x = 12; x <= 52; x += 5) { C.blob(ctx, x, 71, 3.4, 2.4, r, 0.12, 10); C.fill(ctx, '#ffffff', r, null); C.stroke(ctx, r, 1); }
+      // 粉紅蓬蓬裙，裙襬一球一球
+      ctx.beginPath(); ctx.moveTo(19, 56); ctx.quadraticCurveTo(32, 53, 45, 56); ctx.quadraticCurveTo(54, 62, 56, 70);
+      for (let i = 0; i < 6; i++) { const x0 = 56 - i * 8, x1 = x0 - 8; ctx.quadraticCurveTo((x0 + x1) / 2, 75, x1, 70); }
+      ctx.quadraticCurveTo(10, 62, 19, 56); ctx.closePath();
+      C.fill(ctx, '#ff9fc6', r, [8, 53, 48, 22], 1.2); C.stroke(ctx, r, W);
+      [[18, 66], [32, 68], [45, 65], [26, 61], [39, 61]].forEach(([x, y], i) => sparkle(ctx, x, y, i % 2 ? 1.1 : 1.5, '#fff6c9'));
+      C.line(ctx, 19, 56.5, 45, 56.5, r, 2.6, '#ffd23f', 0.3);
+      // 泡泡袖
+      [[15, 48.5], [49, 48.5]].forEach(([x, y]) => { C.blob(ctx, x, y, 6.2, 4.8, r, 0.1, 12); C.fill(ctx, '#ff9fc6', r, null); C.stroke(ctx, r, 1.8); });
+      // 胸前的大蝴蝶結和愛心寶石
+      [-1, 1].forEach(k => {
+        ctx.beginPath(); ctx.moveTo(32, 50); ctx.quadraticCurveTo(32 + k * 9, 43, 32 + k * 10, 50); ctx.quadraticCurveTo(32 + k * 9, 56, 32, 50); ctx.closePath();
+        C.fill(ctx, '#ff7fae', r, null); C.stroke(ctx, r, 1.4);
+      });
+      heart(ctx, 32, 51, 4.4); C.fill(ctx, '#ff3f7f', r, null); C.stroke(ctx, r, 1.4);
+      dot(ctx, 30.6, 49.6, 1, 'rgba(255,255,255,0.9)');
+    } },
+    mgWings: { cape(ctx, C, r) {
+      ribbonWing(ctx, C, r);
+      ctx.save(); ctx.translate(64, 0); ctx.scale(-1, 1); ribbonWing(ctx, C, r); ctx.restore();
+    } },
+    wzHat: { head(ctx, C, r) {
+      // 寬帽簷、帽尖軟軟地垂向右邊，金色帽帶上一個月亮釦，帽尖吊一顆小星星
+      C.blob(ctx, 32, 11, 26, 6, r, 0.05); C.fill(ctx, '#3b4785', r, [6, 5, 52, 12]); C.stroke(ctx, r, W);
+      ctx.beginPath(); ctx.moveTo(18, 10); ctx.quadraticCurveTo(23, -6, 33, -16);
+      ctx.quadraticCurveTo(41, -24, 49, -20); ctx.quadraticCurveTo(56, -16, 57, -8);
+      ctx.quadraticCurveTo(51, -13, 45, -11); ctx.quadraticCurveTo(43, 0, 46, 10); ctx.closePath();
+      C.fill(ctx, '#3b4785', r, [18, -24, 40, 34]); C.stroke(ctx, r, W);
+      ctx.beginPath(); ctx.moveTo(19.5, 4.5); ctx.quadraticCurveTo(32, 7.5, 45, 4.5); ctx.lineTo(46, 10); ctx.quadraticCurveTo(32, 13, 18, 10); ctx.closePath();
+      C.fill(ctx, '#ffd23f', r, null); C.stroke(ctx, r, 1.6);
+      moon(ctx, C, r, 32, 8, 3.6, '#fff6c9');
+      [[27, -4], [37, -12], [40, 0]].forEach(([x, y], i) => sparkle(ctx, x, y, i ? 1.7 : 2.2, '#ffd23f'));
+      C.line(ctx, 57, -8, 57.5, -2, r, 1.2);
+      star(ctx, C, r, 57.5, 0.5, 3.6, '#ffd23f');
+    } },
+    wzRobe: { front(ctx, C, r, p) {
+      suit(ctx, C, r, p, { body: '#2c3768', sleeve: '#2c3768', legs: '#2c3768', shoes: '#6b4a32', hem: 73 });
+      // 喇叭袖口，鑲金邊
+      [[13, -1], [51, 1]].forEach(([x, k]) => {
+        ctx.beginPath(); ctx.moveTo(x - 4, 57); ctx.lineTo(x + 4, 57); ctx.lineTo(x + 5 + k, 63); ctx.quadraticCurveTo(x, 64.5, x - 5 + k, 63); ctx.closePath();
+        C.fill(ctx, '#2c3768', r, null); C.stroke(ctx, r, 1.8);
+        ctx.beginPath(); ctx.moveTo(x - 5 + k, 63); ctx.quadraticCurveTo(x, 64.5, x + 5 + k, 63); C.stroke(ctx, r, 1.6, '#ffd23f');
+      });
+      // 前面開襟露出淡紫色內襯，腰間一條金色細繩打個結
+      ctx.beginPath(); ctx.moveTo(29, 48); ctx.lineTo(35, 48); ctx.lineTo(37, 74); ctx.lineTo(27, 74); ctx.closePath();
+      C.fill(ctx, '#8f86d6', r, null); C.stroke(ctx, r, 1.4);
+      C.line(ctx, 29, 48, 27, 74, r, 1.4, '#ffd23f', 0.3); C.line(ctx, 35, 48, 37, 74, r, 1.4, '#ffd23f', 0.3);
+      ctx.beginPath(); ctx.moveTo(19, 57); ctx.quadraticCurveTo(32, 60, 45, 57); C.stroke(ctx, r, 1.6, '#ffd23f');
+      C.blob(ctx, 32, 59, 2.2, 2, r, 0.1, 10); C.fill(ctx, '#ffd23f', r, null); C.stroke(ctx, r, 1);
+      C.line(ctx, 31.5, 60.5, 30, 66, r, 1.2, '#ffd23f', 0.3); C.line(ctx, 32.5, 60.5, 34, 66, r, 1.2, '#ffd23f', 0.3);
+      // 長袍上的星星和月亮
+      [[23, 51], [42, 52], [22, 67], [43, 69]].forEach(([x, y], i) => sparkle(ctx, x, y, i % 2 ? 1.4 : 1.8, '#ffd23f'));
+      [[24, 61], [41, 62], [19, 72], [46, 74]].forEach(([x, y]) => dot(ctx, x, y, 0.9, '#ffffff'));
+      moon(ctx, C, r, 42, 61, 2.6, '#ffd23f');
+      // 白色小立領
+      [[28, 47], [36, 47]].forEach(([x, y]) => { C.blob(ctx, x, y, 3.6, 2.2, r, 0.1, 10); C.fill(ctx, '#e9e3ff', r, null); C.stroke(ctx, r, 1.2); });
+    } },
+    wzBroom: { cape(ctx, C, r) {
+      // 斜背在身後的飛天掃把：掃把頭從右肩後面冒出來，柄從左腳邊露出來
+      C.line(ctx, 6, 77, 53, 27, r, 5.2, C.INK, 0.4);
+      C.line(ctx, 6, 77, 53, 27, r, 3, '#a8703f', 0.4);
+      ctx.save(); ctx.translate(53, 27); ctx.rotate(-0.807);
+      ctx.beginPath(); ctx.moveTo(1, -4); ctx.quadraticCurveTo(13, -11, 25, -9); ctx.quadraticCurveTo(30, 0, 25, 9); ctx.quadraticCurveTo(13, 11, 1, 4); ctx.closePath();
+      C.fill(ctx, '#e8b64c', r, [0, -11, 30, 22]); C.stroke(ctx, r, W);
+      [-5, -1.5, 2, 5.5].forEach(y => C.line(ctx, 6, y * 0.6, 25, y * 1.4, r, 1.1, '#b8862c', 0.3));
+      C.rect(ctx, -3, -4.6, 6, 9.2, r, 0.4); C.fill(ctx, '#d9384a', r, null); C.stroke(ctx, r, 1.6);
+      ctx.restore();
+      // 柄上綁一顆小星星吊飾
+      C.line(ctx, 44, 37, 45, 44, r, 1.1);
+      star(ctx, C, r, 45, 46, 3.2, '#ffd23f');
+      [[74, 4], [66, -4]].forEach(([x, y], i) => sparkle(ctx, x, y, i ? 1.6 : 2.2, '#ffd23f'));
+    } },
+  });
+  // 魔法少女的緞帶翅膀（右邊那片，左邊鏡像）：上面一大片、下面一小片，緞帶尾巴吊著星星
+  function ribbonWing(ctx, C, r) {
+    ctx.beginPath(); ctx.moveTo(38, 46); ctx.bezierCurveTo(44, 22, 64, 8, 75, 13); ctx.bezierCurveTo(80, 24, 66, 40, 40, 50); ctx.closePath();
+    C.fill(ctx, '#fde7f3', r, [38, 8, 42, 42]); C.stroke(ctx, r, W);
+    ctx.beginPath(); ctx.moveTo(42, 46); ctx.bezierCurveTo(50, 30, 63, 18, 71, 16.5); C.stroke(ctx, r, 1.6, '#ff8fb8');
+    ctx.beginPath(); ctx.moveTo(40, 50); ctx.bezierCurveTo(56, 45, 70, 49, 70, 59); ctx.bezierCurveTo(62, 63, 50, 58, 40, 53); ctx.closePath();
+    C.fill(ctx, '#e6d6ff', r, null); C.stroke(ctx, r, W);
+    ctx.beginPath(); ctx.moveTo(41, 52); ctx.bezierCurveTo(52, 62, 58, 69, 66, 71); C.stroke(ctx, r, 2.4, '#ff8fb8');
+    star(ctx, C, r, 67, 72, 4.4, '#ffd23f');
+    sparkle(ctx, 76, 6, 2.4, '#ffd23f');
+  }
+  // 月亮：外圈減掉往右上偏的內圈
+  function moon(ctx, C, r, x, y, R, color) {
+    ctx.save(); ctx.beginPath(); ctx.arc(x, y, R, 0, Math.PI * 2); ctx.clip();
+    ctx.beginPath(); ctx.arc(x, y, R, 0, Math.PI * 2); ctx.arc(x + R * 0.55, y - R * 0.3, R * 0.85, 0, Math.PI * 2, true);
+    ctx.fillStyle = color; ctx.fill('evenodd'); C.stroke(ctx, r, 1.1); ctx.restore();
+  }
+  // 四角的小亮光
+  function sparkle(ctx, x, y, s, color) {
+    ctx.save(); ctx.fillStyle = color; ctx.beginPath();
+    ctx.moveTo(x, y - s * 2); ctx.quadraticCurveTo(x, y, x + s * 2, y); ctx.quadraticCurveTo(x, y, x, y + s * 2); ctx.quadraticCurveTo(x, y, x - s * 2, y); ctx.quadraticCurveTo(x, y, x, y - s * 2);
+    ctx.fill(); ctx.restore();
+  }
+  function heart(ctx, cx, cy, s) {
+    ctx.beginPath(); ctx.moveTo(cx, cy + s);
+    ctx.bezierCurveTo(cx - s * 1.6, cy, cx - s, cy - s * 1.3, cx, cy - s * 0.4);
+    ctx.bezierCurveTo(cx + s, cy - s * 1.3, cx + s * 1.6, cy, cx, cy + s); ctx.closePath();
+  }
 
   function star(ctx, C, r, x, y, rr, color) {
     ctx.save(); ctx.translate(x, y); ctx.beginPath();

@@ -297,7 +297,6 @@
     bubbletea: { name: '台灣珍奶', icon: '🧋' },
     chicken: { name: '台灣雞排', icon: '🍗' },
   };
-  const BAG_SLOTS = 25; // 背包格數：一種物資佔一格
   const CRATES = [
     { label: '泡麵', item: 'noodle', x1: 6, y1: 16, x2: 7, y2: 17 },
     { label: '礦泉水', item: 'water', x1: 6, y1: 20, x2: 8, y2: 22 },
@@ -328,7 +327,7 @@
   // 會變動的擋路格子（關著的石門、九曲洞的大理石）：'tx,ty'
   const dyn = new Set();
   const map = {
-    W, H, MW, DX, LX, TDX, TLX, TILE, BLOCKING, ROOMS, ITEMS, BAG_SLOTS, CRATES, MONSTER_ZONE, DUNGEON, DUNGEONS, DG_LIST, LOBBY, dyn,
+    W, H, MW, DX, LX, TDX, TLX, TILE, BLOCKING, ROOMS, ITEMS, CRATES, MONSTER_ZONE, DUNGEON, DUNGEONS, DG_LIST, LOBBY, dyn,
     portal: DUNGEON.portal,
     mentor: { x: (MENTOR_TILE.x + 0.5) * TILE, y: (MENTOR_TILE.y + 0.5) * TILE },
     guard: DUNGEON.npc,

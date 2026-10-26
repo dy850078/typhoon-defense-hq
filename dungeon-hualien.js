@@ -14,7 +14,7 @@ const ATK = {
 
 let targets = null; // 九曲洞的凹槽（格子座標）
 const R = {
-  boss: 'fu', clearExp: 500, dupExp: 600,
+  boss: 'fu', clearExp: 500,
   bossExtra: (a) => {
     const hp = BOSS_HP + BOSS_HP_PER_PLAYER * a.st.members.size;
     return { hp, maxHp: hp, phase: 1, nextAttack: a.now0() + 4000, transformUntil: 0, nextHorse: 0 };

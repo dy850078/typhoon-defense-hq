@@ -8,9 +8,11 @@ const AVATAR = require('./shared/avatar');
 const STATS = require('./shared/stats');
 const GEAR = require('./shared/gear');
 const DECOR = require('./shared/decor');
+const BAG = require('./shared/bag');
 const ACCOUNTS = require('./accounts');
 const WISHES = require('./wishes');
 const createDungeons = require('./dungeon');
+const createLoot = require('./loot');
 
 const PORT = Number(process.env.PORT) || 3000;
 const MAX_PLAYERS = Number(process.env.MAX_PLAYERS) || 40;
@@ -184,11 +186,13 @@ app.post('/api/login', (req, res) => {
 // 合併規則：等級取高的那邊（職業跟著走）、裝備和家具取聯集／最大值、背包物資取最大值、外觀和邀請函以帳號為準
 function mergeGuest(u, g) {
   const a = sanitizeSave(u.save);
-  const owned = [...new Set([...a.owned, ...g.owned])];
+  const gear = Object.assign({}, a.gear);
+  Object.keys(g.gear).forEach(id => { gear[id] = Math.max(gear[id] || 0, g.gear[id]); });
+  const seen = [...new Set([...a.seen, ...g.seen])], owned = BAG.ownedOf(gear);
   const furn = Object.fromEntries(Object.keys(a.furn).map(k => [k, Math.max(a.furn[k], g.furn[k])]));
   const inv = Object.fromEntries(Object.keys(a.inv).map(k => [k, Math.max(a.inv[k], g.inv[k])]));
   const gHigher = g.level > a.level || (g.level === a.level && g.exp > a.exp);
-  const changed = gHigher || owned.length > a.owned.length || Object.keys(furn).some(k => furn[k] !== a.furn[k]) ||
+  const changed = gHigher || Object.keys(gear).some(id => gear[id] !== a.gear[id]) || seen.length > a.seen.length || Object.keys(furn).some(k => furn[k] !== a.furn[k]) ||
     Object.keys(inv).some(k => inv[k] !== a.inv[k]) || (!a.vip && g.vip);
   if (!changed) return;
   // 人在總部裡的話先存檔、請他重新進來，才不會被下一次自動存檔蓋回去
@@ -197,7 +201,7 @@ function mergeGuest(u, g) {
     const s = io.sockets.sockets.get(p.id);
     if (s) { s.emit('kicked', '你的帳號剛合併了另一台裝置的進度，請重新進入總部'); s.disconnect(true); }
   });
-  const patch = { owned, furn, inv, equip: Object.keys(a.equip).length ? a.equip : g.equip };
+  const patch = { owned, gear, seen, furn, inv, equip: Object.keys(a.equip).length ? a.equip : g.equip };
   if (gHigher) Object.assign(patch, { level: g.level, exp: g.exp, cls: g.cls });
   if (!a.vip && g.vip) Object.assign(patch, { vip: g.vip, photoHd: a.photoHd || g.photoHd });
   accounts.update(u, patch);
@@ -329,12 +333,13 @@ app.post('/api/admin/gift', (req, res) => {
   let sent = 0, had = 0;
   users.forEach(u => {
     const online = [...players.values()].filter(p => p.account === u);
-    const owned = sanitizeSave(u.save).owned;
-    if (owned.includes(b.item) || online.some(p => p.owned.includes(b.item))) { had++; return; }
-    accounts.update(u, { owned: owned.concat(b.item) });
+    const s = sanitizeSave(u.save);
+    if (s.owned.includes(b.item) || online.some(p => p.owned.includes(b.item))) { had++; return; }
+    const gear = Object.assign({}, s.gear, { [b.item]: 1 });
+    accounts.update(u, { gear, owned: BAG.ownedOf(gear), seen: [...new Set(s.seen.concat(b.item))] });
     online.forEach(p => {
-      p.owned.push(b.item);
-      io.to(p.id).emit('gearGot', { item: b.item, owned: p.owned, from: 'admin' });
+      LOOT.give(p, 'gear', b.item);
+      io.to(p.id).emit('gearGot', { item: b.item, from: 'admin' });
     });
     sent++;
   });
@@ -645,6 +650,7 @@ setInterval(() => {
   summons.slice().forEach(sm => tickSummon(sm, now));
   tickMonster(now);
   DG.tick(now);
+  LOOT.tick(now);
   tickWalls(now);
   tickStorms(now);
   // 所有會動的東西合成一則送出：volatile 在同一個 tick 連送好幾則時，後面的常常被丟掉（颱風位置就一直沒更新）
@@ -957,7 +963,7 @@ function damageFoe(p, foe, isBoss, dmg, crit, skillId, hitBy) {
     io.emit('mob', mobState(foe));
     gainExp(p, STATS.MOBS[foe.kind].exp);
     pushChat({ system: true, text: `👏 ${p.name} 打倒了${STATS.MOBS[foe.kind].name}！`, t: now });
-    if (Math.random() < MOB_DROP_RATE) giveDecor(p);
+    LOOT.fromFoe(foe);
     return;
   }
   io.emit('monsterHit', { id: hitBy || p.id, dmg, crit, hp: monster.hp, skill: skillId, phase: monster.phase });
@@ -967,12 +973,12 @@ function damageFoe(p, foe, isBoss, dmg, crit, skillId, hitBy) {
   monster.respawnAt = now + RESPAWN_MS;
   const top = [...monster.damage.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3);
   io.emit('monster', monsterState());
-  // 有打到颱風的人都多拿一筆經驗，還會掉一件家具；輸出第一名一定拿到稀有裝備，其他人有機會
-  players.forEach(q => {
-    if (!monster.damage.has(q.name)) return;
-    gainExp(q, 400); giveDecor(q);
-    if ((top[0] && top[0][0] === q.name) || Math.random() < BOSS_GEAR_RATE) giveGear(q, true);
-  });
+  // 有打到颱風的人都多拿一筆經驗；寶物噴在地上大家搶：每個有出力的人多噴一個，至少一件稀有裝備
+  const helpers = [...players.values()].filter(q => monster.damage.has(q.name));
+  helpers.forEach(q => gainExp(q, 400));
+  const B = STATS.DROPS.boss, pile = LOOT.roll(Object.assign({}, B, { n: [B.n[0] + helpers.length, B.n[1] + helpers.length] }));
+  if (!pile.some(l => l.kind === 'gear')) { const id = GEAR.rollDrop({ rare: true }); if (id) pile.push({ kind: 'gear', k: id }); }
+  LOOT.scatter(pile, monster.x, monster.y, null, 160);
   const mins = Math.round(RESPAWN_MS / 60000);
   pushChat({ system: true, text: `🎉 ${p.name} 打出最後一擊，${STATS.MONSTER2.name}被擊退了！${mins} 分鐘後會再生成。`, t: now });
   if (top.length) pushChat({ system: true, text: '🏅 輸出排行：' + top.map(([n, d], i) => `${i + 1}. ${n} ${d}`).join('、'), t: now });
@@ -1067,12 +1073,13 @@ const DG = createDungeons({
   isAway: (p) => awayTimers.has(p.id),
   summons: () => summons,
   hurtSummon,
+  loot: () => LOOT,
 });
+// 地上的掉落物（loot.js）
+const LOOT = createLoot({ io, players, MAP, STATS, GEAR, DECOR, BAG, pushChat: (m) => pushChat(m), dgOf: (p) => DG.dgOf(p) });
 
 // ---------------- 室內設計：家具 ----------------
 // 打怪掉落的家具可以擺在總部室內，擺好的家具存在 data/decor.json，伺服器重開也還在
-const MOB_DROP_RATE = 0.5;
-const BOSS_GEAR_RATE = 0.35; // 打倒颱風時，輸出第一名以外的人拿到稀有裝備的機率
 const DECOR_FILE = path.join(DATA_DIR, 'decor.json');
 const decor = new Map(); // 'tx,ty' -> { k, by }
 try {
@@ -1113,12 +1120,6 @@ function cleanDecor(p) {
   return { ok: true, clean: n };
 }
 const decorList = () => [...decor.entries()].map(([key, d]) => ({ key, k: d.k, by: d.by }));
-function giveDecor(p) {
-  const k = DECOR.roll();
-  p.furn[k] = (p.furn[k] || 0) + 1;
-  io.to(p.id).emit('decorGot', { k, furn: p.furn });
-  pushChat({ system: true, text: `🎁 ${p.name} 撿到了家具 ${DECOR.DECOR[k].icon} ${DECOR.DECOR[k].name}`, t: Date.now() });
-}
 // 這格能不能擺家具：要在室內、不能是牆或門、不能擋到東西
 function canDecorate(tx, ty) {
   const room = MAP.roomAt((tx + 0.5) * T, (ty + 0.5) * T);
@@ -1130,6 +1131,7 @@ function canDecorate(tx, ty) {
 // 傳給別人的玩家資料（不含冷卻、增益這些內部狀態）
 // 角色存檔：外觀、職業、等級、裝備、家具、邀請函。總部加入時和帳號存檔都用這個檢查
 const INV_MAX = 99; // 每種物資最多存幾個
+const EAT_CD_MS = STATS.EAT_CD_MS; // 隨身吃喝（礦泉水、珍奶、雞排）共用的冷卻
 function sanitizeSave(data) {
   data = data && typeof data === 'object' ? data : {};
   const name = clean(data.name, 12);
@@ -1142,9 +1144,18 @@ function sanitizeSave(data) {
       theme: data.vip.theme === 's' ? 's' : 'n', photo };
     if (!vip.name || (!vip.song && !vip.drink && !vip.photo)) vip = null;
   }
-  const owned = [...new Set((Array.isArray(data.owned) ? data.owned : []).filter(id => GEAR.GEAR[id]))];
-  // 白紗原本自帶頭紗，後來拆成「新娘頭紗」頭飾：有白紗的人直接送一件
-  if (owned.includes('gown') && !owned.includes('veil')) owned.push('veil');
+  // 裝備可以有好幾件：gear 是每件有幾件；舊存檔只有 owned（有哪些），每件算 1 件
+  const gear = {};
+  if (data.gear && typeof data.gear === 'object') Object.keys(GEAR.GEAR).forEach(id => {
+    const n = clamp(Math.floor(Number(data.gear[id])) || 0, 0, 99);
+    if (n) gear[id] = n;
+  });
+  else (Array.isArray(data.owned) ? data.owned : []).forEach(id => { if (GEAR.GEAR[id]) gear[id] = 1; });
+  // 圖鑑：拿過哪些（丟掉、送人也還算）
+  const seen = [...new Set([...(Array.isArray(data.seen) ? data.seen : []).filter(id => GEAR.GEAR[id]), ...BAG.ownedOf(gear)])];
+  // 白紗原本自帶頭紗，後來拆成「新娘頭紗」頭飾：有白紗、又從來沒拿過頭紗的人直接送一件
+  if (gear.gown && !seen.includes('veil')) { gear.veil = 1; seen.push('veil'); }
+  const owned = BAG.ownedOf(gear);
   const equip = {};
   if (data.equip && typeof data.equip === 'object') Object.keys(GEAR.SLOTS).forEach(slot => {
     const id = data.equip[slot];
@@ -1160,7 +1171,7 @@ function sanitizeSave(data) {
     cls: STATS.CLASSES[data.cls] ? data.cls : 'staff',
     level: clamp(Math.floor(Number(data.level)) || 1, 1, STATS.LEVEL.max),
     exp: Math.max(0, Math.floor(Number(data.exp)) || 0),
-    owned, equip, vip,
+    owned, gear, seen, equip, vip,
     // 清楚版的大頭照（480px），只存在帳號裡；邀請函連結和總部同步用的是上面 vip.photo 的小圖
     photoHd: typeof data.photoHd === 'string' && data.photoHd.length <= 200000 && /^[A-Za-z0-9+/=]+$/.test(data.photoHd) ? data.photoHd : '',
     // 還沒擺出去的家具
@@ -1175,21 +1186,27 @@ function keepProgress(d, account) {
   const a = sanitizeSave(account.save);
   if (account.save.levelSet || a.level > d.level || (a.level === d.level && a.exp > d.exp)) Object.assign(d, { level: a.level, exp: a.exp, cls: a.cls });
   if (account.save.levelSet) accounts.update(account, { levelSet: undefined });
-  d.owned = [...new Set([...a.owned, ...d.owned])];
-  Object.keys(d.furn).forEach(k => { d.furn[k] = Math.max(d.furn[k], a.furn[k]); });
-  // 背包以帳號為準（開兩個分頁也不會變兩倍）；帳號還沒存過背包的話用瀏覽器帶來的
+  // 背包（補品、家具、裝備）以帳號為準：開兩個分頁不會變兩倍，丟掉的東西也不會被舊分頁帶回來
+  // 帳號還沒存過的話，用瀏覽器帶來的（裝備、家具跟帳號取多的那邊）
+  if (account.save.gear) d.gear = a.gear;
+  else Object.keys(a.gear).forEach(id => { d.gear[id] = Math.max(d.gear[id] || 0, a.gear[id]); });
+  d.seen = [...new Set([...a.seen, ...d.seen, ...BAG.ownedOf(d.gear)])];
+  d.owned = BAG.ownedOf(d.gear);
+  Object.keys(d.equip).forEach(s => { if (!d.gear[d.equip[s]]) delete d.equip[s]; });
+  if (account.save.gear) d.furn = a.furn;
+  else Object.keys(d.furn).forEach(k => { d.furn[k] = Math.max(d.furn[k], a.furn[k]); });
   if (account.save.inv) d.inv = a.inv;
 }
 // 把總部裡的角色狀態存回帳號
 function snapshot(p) {
   if (!p.account) return;
   accounts.update(p.account, { name: p.name, hair: p.hair, skin: p.skin, hairColor: p.hairColor, outfit: p.outfit, glasses: p.glasses,
-    cls: p.cls, level: p.level, exp: p.exp, owned: p.owned, equip: p.equip, furn: p.furn, inv: p.inv, vip: p.vip });
+    cls: p.cls, level: p.level, exp: p.exp, owned: p.owned, gear: p.gear, seen: p.seen, equip: p.equip, furn: p.furn, inv: p.inv, vip: p.vip });
 }
 setInterval(() => players.forEach(snapshot), 20000);
 
 function publicPlayer(p) {
-  const { cooldowns, buffs, atkBuff, regenMs, cooking, vip, owned, cakeUntil, furn, account, photoHd, rk, ...rest } = p;
+  const { cooldowns, buffs, atkBuff, regenMs, cooking, eatAt, vip, owned, gear, seen, inv, cakeUntil, furn, account, photoHd, rk, ...rest } = p;
   return Object.assign(rest, publicStats(p), { hasVip: !!vip, cakeMs: Math.max(0, cakeUntil - Date.now()) });
 }
 
@@ -1198,9 +1215,8 @@ function publicPlayer(p) {
 function giveGear(p, rare, src) {
   const id = GEAR.roll(p.owned, rare, src);
   if (!id) return null;
-  p.owned.push(id);
   const g = GEAR.GEAR[id];
-  io.to(p.id).emit('gearGot', { item: id, owned: p.owned });
+  if (LOOT.giveOrDrop(p, 'gear', id)) io.to(p.id).emit('gearGot', { item: id });
   pushChat({ system: true, text: `🎁 ${p.name} 獲得了【${g.rarity}】${g.icon ? g.icon + ' ' : ''}${g.name}！`, t: Date.now() });
   return id;
 }
@@ -1355,7 +1371,7 @@ io.on('connection', (socket) => {
     players.set(socket.id, p);
 
     growMonster();
-    ack({ ok: true, you: Object.assign(publicPlayer(p), { owned: p.owned, furn: p.furn }), players: [...players.values()].map(publicPlayer), history,
+    ack({ ok: true, you: Object.assign(publicPlayer(p), { owned: p.owned, gear: p.gear, seen: p.seen, furn: p.furn, inv: p.inv }), loot: LOOT.list(), players: [...players.values()].map(publicPlayer), history,
       monster: monsterState(), mobs: mobs.map(mobState).concat(DG.allFoes().map(mobState)), emptyCrates: emptyCrates(), dungeon: DG.state(),
       summons: summons.map(summonState), decor: decorList(),
       walls: walls.map(w => ({ id: w.id, kind: w.kind, pts: w.pts, ms: w.until - Date.now() })), storms: storms.map(stormState), music: musicState() });
@@ -1391,12 +1407,9 @@ io.on('connection', (socket) => {
     const key = tx + ',' + ty;
     const c = crates.get(key) || { hits: 0, emptyUntil: 0 };
     if (c.emptyUntil > now) return ack({ ok: false, empty: true });
-    // 背包最多 BAG_SLOTS 格，同種物資疊在同一格（一格最多 INV_MAX 個）；裝不下的箱子不讓敲
+    // 背包的補品區放不下的箱子不讓敲（shared/bag.js）
     const pile = MAP.CRATES[ci].item;
-    const pool = (Array.isArray(pile) ? pile : pile ? [pile] : Object.keys(MAP.ITEMS)).filter(k => {
-      const used = Object.values(p.inv).filter(n => n > 0).length;
-      return p.inv[k] > 0 ? p.inv[k] < INV_MAX : used < MAP.BAG_SLOTS;
-    });
+    const pool = (Array.isArray(pile) ? pile : pile ? [pile] : Object.keys(MAP.ITEMS)).filter(k => BAG.canAdd(p, 'food', k));
     if (!pool.length) return ack({ ok: false, full: true });
     lastAction = now;
     io.emit('crateHit', { tx, ty, id: p.id });
@@ -1619,6 +1632,8 @@ io.on('connection', (socket) => {
     const p = players.get(socket.id);
     if (typeof ack !== 'function') return;
     if (!p || p.dead || p.inv.water < 1) return ack({ ok: false });
+    if (Date.now() < (p.eatAt || 0) + EAT_CD_MS) return ack({ ok: false, cd: true });
+    p.eatAt = Date.now();
     p.inv.water--;
     p.mp = Math.min(p.maxMp, p.mp + STATS.FOODS.water.mp);
     sendStats(p);
@@ -1631,6 +1646,8 @@ io.on('connection', (socket) => {
     if (typeof ack !== 'function') return;
     const food = STATS.FOODS[item];
     if (!p || p.dead || !food || !['bubbletea', 'chicken'].includes(item) || p.inv[item] < 1) return ack({ ok: false });
+    if (Date.now() < (p.eatAt || 0) + EAT_CD_MS) return ack({ ok: false, cd: true });
+    p.eatAt = Date.now();
     p.inv[item]--;
     p.hp = Math.min(p.maxHp, p.hp + (food.hp || 0));
     p.mp = Math.min(p.maxMp, p.mp + (food.mp || 0));
@@ -1668,6 +1685,27 @@ io.on('connection', (socket) => {
     io.emit('decor', { key: String(key), removed: true });
     saveDecor();
     ack({ ok: true, furn: p.furn });
+  });
+
+  // ---------------- 地上的掉落物（loot.js） ----------------
+  // 撿起來：按 Z 或點地上的東西
+  socket.on('pickLoot', (id, ack) => {
+    const p = players.get(socket.id);
+    if (!p || typeof ack !== 'function') return;
+    ack(LOOT.pick(p, String(id)));
+  });
+  // 從背包拖到地上丟出去；kind 是 food / decor / gear
+  const BAG_KINDS = ['food', 'decor', 'gear'];
+  socket.on('dropItem', (kind, k, ack) => {
+    const p = players.get(socket.id);
+    if (!p || typeof ack !== 'function' || !BAG_KINDS.includes(kind)) return;
+    ack(LOOT.drop(p, kind, String(k)));
+  });
+  // 丟掉：不會掉在地上，直接不見
+  socket.on('trashItem', (kind, k, ack) => {
+    const p = players.get(socket.id);
+    if (!p || typeof ack !== 'function' || !BAG_KINDS.includes(kind)) return;
+    ack(LOOT.trash(p, kind, String(k)));
   });
 
   // ---------------- 副本 ----------------

@@ -388,6 +388,13 @@
       C.line(x, 24, 29, 24, 13, r, 2.6, '#3c8a66');
       x.beginPath(); x.moveTo(17, 19); x.lineTo(24, 12); x.lineTo(31, 19); C.stroke(x, r, 2.6, '#3c8a66');
     },
+    // 大畫面：一個畫面，四個角往外撐
+    'btn-stage'(x, r) {
+      C.rect(x, 12, 14, 24, 20, r, 0.6); C.fill(x, '#8ec5ff', r, [12, 14, 24, 20]); C.stroke(x, r, 2.2);
+      [[4, 6, 1, 1], [44, 6, -1, 1], [4, 42, 1, -1], [44, 42, -1, -1]].forEach(([cx, cy, dx, dy]) => {
+        x.beginPath(); x.moveTo(cx, cy + 9 * dy); x.lineTo(cx, cy); x.lineTo(cx + 9 * dx, cy); C.stroke(x, r, 2.8, '#3c8a66');
+      });
+    },
     // 許願池：「做好了」的紅色印章（字另外疊上去）
     'wish-stamp'(x, r) {
       C.blob(x, 24, 24, 21, 21, r, 0.05, 28); C.stroke(x, r, 3, '#d8323f');

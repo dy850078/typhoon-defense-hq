@@ -784,6 +784,7 @@
       stream.getAudioTracks().forEach(tr => { tr.enabled = !muted; });
       socket.emit('treeMute', muted);
       renderBtn();
+      if (isOpen()) render();
     }
 
     // ---- 視訊、分享螢幕 ----
@@ -973,34 +974,36 @@
     const refresh = () => socket.emit('treeList', (r) => set(r && r.trees));
 
     // 工具列上的按鈕：在屋裡的時候多一顆麥克風開關
+    // 工具列：小樹屋按鈕跟麥克風、視訊、分享螢幕包成同一顆膠囊，一看就知道是一組
+    // 開關（卡片上那排有字的也是）都從這裡做出來，狀態一致
+    function tools(withText) {
+      const out = [];
+      const mk = (cls, on, ic, text, title, fn) => {
+        const b = el('button', cls + (on ? ' on' : ' off')); b.type = 'button';
+        b.append(icon(ic, ''));
+        if (withText) b.append(el('span', null, text));
+        b.title = title; b.onclick = fn;
+        out.push(b);
+      };
+      mk('tree-sw', !muted, muted ? 'btn-mic-off' : 'btn-mic', muted ? '麥克風：靜音中' : '麥克風：開著',
+        muted ? '麥克風關著，點一下打開' : '麥克風開著，點一下靜音', toggleMute);
+      mk('tree-sw', vmode === 'cam', vmode === 'cam' ? 'btn-cam' : 'btn-cam-off', vmode === 'cam' ? '視訊：開著' : '視訊：關著',
+        vmode === 'cam' ? '視訊開著，點一下關掉' : '開視訊', () => setVideo('cam'));
+      if (canScreen) mk('tree-sw', vmode === 'screen', 'btn-screen', vmode === 'screen' ? '分享中，按一下停止' : '分享螢幕',
+        vmode === 'screen' ? '正在分享螢幕，點一下停止' : '分享螢幕', () => setVideo('screen'));
+      return out;
+    }
     function renderBtn() {
       const box = $('inventory');
       if (!box) return;
-      box.querySelectorAll('.tree-btn, .tree-tool').forEach(b => b.remove());
-      const b = el('button', 'inv-item bag-btn tree-btn' + (myTree ? ' on' : ''));
-      b.append(icon('btn-tree', ''), myTree ? ' 小樹屋中' : ' 小樹屋');
+      box.querySelectorAll('.tree-group').forEach(b => b.remove());
+      const g = el('div', 'tree-group' + (myTree ? ' in tree-tool' : ''));
+      const b = el('button', 'inv-item bag-btn tree-btn'); b.type = 'button';
+      b.append(icon('btn-tree', ''), el('span', 'tree-btn-t', myTree ? ' 小樹屋中' : ' 小樹屋'));
       b.onclick = open;
-      const kit = box.querySelector('.kit-btn');
-      box.insertBefore(b, kit);
-      if (myTree) {
-        const m = el('button', 'inv-item tree-tool tree-mic' + (muted ? ' off' : ''));
-        m.append(icon(muted ? 'btn-mic-off' : 'btn-mic', ''));
-        m.title = muted ? '麥克風關著，點一下打開' : '麥克風開著，點一下靜音';
-        m.onclick = toggleMute;
-        box.insertBefore(m, kit);
-        const c = el('button', 'inv-item tree-tool' + (vmode === 'cam' ? ' on' : ''));
-        c.append(icon(vmode === 'cam' ? 'btn-cam' : 'btn-cam-off', ''));
-        c.title = vmode === 'cam' ? '視訊開著，點一下關掉' : '開視訊';
-        c.onclick = () => setVideo('cam');
-        box.insertBefore(c, kit);
-        if (canScreen) {
-          const sc = el('button', 'inv-item tree-tool' + (vmode === 'screen' ? ' on' : ''));
-          sc.append(icon('btn-screen', ''));
-          sc.title = vmode === 'screen' ? '正在分享螢幕，點一下停止' : '分享螢幕';
-          sc.onclick = () => setVideo('screen');
-          box.insertBefore(sc, kit);
-        }
-      }
+      g.appendChild(b);
+      if (myTree) tools(false).forEach(x => g.appendChild(x));
+      box.insertBefore(g, box.querySelector('.kit-btn'));
     }
 
     const mins = (ms) => { const m = Math.floor(ms / 60000); return m < 1 ? '剛蓋好' : m < 60 ? `蓋了 ${m} 分鐘` : `蓋了 ${Math.floor(m / 60)} 小時`; };
@@ -1009,8 +1012,6 @@
       const u = faceOf(m.id);
       if (u) { const i = document.createElement('img'); i.src = u; i.alt = ''; f.appendChild(i); }
       else f.appendChild(icon('cls-' + (m.cls || 'staff'), ''));
-      if (m.muted) f.appendChild(icon('btn-mic-off', '', 'tree-muted'));
-      if (m.video) f.appendChild(icon(m.video === 'screen' ? 'btn-screen' : 'btn-cam', '', 'tree-vid'));
       return f;
     }
     // 音量條：放開就把焦點還給遊戲，不然方向鍵會去調音量、人走不動
@@ -1054,6 +1055,18 @@
           head.appendChild(go);
         }
         card.appendChild(head);
+        if (here) {
+          const row = el('div', 'tree-ctrl');
+          tools(true).forEach(x => row.appendChild(x));
+          const st = el('button', 'tree-sw stage-sw'); st.type = 'button';
+          const any = tileEls.size > 0;
+          st.append(icon('btn-stage', ''), el('span', null, '大畫面'));
+          st.disabled = !any;
+          st.title = any ? '把大家的畫面放大' : '有人開視訊或分享螢幕才能用';
+          st.onclick = () => { closeModal(); stage(true); };
+          row.appendChild(st);
+          card.appendChild(row);
+        }
         const ul = el('ul', 'tree-mems');
         t.members.forEach(m => {
           const li = el('li', 'tree-mem' + (talking.has(m.id) ? ' talk' : '') + (m.id === (me && me.id) ? ' me' : ''));
@@ -1061,7 +1074,12 @@
           li.appendChild(face(m));
           const who = el('div', 'tree-who');
           const nm = el('b', null, m.name);
-          who.appendChild(nm);
+          // 名字旁邊：靜音、開視訊／分享螢幕的小圖示（放臉上會擋到）
+          const line = el('div', 'tree-line');
+          line.appendChild(nm);
+          if (m.muted) line.appendChild(icon('btn-mic-off', '', 'tree-flag'));
+          if (m.video) line.appendChild(icon(m.video === 'screen' ? 'btn-screen' : 'btn-cam', '', 'tree-flag'));
+          who.appendChild(line);
           // 同屋的別人：顯示你跟他之間的連線狀態
           if (here && m.id !== (me && me.id)) { const [t2, c2] = stateOf(m.id); nm.appendChild(el('span', 'tree-st ' + c2, t2)); }
           const c = ST.CLASSES[m.cls] || ST.CLASSES.staff;

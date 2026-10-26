@@ -5,7 +5,6 @@
 (function (root) {
   const INK = '#2a2635';
   let SCALE = 2;
-  let RNG = Math.random; // 這次在畫的怪用的亂數（固定種子）
 
   // ---------- 顏色 ----------
   const rgbOf = (c) => [1, 3, 5].map(i => parseInt(c.slice(i, i + 2), 16));
@@ -71,35 +70,20 @@
       ctx.fillRect(x + r() * w, y + r() * h, 0.5 + r() * 1.3, 0.5 + r() * 0.9);
     }
     ctx.restore();
-    if (o.lw !== 0) outline(ctx, path, o.lw || 2.2, o.over);
-    // 疊在身體上的那段改用深一點的同色線，看得出形狀但不是黑線
-    if (o.over && o.lw !== 0) { ctx.save(); ctx.clip(o.over); ctx.strokeStyle = dark(base, 0.4, 0.7); ctx.lineWidth = (o.lw || 2.2) * 0.7; ctx.stroke(path); ctx.restore(); }
+    if (o.lw !== 0) outline(ctx, path, o.lw || 2.2);
   }
-  // over：疊在哪個形狀上面，那一段不描（關節處不用描黑）
-  function outline(ctx, path, lw = 2.2, over) {
-    ctx.save();
-    if (over) { const m = new Path2D(); m.rect(-300, -300, 800, 800); m.addPath(over); ctx.clip(m, 'evenodd'); }
-    ctx.strokeStyle = INK; ctx.lineWidth = lw; ctx.lineJoin = 'round'; ctx.lineCap = 'round'; ctx.stroke(path); ctx.restore();
+  function outline(ctx, path, lw = 2.2) {
+    ctx.save(); ctx.strokeStyle = INK; ctx.lineWidth = lw; ctx.lineJoin = 'round'; ctx.lineCap = 'round'; ctx.stroke(path); ctx.restore();
   }
   // 手腳、尾巴、觸手：粗粗的一條（先描深色邊，再上色，再加一條亮線）
-  // o.end：末端的手掌或鞋子 [rx, ry, 顏色, dx, dy]，跟手腳一起描邊，接的地方才不會有一圈黑線
-  // o.over：疊在哪個形狀上面，那一段不描黑邊（關節處不用描黑）
-  function limb(ctx, pts, w, color, o = {}) {
+  function limb(ctx, pts, w, color) {
     const p = new Path2D(); p.moveTo(...pts[0]);
-    if (pts.length === 2) p.lineTo(...pts[1]);
-    else for (let i = 1; i + 1 < pts.length; i += 2) p.quadraticCurveTo(...pts[i], ...pts[i + 1]);
-    const last = pts[pts.length - 1], e = o.end;
-    const end = e && E(last[0] + (e[3] || 0), last[1] + (e[4] || 0), e[0], e[1]);
+    if (pts.length === 3) p.quadraticCurveTo(...pts[1], ...pts[2]); else p.lineTo(...pts[1]);
     ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-    ctx.save();
-    if (o.over) { const m = new Path2D(); m.rect(-300, -300, 800, 800); m.addPath(o.over); ctx.clip(m, 'evenodd'); }
     ctx.strokeStyle = INK; ctx.lineWidth = w + 2.4; ctx.stroke(p);
-    if (end) { ctx.lineWidth = 2.4; ctx.stroke(end); }
-    ctx.restore();
     ctx.strokeStyle = color; ctx.lineWidth = w; ctx.stroke(p);
-    ctx.save(); ctx.translate(-w * 0.18, -w * 0.18); ctx.strokeStyle = light(color, 0.4, 0.55); ctx.lineWidth = w * 0.32; ctx.stroke(p); ctx.restore();
+    ctx.translate(-w * 0.18, -w * 0.18); ctx.strokeStyle = light(color, 0.4, 0.55); ctx.lineWidth = w * 0.32; ctx.stroke(p);
     ctx.restore();
-    if (end) paint(ctx, RNG, end, [last[0] + (e[3] || 0) - e[0], last[1] + (e[4] || 0) - e[1], e[0] * 2, e[1] * 2], e[2], { lw: 0, shine: false });
   }
   // 小圓球（手、鞋子）
   const ball = (ctx, r, x, y, rx, ry, color, rot = 0) => paint(ctx, r, E(x, y, rx, ry, rot), [x - rx, y - ry, rx * 2, ry * 2], color, { lw: 1.8, shine: false });
@@ -172,7 +156,6 @@
     ctx.scale(SCALE, SCALE);
     let s = seed >>> 0;
     const r = () => ((s = (Math.imul(s, 1664525) + 1013904223) >>> 0) / 4294967296);
-    RNG = r;
     draw(ctx, r);
     return c;
   }
@@ -181,8 +164,7 @@
     navy: '#3c4466', plum: '#5b4a7a', coral: '#d9645a', peach: '#e9967a', mustard: '#e6b94a', cream: '#f3ecdf',
     teal: '#5f9ea6', sage: '#9fb8a8', lav: '#a493c9', pink: '#e3a0aa', wood: '#b98257', skin: '#efc6a6', grass: '#8fb07a',
   };
-  // 兩條腿＋鞋子：[[上, 下], ...]
-  const legs = (ctx, list, w, color, shoe) => list.forEach(([a, b]) => limb(ctx, [a, b], w, color, { end: [5.2, 3.2, shoe, -1, 2] }));
+  const shoes = (ctx, r, pts, color) => pts.forEach(([x, y]) => ball(ctx, r, x, y, 5.2, 3.2, color));
   // 小火焰
   const flame = (x, y, s) => { const p = new Path2D(); p.moveTo(x, y - 7 * s); p.quadraticCurveTo(x + 5 * s, y - 1 * s, x + 3 * s, y + 2 * s); p.quadraticCurveTo(x, y + 4 * s, x - 3 * s, y + 2 * s); p.quadraticCurveTo(x - 5 * s, y - 1 * s, x, y - 7 * s); p.closePath(); return p; };
 
@@ -191,7 +173,8 @@
     // 便利貼精：一張黃色便利貼，後面黏著粉紅、藍色兩張，右下角翹起來
     sticky: () => canvas(96, 84, 201, (ctx, r) => {
       shadow(ctx, 48, 79, 24);
-      legs(ctx, [[[41, 60], [40, 75]], [[55, 60], [56, 75]]], 4.6, C.navy, C.coral);
+      limb(ctx, [[41, 60], [40, 75]], 4.6, C.navy); limb(ctx, [[55, 60], [56, 75]], 4.6, C.navy);
+      shoes(ctx, r, [[39, 77], [57, 77]], C.coral);
       paint(ctx, r, T(RR(-20, -21, 40, 42, 4), 38, 37, -12), [16, 14, 44, 46], C.teal, { hue: '#7fb3c9', at: [0.2, 0.2] });
       paint(ctx, r, T(RR(-20, -21, 40, 42, 4), 59, 39, 10), [37, 16, 44, 46], C.pink, { hue: '#e9b08a', at: [0.8, 0.9] });
       const note = new Path2D();
@@ -204,8 +187,8 @@
       brush(ctx, [[33, 27], [49, 26]], 1.7, 'rgba(79,120,168,0.8)'); brush(ctx, [[33, 33], [44, 32.5]], 1.7, 'rgba(79,120,168,0.8)');
       brush(ctx, [[55, 27], [58, 31], [64, 23]], 2, 'rgba(201,85,94,0.85)');
       face(ctx, 48, 45, 1.05);
-      limb(ctx, [[29, 42], [21, 38], [17, 32]], 4, '#efc75e', { over: note, end: [3.2, 3.2, '#efc75e'] });
-      limb(ctx, [[68, 38], [76, 35], [80, 29]], 4, '#efc75e', { over: note, end: [3.2, 3.2, '#efc75e'] });
+      limb(ctx, [[27, 42], [21, 38], [17, 32]], 4, '#efc75e'); ball(ctx, r, 17, 31, 3.2, 3.2, '#efc75e');
+      limb(ctx, [[70, 38], [76, 35], [80, 29]], 4, '#efc75e'); ball(ctx, r, 80, 28, 3.2, 3.2, '#efc75e');
     }),
 
     // 已讀飄飄：白白的對話泡泡幽靈，睡眼惺忪，角落寫著「已讀」
@@ -226,8 +209,9 @@
     // 甩鍋鍋：深藍色的小炒鍋，鍋裡還有青菜，把另一支小鍋子丟出去
     wok: () => canvas(96, 84, 203, (ctx, r) => {
       shadow(ctx, 46, 79, 26);
-      legs(ctx, [[[39, 62], [38, 74]], [[53, 62], [54, 74]]], 4.6, C.navy, C.coral);
-      limb(ctx, [[17, 44], [11, 40], [7, 33]], 4, '#5a6488', { end: [3.2, 3.2, C.cream] });
+      limb(ctx, [[39, 62], [38, 74]], 4.6, C.navy); limb(ctx, [[53, 62], [54, 74]], 4.6, C.navy);
+      shoes(ctx, r, [[37, 76], [55, 76]], C.coral);
+      limb(ctx, [[17, 44], [11, 40], [7, 33]], 4, '#5a6488'); ball(ctx, r, 7, 32, 3.2, 3.2, C.cream);
       const bowl = new Path2D(); bowl.moveTo(14, 34); bowl.quadraticCurveTo(16, 67, 46, 67); bowl.quadraticCurveTo(76, 67, 78, 34); bowl.closePath();
       paint(ctx, r, bowl, [14, 34, 64, 33], '#3f4870', { hue: '#6a5488', at: [0.8, 0.9] });
       // 把手＋丟出去的小鍋子
@@ -277,14 +261,15 @@
     // 加班鬧鐘：珊瑚紅的雙鈴鬧鐘，停在快十一點，黑眼圈很重
     clock: () => canvas(96, 84, 205, (ctx, r) => {
       shadow(ctx, 48, 79, 22);
-      legs(ctx, [[[38, 64], [36, 74]], [[58, 64], [60, 74]]], 4.6, C.navy, C.cream);
+      limb(ctx, [[38, 64], [36, 74]], 4.6, C.navy); limb(ctx, [[58, 64], [60, 74]], 4.6, C.navy);
+      shoes(ctx, r, [[35, 76], [61, 76]], C.cream);
       [[30, 17, -28], [66, 17, 28]].forEach(([x, y, a]) => {
         const p = new Path2D(); p.moveTo(-11, 3); p.quadraticCurveTo(-10, -9, 0, -9); p.quadraticCurveTo(10, -9, 11, 3); p.closePath();
         paint(ctx, r, T(p, x, y, a), [x - 11, y - 10, 22, 14], C.mustard, { lw: 2, hue: '#e9967a', at: [0.5, 1] });
       });
-      limb(ctx, [[48, 20], [48, 10]], 2.4, '#5a6488', { end: [3, 3, '#5a6488', 0, -1] });
-      limb(ctx, [[25, 46], [19, 42], [15, 34]], 4, C.coral, { end: [3.2, 3.2, C.cream, 0, -1] });
-      limb(ctx, [[71, 46], [77, 42], [81, 34]], 4, C.coral, { end: [3.2, 3.2, C.cream, 0, -1] });
+      limb(ctx, [[48, 10], [48, 20]], 2.4, '#5a6488'); ball(ctx, r, 48, 9, 3, 3, '#5a6488');
+      limb(ctx, [[25, 46], [19, 42], [15, 34]], 4, C.coral); ball(ctx, r, 15, 33, 3.2, 3.2, C.cream);
+      limb(ctx, [[71, 46], [77, 42], [81, 34]], 4, C.coral); ball(ctx, r, 81, 33, 3.2, 3.2, C.cream);
       paint(ctx, r, E(48, 44, 25, 24), [23, 20, 50, 48], C.coral, { hue: '#e9967a', at: [0.2, 0.9] });
       paint(ctx, r, E(48, 44, 19, 18), [29, 26, 38, 36], C.cream, { lw: 1.8, hue: '#e8d6c8', at: [0.7, 0.9] });
       for (let i = 0; i < 12; i++) { const a = (i / 12) * Math.PI * 2; dab(ctx, 48 + Math.cos(a) * 15.5, 44 + Math.sin(a) * 15, i % 3 ? 0.9 : 1.5, i % 3 ? 0.9 : 1.5, '#5a6488'); }
@@ -299,9 +284,9 @@
     // 急件老闆（頭目）：圓滾滾的老闆，頭頂一撮毛、八字鬍，抱著一疊蓋了「急件」紅章的卷宗
     boss: () => canvas(120, 100, 206, (ctx, r) => {
       shadow(ctx, 60, 95, 36);
-      legs(ctx, [[[51, 80], [50, 91]], [[69, 80], [70, 91]]], 6, '#323a58', '#5b4a52');
-      const suit = S([[60, 38], [80, 42], [91, 62], [86, 84], [60, 90], [34, 84], [29, 62], [40, 42]]);
-      paint(ctx, r, suit, [29, 38, 62, 52], C.navy, { hue: C.plum, at: [0.85, 0.85] });
+      limb(ctx, [[51, 80], [50, 91]], 6, '#323a58'); limb(ctx, [[69, 80], [70, 91]], 6, '#323a58');
+      shoes(ctx, r, [[48, 93], [72, 93]], '#5b4a52');
+      paint(ctx, r, S([[60, 38], [80, 42], [91, 62], [86, 84], [60, 90], [34, 84], [29, 62], [40, 42]]), [29, 38, 62, 52], C.navy, { hue: C.plum, at: [0.85, 0.85] });
       const shirt = new Path2D(); shirt.moveTo(50, 41); shirt.lineTo(70, 41); shirt.lineTo(63, 72); shirt.lineTo(57, 72); shirt.closePath();
       paint(ctx, r, shirt, [50, 41, 20, 31], C.cream, { lw: 1.6, shine: false });
       const tie = new Path2D(); tie.moveTo(57, 43); tie.lineTo(63, 43); tie.lineTo(65, 61); tie.lineTo(60, 67); tie.lineTo(55, 61); tie.closePath();
@@ -322,9 +307,9 @@
       ctx.save(); ctx.translate(28, 63); ctx.rotate(-0.32);
       ctx.strokeStyle = 'rgba(201,85,94,0.9)'; ctx.lineWidth = 1.5; ctx.strokeRect(-10, -5.5, 19, 11);
       text(ctx, '急件', -0.5, 0.4, 7.5, 'rgba(201,85,94,0.95)'); ctx.restore();
-      limb(ctx, [[37, 56], [38, 66], [44, 70]], 6.4, C.navy, { over: suit, end: [3.6, 3.4, C.skin, 1, 0] });
+      limb(ctx, [[37, 56], [38, 66], [44, 70]], 6.4, C.navy); ball(ctx, r, 45, 70, 3.6, 3.4, C.skin);
+      limb(ctx, [[84, 54], [94, 50], [101, 42]], 6.4, C.navy); ball(ctx, r, 102, 41, 3.6, 3.6, C.skin);
       limb(ctx, [[104, 39], [108, 35]], 2, C.skin);
-      limb(ctx, [[84, 54], [94, 50], [101, 42]], 6.4, C.navy, { over: suit, end: [3.6, 3.6, C.skin, 1, -1] });
     }),
 
     // ---------- 廟口老街 ----------
@@ -332,19 +317,19 @@
     monkey: () => canvas(96, 84, 207, (ctx, r) => {
       glow(ctx, 48, 55, 34, '#f0b060', 0.35);
       shadow(ctx, 48, 79, 20);
-      limb(ctx, [[66, 62], [84, 64], [80, 48], [74, 42], [74, 52]], 4.2, '#a8754f');
-      legs(ctx, [[[42, 66], [41, 75]], [[54, 66], [55, 75]]], 4.4, '#a8754f', '#8a5f45');
+      limb(ctx, [[66, 62], [84, 64], [80, 48]], 4.2, '#a8754f'); limb(ctx, [[80, 48], [74, 44], [74, 52]], 4.2, '#a8754f');
+      limb(ctx, [[42, 66], [41, 75]], 4.4, '#a8754f'); limb(ctx, [[54, 66], [55, 75]], 4.4, '#a8754f');
+      shoes(ctx, r, [[40, 77], [56, 77]], '#8a5f45');
       paint(ctx, r, RR(38, 34, 20, 5, 2), [38, 34, 20, 5], C.mustard, { lw: 1.6, shine: false });
-      const lantern = E(48, 54, 18, 15);
-      paint(ctx, r, lantern, [30, 39, 36, 30], C.coral, { hue: '#f0b060', at: [0.5, 0.5] });
+      paint(ctx, r, E(48, 54, 18, 15), [30, 39, 36, 30], C.coral, { hue: '#f0b060', at: [0.5, 0.5] });
       [-9, 0, 9].forEach(dx => brush(ctx, [[48 + dx, 41], [48 + dx * 1.6, 54], [48 + dx, 67]], 1.2, 'rgba(150,50,50,0.35)'));
       text(ctx, '福', 48, 55, 10, 'rgba(240,200,110,0.95)');
       paint(ctx, r, RR(39, 67, 18, 5, 2), [39, 67, 18, 5], C.mustard, { lw: 1.6, shine: false });
-      limb(ctx, [[33, 50], [24, 46], [18, 38]], 4, '#a8754f', { over: lantern, end: [3, 3, C.skin] });
+      limb(ctx, [[32, 50], [24, 46], [18, 38]], 4, '#a8754f'); ball(ctx, r, 18, 37, 3, 3, C.skin);
       glow(ctx, 16, 28, 10, '#f0b060', 0.6);
       paint(ctx, r, E(16, 35, 6, 2.6), [10, 32, 12, 6], '#c49a4a', { lw: 1.4, shine: false });
       paint(ctx, r, flame(16, 29, 0.8), [12, 23, 8, 10], '#f0a24a', { lw: 1.2, shine: false, hue: '#fff0b0', at: [0.5, 0.8] });
-      limb(ctx, [[63, 52], [70, 56], [72, 62]], 4, '#a8754f', { over: lantern, end: [3, 3, C.skin] });
+      limb(ctx, [[64, 52], [70, 56], [72, 62]], 4, '#a8754f'); ball(ctx, r, 72, 63, 3, 3, C.skin);
       // 頭
       [[31, 24], [65, 24]].forEach(([x, y]) => { paint(ctx, r, E(x, y, 6, 6.4), [x - 6, y - 6, 12, 13], '#a8754f', { lw: 1.8, shine: false }); dab(ctx, x, y, 3.2, 3.4, '#e7b493'); });
       paint(ctx, r, E(48, 23, 17, 15), [31, 8, 34, 30], '#a8754f', { hue: '#c98a5a', at: [0.3, 0.2] });
@@ -362,13 +347,12 @@
       const stone = C.sage, mane = '#86a397';
       paint(ctx, r, RR(21, 69, 54, 10, 3), [21, 69, 54, 10], '#97a3b0', { lw: 2, shine: false });
       [[74, 46, 5], [78, 40, 4.2], [74, 35, 3.4]].forEach(([x, y, s]) => paint(ctx, r, E(x, y, s, s), [x - s, y - s, s * 2, s * 2], mane, { lw: 1.6, shine: false }));
-      const lb = E(51, 56, 22, 15);
-      paint(ctx, r, lb, [29, 41, 44, 30], stone, { hue: '#c7d3c2', at: [0.3, 0.2] });
-      paint(ctx, r, RR(56, 58, 9, 13, 3), [56, 58, 9, 13], stone, { lw: 2, shine: false, over: lb });
+      paint(ctx, r, E(51, 56, 22, 15), [29, 41, 44, 30], stone, { hue: '#c7d3c2', at: [0.3, 0.2] });
+      paint(ctx, r, RR(56, 58, 9, 13, 3), [56, 58, 9, 13], stone, { lw: 2, shine: false });
       paint(ctx, r, E(27, 63, 8, 8), [19, 55, 16, 16], C.coral, { lw: 2, hue: '#e9967a', at: [0.3, 0.3] });
       brush(ctx, [[20, 61], [27, 64], [34, 66]], 1.4, 'rgba(240,200,110,0.9)'); brush(ctx, [[26, 56], [27, 63], [29, 70]], 1.4, 'rgba(240,200,110,0.9)');
-      paint(ctx, r, RR(32, 54, 9, 16, 3), [32, 54, 9, 16], stone, { lw: 2, shine: false, over: lb });
-      paint(ctx, r, E(34, 56, 6, 4), [28, 52, 12, 8], stone, { lw: 1.8, shine: false, over: RR(32, 54, 9, 16, 3) });
+      paint(ctx, r, RR(32, 54, 9, 16, 3), [32, 54, 9, 16], stone, { lw: 2, shine: false });
+      ball(ctx, r, 34, 56, 6, 4, stone);
       for (let i = 0; i < 12; i++) {
         const a = (i / 12) * Math.PI * 2, x = 48 + Math.cos(a) * 18, y = 28 + Math.sin(a) * 16;
         paint(ctx, r, E(x, y, 6, 6), [x - 6, y - 6, 12, 12], mane, { lw: 1.6, shine: false });
@@ -389,8 +373,9 @@
     imp: () => canvas(96, 84, 209, (ctx, r) => {
       shadow(ctx, 46, 80, 20);
       const skin = '#d98466';
-      limb(ctx, [[40, 64], [39, 75]], 4.4, skin, { end: [4.6, 2.6, skin, -2, 2] }); limb(ctx, [[52, 64], [53, 75]], 4.4, skin, { end: [4.6, 2.6, skin, 2, 2] });
-      limb(ctx, [[34, 50], [28, 54], [26, 60]], 4, skin, { end: [3, 3, skin] });
+      limb(ctx, [[40, 64], [39, 75]], 4.4, skin); limb(ctx, [[52, 64], [53, 75]], 4.4, skin);
+      ball(ctx, r, 37, 77, 4.6, 2.6, skin); ball(ctx, r, 55, 77, 4.6, 2.6, skin);
+      limb(ctx, [[34, 50], [28, 54], [26, 60]], 4, skin); ball(ctx, r, 26, 61, 3, 3, skin);
       const dress = new Path2D(); dress.moveTo(35, 45); dress.lineTo(57, 45); dress.quadraticCurveTo(63, 56, 62, 67); dress.lineTo(30, 67); dress.quadraticCurveTo(29, 56, 35, 45); dress.closePath();
       paint(ctx, r, dress, [29, 45, 34, 22], C.grass, { hue: '#c2c97a', at: [0.5, 1], dir: 1.5 });
       [34, 39, 44, 49, 54, 59].forEach(x => brush(ctx, [[x, 58], [x + 1, 66.5]], 1.2, 'rgba(70,100,60,0.45)'));
@@ -409,11 +394,12 @@
       [-12, -2, 8].forEach(x => brush(ctx, [[x, -3], [x + 5, -12]], 1, 'rgba(200,235,200,0.45)'));
       limb(ctx, [[26, 1], [31, 7]], 2.2, '#3f7f63'); ctx.restore();
       // 拿雞腿
+      limb(ctx, [[58, 50], [66, 48], [72, 43]], 4, skin);
       ctx.save(); ctx.translate(78, 37); ctx.rotate(-0.6);
-      limb(ctx, [[-6, 3], [-11, 6]], 2.6, C.cream, { end: [2.2, 2.2, C.cream, -1, 0.6] });
+      limb(ctx, [[-6, 3], [-11, 6]], 2.6, C.cream); ball(ctx, r, -12, 6.6, 2.2, 2.2, C.cream);
       paint(ctx, r, E(0, 0, 7.4, 5.6), [-7, -6, 15, 12], '#c98a4a', { lw: 1.8, hue: '#a8603a', at: [0.7, 0.9] });
       ctx.restore();
-      limb(ctx, [[57, 50], [66, 48], [72, 43]], 4, skin, { over: dress, end: [3, 3, skin] });
+      ball(ctx, r, 72, 43, 3, 3, skin);
       [[84, 26, 88, 23], [87, 31, 91, 28]].forEach(([a, b, c, d]) => brush(ctx, [[a, b], [c, d]], 1.4, 'rgba(150,150,180,0.8)'));
     }),
 
@@ -423,7 +409,8 @@
       const fur = '#ec9a52', stripe = 'rgba(160,80,40,0.85)';
       limb(ctx, [[84, 82], [110, 84], [107, 60]], 6, fur);
       [[103, 82], [109, 74], [108, 66]].forEach(([x, y]) => dab(ctx, x, y, 2.6, 1.2, stripe, 0.4));
-      legs(ctx, [[[51, 84], [50, 92]], [[69, 84], [70, 92]]], 5, '#3c4466', '#5b4a52');
+      limb(ctx, [[51, 84], [50, 92]], 5, '#3c4466'); limb(ctx, [[69, 84], [70, 92]], 5, '#3c4466');
+      shoes(ctx, r, [[48, 94], [72, 94]], '#5b4a52');
       const dress = new Path2D(); dress.moveTo(43, 50); dress.quadraticCurveTo(34, 76, 36, 88); dress.lineTo(84, 88); dress.quadraticCurveTo(86, 76, 77, 50); dress.closePath();
       paint(ctx, r, dress, [34, 50, 52, 38], '#6f5f9e', { hue: '#9b7fb8', at: [0.3, 0.3], dir: 1.4 });
       const sh = new Path2D(); sh.moveTo(37, 52); sh.quadraticCurveTo(60, 76, 83, 52); sh.quadraticCurveTo(76, 43, 60, 43); sh.quadraticCurveTo(44, 43, 37, 52); sh.closePath();
@@ -433,6 +420,7 @@
         dab(ctx, x, y, 1, 1, C.mustard);
       });
       // 手：一邊提糖果籃，一邊拿糖招手
+      limb(ctx, [[41, 56], [34, 62], [27, 64]], 5, fur);
       ctx.save(); ctx.lineCap = 'round'; ctx.strokeStyle = INK; ctx.lineWidth = 3.4; ctx.beginPath(); ctx.moveTo(14, 66); ctx.quadraticCurveTo(26, 50, 37, 66); ctx.stroke();
       ctx.strokeStyle = C.wood; ctx.lineWidth = 1.8; ctx.stroke(); ctx.restore();
       [[19, 63, C.coral], [26, 61, '#5f9ea6'], [33, 63, C.mustard]].forEach(([x, y, c]) => {
@@ -443,9 +431,8 @@
       paint(ctx, r, bk, [12, 66, 27, 16], '#d9a066', { hue: '#b9805a', at: [0.5, 1], dir: 1.5 });
       [17, 23, 29, 34].forEach(x => brush(ctx, [[x, 68], [x - 0.6, 80]], 1.1, 'rgba(140,90,58,0.55)'));
       brush(ctx, [[14, 73], [37, 73]], 1.1, 'rgba(140,90,58,0.55)');
-      const top = new Path2D(); top.addPath(dress); top.addPath(sh);
-      limb(ctx, [[42, 55], [34, 62], [27, 64]], 5, fur, { over: top, end: [3.6, 3.4, fur, 1, 1] });
-      limb(ctx, [[78, 55], [88, 52], [95, 44]], 5, fur, { over: top, end: [3.6, 3.6, fur, 1, -1] });
+      ball(ctx, r, 28, 65, 3.6, 3.4, fur);
+      limb(ctx, [[79, 56], [88, 52], [95, 44]], 5, fur); ball(ctx, r, 96, 43, 3.6, 3.6, fur);
       [-1, 1].forEach(k => { const p = new Path2D(); p.moveTo(99 + k * 3, 38); p.lineTo(99 + k * 6.4, 35.8); p.lineTo(99 + k * 6.4, 40.2); p.closePath(); paint(ctx, r, p, [92, 35, 14, 6], '#8cc3a0', { lw: 1, shine: false }); });
       ball(ctx, r, 99, 38, 3.6, 2.8, '#8cc3a0');
       // 頭

@@ -76,7 +76,7 @@
     mgWings: { slot: 'cape', name: '緞帶星星翅膀', rarity: 'SSR', series: 'magical', src: 'gacha' },
     wzHat: { slot: 'head', name: '歪歪巫師帽', rarity: 'R', series: 'wizard', src: 'gacha' },
     wzRobe: { slot: 'outfit', name: '星空巫師袍', rarity: 'SR', series: 'wizard', src: 'gacha' },
-    wzBroom: { slot: 'cape', name: '飛天掃把', rarity: 'SSR', series: 'wizard', src: 'gacha' },
+    wzWand: { slot: 'cape', name: '古木魔杖', rarity: 'SSR', series: 'wizard', src: 'gacha' },
     // 武器：花蓮副本（打倒花蓮王才會掉）
     lilyDart: { slot: 'weapon', name: '金針花標', rarity: 'R', series: 'hualien', icon: '🌼', basic: 'lilyDart', dungeon: 'hualien' },
     qixingStaff: { slot: 'weapon', name: '七星潭法杖', rarity: 'SR', series: 'hualien', icon: '🔮', basic: 'pebbleOrb', dungeon: 'hualien' },
@@ -665,20 +665,33 @@
       // 白色小立領
       [[28, 47], [36, 47]].forEach(([x, y]) => { C.blob(ctx, x, y, 3.6, 2.2, r, 0.1, 10); C.fill(ctx, '#e9e3ff', r, null); C.stroke(ctx, r, 1.2); });
     } },
-    wzBroom: { cape(ctx, C, r) {
-      // 斜背在身後的飛天掃把：掃把頭從右肩後面冒出來，柄從左腳邊露出來
-      C.line(ctx, 6, 77, 53, 27, r, 5.2, C.INK, 0.4);
-      C.line(ctx, 6, 77, 53, 27, r, 3, '#a8703f', 0.4);
-      ctx.save(); ctx.translate(53, 27); ctx.rotate(-0.807);
-      ctx.beginPath(); ctx.moveTo(1, -4); ctx.quadraticCurveTo(13, -11, 25, -9); ctx.quadraticCurveTo(30, 0, 25, 9); ctx.quadraticCurveTo(13, 11, 1, 4); ctx.closePath();
-      C.fill(ctx, '#e8b64c', r, [0, -11, 30, 22]); C.stroke(ctx, r, W);
-      [-5, -1.5, 2, 5.5].forEach(y => C.line(ctx, 6, y * 0.6, 25, y * 1.4, r, 1.1, '#b8862c', 0.3));
-      C.rect(ctx, -3, -4.6, 6, 9.2, r, 0.4); C.fill(ctx, '#d9384a', r, null); C.stroke(ctx, r, 1.6);
+    // 披風那一格，但畫成左手握著的古木魔杖（clasp 這層畫在身體和手臂上面）
+    wzWand: { clasp(ctx, C, r, p) {
+      // 整根往左斜，杖頭在耳朵外面
+      ctx.save(); ctx.transform(1, 0, 0.22, 1, -15.8, 0);
+      // 杖身：歪歪扭扭的老木頭，有樹瘤和裂紋
+      const pts = [[14, 72], [11, 64], [11.5, 56], [8.5, 48], [9, 40], [6, 32]];
+      const body = () => { ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < pts.length; i++) { const [x0, y0] = pts[i - 1], [x1, y1] = pts[i]; ctx.quadraticCurveTo(x0 + (i % 2 ? 2 : -2), (y0 + y1) / 2, x1, y1); } };
+      body(); C.stroke(ctx, r, 6.2); body(); C.stroke(ctx, r, 3.8, '#8a5a3a');
+      body(); ctx.save(); ctx.translate(-0.8, 0); C.stroke(ctx, r, 1, 'rgba(255,230,190,0.45)'); ctx.restore();
+      [[11.2, 52], [9.2, 43]].forEach(([x, y]) => { C.blob(ctx, x, y, 2.6, 2, r, 0.15, 10); C.fill(ctx, '#6b4a32', r, null); C.stroke(ctx, r, 1.2); });
+      // 杖頭：三根捲起來的枝條抱著一顆發光的綠水晶
+      const g = ctx.createRadialGradient(6, 22, 1, 6, 22, 15); g.addColorStop(0, 'rgba(150,255,210,0.95)'); g.addColorStop(0.5, 'rgba(150,255,210,0.4)'); g.addColorStop(1, 'rgba(150,255,210,0)');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(6, 22, 15, 0, Math.PI * 2); ctx.fill();
+      C.blob(ctx, 6, 22, 4.4, 5.4, r, 0.08, 12); C.fill(ctx, '#7be0b8', r, null); C.stroke(ctx, r, 1.6);
+      C.blob(ctx, 4.8, 20, 1.3, 1.9, r, 0.1, 8); ctx.fillStyle = 'rgba(255,255,255,0.95)'; ctx.fill();
+      // 兩根枝條從杖頂繞上來，把水晶包在中間，尾端捲起來
+      [[-1, [-0.5, 27], [-1.5, 17], [5, 13.5]], [1, [12.5, 27], [13, 17], [8, 14]]].forEach(([k, c1, c2, end]) => {
+        const path = () => { ctx.beginPath(); ctx.moveTo(6, 32); ctx.bezierCurveTo(c1[0], c1[1], c2[0], c2[1], end[0], end[1]); };
+        path(); C.stroke(ctx, r, 4); path(); C.stroke(ctx, r, 2.2, '#8a5a3a');
+        C.blob(ctx, end[0], end[1], 1.6, 1.6, r, 0.1, 8); C.fill(ctx, '#8a5a3a', r, null); C.stroke(ctx, r, 1);
+      });
+      // 一片小葉子
+      ctx.beginPath(); ctx.moveTo(10, 30); ctx.quadraticCurveTo(17, 26, 18, 30); ctx.quadraticCurveTo(14, 33, 10, 30); ctx.closePath(); C.fill(ctx, '#6baf7b', r, null); C.stroke(ctx, r, 1.2);
       ctx.restore();
-      // 柄上綁一顆小星星吊飾
-      C.line(ctx, 44, 37, 45, 44, r, 1.1);
-      star(ctx, C, r, 45, 46, 3.2, '#ffd23f');
-      [[74, 4], [66, -4]].forEach(([x, y], i) => sparkle(ctx, x, y, i ? 1.6 : 2.2, '#ffd23f'));
+      [[-12, 12, 1.8], [8, 6, 1.4], [-12, 30, 1.2]].forEach(([x, y, s]) => sparkle(ctx, x, y, s, '#b8ffe0'));
+      // 握住杖的左手畫在杖上面
+      C.blob(ctx, 12.5, 63, 3.8, 3.6, r, 0.1); C.fill(ctx, p.skin || '#fde6d4', r, null); C.stroke(ctx, r, 2);
     } },
   });
   // 魔法少女的緞帶翅膀（右邊那片，左邊鏡像）：上面一大片、下面一小片，緞帶尾巴吊著星星

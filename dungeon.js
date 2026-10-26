@@ -66,7 +66,7 @@ function createDungeon(ctx, D, region) {
     emit();
   }
 
-  // ---------------- NPC：總部 ⇄ 候位區 ----------------
+  // ---------------- NPC：副本大廳 ⇄ 候位區 ----------------
   function go(p) {
     if (p.dead) return { ok: false };
     if (st.members.has(p.id) && st.phase !== 'idle') return { ok: false };
@@ -92,7 +92,7 @@ function createDungeon(ctx, D, region) {
     st.phase = 'countdown';
     st.countdownAt = now0() + D.countdownMs;
     emit();
-    say(`🌀 ${p.name} 按下了出發！${D.countdownMs / 1000} 秒後前往${D.name}副本，想去的人快找指揮中心的${D.npcName}，到${D.lobbyName}集合（最多 ${D.maxPlayers} 人${D.minLevel ? `，要 Lv.${D.minLevel} 以上` : ''}）`);
+    say(`🌀 ${p.name} 按下了出發！${D.countdownMs / 1000} 秒後前往${D.name}副本，想去的人快從指揮中心的副本傳送門到副本大廳找${D.npcName}，到${D.lobbyName}集合（最多 ${D.maxPlayers} 人${D.minLevel ? `，要 Lv.${D.minLevel} 以上` : ''}）`);
     return { ok: true };
   }
   function launch() {
@@ -152,6 +152,15 @@ function createDungeon(ctx, D, region) {
     if (st.stage === D.stages.length - 1) spawnBoss();
     io.emit('dgStage', { id: D.id, stage: st.stage });
     emit();
+    // 下一關在另一欄（中間沒有門）：等一下把大家傳送過去
+    const next = D.stages[st.stage];
+    if (next && next.warp) {
+      const at = st.startedAt;
+      setTimeout(() => {
+        if (st.phase !== 'run' || st.startedAt !== at || st.stage !== i + 1) return;
+        memberList().filter(p => !p.dead).forEach((p, k) => { const s = jitter(next.start, k); teleport(p, s.x, s.y); });
+      }, 2500);
+    }
   }
 
   // ---------------- 倒下、復活 ----------------
@@ -215,7 +224,7 @@ function createDungeon(ctx, D, region) {
       io.emit('mobAttack', { mid: m.id, id: prey.id, say: def.say[Math.floor(Math.random() * def.say.length)] });
       setTimeout(() => {
         if (!m.alive || now0() < m.frozenUntil || dist(prey.x, prey.y, m.x, m.y) > def.range * 1.3) return;
-        const dmg = Math.round(rand(def.dmg) * (now0() < m.weakUntil ? STATS.WEAKEN.dmgDealt : 1) * (region.dmgMul || 1));
+        const dmg = Math.round(rand(def.dmg) * (now0() < m.weakUntil ? STATS.WEAKEN.dmgDealt : 1) * (region.dmgMul ?? 1));
         if (prey.summon) return ctx.hurtSummon(prey, dmg, def.name);
         if (st.members.has(prey.id)) hurtPlayer(prey, dmg, def.name);
       }, 450);
@@ -239,7 +248,7 @@ function createDungeon(ctx, D, region) {
     setTimeout(() => {
       if (!f.alive || now0() < f.frozenUntil || st.phase !== 'run') return;
       io.emit('dgAttackHit', msg);
-      const b = foeBox(f), weak = (now0() < f.weakUntil ? STATS.WEAKEN.dmgDealt : 1) * (region.dmgMul || 1);
+      const b = foeBox(f), weak = (now0() < f.weakUntil ? STATS.WEAKEN.dmgDealt : 1) * (region.dmgMul ?? 1);
       const victims = activeMembers().filter(p => inBox(b, p.x, p.y) && hit(p));
       if (dmg) {
         victims.forEach(p => hurtPlayer(p, Math.round(dmg(p, victims) * weak), by || STATS.MOBS[f.kind].name));
@@ -320,8 +329,8 @@ function createDungeon(ctx, D, region) {
     go, home, start, leave, remove, onDeath, damage, tick, mobState, isMember,
     action: (name, p, ...args) => (region.actions && region.actions[name] ? region.actions[name](api, p, ...args) : { ok: false }),
     inLobby, nearNpc: (p) => MAP.nearNpc(D, p.x, p.y),
-    // 自己回報的位置：隊員不能跑出副本，也不能跳到還沒開門的關卡（門所在的那一排算進前一關）
-    allowMember: (p, x, y) => MAP.areaOf(x) === 'dungeon:' + D.id && y < D.stages[Math.max(0, st.stage)].box.y2 + T,
+    // 自己回報的位置：隊員不能跑出副本，也不能跳到還沒打到的關卡
+    allowMember: (p, x, y) => MAP.areaOf(x) === 'dungeon:' + D.id && MAP.stageAt(x, y) <= st.stage,
     inFight: (p) => st.members.has(p.id) && MAP.stageAt(p.x, p.y) >= 0,
     foes: () => st.foes.filter(f => f.alive),
     allFoes: () => st.foes,

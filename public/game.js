@@ -350,6 +350,9 @@
   socket.on('dgEnter', (e) => HQ_TAIWAN.play({ region: e.region, title: e.title, sub: 'DUNGEON · 副本' }));
   socket.on('dgStone', (e) => scene && scene.onStone(e));
   socket.on('dgBlock', (e) => scene && scene.onBlock(e));
+  socket.on('dgPipe', (e) => scene && scene.onPipe(e));
+  socket.on('dgQuiz', (e) => scene && scene.onQuiz(e));
+  socket.on('dgRod', (e) => scene && scene.onRod(e));
   socket.on('dgStage', (e) => scene && scene.onDgStage(e));
   socket.on('dgBallHit', (e) => scene && scene.onBallHit(e));
   socket.on('dgAttack', (a) => scene && scene.onFuAttack(a));
@@ -1918,7 +1921,7 @@
     box.appendChild(top);
     // 套裝狀態和收集說明放在人物圖和欄位下面，人物圖才能跟四個欄位上下對齊
     if (setId) box.appendChild(el('p', 'gear-set-on', `套裝效果發動中：${GR.SERIES[setId].name}`));
-    box.appendChild(el('p', 'modal-hint', `圖鑑 ${mySeen.filter(id => GR.GEAR[id]).length} / ${Object.keys(GR.GEAR).length} 件。頭飾、服裝、披風都穿同一個系列，就會發動套裝特效。野外的怪會噴裝備在地上，走過去按 Z 或點一下撿；到戰情室玩你畫我猜，猜對也會拿到新裝備；女僕咖啡廳系列要在廚房煮泡麵才會掉。武器在副本裡，打倒最終頭目會噴在地上。拿到的裝備都放在背包的裝備區。`));
+    box.appendChild(el('p', 'modal-hint', `圖鑑 ${mySeen.filter(id => GR.GEAR[id]).length} / ${Object.keys(GR.GEAR).length} 件。頭飾、服裝、披風都穿同一個系列，就會發動套裝特效。野外的怪會噴裝備在地上，走過去按 Z 或點一下撿；到戰情室玩你畫我猜，猜對也會拿到新裝備；女僕咖啡廳系列要在廚房煮泡麵才會掉。武器在副本裡（指揮中心的副本傳送門到副本大廳找 NPC），打倒最終頭目會噴在地上。拿到的裝備都放在背包的裝備區。`));
     // 照部位分頁，最後一頁看套裝；記住上次看哪一頁
     const order = Object.keys(GR.SERIES);
     const all = Object.keys(GR.GEAR).sort((a, b) => order.indexOf(GR.GEAR[a].series) - order.indexOf(GR.GEAR[b].series));
@@ -2990,7 +2993,7 @@
   const LOOT_REACH = 1.6 * T; // 站多近撿得到地上的東西（伺服器是 1.7 格，留一點誤差）
   const HINTS = {
     crate: ['act-crate', '敲箱子'], cook: ['act-cook', '煮泡麵'], mentor: ['act-mentor', '轉職'],
-    loot: ['', '撿起來'], guard: ['act-guard', '前往副本'], elevator: ['act-elevator', '前往 101'], dj: ['btn-song', '點歌'], tv: ['act-tv', '視訊／遊戲'], well: ['wish-coin', '許個願'], greek: ['act-greek', '說話'],
+    loot: ['', '撿起來'], guard: ['act-guard', '前往花蓮'], elevator: ['act-elevator', '前往 101'], portal: ['act-portal', '進入副本大廳'], hubExit: ['act-home', '回總部'], dj: ['btn-song', '點歌'], tv: ['act-tv', '視訊／遊戲'], well: ['wish-coin', '許個願'], greek: ['act-greek', '說話'],
   };
   // tail：尖角朝哪邊（down＝紙條在東西上面；left／right＝紙條在旁邊，上面被介面擋住的時候用）
   // 地上的東西（loot）名字每次不一樣：圖示和字放在 act 裡，鍵帽是 Z
@@ -3454,6 +3457,54 @@
     CR.fill(ctx, '#8a5cd6', r, null); CR.stroke(ctx, r, 1.6);
     ctx.fillStyle = '#ff3b3b'; ctx.beginPath(); ctx.arc(77, 29, 2.2, 0, Math.PI * 2); ctx.fill();
   });
+  // 寄居蟹：背著海螺殼的紅色小螃蟹
+  const drawCrabMob = () => mobCanvas(94, (ctx, r) => {
+    ctx.fillStyle = 'rgba(19,26,40,0.18)'; ctx.beginPath(); ctx.ellipse(48, 81, 24, 4, 0, 0, Math.PI * 2); ctx.fill();
+    [[30, 74, -1], [36, 77, -1], [60, 77, 1], [66, 74, 1]].forEach(([x, y, k]) => CR.line(ctx, x, y - 8, x + k * 6, y + 2, r, 2.6, '#c8402f', 0.4));
+    // 殼：一圈一圈的海螺
+    CR.blob(ctx, 52, 50, 22, 20, r, 0.08); CR.fill(ctx, '#f2d7b0', r, [30, 30, 44, 40]); CR.stroke(ctx, r, 2.6);
+    ctx.beginPath(); for (let i = 0; i <= 30; i++) { const a = i * 0.45, d = 2 + i * 0.55; ctx[i ? 'lineTo' : 'moveTo'](54 + Math.cos(a) * d, 48 + Math.sin(a) * d); }
+    CR.stroke(ctx, r, 1.8, '#b8865a');
+    // 身體和兩隻大鉗子
+    CR.blob(ctx, 40, 66, 16, 10, r, 0.08); CR.fill(ctx, '#e8604a', r, null); CR.stroke(ctx, r, 2.4);
+    [[20, 58], [30, 54]].forEach(([x, y]) => { CR.blob(ctx, x, y, 7, 6, r, 0.1); CR.fill(ctx, '#e8604a', r, null); CR.stroke(ctx, r, 2.2);
+      CR.line(ctx, x - 5, y - 1, x + 1, y + 1, r, 1.6); });
+    [[34, 54], [42, 54]].forEach(([x, y]) => { CR.line(ctx, x, y + 6, x, y, r, 1.8); ctx.fillStyle = CR.INK; ctx.beginPath(); ctx.arc(x, y, 2.6, 0, Math.PI * 2); ctx.fill(); });
+  });
+  // 燕子：深藍色背、白肚子、剪刀尾巴
+  const drawSwallowMob = () => mobCanvas(95, (ctx, r) => {
+    ctx.fillStyle = 'rgba(19,26,40,0.12)'; ctx.beginPath(); ctx.ellipse(48, 81, 18, 3, 0, 0, Math.PI * 2); ctx.fill();
+    // 尾巴
+    ctx.beginPath(); ctx.moveTo(30, 44); ctx.lineTo(10, 30); ctx.lineTo(22, 46); ctx.lineTo(8, 56); ctx.lineTo(32, 50); ctx.closePath();
+    CR.fill(ctx, '#2f3b6b', r, null); CR.stroke(ctx, r, 2.2);
+    // 翅膀（往上張開）
+    ctx.beginPath(); ctx.moveTo(44, 40); ctx.quadraticCurveTo(40, 14, 62, 6); ctx.quadraticCurveTo(58, 26, 58, 40); ctx.closePath();
+    CR.fill(ctx, '#2f3b6b', r, null); CR.stroke(ctx, r, 2.4);
+    CR.blob(ctx, 50, 46, 20, 12, r, 0.06); CR.fill(ctx, '#2f3b6b', r, [30, 34, 40, 24]); CR.stroke(ctx, r, 2.6);
+    CR.blob(ctx, 54, 50, 12, 6, r, 0.08); CR.fill(ctx, '#fbf6e9', r, null);
+    // 頭：紅色喉嚨、黃嘴巴
+    CR.blob(ctx, 68, 40, 10, 9, r, 0.06); CR.fill(ctx, '#2f3b6b', r, null); CR.stroke(ctx, r, 2.4);
+    CR.blob(ctx, 72, 46, 5, 3.5, r, 0.1); CR.fill(ctx, '#e8384f', r, null);
+    ctx.beginPath(); ctx.moveTo(77, 39); ctx.lineTo(85, 41); ctx.lineTo(77, 43); ctx.closePath(); CR.fill(ctx, '#ffd23f', r, null); CR.stroke(ctx, r, 1.6);
+    ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(70, 38, 2.6, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = CR.INK; ctx.beginPath(); ctx.arc(70.6, 38.2, 1.4, 0, Math.PI * 2); ctx.fill();
+  });
+  // 台灣獼猴：咖啡色的毛、粉紅色的臉，手上抱著一顆石頭
+  const drawMonkeyMob = () => mobCanvas(96, (ctx, r) => {
+    ctx.fillStyle = 'rgba(19,26,40,0.18)'; ctx.beginPath(); ctx.ellipse(48, 81, 22, 4, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(64, 70); ctx.quadraticCurveTo(84, 66, 80, 46); CR.stroke(ctx, r, 4, '#8a6a4a');
+    [[38, 76], [56, 76]].forEach(([x, y]) => { CR.blob(ctx, x, y, 7, 4, r, 0.08); CR.fill(ctx, '#7a5a3c', r, null); CR.stroke(ctx, r, 2.2); });
+    CR.blob(ctx, 47, 60, 19, 17, r, 0.08); CR.fill(ctx, '#9b7652', r, [28, 43, 38, 34]); CR.stroke(ctx, r, 2.6);
+    CR.blob(ctx, 47, 64, 11, 10, r, 0.08); CR.fill(ctx, '#d9b896', r, null);
+    // 頭和耳朵
+    [[29, 32], [65, 32]].forEach(([x, y]) => { CR.blob(ctx, x, y, 6, 6, r, 0.1); CR.fill(ctx, '#e7a89a', r, null); CR.stroke(ctx, r, 2); });
+    CR.blob(ctx, 47, 32, 17, 15, r, 0.08); CR.fill(ctx, '#9b7652', r, [30, 17, 34, 30]); CR.stroke(ctx, r, 2.6);
+    CR.blob(ctx, 47, 36, 12, 10, r, 0.08); CR.fill(ctx, '#f0b4a6', r, null); CR.stroke(ctx, r, 1.8);
+    [[42, 33], [52, 33]].forEach(([x, y]) => { ctx.fillStyle = CR.INK; ctx.beginPath(); ctx.arc(x, y, 2.2, 0, Math.PI * 2); ctx.fill(); });
+    ctx.beginPath(); ctx.moveTo(43, 41); ctx.quadraticCurveTo(47, 44, 51, 41); CR.stroke(ctx, r, 1.8);
+    // 抱著的小石頭
+    CR.blob(ctx, 47, 58, 8, 6, r, 0.12); CR.fill(ctx, '#c9ccd3', r, null); CR.stroke(ctx, r, 2);
+  });
   // 花蓮王：黑色披風在後面，前面是 avatar.js 畫的人（npc: 'fu'）
   const drawFuMob = (fist) => mobCanvas(93, (ctx, r) => {
     ctx.beginPath(); ctx.moveTo(28, 50); ctx.quadraticCurveTo(14, 70, 18, 84); ctx.lineTo(78, 84); ctx.quadraticCurveTo(82, 70, 68, 50); ctx.closePath();
@@ -3616,15 +3667,18 @@
     const inKitchen = (x, y) => x >= kitchen.x1 && x <= kitchen.x2 && y >= kitchen.y1 && y <= kitchen.y2;
     const floorOf = (ch, x, y) => {
       if (ch === ' ') return 'void';
+      if (x >= MAP.HX) return ch === 'w' ? 'hubwall' : 'hub';
       if (x >= MAP.TLX) return ch === 'h' || ch === 'O' ? 'lobby101' : ch === 'g' ? 'glass' : 'void';
       if (x >= MAP.TDX) {
         if (ch === 'g') return 'glass';
         if (ch === 'k') return 'sky';
-        if (y < 13 || (y === 13 && ch === 'X')) return 'plaza';
-        return y < 29 || (y === 29 && ch === 'X') ? 'steel' : 'deck';
+        // 關卡之間的門跟上面那一關的地板一樣
+        const c = ch === 'X' ? at(x, y - 1) : ch;
+        return c === 'p' || c === 'T' ? 'plaza' : c === 'i' ? 'shaft' : c === 'l' ? 'outdoor' : c === 'o' || c === 'A' ? 'deck' : 'steel';
       }
       if (x >= MAP.LX) return ch === 'q' || ch === 'O' ? 'temple' : ch === 'Q' ? 'templewall' : 'void';
-      if (x >= MAP.MW) return ch === 'Z' ? 'sea' : ch === 'Y' ? 'rock' : 'yE'.includes(ch) ? 'sand' : ch === 'n' ? 'cliff' : 'cave';
+      if (x >= MAP.MW) return ch === 'Z' ? 'sea' : ch === 'Y' ? 'rock' : 'yE'.includes(ch) ? 'sand' : ch === 'n' ? 'cliff'
+        : ch === 'a' ? 'gorge' : 'msv'.includes(ch) ? 'trail' : 'cave';
       if (y > 30 && ':T~'.includes(ch)) return 'mud';
       if (',T~BFOLI'.includes(ch)) return 'grass';
       if (ch === '#') return 'wall';
@@ -3676,6 +3730,16 @@
           ctx.fillStyle = (x * 3 + y) % 4 ? '#c9ccd3' : '#c2c6ce'; ctx.fillRect(px, py, T, T);
           CR.line(ctx, px + r() * 20, py + r() * T, px + 28 + r() * 20, py + r() * T, r, 1, 'rgba(110,118,132,0.35)', 6);
           CR.dots(ctx, px, py, T, T, 3, 'rgba(255,255,255,0.5)', r, 1.6);
+        } else if (base === 'gorge') {
+          // 燕子口：大理石峽谷裡的步道，灰藍色的碎石
+          ctx.fillStyle = (x * 3 + y) % 4 ? '#b9bfc6' : '#b3b9c1'; ctx.fillRect(px, py, T, T);
+          CR.dots(ctx, px, py, T, T, 4, 'rgba(90,100,112,0.35)', r, 2.4);
+          CR.dots(ctx, px, py, T, T, 3, 'rgba(255,255,255,0.5)', r, 1.6);
+        } else if (base === 'trail') {
+          // 砂卡礑步道：淺色的石板路，路邊長青苔
+          ctx.fillStyle = (x + y) % 2 ? '#d8d2c2' : '#d2ccbb'; ctx.fillRect(px, py, T, T);
+          CR.rect(ctx, px + 3, py + 3, T - 6, T - 6, r, 1); CR.stroke(ctx, r, 1.2, 'rgba(110,100,84,0.35)');
+          if (r() < 0.3) CR.dots(ctx, px + 4, py + T - 14, 18, 10, 5, 'rgba(107,175,123,0.7)', r, 2.2);
         } else if (base === 'cliff') {
           // 清水斷崖上的草地
           ctx.fillStyle = (x * 3 + y) % 5 ? '#b5d68f' : '#aed087'; ctx.fillRect(px, py, T, T);
@@ -3699,7 +3763,17 @@
           ctx.fillStyle = (x + y) % 2 ? '#8e96a3' : '#89919e'; ctx.fillRect(px, py, T, T);
           CR.rect(ctx, px + 2, py + 2, T - 4, T - 4, r, 0.6); CR.stroke(ctx, r, 1.4, 'rgba(43,42,51,0.45)');
           [[6, 6], [T - 6, 6], [6, T - 6], [T - 6, T - 6]].forEach(([dx, dy]) => { ctx.fillStyle = 'rgba(255,255,255,0.55)'; ctx.beginPath(); ctx.arc(px + dx, py + dy, 1.8, 0, Math.PI * 2); ctx.fill(); });
-          if (y === 21) { ctx.fillStyle = 'rgba(255,176,32,0.18)'; ctx.fillRect(px, py - 10, T, T + 20); }
+          if (y === Math.floor(MAP.DUNGEONS.taipei.ball.y / T)) { ctx.fillStyle = 'rgba(255,176,32,0.18)'; ctx.fillRect(px, py - 10, T, T + 20); }
+        } else if (base === 'shaft') {
+          // 電梯井：深色的金屬地板，一條一條的防滑紋
+          ctx.fillStyle = (x + y) % 2 ? '#4a5263' : '#465061'; ctx.fillRect(px, py, T, T);
+          for (let k = 8; k < T; k += 12) CR.line(ctx, px + k, py + 6, px + k + 6, py + 14, r, 1.4, 'rgba(255,255,255,0.18)', 0.4);
+          CR.rect(ctx, px + 1, py + 1, T - 2, T - 2, r, 0.6); CR.stroke(ctx, r, 1, 'rgba(19,26,40,0.5)');
+        } else if (base === 'outdoor') {
+          // 91 樓戶外觀景台：灰色的格柵地板
+          ctx.fillStyle = (x + y) % 2 ? '#b8bec8' : '#b2b9c3'; ctx.fillRect(px, py, T, T);
+          [12, 24, 36].forEach(k => CR.line(ctx, px + k, py, px + k, py + T, r, 1, 'rgba(60,66,80,0.3)', 0.4));
+          CR.dots(ctx, px, py, T, T, 3, 'rgba(255,255,255,0.45)', r, 1.4);
         } else if (base === 'deck') {
           // 觀景台：暖色木地板
           ctx.fillStyle = (x * 3 + y) % 4 ? '#d9b98c' : '#d3b284'; ctx.fillRect(px, py, T, T);
@@ -3719,6 +3793,16 @@
           ctx.fillStyle = (x + y) % 2 ? '#f1ede4' : '#ebe6dc'; ctx.fillRect(px, py, T, T);
           CR.line(ctx, px + r() * 20, py + r() * T, px + 28 + r() * 20, py + r() * T, r, 1, 'rgba(140,130,118,0.35)', 6);
           CR.rect(ctx, px + 1, py + 1, T - 2, T - 2, r, 0.6); CR.stroke(ctx, r, 1, 'rgba(201,150,42,0.45)');
+        } else if (base === 'hub') {
+          // 副本大廳：深藍色的星空地毯，一格一格有金色的細框
+          ctx.fillStyle = (x + y) % 2 ? '#3a4766' : '#36425f'; ctx.fillRect(px, py, T, T);
+          CR.rect(ctx, px + 2, py + 2, T - 4, T - 4, r, 0.6); CR.stroke(ctx, r, 1, 'rgba(224,184,74,0.4)');
+          CR.dots(ctx, px, py, T, T, 2, 'rgba(255,240,190,0.75)', r, 1.4);
+        } else if (base === 'hubwall') {
+          // 副本大廳的牆：深紫灰色的石磚
+          ctx.fillStyle = '#4b4560'; ctx.fillRect(px, py, T, T);
+          CR.rect(ctx, px + 2, py + 3, T - 4, T / 2 - 4, r, 1); CR.fill(ctx, '#5a536f', r, null); CR.stroke(ctx, r, 1.6, 'rgba(25,22,36,0.7)');
+          CR.rect(ctx, px + 2, py + T / 2 + 1, T - 4, T / 2 - 4, r, 1); CR.fill(ctx, '#544d69', r, null); CR.stroke(ctx, r, 1.6, 'rgba(25,22,36,0.7)');
         } else if (base === 'temple') {
           // 古城候位區：一塊一塊的米灰色石板，偶爾有裂縫和青苔
           ctx.fillStyle = (x + y) % 2 ? '#c8bea9' : '#c1b6a0'; ctx.fillRect(px, py, T, T);
@@ -3779,7 +3863,29 @@
           CR.rect(ctx, px + 4, py - 30, T * 2 - 8, T + 22, r, 1.4); CR.fill(ctx, '#9aa3b5', r, [px, py - 30, T * 2, T + 22]); CR.stroke(ctx, r, 2.8);
           CR.rect(ctx, px + 10, py - 24, T * 2 - 20, T + 8, r, 1); CR.fill(ctx, '#b8c0cc', r, null); CR.stroke(ctx, r, 1.6);
           ctx.font = '900 11px sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#2b2a33'; ctx.fillText('七星潭', px + T, py - 12);
-        } else if (ch === 'O') {
+        } else if (ch === 's') {
+          // 砂卡礑的泉水：岩壁上的小洞流出藍綠色的水
+          CR.blob(ctx, px + 20, py + 24, 20, 18, r, 0.1); CR.fill(ctx, '#8d8577', r, [px, py + 4, T, 40]); CR.stroke(ctx, r, 2.6);
+          CR.blob(ctx, px + 24, py + 24, 11, 10, r, 0.1); CR.fill(ctx, '#5fc6d0', r, null); CR.stroke(ctx, r, 2);
+          CR.dots(ctx, px + 16, py + 16, 16, 16, 4, 'rgba(255,255,255,0.8)', r, 1.6);
+        } else if (ch === 'v') {
+          // 水車：木頭輪子，一格一格的葉片
+          ctx.fillStyle = 'rgba(19,26,40,0.2)'; ctx.beginPath(); ctx.ellipse(px + 24, py + 44, 22, 5, 0, 0, Math.PI * 2); ctx.fill();
+          ctx.beginPath(); ctx.arc(px + 24, py + 16, 26, 0, Math.PI * 2); CR.fill(ctx, '#c39a62', r, [px - 2, py - 10, T + 4, 52]); CR.stroke(ctx, r, 2.8);
+          for (let k = 0; k < 8; k++) { const ang = k * Math.PI / 4; CR.line(ctx, px + 24, py + 16, px + 24 + Math.cos(ang) * 26, py + 16 + Math.sin(ang) * 26, r, 2.2, '#7a5a3c'); }
+          ctx.beginPath(); ctx.arc(px + 24, py + 16, 6, 0, Math.PI * 2); CR.fill(ctx, '#7a5a3c', r, null); CR.stroke(ctx, r, 2);
+        } else if (ch === 'b' && at(x - 1, y) !== 'b') {
+          // 副本大廳的告示板（整排畫成一塊木板，上面的字另外寫）
+          let n = 0; while (at(x + n, y) === 'b') n++;
+          CR.rect(ctx, px + 4, py - 22, n * T - 8, T + 14, r, 1.2); CR.fill(ctx, '#b98a55', r, [px, py - 22, n * T, T + 14]); CR.stroke(ctx, r, 2.8);
+          CR.rect(ctx, px + 12, py - 14, n * T - 24, T - 2, r, 1); CR.fill(ctx, '#fbf6e9', r, null); CR.stroke(ctx, r, 1.8);
+          [px + 18, px + n * T - 18].forEach(nx => { ctx.fillStyle = '#e8384f'; ctx.beginPath(); ctx.arc(nx, py - 8, 3.2, 0, Math.PI * 2); ctx.fill(); });
+        } else if (ch === 'D') {
+          // 還沒開放的副本台座：灰灰的，上面蓋著一塊布
+          CR.blob(ctx, px + 24, py + 30, 26, 15, r, 0.06); CR.fill(ctx, '#7d7891', r, [px - 2, py + 15, T + 4, 30]); CR.stroke(ctx, r, 2.4);
+          CR.blob(ctx, px + 24, py + 16, 13, 16, r, 0.1); CR.fill(ctx, '#d9d3c3', r, [px + 10, py, 28, 32]); CR.stroke(ctx, r, 2.2);
+          ctx.font = '900 15px sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#7d7891'; ctx.fillText('?', px + 24, py + 22);
+        } else if (ch === 'O' || ch === 'e') {
           // 副本傳送門的石座（漩渦另外畫，會轉）
           CR.blob(ctx, px + 24, py + 30, 30, 15, r, 0.06); CR.fill(ctx, '#9aa3b5', r, [px - 6, py + 15, T + 12, 30]); CR.stroke(ctx, r, 2.6);
           CR.blob(ctx, px + 24, py + 28, 22, 10, r, 0.08); CR.fill(ctx, '#2f3b55', r, null); CR.stroke(ctx, r, 2);
@@ -3977,8 +4083,15 @@
     constructor() { super('hq'); this.remotes = new Map(); this.drops = []; this.told = {}; this.walls = new Map(); this.storms = new Map(); this.drawing = null; }
 
     create() {
-      this.textures.addCanvas('map', drawMap());
-      this.add.image(0, 0, 'map').setOrigin(0).setDepth(-10);
+      // 整張地圖比顯示卡一張貼圖的上限（很多手機是 4096 或 8192）還寬，切成一條一條放
+      const mapCv = drawMap(), CH = 4096;
+      for (let x0 = 0, k = 0; x0 < mapCv.width; x0 += CH, k++) {
+        const piece = document.createElement('canvas');
+        piece.width = Math.min(CH, mapCv.width - x0); piece.height = mapCv.height;
+        piece.getContext('2d').drawImage(mapCv, -x0, 0);
+        this.textures.addCanvas('map' + k, piece);
+        this.add.image(x0, 0, 'map' + k).setOrigin(0).setDepth(-10);
+      }
       this.cameras.main.setBounds(0, 0, MAP.MW * T, MAP.H * T); // 副本區另外設（見 update）
       this.cameras.main.setBackgroundColor('#131a28');
       this.applyZoom();
@@ -4093,6 +4206,9 @@
         cls: 'suit', suit: '#f2f4f8', tie: '#f2f4f8', npc: 'hsu' }, 'sign'));
       this.textures.addCanvas('mob-rock', drawRockMob());
       this.textures.addCanvas('mob-horse', drawHorseMob());
+      this.textures.addCanvas('mob-crab', drawCrabMob());
+      this.textures.addCanvas('mob-swallow', drawSwallowMob());
+      this.textures.addCanvas('mob-monkey', drawMonkeyMob());
       this.textures.addCanvas('mob-fu', drawFuMob(false));
       this.textures.addCanvas('mob-fu-fist', drawFuMob(true));
       this.textures.addCanvas('dg-gate', drawGate());
@@ -5796,6 +5912,8 @@
       if (Math.hypot(x - MAP.mentor.x, y - (MAP.mentor.y - 20)) < 50 && MAP.nearMentor(this.me.x, this.me.y)) return { type: 'mentor' };
       if (Math.hypot(x - MAP.guard.x, y - (MAP.guard.y - 20)) < 50 && MAP.nearGuard(this.me.x, this.me.y)) return { type: 'guard' };
       if (Math.hypot(x - MAP.elevator.x, y - (MAP.elevator.y - 20)) < 50 && MAP.nearElevator(this.me.x, this.me.y)) return { type: 'elevator' };
+      if (Math.hypot(x - MAP.hqPortal.x, y - MAP.hqPortal.y) < 44 && MAP.nearHqPortal(this.me.x, this.me.y)) return { type: 'portal' };
+      if (Math.hypot(x - MAP.hubExit.x, y - MAP.hubExit.y) < 44 && MAP.nearHubExit(this.me.x, this.me.y)) return { type: 'hubExit' };
       if (Math.hypot(x - MAP.greek.x, y - (MAP.greek.y - 20)) < 50 && MAP.nearGreek(this.me.x, this.me.y)) return { type: 'greek' };
       if (Math.hypot(x - MAP.fridge.x, y - (MAP.fridge.y - 10)) < 40 && MAP.nearFridge(this.me.x, this.me.y)) return { type: 'fridge' };
       if (MAP.tiles[ty] && MAP.tiles[ty][tx] === 'J' && MAP.nearDj(this.me.x, this.me.y)) return { type: 'dj' };
@@ -5804,6 +5922,13 @@
     }
 
     isDead() { return !!(myStats && myStats.dead); }
+    // 砂卡礑的溪水漲上來的地方走得比較慢
+    floodSlow() {
+      const d = this.myDg();
+      if (!d || d.id !== 'hualien' || d.stage !== 3 || !d.flood || MAP.stageAt(this.me.x, this.me.y) !== 3) return 1;
+      const F = MAP.DUNGEONS.hualien.flood;
+      return this.me.y >= (F.y + 1 - d.flood * F.rows) * T ? 0.55 : 1;
+    }
 
     // 提示紙條掛在哪裡（世界座標）：top＝放上面時尖角的位置，y／half＝放旁邊時的高度和東西的半寬
     hintAnchor(act) {
@@ -5816,6 +5941,7 @@
         return { x: n.x, top: ny - (act.type === 'mentor' ? 106 : 110), y: ny - 38, half: 30 };
       }
       if (act.type === 'dj') return { x: MAP.dj.x, top: MAP.dj.y - 52, y: MAP.dj.y - 4, half: 50 };
+      if (act.type === 'portal' || act.type === 'hubExit') { const n = act.type === 'portal' ? MAP.hqPortal : MAP.hubExit; return { x: n.x, top: n.y - 76, y: n.y - 10, half: 34 }; }
       // 電視牆很長，紙條掛在自己正上方的那一段
       if (act.type === 'tv') return { x: Phaser.Math.Clamp(this.me.x, 23.5 * T, 32.5 * T), top: 4 * T + 6, y: 4.5 * T, half: T / 2 };
       if (act.type === 'greek') { const ny = MAP.greek.y + 18; return { x: MAP.greek.x, top: ny - 110, y: ny - 38, half: 30 }; }
@@ -5900,6 +6026,8 @@
       if (!best && MAP.nearMentor(this.me.x, this.me.y)) return { type: 'mentor' };
       if (!best && MAP.nearGuard(this.me.x, this.me.y)) return { type: 'guard' };
       if (!best && MAP.nearElevator(this.me.x, this.me.y)) return { type: 'elevator' };
+      if (!best && MAP.nearHqPortal(this.me.x, this.me.y)) return { type: 'portal' };
+      if (!best && MAP.nearHubExit(this.me.x, this.me.y)) return { type: 'hubExit' };
       if (!best && MAP.nearDj(this.me.x, this.me.y)) return { type: 'dj' };
       if (!best && MAP.nearTv(this.me.x, this.me.y)) return { type: 'tv' };
       if (!best && MAP.nearGreek(this.me.x, this.me.y)) return { type: 'greek' };
@@ -5925,6 +6053,8 @@
         this.tryPush(act.dx, act.dy);
       } else if (act.type === 'mentor') {
         openMentor();
+      } else if (act.type === 'portal' || act.type === 'hubExit') {
+        socket.emit(act.type === 'portal' ? 'hubGo' : 'hubHome', (res) => { if (res && !res.ok && res.error) toast(res.error); });
       } else if (act.type === 'guard' || act.type === 'elevator') {
         socket.emit('dgGo', (res) => {
           if (res && res.ok) toast(act.type === 'guard' ? '守門員：「去吧！到候位區按出發。」' : '電梯小姐：「直達觀景台，請到候位區按出發。」');
@@ -6258,8 +6388,17 @@
     onMobAttack(a) {
       if (fxOff()) return;
       const m = this.mobs.get(a.mid);
-      const who = this.actorOf(a.id);
-      if (!m || !who) return;
+      const who = a.id && this.actorOf(a.id);
+      if (!m) return;
+      // 沒有目標的（例如獼猴在轉石板）：只冒台詞
+      if (!who) {
+        if (!a.say) return;
+        if (m.say) m.say.destroy();
+        const say = m.say = this.bubbleImg(0, -104 * (m.k || 1), a.say);
+        m.add(say);
+        this.time.delayedCall(1600, () => { if (m.say === say) { say.destroy(); m.say = null; } });
+        return;
+      }
       // 往目標撲一下，頭上冒出台詞
       const dir = who.x < m.x ? -1 : 1;
       this.tweens.add({ targets: m.body_, x: dir * 16, angle: dir * 10, duration: 150, yoyo: true, delay: 250 });
@@ -6420,6 +6559,18 @@
           backgroundColor: PAPER, padding: { x: 11, y: 5 } }).setOrigin(0.5).setDepth(pt.y + 60);
         return this.add.image(pt.x, pt.y + 6, 'typhoon').setScale(0.34, 0.14).setTint(d.id === 'taipei' ? 0x7fd1c8 : 0xffb020).setDepth(pt.y - 20);
       });
+      // 指揮中心的副本傳送門、副本大廳回總部的出口
+      [[MAP.hqPortal, '副本傳送門', 0xb68cff], [MAP.hubExit, '回總部', 0x7fd1ff]].forEach(([pt, name, tint]) => {
+        this.add.text(pt.x, pt.y - 58, name, { fontSize: '11px', fontStyle: '900', color: '#8a5a10', fontFamily: FONT,
+          backgroundColor: PAPER, padding: { x: 11, y: 5 } }).setOrigin(0.5).setDepth(pt.y + 60);
+        this.portals.push(this.add.image(pt.x, pt.y + 6, 'typhoon').setScale(0.34, 0.14).setTint(tint).setDepth(pt.y - 20));
+      });
+      // 副本大廳：還沒開放的台座、告示板上每個副本的狀態
+      MAP.soon.forEach(p => this.add.text(p.x, p.y - 34, `${p.name}・敬請期待`, { fontSize: '10px', fontStyle: 'bold', color: '#7d7891', fontFamily: FONT,
+        backgroundColor: PAPER, padding: { x: 8, y: 3 } }).setOrigin(0.5).setDepth(p.y));
+      this.hubBoard = this.add.text(MAP.hubBoard.x, MAP.hubBoard.y + 10, '', { fontSize: '12px', fontStyle: 'bold', color: INK, fontFamily: FONT,
+        align: 'center', lineSpacing: 4 }).setOrigin(0.5).setDepth(MAP.hubBoard.y + 60);
+      this.renderHubBoard();
       // 七星潭的石頭：每顆一個顏色，踩對會亮起來
       this.stoneImgs = D.stones.map((st, i) => {
         const g = this.add.graphics({ x: st.x, y: st.y }).setDepth(-7);
@@ -6441,6 +6592,11 @@
         d.gates.forEach((g, i) => MAP.setGate(d, i, false));
       });
       this.blockImgs = D.blocks.map(([x, y]) => this.add.image((x + 0.5) * T, (y + 1) * T + 2, 'fx-marble').setOrigin(0.5, 1).setDepth((y + 1) * T));
+      // 燕子口的兩塊踏板、砂卡礑的水道石板和漲上來的溪水（狀態變了就重畫）
+      this.plateG = this.add.graphics().setDepth(-6);
+      this.pipeG = this.add.graphics().setDepth(-6);
+      this.floodG = this.add.graphics().setDepth(-5);
+      this.drawPlates(); this.drawPipes();
       this.blockPos = D.blocks.map(b => b.slice());
       this.blockPos.forEach(([x, y]) => MAP.dyn.add(x + ',' + y));
       // 87 樓：四個控制台的燈、盪來盪去的阻尼球（球的鋼索每一格重畫）
@@ -6449,6 +6605,15 @@
       this.ball = this.add.image((TP.ball.x1 + TP.ball.x2) / 2, TP.ball.y + 64, 'fx-damper').setOrigin(0.5, 0.95).setDepth(TP.ball.y + 64);
       this.ballPh = 0;
       this.drawConsoles();
+      // 電梯井：題目牌和四顆答案按鈕；91 樓：五根避雷針
+      const Q = TP.quiz;
+      this.quizG = this.add.graphics().setDepth(-6);
+      this.quizText = this.add.text(Q.board.x, Q.board.y, '', { fontSize: '17px', fontStyle: '900', color: INK, fontFamily: FONT,
+        backgroundColor: PAPER, padding: { x: 16, y: 10 }, align: 'center', wordWrap: { width: 560 } }).setOrigin(0.5).setDepth(Q.board.y + 200);
+      this.quizOpts = Q.buttons.map(b => this.add.text(b.x, b.y - 2, '', { fontSize: '16px', fontStyle: '900', color: '#2b2a33', fontFamily: FONT })
+        .setOrigin(0.5).setDepth(b.y + 1));
+      this.rodG = TP.rods.map(rd => this.add.graphics({ x: rd.x, y: rd.y }).setDepth(rd.y + 20));
+      this.drawQuiz(); this.drawRods();
       // 副本的面板按鈕
       $('dg-panel').addEventListener('click', (e) => {
         const b = e.target.closest('button');
@@ -6458,6 +6623,17 @@
         if (b.dataset.act === 'home') socket.emit('dgHome', () => {});
         if (b.dataset.act === 'reset') socket.emit('dgReset', (res) => { if (res && !res.ok && res.error) toast(res.error); });
       });
+    }
+    // 副本大廳的告示板：每個副本現在空著、在倒數還是有人在打
+    renderHubBoard() {
+      if (!this.hubBoard) return;
+      const lines = MAP.DG_LIST.map(D => {
+        const d = this.dgs[D.id];
+        const st = !d || d.phase === 'idle' ? '空閒，可以出發' : d.phase === 'countdown' ? '倒數出發中'
+          : d.phase === 'clear' ? '剛通關' : `挑戰中 ${d.members.length}/${d.max} 人・第 ${Math.min(d.stage, D.stages.length - 1) + 1} 關`;
+        return `${D.name}${D.minLevel ? `（Lv.${D.minLevel}）` : ''}：${st}`;
+      });
+      this.hubBoard.setText(lines.join('\n'));
     }
     // 自己參加中的副本（沒有就是 null）
     myDg() {
@@ -6491,9 +6667,13 @@
       });
       if (d.id === 'hualien') {
         d.blocks.forEach(([x, y], i) => this.placeBlock(i, x, y, true));
-        this.drawStele();
-      } else this.drawConsoles();
+        this.drawStele(); this.drawPlates(); this.drawPipes();
+        // 石碑的順序亮著的時候，時間到要自己藏起來
+        clearTimeout(this.steleTimer);
+        if (d.seqLeft > 0) this.steleTimer = setTimeout(() => { if (this.dgs.hualien === d) { d.seq = d.seq.map((v, k) => (k < d.progress ? v : -1)); this.drawStele(); this.renderDgPanel(true); } }, d.seqLeft + 50);
+      } else { this.drawConsoles(); this.drawQuiz(); this.drawRods(); }
       if (this.hereDg() === d || this.myDg() === d) this.renderDgPanel(true);
+      this.renderHubBoard();
     }
 
     placeBlock(i, x, y, instant) {
@@ -6524,12 +6704,66 @@
       if (!d || !d.seq || !d.seq.length || d.phase === 'idle') return;
       const n = d.seq.length, gap = 15, x0 = S.x - (n - 1) * gap / 2, y = S.y;
       d.seq.forEach((si, k) => {
+        // 沒亮的時候是 -1：畫一顆灰色的問號
+        if (si < 0) { g.fillStyle(0x6b7280, 1); g.fillCircle(x0 + k * gap, y, 6); g.lineStyle(2, 0x2b2a33, 1); g.strokeCircle(x0 + k * gap, y, 6); return; }
         const col = Phaser.Display.Color.HexStringToColor(D.stones[si].color).color, done = k < d.progress;
         g.fillStyle(col, 1); g.fillCircle(x0 + k * gap, y, 6);
         g.lineStyle(2, done ? 0xffd23f : 0x2b2a33, 1); g.strokeCircle(x0 + k * gap, y, done ? 7.5 : 6);
         if (done) this.stoneImgs[si].glow.setVisible(true);
       });
       if (d.stage > 0) { g.lineStyle(3, 0xffd23f, 1); g.strokeRoundedRect(S.x - n * gap / 2 - 6, y - 12, n * gap + 12, 24, 8); }
+    }
+    // 燕子口的踏板：有人踩著就亮黃色；兩塊都亮的時候中間畫一圈倒數
+    drawPlates() {
+      const g = this.plateG, d = this.dgs && this.dgs.hualien, D = MAP.DUNGEONS.hualien;
+      g.clear();
+      D.plates.forEach(([x, y], i) => {
+        const cx = (x + 0.5) * T, cy = (y + 0.5) * T, on = !!(d && d.plates && d.plates[i]), done = d && d.stage > 2;
+        g.fillStyle(0x131a28, 0.18); g.fillRoundedRect(cx - 24, cy - 20, 50, 44, 8);
+        g.fillStyle(on || done ? 0xffd23f : 0x9aa3b5, 1); g.fillRoundedRect(cx - 22, cy - 22, 44, 40, 8);
+        g.lineStyle(3, 0x2b2a33, 0.9); g.strokeRoundedRect(cx - 22, cy - 22, 44, 40, 8);
+        g.lineStyle(2, 0xffffff, 0.6); g.strokeRoundedRect(cx - 15, cy - 15, 30, 26, 5);
+      });
+      if (d && d.hold > 0 && d.stage === 2) {
+        const [a, b] = D.plates, mx = (a[0] + b[0] + 1) / 2 * T, my = a[1] * T - 30;
+        g.lineStyle(8, 0x2b2a33, 0.25); g.strokeCircle(mx, my, 26);
+        g.lineStyle(8, 0x7be08f, 1); g.beginPath(); g.arc(mx, my, 26, -Math.PI / 2, -Math.PI / 2 + d.hold * Math.PI * 2); g.strokePath();
+      }
+    }
+    // 砂卡礑：每塊石板畫出水道，泉水流得到的那些變成藍色；溪水漲到哪裡就蓋一層藍
+    drawPipes() {
+      const g = this.pipeG, d = this.dgs && this.dgs.hualien, P = MAP.DUNGEONS.hualien.pipes, C = P.xs.length;
+      g.clear(); this.floodG.clear();
+      if (!d || !d.pipes || !d.pipes.length) return;
+      const wet = new Set(d.pipeFlow || []), done = d.stage > 3;
+      const chan = (x1, y1, x2, y2, w) => {
+        g.lineStyle(14, 0x2b2a33, 0.9); g.lineBetween(x1, y1, x2, y2);
+        g.lineStyle(9, w ? 0x5fc6d0 : 0xe8e1d0, 1); g.lineBetween(x1, y1, x2, y2);
+      };
+      // 泉水到第一欄、最後一欄到水車的固定水道
+      const sy = (P.ys[P.src] + 0.5) * T, dy = (P.ys[P.dst] + 0.5) * T;
+      chan((P.xs[0] - 2.4) * T, sy, (P.xs[0]) * T, sy, true);
+      chan((P.xs[C - 1] + 1) * T, dy, (P.xs[C - 1] + 3.4) * T, dy, done);
+      d.pipes.forEach((m, i) => {
+        const cx = (P.xs[i % C] + 0.5) * T, cy = (P.ys[Math.floor(i / C)] + 0.5) * T, w = wet.has(i);
+        g.fillStyle(0x131a28, 0.2); g.fillRoundedRect(cx - 24, cy - 21, 52, 50, 8);
+        g.fillStyle(0xc9c3b8, 1); g.fillRoundedRect(cx - 25, cy - 25, 50, 50, 8);
+        g.lineStyle(3, 0x2b2a33, 0.9); g.strokeRoundedRect(cx - 25, cy - 25, 50, 50, 8);
+        [[1, 0, -1], [2, 1, 0], [4, 0, 1], [8, -1, 0]].forEach(([bit, ux, uy]) => { if (m & bit) chan(cx, cy, cx + ux * 24, cy + uy * 24, w); });
+        g.fillStyle(w ? 0x5fc6d0 : 0xe8e1d0, 1); g.fillCircle(cx, cy, 5);
+      });
+      const F = MAP.DUNGEONS.hualien.flood, B = MAP.DUNGEONS.hualien.stages[3].box;
+      if (d.flood > 0 && !done) {
+        const top = (F.y + 1 - d.flood * F.rows) * T;
+        this.floodG.fillStyle(0x4f86c6, 0.35).fillRect(B.x1, top, B.x2 - B.x1, (F.y + 1) * T - top);
+        this.floodG.lineStyle(3, 0xffffff, 0.7).lineBetween(B.x1, top, B.x2, top);
+      }
+    }
+    onPipe(e) {
+      const d = this.dgs.hualien;
+      if (!d || !d.pipes) return;
+      d.pipes[e.i] = e.m;
+      this.drawPipes();
     }
     onStone(e) {
       const st = MAP.DUNGEONS.hualien.stones[e.i];
@@ -6558,11 +6792,13 @@
       const d = this.dgs.taipei, now = performance.now();
       this.consoleG.forEach((g, i) => {
         g.clear();
-        const left = !d || d.phase === 'idle' ? 0 : d.phase === 'run' && d.stage === 1 ? d.lit[i] - (now - d.at) : d.stage > 1 ? 1 : 0;
-        if (left <= 0) { g.lineStyle(3, 0xe8384f, 0.7); g.strokeEllipse(0, 6, 56, 30); return; }
-        g.fillStyle(0xffd23f, 0.35); g.fillEllipse(0, 6, 70, 38);
+        const left = !d || d.phase === 'idle' ? 0 : d.phase === 'run' && d.stage === 2 ? d.lit[i] - (now - d.at) : d.stage > 2 ? 1 : 0;
+        // 每個控制台腳下一圈自己的顏色
+        const col = Phaser.Display.Color.HexStringToColor(MAP.DUNGEONS.taipei.consoles[i].color).color;
+        if (left <= 0) { g.lineStyle(4, col, 0.9); g.strokeEllipse(0, 6, 56, 30); return; }
+        g.fillStyle(col, 0.4); g.fillEllipse(0, 6, 70, 38);
         g.lineStyle(4, 0xffd23f, 1); g.strokeEllipse(0, 6, 56, 30);
-        if (d.stage === 1) {
+        if (d.stage === 2) {
           const k = Math.min(1, left / (d.litMs || 5000));
           g.lineStyle(5, 0x7be08f, 1); g.beginPath(); g.arc(0, -46, 12, -Math.PI / 2, -Math.PI / 2 + k * Math.PI * 2); g.strokePath();
         }
@@ -6572,15 +6808,65 @@
     tickDamper(dt) {
       const d = this.dgs.taipei, B = MAP.DUNGEONS.taipei.ball, cx = (B.x1 + B.x2) / 2, A = (B.x2 - B.x1) / 2;
       let x = cx;
-      if (d && d.ballPh != null && d.phase === 'run' && d.stage === 1) {
+      const run = d && d.ballPh != null && d.phase === 'run' && d.stage === 2;
+      if (run) {
         const ph = d.ballPh + (performance.now() - d.at) / B.period;
         x = cx + A * Math.sin(ph * Math.PI * 2);
       }
       this.ball.setPosition(x, B.y + 64);
-      const top = 14 * T + 4;
+      // 球身上照順序閃四個顏色，閃完停一下再重來
+      const ord = run && d.order && d.order.length ? d.order : null;
+      if (ord) {
+        const t = (performance.now() % 4200) / 700, k = Math.floor(t);
+        if (k < 4 && t - k < 0.75) this.ball.setTint(Phaser.Display.Color.HexStringToColor(MAP.DUNGEONS.taipei.consoles[ord[k]].color).color);
+        else this.ball.clearTint();
+      } else if (this.ball.isTinted) this.ball.clearTint();
+      const top = MAP.DUNGEONS.taipei.stages[2].box.y1 + 4;
       this.ballCable.clear().lineStyle(3, 0x2b2a33, 0.8);
       [-30, 0, 30].forEach(k => this.ballCable.lineBetween(cx + k * 2, top, x + k, B.y - 50));
-      if (d && d.phase === 'run' && d.stage === 1) this.drawConsoles();
+      if (run) this.drawConsoles();
+      if (d && d.phase === 'run' && d.stage === 1 && d.quiz && d.quiz.hold.some(Boolean)) this.drawQuiz();
+    }
+    // 電梯井：題目牌、四顆樓層按鈕（有人站著的那顆畫一圈倒數）
+    drawQuiz() {
+      const d = this.dgs && this.dgs.taipei, Q = MAP.DUNGEONS.taipei.quiz, g = this.quizG;
+      g.clear();
+      const q = d && d.phase === 'run' && d.stage === 1 ? d.quiz : null;
+      this.quizText.setVisible(!!q).setText(q ? `第 ${q.done + 1} 題（答對 ${q.done}/${q.need}）\n${q.q}` : '');
+      Q.buttons.forEach((b, i) => {
+        g.fillStyle(0x131a28, 0.25); g.fillCircle(b.x + 3, b.y + 5, 30);
+        g.fillStyle(0xc9962a, 1); g.fillCircle(b.x, b.y, 30);
+        g.fillStyle(q ? 0xfbf6e9 : 0x9aa3b5, 1); g.fillCircle(b.x, b.y, 23);
+        g.lineStyle(3, 0x2b2a33, 0.9); g.strokeCircle(b.x, b.y, 30);
+        const k = q ? q.hold[i] : 0;
+        if (k > 0) { g.lineStyle(6, 0x7be08f, 1); g.beginPath(); g.arc(b.x, b.y, 36, -Math.PI / 2, -Math.PI / 2 + k * Math.PI * 2); g.strokePath(); }
+        this.quizOpts[i].setText(q ? String(q.opts[i]) : '');
+      });
+    }
+    onQuiz(e) {
+      const b = MAP.DUNGEONS.taipei.quiz.buttons[e.i];
+      this.burst(b.x, b.y - 10, 14, e.ok ? 0x7be08f : 0xe8384f, 80);
+      this.floatText(b.x, b.y - 70, e.ok ? '答對了！' : '答錯了！', e.ok ? '#7be08f' : '#ff8a8a', 24);
+    }
+    // 91 樓：避雷針，亮的是金色、頂上冒電光；暗的是灰色
+    drawRods() {
+      const d = this.dgs && this.dgs.taipei;
+      const on = d && d.rods && (d.stage === 3 || d.stage > 3) ? d.rods.map(v => v || d.stage > 3) : [false, false, false, false, false];
+      this.rodG.forEach((g, i) => {
+        g.clear();
+        g.fillStyle(0x131a28, 0.22); g.fillEllipse(0, 22, 46, 14);
+        g.fillStyle(0x6b7280, 1); g.fillRoundedRect(-14, 6, 28, 18, 5);
+        g.lineStyle(3, 0x2b2a33, 0.9); g.strokeRoundedRect(-14, 6, 28, 18, 5);
+        g.lineStyle(6, 0x2b2a33, 1); g.lineBetween(0, 8, 0, -70);
+        g.lineStyle(3, on[i] ? 0xffd23f : 0xb8bec8, 1); g.lineBetween(0, 8, 0, -70);
+        g.fillStyle(on[i] ? 0xffd23f : 0x9aa3b5, 1); g.fillCircle(0, -74, 7);
+        g.lineStyle(2.5, 0x2b2a33, 1); g.strokeCircle(0, -74, 7);
+        if (on[i]) { g.lineStyle(3, 0xfff07a, 0.9); [[-16, -88], [16, -88], [0, -96]].forEach(([x, y]) => g.lineBetween(0, -74, x, y)); }
+      });
+    }
+    onRod(e) {
+      const rd = MAP.DUNGEONS.taipei.rods[e.i];
+      this.burst(rd.x, rd.y - 74, 12, 0xffd23f, 70);
     }
     onBallHit(e) {
       this.burst(e.x, e.y - 40, 14, 0xffc93c, 90);
@@ -6593,10 +6879,10 @@
       if (!d || d.id !== e.id) return;
       this.cameras.main.shake(500, 0.006);
       const msg = {
-        hualien: ['石門打開了！往下走到太魯閣九曲洞', '石門打開了！往下走到清水斷崖……小心'],
-        taipei: ['電梯門開了！往下走到 87 樓，小心阻尼球', '阻尼球停了！電梯直達觀景台……天龍王就在上面'],
+        hualien: ['石門打開了！往下走到太魯閣九曲洞', '石門打開了！往下走到燕子口，找到兩塊踏板', '溪水把大家沖到砂卡礑步道了！踩石板把水道轉到通', '水車轉起來了！往下走到清水斷崖……小心'],
+        taipei: ['電梯面板壞了！站在答案按鈕上 1.5 秒就能作答', '電梯修好了！往下走到 87 樓，照阻尼球閃的顏色順序點控制台', '電梯把大家送到 91 樓戶外觀景台！碰避雷針，五根全部點亮', '雷雲散了！往下走到觀景台……天龍王就在上面'],
       }[e.id];
-      toast(msg[Math.min(e.stage, 2) - 1]);
+      toast(msg[Math.min(e.stage, msg.length) - 1]);
     }
     onDgClear(c) {
       const d = this.myDg();
@@ -6622,19 +6908,28 @@
         let extra = '';
         // 七星潭：面板上也畫出石碑的顏色順序（手機上石碑常常被上面的條擋住）
         if (d.id === 'hualien' && d.stage === 0 && d.phase === 'run') extra = '<span class="dg-seq">' + d.seq.map((si, k) =>
-          `<i style="background:${D.stones[si].color}" class="${k < d.progress ? 'on' : ''}"></i>`).join('') + '</span>';
+          `<i style="background:${si < 0 ? '#6b7280' : D.stones[si].color}" class="${k < d.progress ? 'on' : ''}"></i>`).join('') + '</span>' +
+          (d.seq.some(si => si < 0) ? '<span class="dg-note">記住順序了嗎？</span>' : '<span class="dg-note">快記下來！</span>');
+        // 燕子口：兩塊踏板有沒有人踩；砂卡礑：溪水漲到第幾次
+        if (d.id === 'hualien' && d.phase === 'run' && d.stage === 2) extra = '<span class="dg-seq">' + (d.plates || []).map(on =>
+          `<i style="background:${on ? '#ffd23f' : '#5b6577'}" class="${on ? 'on' : ''}"></i>`).join('') + '</span>';
+        if (d.id === 'hualien' && d.phase === 'run' && d.stage === 3 && d.flood) extra = `<span class="dg-note">溪水 ${d.flood}／${D.flood.max}</span>`;
         // 信義廣場：第幾波；87 樓：四個控制台亮了幾個
         if (d.id === 'taipei' && d.phase === 'run' && d.stage === 0) extra = `<span class="dg-note">第 ${Math.max(1, d.wave)}／${d.waves} 波</span>`;
-        if (d.id === 'taipei' && d.phase === 'run' && d.stage === 1) extra = '<span class="dg-seq">' + d.lit.map(t =>
+        if (d.id === 'taipei' && d.phase === 'run' && d.stage === 1 && d.quiz) extra = `<span class="dg-note">答對 ${d.quiz.done}／${d.quiz.need} 題</span>`;
+        if (d.id === 'taipei' && d.phase === 'run' && d.stage === 3) extra = '<span class="dg-seq">' + (d.rods || []).map(v =>
+          `<i style="background:${v ? '#ffd23f' : '#5b6577'}" class="${v ? 'on' : ''}"></i>`).join('') + '</span>';
+        if (d.id === 'taipei' && d.phase === 'run' && d.stage === 2) extra = '<span class="dg-seq">' + d.lit.map(t =>
           `<i style="background:${t > 0 ? '#ffd23f' : '#5b6577'}" class="${t > 0 ? 'on' : ''}"></i>`).join('') + '</span>';
         // 手機上縮成一顆計時膠囊（只有關卡和時間），點一下才展開按鈕
         const short = d.phase === 'clear' ? `通關 ${sec(Math.max(0, left))}` : `第 ${Math.min(d.stage, last) + 1} 關 ${sec(Math.max(0, left))}`;
-        key = 'in|' + d.id + what + d.stage + '|' + d.progress + '|' + d.wave + '|' + (d.lit || []).map(t => t > 0 ? 1 : 0).join('');
+        key = 'in|' + d.id + what + d.stage + '|' + d.progress + '|' + d.wave + '|' + (d.lit || []).map(t => t > 0 ? 1 : 0).join('') +
+          '|' + (d.seq || []).join(',') + '|' + (d.plates || []).join(',') + '|' + (d.flood || 0) + '|' + (d.quiz ? d.quiz.done : '') + '|' + (d.rods || []).join(',');
         html = `<span class="dg-full">${D.name}副本 · ${what}</span><span class="dg-short">${short}</span>` + extra + '<span class="dg-btns">' +
-          (d.id === 'hualien' && d.stage === 1 && d.phase === 'run' ? '<button class="hud-btn tiny" data-act="reset" type="button">重排大理石</button>' : '') +
+          (d.id === 'hualien' && (d.stage === 1 || d.stage === 2) && d.phase === 'run' ? '<button class="hud-btn tiny" data-act="reset" type="button">重排大理石</button>' : '') +
           '<button class="hud-btn tiny" data-act="leave" type="button">離開</button></span>';
       } else {
-        const homeBtn = '<button class="hud-btn tiny" data-act="home" type="button">回總部</button>';
+        const homeBtn = '<button class="hud-btn tiny" data-act="home" type="button">回副本大廳</button>';
         const lv = D.minLevel ? ` · Lv.${D.minLevel} 以上` : '';
         if (d.phase === 'idle') { key = 'idle' + d.id; html = `<span>${D.title} · 1～${d.max} 人 · 限時 ${D.timeLimitMs / 60000} 分${lv}</span><button class="primary" data-act="start" type="button">出發</button>` + homeBtn; }
         else if (d.phase === 'countdown') {
@@ -6653,10 +6948,10 @@
     // 九曲洞：往大理石的方向走（或點石頭）就會推
     tryPush(dx, dy) {
       const d = this.myDg();
-      if (!d || d.id !== 'hualien' || d.stage !== 1 || MAP.stageAt(this.me.x, this.me.y) !== 1) return;
+      if (!d || d.id !== 'hualien' || (d.stage !== 1 && d.stage !== 2) || MAP.stageAt(this.me.x, this.me.y) !== d.stage) return;
       const fx = Math.floor((this.me.x + dx * 26) / T), fy = Math.floor((this.me.y - 4 + dy * 26) / T);
       const i = this.blockPos.findIndex(([x, y]) => x === fx && y === fy);
-      if (i < 0) return;
+      if (i < 0 || MAP.DUNGEONS.hualien.blocks[i][2] !== d.stage) return;
       const now = performance.now();
       if (now - (this.lastPush || 0) < 260) return;
       this.lastPush = now;
@@ -6900,7 +7195,7 @@
       const len = Math.hypot(dx, dy);
       let moving = false;
       if (len > 0) {
-        const step = SPEED * dt / len;
+        const step = SPEED * this.floodSlow() * dt / len;
         const nx = this.me.x + dx * step, ny = this.me.y + dy * step;
         const ox = this.me.x, oy = this.me.y;
         if (this.canStand(nx, this.me.y)) this.me.x = nx;
@@ -6908,7 +7203,7 @@
         moving = this.me.x !== ox || this.me.y !== oy;
         // 九曲洞：往大理石走過去就是推
         const md = this.myDg();
-        if (md && md.id === 'hualien' && md.stage === 1) {
+        if (md && md.id === 'hualien' && (md.stage === 1 || md.stage === 2)) {
           const hz = Math.abs(dx) >= Math.abs(dy), pdx = hz ? Math.sign(dx) : 0, pdy = hz ? 0 : Math.sign(dy);
           if (!this.canStand(this.me.x + pdx * 4, this.me.y + pdy * 4)) this.tryPush(pdx, pdy);
         }
@@ -6995,11 +7290,13 @@
       // 總部、副本、候位區分開設鏡頭範圍，才不會看到中間的空地；比螢幕窄的區域放在畫面正中間
       const zone = MAP.zoneOf(this.me.x), inD = zone === 'dungeon', zd = MAP.dungeonAt(this.me.x);
       const cam = this.cameras.main, vw = cam.width / cam.zoom, vh = cam.height / cam.zoom;
-      const camKey = MAP.areaOf(this.me.x) + '|' + Math.round(vw) + 'x' + Math.round(vh);
+      // 有兩欄的副本（花蓮）：鏡頭只看自己在的那一欄
+      const col = inD && zd.cols > 1 && this.me.x >= (zd.dx + 22) * T ? 1 : 0;
+      const camKey = MAP.areaOf(this.me.x) + col + '|' + Math.round(vw) + 'x' + Math.round(vh);
       if (camKey !== this.camKey) {
         this.camKey = camKey;
-        const [x1, x2, y1, y2] = zone === 'dungeon' ? [zd.dx, zd.dx + 22, 0, MAP.H]
-          : zone === 'lobby' ? [zd.lx, zd.lx + 12, 0, 18] : [0, MAP.MW, 0, MAP.H];
+        const [x1, x2, y1, y2] = zone === 'dungeon' ? [zd.dx + col * 22, zd.dx + col * 22 + 22, 0, MAP.H]
+          : zone === 'lobby' ? [zd.lx, zd.lx + 12, 0, 18] : zone === 'hub' ? [MAP.HX, MAP.HX + 16, 0, 18] : [0, MAP.MW, 0, MAP.H];
         const w = (x2 - x1) * T, h = (y2 - y1) * T;
         const bw = Math.max(w, vw), bh = Math.max(h, vh), bx = x1 * T - (bw - w) / 2, by = y1 * T - (bh - h) / 2;
         cam.setBounds(bx, by, bw, bh);
@@ -7111,12 +7408,16 @@
         // 其他地方的玩法交給頭上的提示紙條，只有不講會不知道規則的地方才提醒一句
         const tips = {
           front: '看到紅圈快閃開，回到圍欄裡就安全了',
-          d1: '照石碑上的顏色順序踩石頭',
-          d2: '把三顆大理石推進地上的凹槽',
-          d3: '紅色範圍快閃開，他舉拳就是要衝鋒',
+          d1: '石碑上的顏色順序只亮一下，快記下來再照順序踩',
+          d2: '把四顆大理石推進地上的凹槽，推到角落會卡住',
+          d3: '兩塊踏板要同時有人踩，一個人可以把大理石推上去壓',
+          d4: '踩石板會轉水道，把泉水接到水車；溪水會漲，獼猴會亂轉',
+          d5: '紅色範圍快閃開，他舉拳就是要衝鋒',
           t1: '撐過三波怪，地上的紅圈是招牌要掉下來了',
-          t2: '阻尼球掃到很痛！四個角落的控制台要同時亮',
-          t3: '黃圈是分攤要靠過去，暴風來時躲到柱子後面',
+          t2: '站在答案按鈕上 1.5 秒就算作答，答錯會掉招牌下來',
+          t3: '看阻尼球閃的顏色順序點控制台，四個要同時亮',
+          t4: '碰避雷針，它和左右兩根會一起切換，五根全亮就過關',
+          t5: '黃圈是分攤要靠過去，暴風來時躲到柱子後面',
         };
         if (tips[rid] && !this.told[rid]) { this.told[rid] = true; toast(tips[rid]); }
       }

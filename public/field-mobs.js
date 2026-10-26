@@ -1,486 +1,457 @@
 // 野區的怪：職場怪（下班路上、打卡大樓）和台灣民間傳說的怪（廟口老街）
-// 小怪畫在 96x84 裡（跟副本的怪一樣大），頭目畫在 120x100 裡，都是兩倍解析度，腳底在畫布下緣
+// 畫風參考 ZS 給的插畫：形狀簡單飽滿、霧面的不透明水彩色、色塊裡有深淺變化和乾筆刷痕，
+// 臉是小小的點點眼＋嘟嘟的嘴；外框保留深色描邊（跟遊戲裡其他角色一致）
+// 小怪畫在 96x84 裡，頭目畫在 120x100 裡，腳底在畫布下緣
 (function (root) {
-  const CR = root.HQ_CRAYON;
-  const INK = CR.INK;
+  const INK = '#2a2635';
+  let SCALE = 2;
 
-  function canvas(w, h, seed, draw) {
-    const c = document.createElement('canvas');
-    c.width = w * 2; c.height = h * 2;
-    const ctx = c.getContext('2d');
-    ctx.scale(2, 2);
-    draw(ctx, CR.rng(seed));
-    return c;
-  }
-  // 參考插畫家的畫法：柔和的霧面配色，色塊裡面有一筆一筆的亮色、暗色筆觸，像不透明水彩疊上去
-  const hex = (c) => /^#[0-9a-f]{6}$/i.test(c) ? [1, 3, 5].map(i => parseInt(c.slice(i, i + 2), 16)) : null;
-  const mix = (rgb, to, k, a) => `rgba(${rgb.map((v, i) => Math.round(v + (to[i] - v) * k)).join(',')},${a})`;
-  const LIGHT = [255, 248, 230], DARK = [40, 44, 80];
-  function fill(ctx, color, r, box, grain = 1) {
-    const rgb = hex(color);
+  // ---------- 顏色 ----------
+  const rgbOf = (c) => [1, 3, 5].map(i => parseInt(c.slice(i, i + 2), 16));
+  const mix = (c, to, k, a = 1) => {
+    const p = rgbOf(c), q = typeof to === 'string' ? rgbOf(to) : to;
+    return `rgba(${p.map((v, i) => Math.round(v + (q[i] - v) * k)).join(',')},${a})`;
+  };
+  const CREAM = [255, 246, 226], NIGHT = [36, 34, 72];
+  const light = (c, k = 0.35, a = 1) => mix(c, CREAM, k, a);
+  const dark = (c, k = 0.3, a = 1) => mix(c, NIGHT, k, a);
+
+  // ---------- 形狀（都回傳 Path2D，才不會互相蓋掉路徑） ----------
+  const E = (cx, cy, rx, ry, rot = 0) => { const p = new Path2D(); p.ellipse(cx, cy, rx, ry, rot, 0, Math.PI * 2); return p; };
+  const RR = (x, y, w, h, rad) => { const p = new Path2D(); p.roundRect(x, y, w, h, rad); return p; };
+  // 把一串點用二次曲線連成圓滑的封閉形狀
+  const S = (pts) => {
+    const p = new Path2D(), n = pts.length, mid = (a, b) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+    let m = mid(pts[n - 1], pts[0]); p.moveTo(m[0], m[1]);
+    for (let i = 0; i < n; i++) { const a = pts[i]; m = mid(a, pts[(i + 1) % n]); p.quadraticCurveTo(a[0], a[1], m[0], m[1]); }
+    p.closePath(); return p;
+  };
+  // 旋轉／平移一個形狀
+  const T = (path, x, y, deg = 0, s = 1) => { const p = new Path2D(); p.addPath(path, new DOMMatrix().translate(x, y).rotate(deg).scale(s)); return p; };
+
+  // ---------- 上色：一塊顏色畫成水彩感 ----------
+  // box：形狀大概的範圍 [x, y, w, h]；o.hue：第二個顏色（從 o.at 那邊暈開）；o.lw：描邊粗細（0 不描）
+  function paint(ctx, r, path, box, base, o = {}) {
+    const [x, y, w, h] = box, cx = x + w / 2, cy = y + h / 2;
     ctx.save();
-    ctx.fillStyle = color; ctx.fill();
-    if (rgb) {
-      ctx.clip();
-      const [x, y, w, h] = box || [0, 0, 120, 100];
-      if (box) {
-        // 用 Path2D 畫，才不會蓋掉等一下要描邊的路徑
-      // 右下暗一點、左上亮一點（平塗的色塊，不用漸層）
-        ctx.fillStyle = mix(rgb, DARK, 0.28, 0.35);
-        const sh = new Path2D(); sh.ellipse(x + w * 0.62, y + h * 1.02, w * 0.75, h * 0.42, -0.2, 0, Math.PI * 2); ctx.fill(sh);
-        ctx.fillStyle = mix(rgb, LIGHT, 0.45, 0.4);
-        const hi = new Path2D(); hi.ellipse(x + w * 0.3, y + h * 0.22, w * 0.26, h * 0.16, -0.5, 0, Math.PI * 2); ctx.fill(hi);
+    ctx.clip(path);
+    // 1. 整塊先上暗色，再把亮一點的主色往左上偏一點蓋上去：右下就留下一圈影子
+    ctx.fillStyle = dark(base, 0.26); ctx.fillRect(x - 4, y - 4, w + 8, h + 8);
+    ctx.save(); ctx.translate(cx, cy); ctx.scale(0.94, 0.93); ctx.translate(-cx - w * 0.045, -cy - h * 0.06);
+    ctx.fillStyle = base; ctx.fill(path); ctx.restore();
+    // 2. 第二個顏色暈開（像插畫裡橘色魚身慢慢變粉紅）
+    if (o.hue) {
+      const [ax, ay] = o.at || [0.5, 1];
+      const g = ctx.createRadialGradient(x + w * ax, y + h * ay, 0, x + w * ax, y + h * ay, Math.max(w, h) * 0.75);
+      g.addColorStop(0, mix(o.hue, o.hue, 0, 0.7)); g.addColorStop(1, mix(o.hue, o.hue, 0, 0));
+      ctx.fillStyle = g; ctx.fillRect(x - 4, y - 4, w + 8, h + 8);
+    }
+    // 3. 左上一塊亮面（不規則的形狀）
+    if (o.shine !== false) {
+      const pts = [];
+      for (let i = 0; i < 9; i++) {
+        const a = (i / 9) * Math.PI * 2, k = 0.75 + r() * 0.5;
+        pts.push([x + w * 0.33 + Math.cos(a) * w * 0.2 * k, y + h * 0.26 + Math.sin(a) * h * 0.13 * k]);
       }
-      // 短短的筆觸
-      const n = box ? Math.min(70, Math.round(w * h / 45)) : 40;
-      ctx.lineCap = 'round';
-      for (let i = 0; i < n; i++) {
-        const px = x + r() * w, py = y + r() * h, len = 2 + r() * 5, a = -0.6 + r() * 0.5;
-        ctx.strokeStyle = r() < 0.55 ? mix(rgb, LIGHT, 0.4, 0.35) : mix(rgb, DARK, 0.25, 0.25);
-        ctx.lineWidth = 0.8 + r() * 1.4;
-        const st = new Path2D(); st.moveTo(px, py); st.quadraticCurveTo(px + len * 0.5, py - 1.2, px + Math.cos(a) * len, py + Math.sin(a) * len); ctx.stroke(st);
+      ctx.fillStyle = light(base, 0.4, 0.42); ctx.fill(S(pts));
+    }
+    // 4. 乾筆刷痕：同一個方向的細細筆觸＋一點一點的顏料
+    ctx.lineCap = 'round';
+    const n = Math.min(90, Math.round(w * h / 28)), dir = o.dir == null ? -0.5 : o.dir;
+    for (let i = 0; i < n; i++) {
+      const px = x + r() * w, py = y + r() * h, len = 3 + r() * 7, a = dir + (r() - 0.5) * 0.5;
+      ctx.strokeStyle = r() < 0.6 ? light(base, 0.45, 0.16 + r() * 0.14) : dark(base, 0.35, 0.1 + r() * 0.1);
+      ctx.lineWidth = 0.6 + r() * 1.6;
+      const st = new Path2D(); st.moveTo(px, py); st.quadraticCurveTo(px + Math.cos(a) * len * 0.5 + 0.8, py + Math.sin(a) * len * 0.5 - 0.8, px + Math.cos(a) * len, py + Math.sin(a) * len);
+      ctx.stroke(st);
+    }
+    for (let i = 0; i < n * 2; i++) {
+      ctx.fillStyle = r() < 0.5 ? 'rgba(255,248,232,0.16)' : 'rgba(30,24,60,0.07)';
+      ctx.fillRect(x + r() * w, y + r() * h, 0.5 + r() * 1.3, 0.5 + r() * 0.9);
+    }
+    ctx.restore();
+    if (o.lw !== 0) outline(ctx, path, o.lw || 2.2);
+  }
+  function outline(ctx, path, lw = 2.2) {
+    ctx.save(); ctx.strokeStyle = INK; ctx.lineWidth = lw; ctx.lineJoin = 'round'; ctx.lineCap = 'round'; ctx.stroke(path); ctx.restore();
+  }
+  // 手腳、尾巴、觸手：粗粗的一條（先描深色邊，再上色，再加一條亮線）
+  function limb(ctx, pts, w, color) {
+    const p = new Path2D(); p.moveTo(...pts[0]);
+    if (pts.length === 3) p.quadraticCurveTo(...pts[1], ...pts[2]); else p.lineTo(...pts[1]);
+    ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.strokeStyle = INK; ctx.lineWidth = w + 2.4; ctx.stroke(p);
+    ctx.strokeStyle = color; ctx.lineWidth = w; ctx.stroke(p);
+    ctx.translate(-w * 0.18, -w * 0.18); ctx.strokeStyle = light(color, 0.4, 0.55); ctx.lineWidth = w * 0.32; ctx.stroke(p);
+    ctx.restore();
+  }
+  // 小圓球（手、鞋子）
+  const ball = (ctx, r, x, y, rx, ry, color, rot = 0) => paint(ctx, r, E(x, y, rx, ry, rot), [x - rx, y - ry, rx * 2, ry * 2], color, { lw: 1.8, shine: false });
+  // 畫筆塗的一條線（不描邊，用在圖案、花紋）
+  function brush(ctx, pts, w, color) {
+    const p = new Path2D(); p.moveTo(...pts[0]);
+    for (let i = 1; i < pts.length; i += 2) {
+      if (pts[i + 1]) p.quadraticCurveTo(...pts[i], ...pts[i + 1]); else p.lineTo(...pts[i]);
+    }
+    ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = color; ctx.lineWidth = w; ctx.stroke(p); ctx.restore();
+  }
+  const dab = (ctx, x, y, rx, ry, color, rot = 0) => { ctx.fillStyle = color; ctx.fill(E(x, y, rx, ry, rot)); };
+  const glow = (ctx, x, y, rad, color, a = 0.5) => {
+    const g = ctx.createRadialGradient(x, y, 0, x, y, rad);
+    g.addColorStop(0, mix(color, color, 0, a)); g.addColorStop(1, mix(color, color, 0, 0));
+    ctx.fillStyle = g; ctx.fillRect(x - rad, y - rad, rad * 2, rad * 2);
+  };
+  const shadow = (ctx, x, y, rx) => {
+    ctx.save(); ctx.translate(x, y); ctx.scale(1, 0.2);
+    const g = ctx.createRadialGradient(0, 0, 0, 0, 0, rx);
+    g.addColorStop(0, 'rgba(30,28,60,0.28)'); g.addColorStop(1, 'rgba(30,28,60,0)');
+    ctx.fillStyle = g; ctx.fillRect(-rx, -rx, rx * 2, rx * 2); ctx.restore();
+  };
+  const text = (ctx, s, x, y, size, color, rot = 0) => {
+    ctx.save(); ctx.translate(x, y); ctx.rotate(rot); ctx.fillStyle = color; ctx.font = `900 ${size}px sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(s, 0, 0); ctx.restore();
+  };
+
+  // ---------- 臉：小點點眼、短短的鼻子、嘟嘟嘴（插畫家那種淡定的表情） ----------
+  // o.eyes：dot（點點）、sleepy（半睜）、happy（彎彎）、wink（一隻眨眼）、tired（黑眼圈）
+  // o.mouth：預設嘟嘟嘴；line（一條線）、smirk（壞笑）、none（不畫）
+  function face(ctx, x, y, s = 1, o = {}) {
+    const gap = (o.gap || 7) * s, ec = o.eyeColor || INK;
+    ctx.save(); ctx.lineCap = 'round';
+    if (o.blush !== false) [-1, 1].forEach(k => glow(ctx, x + k * (gap + 3.5 * s), y + 4 * s, 4.2 * s, '#e88a8a', 0.55));
+    const dotEye = (ex) => { ctx.fillStyle = ec; ctx.beginPath(); ctx.ellipse(ex, y, 1.5 * s, 1.75 * s, 0, 0, Math.PI * 2); ctx.fill(); };
+    const arcEye = (ex) => { ctx.strokeStyle = ec; ctx.lineWidth = 1.5 * s; ctx.beginPath(); ctx.arc(ex, y + 1 * s, 2.4 * s, Math.PI * 1.15, Math.PI * 1.85); ctx.stroke(); };
+    [-1, 1].forEach(k => {
+      const ex = x + k * gap;
+      const kind = o.eyes === 'wink' ? (k < 0 ? 'dot' : 'happy') : (o.eyes || 'dot');
+      if (kind === 'dot') dotEye(ex);
+      else if (kind === 'happy') arcEye(ex);
+      else if (kind === 'sleepy') {
+        ctx.fillStyle = ec; ctx.beginPath(); ctx.arc(ex, y - 0.3 * s, 2 * s, 0, Math.PI); ctx.fill();
+        ctx.strokeStyle = ec; ctx.lineWidth = 1.3 * s; ctx.beginPath(); ctx.moveTo(ex - 2.8 * s, y - 0.4 * s); ctx.lineTo(ex + 2.8 * s, y - 0.4 * s); ctx.stroke();
+      } else if (kind === 'tired') {
+        dotEye(ex);
+        ctx.strokeStyle = 'rgba(140,110,190,0.75)'; ctx.lineWidth = 1.2 * s; ctx.beginPath(); ctx.arc(ex, y + 0.6 * s, 3 * s, Math.PI * 0.2, Math.PI * 0.8); ctx.stroke();
       }
-      // 蠟筆顆粒
-      if (grain > 0) for (let i = 0; i < Math.min(300, w * h / 35); i++) {
-        ctx.fillStyle = r() < 0.5 ? 'rgba(255,250,235,0.22)' : 'rgba(40,30,50,0.07)';
-        ctx.fillRect(x + r() * w, y + r() * h, 0.6 + r() * 1.4, 0.5 + r() * 0.6);
-      }
+    });
+    if (o.nose) { ctx.strokeStyle = o.nose; ctx.lineWidth = 1.2 * s; ctx.beginPath(); ctx.moveTo(x, y + 1 * s); ctx.quadraticCurveTo(x + 1.2 * s, y + 3 * s, x - 0.2 * s, y + 3.6 * s); ctx.stroke(); }
+    const ly = y + (o.nose ? 6.4 : 5) * s, lw = (o.lipW || 3.4) * s, lc = o.lips || '#c9555e';
+    if (o.mouth === 'line') { ctx.strokeStyle = ec; ctx.lineWidth = 1.3 * s; ctx.beginPath(); ctx.moveTo(x - 2.4 * s, ly); ctx.quadraticCurveTo(x, ly - 0.6 * s, x + 2.4 * s, ly + 0.3 * s); ctx.stroke(); }
+    else if (o.mouth === 'smirk') {
+      ctx.fillStyle = lc; ctx.beginPath(); ctx.moveTo(x - lw, ly); ctx.quadraticCurveTo(x, ly + 3.2 * s, x + lw + 1 * s, ly - 1.4 * s); ctx.quadraticCurveTo(x, ly + 0.8 * s, x - lw, ly); ctx.fill();
+    } else if (o.mouth !== 'none') {
+      // 嘟嘟嘴：上下兩片
+      ctx.fillStyle = lc;
+      ctx.beginPath(); ctx.moveTo(x - lw, ly); ctx.quadraticCurveTo(x - lw * 0.5, ly - 1.8 * s, x, ly - 0.7 * s); ctx.quadraticCurveTo(x + lw * 0.5, ly - 1.8 * s, x + lw, ly);
+      ctx.quadraticCurveTo(x, ly + 2.6 * s, x - lw, ly); ctx.fill();
+      ctx.strokeStyle = dark(lc, 0.45, 0.7); ctx.lineWidth = 0.7 * s; ctx.beginPath(); ctx.moveTo(x - lw * 0.7, ly + 0.1 * s); ctx.quadraticCurveTo(x, ly + 0.6 * s, x + lw * 0.7, ly + 0.1 * s); ctx.stroke();
     }
     ctx.restore();
   }
-  // 燈火、燈籠周圍淡淡的光暈
-  const glow = (ctx, x, y, rad, rgb) => {
-    const g = ctx.createRadialGradient(x, y, 0, x, y, rad);
-    g.addColorStop(0, `rgba(${rgb},0.45)`); g.addColorStop(1, `rgba(${rgb},0)`);
-    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, rad, 0, Math.PI * 2); ctx.fill();
+
+  function canvas(w, h, seed, draw) {
+    const c = document.createElement('canvas');
+    c.width = w * SCALE; c.height = h * SCALE;
+    const ctx = c.getContext('2d');
+    ctx.scale(SCALE, SCALE);
+    let s = seed >>> 0;
+    const r = () => ((s = (Math.imul(s, 1664525) + 1013904223) >>> 0) / 4294967296);
+    draw(ctx, r);
+    return c;
+  }
+
+  const C = {
+    navy: '#3c4466', plum: '#5b4a7a', coral: '#d9645a', peach: '#e9967a', mustard: '#e6b94a', cream: '#f3ecdf',
+    teal: '#5f9ea6', sage: '#9fb8a8', lav: '#a493c9', pink: '#e3a0aa', wood: '#b98257', skin: '#efc6a6', grass: '#8fb07a',
   };
-  const dot = (ctx, x, y, rad, color) => { ctx.fillStyle = color; ctx.beginPath(); ctx.arc(x, y, rad, 0, Math.PI * 2); ctx.fill(); };
-  const shadow = (ctx, cx, cy, rx) => {
-    ctx.fillStyle = 'rgba(19,26,40,0.18)'; ctx.beginPath(); ctx.ellipse(cx, cy, rx, 4, 0, 0, Math.PI * 2); ctx.fill();
-  };
-  // 圓圓的黑眼睛，帶一點反光
-  const eye = (ctx, x, y, rad) => { rad *= 0.82; dot(ctx, x, y, rad, INK); dot(ctx, x - rad * 0.3, y - rad * 0.35, Math.max(0.5, rad * 0.24), 'rgba(255,250,235,0.9)'); };
-  // 瞇瞇眼（彎彎的一條線）
-  const squint = (ctx, r, x, y, w, up) => {
-    ctx.beginPath(); ctx.moveTo(x - w, y); ctx.quadraticCurveTo(x, y + (up ? -w : w) * 0.9, x + w, y); CR.stroke(ctx, r, 2);
-  };
-  const blush = (ctx, pts, rad = 3) => pts.forEach(([x, y]) => { ctx.fillStyle = 'rgba(226,120,120,0.4)'; ctx.beginPath(); ctx.ellipse(x, y, rad, rad * 0.6, 0, 0, Math.PI * 2); ctx.fill(); });
-  const smile = (ctx, r, x, y, w, k = 1) => { ctx.beginPath(); ctx.moveTo(x - w, y); ctx.quadraticCurveTo(x, y + w * 0.8 * k, x + w, y); CR.stroke(ctx, r, 1.8); };
-  // 小短腿＋鞋子
-  const legs = (ctx, r, xs, y0, y1, shoe) => xs.forEach(x => {
-    CR.line(ctx, x, y0, x, y1, r, 2.6, INK, 0.4);
-    CR.blob(ctx, x + 1.5, y1 + 1, 5, 2.8, r, 0.08, 10); fill(ctx, shoe, r, null); CR.stroke(ctx, r, 1.8);
-  });
-  const arm = (ctx, r, x0, y0, x1, y1, hand) => {
-    CR.line(ctx, x0, y0, x1, y1, r, 2.4, INK, 0.4);
-    if (hand) { CR.blob(ctx, x1, y1, 3, 3, r, 0.1, 10); fill(ctx, hand, r, null); CR.stroke(ctx, r, 1.4); }
-  };
-  const text = (ctx, s, x, y, size, color, weight = 900) => {
-    ctx.save(); ctx.fillStyle = color; ctx.font = `${weight} ${size}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText(s, x, y); ctx.restore();
-  };
+  const shoes = (ctx, r, pts, color) => pts.forEach(([x, y]) => ball(ctx, r, x, y, 5.2, 3.2, color));
+  // 小火焰
+  const flame = (x, y, s) => { const p = new Path2D(); p.moveTo(x, y - 7 * s); p.quadraticCurveTo(x + 5 * s, y - 1 * s, x + 3 * s, y + 2 * s); p.quadraticCurveTo(x, y + 4 * s, x - 3 * s, y + 2 * s); p.quadraticCurveTo(x - 5 * s, y - 1 * s, x, y - 7 * s); p.closePath(); return p; };
 
   const DRAW = {
     // ---------- 下班路上 ----------
-    // 便利貼精：一張黃色便利貼，右下角翹起來，後面還黏著粉紅、藍色兩張，上面寫著潦草的待辦
+    // 便利貼精：一張黃色便利貼，後面黏著粉紅、藍色兩張，右下角翹起來
     sticky: () => canvas(96, 84, 201, (ctx, r) => {
-      shadow(ctx, 48, 81, 22);
-      legs(ctx, r, [40, 56], 66, 77, '#d9605a');
-      // 後面兩張
-      [['#8ec3c9', -0.22, -7, 4], ['#e9a0a8', 0.16, 7, 2]].forEach(([c, a, dx, dy]) => {
-        ctx.save(); ctx.translate(48 + dx, 40 + dy); ctx.rotate(a);
-        CR.rect(ctx, -22, -22, 44, 44, r, 1); fill(ctx, c, r, [-22, -22, 44, 44]); CR.stroke(ctx, r, 2.2);
-        ctx.restore();
-      });
-      // 最前面的黃色那張，右下角翹起
-      ctx.save(); ctx.translate(48, 42); ctx.rotate(-0.04);
-      ctx.beginPath(); ctx.moveTo(-24, -24); ctx.lineTo(24, -24); ctx.lineTo(24, 12); ctx.lineTo(12, 24); ctx.lineTo(-24, 24); ctx.closePath();
-      fill(ctx, '#f0c95a', r, [-24, -24, 48, 48], 1.2); CR.stroke(ctx, r, 2.6);
-      ctx.beginPath(); ctx.moveTo(24, 12); ctx.quadraticCurveTo(15, 12, 12, 24); ctx.quadraticCurveTo(20, 20, 24, 12); ctx.closePath();
-      fill(ctx, '#d9a845', r, null); CR.stroke(ctx, r, 1.8);
-      // 頂端的黏膠條（顏色深一點）
-      CR.rect(ctx, -23, -23, 46, 7, r, 0.4); ctx.fillStyle = 'rgba(242,180,40,0.35)'; ctx.fill();
-      // 潦草的待辦
-      [[-15, -10, 14], [-15, -4, 10]].forEach(([x, y, w]) => CR.line(ctx, x, y, x + w, y, r, 1.3, 'rgba(79,124,194,0.85)', 1.2));
-      ctx.beginPath(); ctx.moveTo(6, -12); ctx.lineTo(9, -8); ctx.lineTo(16, -15); CR.stroke(ctx, r, 1.6, '#d9605a');
-      // 臉
-      eye(ctx, -8, 7, 2.6); eye(ctx, 8, 7, 2.6);
-      blush(ctx, [[-14, 13], [14, 13]]);
-      smile(ctx, r, 0, 13, 4);
-      ctx.restore();
-      // 兩隻小手：一隻舉起來揮
-      arm(ctx, r, 20, 50, 10, 40, '#f0c95a');
-      arm(ctx, r, 76, 40, 86, 32, '#f0c95a');
+      shadow(ctx, 48, 79, 24);
+      limb(ctx, [[41, 60], [40, 75]], 4.6, C.navy); limb(ctx, [[55, 60], [56, 75]], 4.6, C.navy);
+      shoes(ctx, r, [[39, 77], [57, 77]], C.coral);
+      paint(ctx, r, T(RR(-20, -21, 40, 42, 4), 38, 37, -12), [16, 14, 44, 46], C.teal, { hue: '#7fb3c9', at: [0.2, 0.2] });
+      paint(ctx, r, T(RR(-20, -21, 40, 42, 4), 59, 39, 10), [37, 16, 44, 46], C.pink, { hue: '#e9b08a', at: [0.8, 0.9] });
+      const note = new Path2D();
+      note.moveTo(26, 17); note.quadraticCurveTo(48, 13, 71, 17); note.lineTo(71, 47); note.quadraticCurveTo(66, 57, 58, 60);
+      note.lineTo(27, 61); note.quadraticCurveTo(24, 40, 26, 17); note.closePath();
+      paint(ctx, r, note, [24, 13, 48, 48], '#efc75e', { hue: '#ea9a76', at: [0.6, 1.05] });
+      ctx.save(); ctx.clip(note); ctx.fillStyle = 'rgba(255,240,200,0.4)'; ctx.fillRect(22, 13, 52, 8); ctx.restore();
+      const curl = new Path2D(); curl.moveTo(71, 47); curl.quadraticCurveTo(62, 49, 58, 60); curl.quadraticCurveTo(67, 57, 71, 47); curl.closePath();
+      paint(ctx, r, curl, [58, 47, 13, 13], '#d9a845', { lw: 1.8, shine: false });
+      brush(ctx, [[33, 27], [49, 26]], 1.7, 'rgba(79,120,168,0.8)'); brush(ctx, [[33, 33], [44, 32.5]], 1.7, 'rgba(79,120,168,0.8)');
+      brush(ctx, [[55, 27], [58, 31], [64, 23]], 2, 'rgba(201,85,94,0.85)');
+      face(ctx, 48, 45, 1.05);
+      limb(ctx, [[27, 42], [21, 38], [17, 32]], 4, '#efc75e'); ball(ctx, r, 17, 31, 3.2, 3.2, '#efc75e');
+      limb(ctx, [[70, 38], [76, 35], [80, 29]], 4, '#efc75e'); ball(ctx, r, 80, 28, 3.2, 3.2, '#efc75e');
     }),
 
-    // 已讀飄飄：一個白白的對話泡泡，下面拖著飄飄的尾巴，睡眼惺忪，角落寫著「已讀」
+    // 已讀飄飄：白白的對話泡泡幽靈，睡眼惺忪，角落寫著「已讀」
     seen: () => canvas(96, 84, 202, (ctx, r) => {
-      shadow(ctx, 48, 81, 16);
-      // 泡泡身體＋飄飄的尾巴
-      ctx.beginPath();
-      ctx.moveTo(20, 44);
-      ctx.quadraticCurveTo(18, 14, 48, 12); ctx.quadraticCurveTo(78, 14, 76, 44);
-      ctx.quadraticCurveTo(76, 58, 64, 62);
-      ctx.quadraticCurveTo(62, 70, 54, 74); ctx.quadraticCurveTo(56, 68, 50, 64);
-      ctx.quadraticCurveTo(44, 70, 36, 68); ctx.quadraticCurveTo(40, 64, 34, 62);
-      ctx.quadraticCurveTo(20, 58, 20, 44); ctx.closePath();
-      fill(ctx, '#f8f1e4', r, [18, 12, 60, 62], 1); CR.stroke(ctx, r, 2.6);
-      // 底部淡淡的陰影
-      CR.blob(ctx, 48, 60, 16, 3, r, 0.1); ctx.save(); ctx.globalAlpha = 0.6; ctx.fillStyle = '#dfe6f0'; ctx.fill(); ctx.restore();
-      // 半睜半閉的眼睛
-      [[38, 36], [58, 36]].forEach(([x, y]) => {
-        ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI); ctx.closePath(); ctx.fillStyle = INK; ctx.fill();
-        CR.line(ctx, x - 5, y, x + 5, y, r, 2.2, INK, 0.3);
-      });
-      // 嘟嘴
-      CR.blob(ctx, 48, 46, 2.4, 1.8, r, 0.1, 10); fill(ctx, '#d9605a', r, null);
-      // 兩個藍色勾勾＋「已讀」
-      [[60, 56], [65, 56]].forEach(([x, y]) => { ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 2, y + 2.5); ctx.lineTo(x + 6, y - 2.5); CR.stroke(ctx, r, 1.6, '#4b7fa3'); });
-      text(ctx, '已讀', 36, 56, 7, 'rgba(110,118,132,0.9)', 700);
-      // 飄動的小線條
-      [[12, 30], [84, 38], [80, 22]].forEach(([x, y]) => CR.line(ctx, x, y, x + (x < 48 ? -4 : 4), y + 6, r, 1.4, 'rgba(110,118,132,0.6)', 0.4));
+      shadow(ctx, 48, 80, 16);
+      const b = new Path2D();
+      b.moveTo(21, 40); b.quadraticCurveTo(20, 13, 48, 12); b.quadraticCurveTo(76, 13, 75, 40);
+      b.quadraticCurveTo(75, 56, 63, 60); b.quadraticCurveTo(62, 69, 55, 73); b.quadraticCurveTo(57, 66, 51, 62);
+      b.quadraticCurveTo(44, 68, 36, 66); b.quadraticCurveTo(40, 62, 34, 60); b.quadraticCurveTo(21, 56, 21, 40); b.closePath();
+      paint(ctx, r, b, [20, 12, 56, 62], C.cream, { hue: '#b9b3d9', at: [0.6, 1] });
+      face(ctx, 48, 38, 1.15, { eyes: 'sleepy', gap: 8, lipW: 2.6 });
+      text(ctx, '已讀', 36, 53, 7, 'rgba(120,124,150,0.9)');
+      [[59, 53], [64, 53]].forEach(([x, y]) => brush(ctx, [[x, y], [x + 2, y + 2.5], [x + 6, y - 2.5]], 1.6, '#5d82a8'));
+      [[12, 30, 8, 36], [84, 36, 88, 42], [80, 20, 84, 25]].forEach(([a, b2, c, d]) => brush(ctx, [[a, b2], [c, d]], 1.6, 'rgba(185,179,217,0.9)'));
     }),
 
-    // 甩鍋鍋：一支黑色小炒鍋，木頭把手當手臂，正要把另一支小鍋子丟出去，嘴裡嘻嘻笑
+    // 甩鍋鍋：深藍色的小炒鍋，鍋裡還有青菜，把另一支小鍋子丟出去
     wok: () => canvas(96, 84, 203, (ctx, r) => {
-      shadow(ctx, 44, 81, 24);
-      legs(ctx, r, [36, 52], 64, 77, '#5d6b80');
-      // 鍋身（側面看是半圓碗）
-      ctx.beginPath(); ctx.moveTo(14, 36); ctx.quadraticCurveTo(16, 68, 44, 68); ctx.quadraticCurveTo(72, 68, 74, 36); ctx.closePath();
-      fill(ctx, '#3c3f5c', r, [14, 36, 60, 32], 1.2); CR.stroke(ctx, r, 2.6);
-      // 鍋口
-      CR.blob(ctx, 44, 36, 31, 6, r, 0.04, 20); fill(ctx, '#5d6b80', r, null); CR.stroke(ctx, r, 2.4);
-      CR.blob(ctx, 44, 37, 25, 3.6, r, 0.06, 16); ctx.fillStyle = '#2b2a33'; ctx.fill();
-      // 鍋子上的亮光
-      ctx.beginPath(); ctx.arc(30, 52, 10, Math.PI * 0.75, Math.PI * 1.05); CR.stroke(ctx, r, 2, 'rgba(255,255,255,0.45)');
-      // 臉（白白的，畫在鍋身上）
-      [[34, 50], [54, 50]].forEach(([x, y]) => { dot(ctx, x, y, 4.2, '#f8f1e4'); eye(ctx, x + 1, y + 0.5, 2.2); });
-      ctx.beginPath(); ctx.moveTo(38, 58); ctx.quadraticCurveTo(44, 64, 50, 58); ctx.closePath(); ctx.fillStyle = '#f8f1e4'; ctx.fill(); CR.stroke(ctx, r, 1.4, '#f8f1e4');
-      blush(ctx, [[26, 57], [62, 57]], 3.2);
-      // 冒汗
-      ctx.beginPath(); ctx.moveTo(70, 44); ctx.quadraticCurveTo(66, 50, 70, 52); ctx.quadraticCurveTo(74, 50, 70, 44); ctx.closePath();
-      fill(ctx, '#8ec3c9', r, null); CR.stroke(ctx, r, 1.2);
-      // 木頭把手往右上伸，抓著另一支小鍋子要丟出去
-      ctx.save(); ctx.translate(72, 40); ctx.rotate(-0.55);
-      CR.rect(ctx, 0, -3.5, 22, 7, r, 0.6); fill(ctx, '#b07a4a', r, null); CR.stroke(ctx, r, 2);
-      ctx.restore();
-      ctx.save(); ctx.translate(80, 22); ctx.rotate(0.6);
-      ctx.beginPath(); ctx.moveTo(-9, -2); ctx.quadraticCurveTo(-8, 8, 0, 8); ctx.quadraticCurveTo(8, 8, 9, -2); ctx.closePath();
-      fill(ctx, '#3c3f5c', r, null); CR.stroke(ctx, r, 2);
-      CR.line(ctx, 9, -2, 15, -6, r, 2.4, '#b07a4a', 0.3);
-      ctx.restore();
-      // 丟出去的動作線
-      [[70, 10], [76, 6]].forEach(([x, y]) => CR.line(ctx, x, y, x - 6, y + 4, r, 1.4, 'rgba(110,118,132,0.6)', 0.4));
-      // 左手揮揮（不是我喔）
-      arm(ctx, r, 16, 46, 6, 38, '#f8f1e4');
+      shadow(ctx, 46, 79, 26);
+      limb(ctx, [[39, 62], [38, 74]], 4.6, C.navy); limb(ctx, [[53, 62], [54, 74]], 4.6, C.navy);
+      shoes(ctx, r, [[37, 76], [55, 76]], C.coral);
+      limb(ctx, [[17, 44], [11, 40], [7, 33]], 4, '#5a6488'); ball(ctx, r, 7, 32, 3.2, 3.2, C.cream);
+      const bowl = new Path2D(); bowl.moveTo(14, 34); bowl.quadraticCurveTo(16, 67, 46, 67); bowl.quadraticCurveTo(76, 67, 78, 34); bowl.closePath();
+      paint(ctx, r, bowl, [14, 34, 64, 33], '#3f4870', { hue: '#6a5488', at: [0.8, 0.9] });
+      // 把手＋丟出去的小鍋子
+      paint(ctx, r, T(RR(0, -3.5, 22, 7, 3.5), 75, 38, -32), [74, 24, 20, 16], C.wood, { lw: 1.8, shine: false });
+      const pot = new Path2D(); pot.moveTo(-9, -2); pot.quadraticCurveTo(-8, 8, 0, 8); pot.quadraticCurveTo(8, 8, 9, -2); pot.closePath();
+      paint(ctx, r, T(pot, 80, 16, 30), [70, 8, 20, 18], '#3f4870', { lw: 1.8, shine: false });
+      limb(ctx, [[84, 13], [89, 9]], 2.4, C.wood);
+      [[70, 6, 64, 10], [77, 3, 71, 6]].forEach(([a, b2, c, d]) => brush(ctx, [[a, b2], [c, d]], 1.4, 'rgba(150,150,180,0.8)'));
+      // 鍋口和鍋裡的青菜
+      paint(ctx, r, E(46, 34, 32, 6), [14, 28, 64, 12], '#7b84a6', { lw: 2, shine: false });
+      ctx.fillStyle = '#262940'; ctx.fill(E(46, 35, 26, 3.6));
+      [[36, 33, '#7fb38a'], [44, 34, '#9cc79a'], [52, 33, '#7fb38a'], [58, 34.5, '#e9967a'], [30, 35, '#e9967a']].forEach(([x, y, c]) => dab(ctx, x, y, 3.4, 1.6, c, -0.3));
+      brush(ctx, [[24, 44], [22, 52], [26, 58]], 2.2, 'rgba(200,205,235,0.4)');
+      face(ctx, 46, 49, 1.15, { eyeColor: '#f3ecdf', lips: '#e98a84', gap: 8 });
+      ctx.fillStyle = '#9fd0d6'; ctx.beginPath(); ctx.moveTo(70, 42); ctx.quadraticCurveTo(66, 48, 70, 50); ctx.quadraticCurveTo(74, 48, 70, 42); ctx.fill();
     }),
 
     // ---------- 打卡大樓 ----------
-    // 會議章魚：紫色章魚戴著眼鏡、打領帶，觸手拿著筆電、咖啡、雷射筆
+    // 會議章魚：薰衣草紫的章魚，戴圓眼鏡打紅領帶，拿著筆電和咖啡
     octo: () => canvas(96, 84, 204, (ctx, r) => {
-      shadow(ctx, 48, 81, 28);
-      const body = '#a493c9';
-      // 觸手（底下一圈）
-      for (let i = 0; i < 6; i++) {
-        const k = (i - 2.5) / 2.5;
-        ctx.beginPath(); ctx.moveTo(48 + k * 12, 58); ctx.quadraticCurveTo(48 + k * 22, 70, 48 + k * 26 + k * 4, 77 - Math.abs(k) * 2);
-        CR.stroke(ctx, r, 7.6, INK); CR.stroke(ctx, r, 5, body);
-      }
-      // 拿東西的三隻觸手
-      [[30, 50, 14, 40], [66, 50, 82, 42], [62, 54, 80, 62]].forEach(([x0, y0, x1, y1]) => {
-        ctx.beginPath(); ctx.moveTo(x0, y0); ctx.quadraticCurveTo((x0 + x1) / 2, y1 + 8, x1, y1);
-        CR.stroke(ctx, r, 7, INK); CR.stroke(ctx, r, 4.6, body);
-      });
-      // 頭
-      CR.blob(ctx, 48, 38, 24, 23, r, 0.04, 20); fill(ctx, body, r, [24, 15, 48, 46], 1); CR.stroke(ctx, r, 2.6);
-      [[38, 20, 4], [58, 24, 3], [52, 16, 2.4]].forEach(([x, y, s]) => dot(ctx, x, y, s, 'rgba(255,255,255,0.35)'));
-      // 圓眼鏡
-      [[39, 40], [57, 40]].forEach(([x, y]) => {
-        dot(ctx, x, y, 6.6, 'rgba(255,255,255,0.7)'); ctx.beginPath(); ctx.arc(x, y, 6.6, 0, Math.PI * 2); CR.stroke(ctx, r, 1.8);
-        eye(ctx, x, y + 0.5, 2.4);
-      });
-      CR.line(ctx, 45.6, 40, 50.4, 40, r, 1.6, INK, 0.2);
-      smile(ctx, r, 48, 50, 3.6);
-      // 領帶
-      ctx.beginPath(); ctx.moveTo(45, 58); ctx.lineTo(51, 58); ctx.lineTo(53, 70); ctx.lineTo(48, 74); ctx.lineTo(43, 70); ctx.closePath();
-      fill(ctx, '#d9605a', r, null); CR.stroke(ctx, r, 1.8);
-      // 筆電（左）
-      ctx.save(); ctx.translate(12, 36); ctx.rotate(-0.2);
-      CR.rect(ctx, -10, -9, 20, 13, r, 0.5); fill(ctx, '#c3c8cf', r, null); CR.stroke(ctx, r, 1.8);
-      CR.rect(ctx, -8, -7, 16, 9, r, 0.3); fill(ctx, '#8ec3c9', r, null);
-      // 螢幕上的長條圖
-      [[-5, 3], [-1, 5], [3, 7]].forEach(([x, h]) => { ctx.fillStyle = '#4b7fa3'; ctx.fillRect(x, 1 - h, 2.4, h); });
-      ctx.restore();
-      // 咖啡（右上）
-      CR.rect(ctx, 78, 32, 9, 11, r, 0.5); fill(ctx, '#f8f1e4', r, null); CR.stroke(ctx, r, 1.8);
-      CR.rect(ctx, 78, 36, 9, 3, r, 0.3); ctx.fillStyle = '#b07a4a'; ctx.fill();
-      [[80, 28], [84, 26]].forEach(([x, y]) => { ctx.beginPath(); ctx.moveTo(x, y + 3); ctx.quadraticCurveTo(x + 2, y, x, y - 3); CR.stroke(ctx, r, 1.2, 'rgba(110,118,132,0.7)'); });
-      // 雷射筆（右下）
-      CR.line(ctx, 78, 62, 90, 58, r, 2.6, '#5d6b80', 0.3);
-      dot(ctx, 91, 57.6, 1.8, '#d9605a');
+      shadow(ctx, 48, 79, 30);
+      const body = C.lav;
+      [[-1, 34, 76], [-0.6, 40, 78], [-0.2, 46, 79], [0.2, 52, 79], [0.6, 58, 78], [1, 64, 76]].forEach(([k, x, y]) =>
+        limb(ctx, [[48 + k * 12, 56], [48 + k * 24, 64], [x + k * 8, y]], 5.4, body));
+      [[44, 76], [50, 77]].forEach(([x, y]) => dab(ctx, x, y, 1.4, 1, 'rgba(240,200,220,0.9)'));
+      limb(ctx, [[30, 48], [20, 50], [14, 42]], 4.6, body);
+      limb(ctx, [[66, 48], [76, 50], [80, 42]], 4.6, body);
+      limb(ctx, [[62, 54], [74, 62], [80, 60]], 4.2, body);
+      paint(ctx, r, S([[48, 12], [66, 16], [73, 34], [68, 52], [48, 58], [28, 52], [23, 34], [30, 16]]), [23, 12, 50, 46], body, { hue: '#d9a0b8', at: [0.5, 1] });
+      [[36, 22, 3.4], [58, 26, 2.6], [52, 17, 2]].forEach(([x, y, s]) => dab(ctx, x, y, s, s, 'rgba(240,230,250,0.5)'));
+      // 眼鏡
+      [[40, 38], [56, 38]].forEach(([x, y]) => { ctx.fillStyle = 'rgba(255,250,240,0.45)'; ctx.fill(E(x, y, 5.6, 5.6)); outline(ctx, E(x, y, 5.6, 5.6), 1.4); });
+      brush(ctx, [[45.6, 38], [50.4, 38]], 1.3, INK);
+      face(ctx, 48, 38.5, 1, { gap: 8, lipW: 2.6 });
+      const tie = new Path2D(); tie.moveTo(45, 55); tie.lineTo(51, 55); tie.lineTo(53, 66); tie.lineTo(48, 70); tie.lineTo(43, 66); tie.closePath();
+      paint(ctx, r, tie, [43, 55, 10, 15], C.coral, { lw: 1.6, shine: false });
+      // 筆電
+      paint(ctx, r, T(RR(-11, -8, 22, 15, 2.5), 13, 36, -12), [1, 27, 24, 18], '#aab3c3', { lw: 1.8, shine: false });
+      ctx.save(); ctx.translate(13, 36); ctx.rotate(-0.21); ctx.fillStyle = '#8ec3c9'; ctx.fillRect(-8, -5.5, 16, 10);
+      [[-5, 3], [-1, 5], [3, 7]].forEach(([x, h]) => { ctx.fillStyle = '#4f78a8'; ctx.fillRect(x, 3 - h, 2.4, h); }); ctx.restore();
+      // 咖啡
+      paint(ctx, r, RR(77, 30, 10, 12, 2), [77, 30, 10, 12], C.cream, { lw: 1.8, shine: false });
+      ctx.fillStyle = C.wood; ctx.fillRect(77.5, 34, 9, 3);
+      [[80, 26], [84, 24]].forEach(([x, y]) => brush(ctx, [[x, y + 3], [x + 2, y], [x, y - 3]], 1.2, 'rgba(160,160,190,0.8)'));
     }),
 
-    // 加班鬧鐘：紅色的雙鈴鬧鐘，指針停在快十一點，黑眼圈很重，鈴鐺還在響
+    // 加班鬧鐘：珊瑚紅的雙鈴鬧鐘，停在快十一點，黑眼圈很重
     clock: () => canvas(96, 84, 205, (ctx, r) => {
-      shadow(ctx, 48, 81, 22);
-      legs(ctx, r, [36, 60], 66, 77, '#2b2a33');
-      // 鈴鐺和中間的小槌
-      [[30, 16, -0.5], [66, 16, 0.5]].forEach(([x, y, a]) => {
-        ctx.save(); ctx.translate(x, y); ctx.rotate(a);
-        ctx.beginPath(); ctx.arc(0, 2, 10, Math.PI, 0); ctx.closePath();
-        fill(ctx, '#e9b949', r, null); CR.stroke(ctx, r, 2.2);
-        ctx.restore();
+      shadow(ctx, 48, 79, 22);
+      limb(ctx, [[38, 64], [36, 74]], 4.6, C.navy); limb(ctx, [[58, 64], [60, 74]], 4.6, C.navy);
+      shoes(ctx, r, [[35, 76], [61, 76]], C.cream);
+      [[30, 17, -28], [66, 17, 28]].forEach(([x, y, a]) => {
+        const p = new Path2D(); p.moveTo(-11, 3); p.quadraticCurveTo(-10, -9, 0, -9); p.quadraticCurveTo(10, -9, 11, 3); p.closePath();
+        paint(ctx, r, T(p, x, y, a), [x - 11, y - 10, 22, 14], C.mustard, { lw: 2, hue: '#e9967a', at: [0.5, 1] });
       });
-      CR.line(ctx, 48, 12, 48, 20, r, 2.4, INK, 0.2); dot(ctx, 48, 11, 2.6, INK);
-      // 鬧鐘本體
-      CR.blob(ctx, 48, 44, 26, 25, r, 0.03, 22); fill(ctx, '#d9605a', r, [22, 19, 52, 50], 1.2); CR.stroke(ctx, r, 2.8);
-      CR.blob(ctx, 48, 44, 20, 19, r, 0.03, 20); fill(ctx, '#f8f1e4', r, null); CR.stroke(ctx, r, 1.8);
-      // 刻度
-      for (let i = 0; i < 12; i++) {
-        const a = (i / 12) * Math.PI * 2, rr = i % 3 ? 16.5 : 15;
-        CR.line(ctx, 48 + Math.cos(a) * rr, 44 + Math.sin(a) * rr, 48 + Math.cos(a) * 18, 44 + Math.sin(a) * 18, r, i % 3 ? 1 : 1.6, INK, 0.1);
-      }
-      // 指針：10:55
-      CR.line(ctx, 48, 44, 40, 37, r, 2.2, INK, 0.2); CR.line(ctx, 48, 44, 46, 30, r, 1.6, INK, 0.2);
-      dot(ctx, 48, 44, 1.6, INK);
-      // 累累的臉（畫在鐘面下半）：黑眼圈、下垂的眼睛
-      [[40, 50], [56, 50]].forEach(([x, y]) => {
-        ctx.beginPath(); ctx.arc(x, y + 1.5, 4, Math.PI * 0.15, Math.PI * 0.85); CR.stroke(ctx, r, 1.6, 'rgba(138,92,214,0.7)');
-        eye(ctx, x, y - 0.5, 2);
-        CR.line(ctx, x - 3.5, y - 4, x + 3.5, y - 3, r, 1.4, INK, 0.2);
-      });
-      ctx.beginPath(); ctx.moveTo(44, 58); ctx.quadraticCurveTo(48, 55, 52, 58); CR.stroke(ctx, r, 1.6);
-      // 鈴聲
-      [[14, 10, -1], [82, 10, 1]].forEach(([x, y, k]) => {
-        [0, 6].forEach(d => { ctx.beginPath(); ctx.arc(x - k * d, y + 8, 8 + d, k > 0 ? -Math.PI * 0.4 : Math.PI * 1.1, k > 0 ? -Math.PI * 0.1 : Math.PI * 1.4); CR.stroke(ctx, r, 1.4, 'rgba(232,56,79,0.7)'); });
-      });
-      // 兩隻小手抓著頭（崩潰）
-      arm(ctx, r, 22, 48, 16, 36, '#f8f1e4');
-      arm(ctx, r, 74, 48, 80, 36, '#f8f1e4');
+      limb(ctx, [[48, 10], [48, 20]], 2.4, '#5a6488'); ball(ctx, r, 48, 9, 3, 3, '#5a6488');
+      limb(ctx, [[25, 46], [19, 42], [15, 34]], 4, C.coral); ball(ctx, r, 15, 33, 3.2, 3.2, C.cream);
+      limb(ctx, [[71, 46], [77, 42], [81, 34]], 4, C.coral); ball(ctx, r, 81, 33, 3.2, 3.2, C.cream);
+      paint(ctx, r, E(48, 44, 25, 24), [23, 20, 50, 48], C.coral, { hue: '#e9967a', at: [0.2, 0.9] });
+      paint(ctx, r, E(48, 44, 19, 18), [29, 26, 38, 36], C.cream, { lw: 1.8, hue: '#e8d6c8', at: [0.7, 0.9] });
+      for (let i = 0; i < 12; i++) { const a = (i / 12) * Math.PI * 2; dab(ctx, 48 + Math.cos(a) * 15.5, 44 + Math.sin(a) * 15, i % 3 ? 0.9 : 1.5, i % 3 ? 0.9 : 1.5, '#5a6488'); }
+      brush(ctx, [[48, 44], [41, 38]], 2.2, '#3c4466'); brush(ctx, [[48, 44], [46.5, 31]], 1.6, '#3c4466'); dab(ctx, 48, 44, 1.6, 1.6, '#3c4466');
+      face(ctx, 48, 49, 1, { eyes: 'tired', gap: 7.5, mouth: 'line' });
+      [[14, 12, -1], [82, 12, 1]].forEach(([x, y, k]) => [0, 5].forEach(d => {
+        ctx.save(); ctx.strokeStyle = 'rgba(217,100,90,0.7)'; ctx.lineWidth = 1.6; ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.arc(x - k * d, y + 8, 7 + d, k > 0 ? -Math.PI * 0.42 : Math.PI * 1.12, k > 0 ? -Math.PI * 0.12 : Math.PI * 1.42); ctx.stroke(); ctx.restore();
+      }));
     }),
 
-    // 急件老闆（頭目）：圓滾滾的老闆，頭頂一撮毛、八字鬍、吊帶褲，抱著一疊蓋了「急件」紅章的卷宗
+    // 急件老闆（頭目）：圓滾滾的老闆，頭頂一撮毛、八字鬍，抱著一疊蓋了「急件」紅章的卷宗
     boss: () => canvas(120, 100, 206, (ctx, r) => {
-      shadow(ctx, 60, 96, 36);
-      legs(ctx, r, [48, 72], 82, 92, '#2b2a33');
-      // 西裝外套（蛋形身體）
-      CR.blob(ctx, 60, 62, 32, 26, r, 0.03, 24); fill(ctx, '#34405e', r, [28, 36, 64, 52], 1.2); CR.stroke(ctx, r, 2.8);
-      // 白襯衫＋領帶
-      ctx.beginPath(); ctx.moveTo(50, 40); ctx.lineTo(70, 40); ctx.lineTo(64, 76); ctx.lineTo(56, 76); ctx.closePath(); fill(ctx, '#f8f1e4', r, null); CR.stroke(ctx, r, 1.8);
-      ctx.beginPath(); ctx.moveTo(57, 42); ctx.lineTo(63, 42); ctx.lineTo(65, 62); ctx.lineTo(60, 68); ctx.lineTo(55, 62); ctx.closePath(); fill(ctx, '#d9605a', r, null); CR.stroke(ctx, r, 1.6);
+      shadow(ctx, 60, 95, 36);
+      limb(ctx, [[51, 80], [50, 91]], 6, '#323a58'); limb(ctx, [[69, 80], [70, 91]], 6, '#323a58');
+      shoes(ctx, r, [[48, 93], [72, 93]], '#5b4a52');
+      paint(ctx, r, S([[60, 38], [80, 42], [91, 62], [86, 84], [60, 90], [34, 84], [29, 62], [40, 42]]), [29, 38, 62, 52], C.navy, { hue: C.plum, at: [0.85, 0.85] });
+      const shirt = new Path2D(); shirt.moveTo(50, 41); shirt.lineTo(70, 41); shirt.lineTo(63, 72); shirt.lineTo(57, 72); shirt.closePath();
+      paint(ctx, r, shirt, [50, 41, 20, 31], C.cream, { lw: 1.6, shine: false });
+      const tie = new Path2D(); tie.moveTo(57, 43); tie.lineTo(63, 43); tie.lineTo(65, 61); tie.lineTo(60, 67); tie.lineTo(55, 61); tie.closePath();
+      paint(ctx, r, tie, [55, 43, 10, 24], C.coral, { lw: 1.6, shine: false });
+      const sq = new Path2D(); sq.moveTo(73, 52); sq.lineTo(82, 52); sq.lineTo(78, 46); sq.closePath(); paint(ctx, r, sq, [73, 46, 9, 6], C.mustard, { lw: 1.2, shine: false });
       // 頭
-      CR.blob(ctx, 60, 28, 20, 18, r, 0.03, 20); fill(ctx, '#f0c9a8', r, [40, 10, 40, 36], 0.8); CR.stroke(ctx, r, 2.6);
-      // 頭頂一撮毛、兩邊的頭髮
-      ctx.beginPath(); ctx.moveTo(58, 11); ctx.quadraticCurveTo(54, 2, 62, 3); ctx.quadraticCurveTo(58, 6, 61, 11); CR.stroke(ctx, r, 2.4);
-      [[41, 26, -1], [79, 26, 1]].forEach(([x, y, k]) => { CR.blob(ctx, x, y, 4, 7, r, 0.1, 12); fill(ctx, '#5d6b80', r, null); CR.stroke(ctx, r, 1.6); });
-      // 認真的眉毛＋小眼睛
-      CR.line(ctx, 48, 22, 56, 24, r, 2.6); CR.line(ctx, 72, 22, 64, 24, r, 2.6);
-      eye(ctx, 53, 28, 2.2); eye(ctx, 67, 28, 2.2);
-      blush(ctx, [[46, 34], [74, 34]], 3.4);
-      // 八字鬍
-      ctx.beginPath(); ctx.moveTo(60, 35); ctx.quadraticCurveTo(52, 32, 47, 38); ctx.quadraticCurveTo(54, 37, 60, 38);
-      ctx.quadraticCurveTo(66, 37, 73, 38); ctx.quadraticCurveTo(68, 32, 60, 35); ctx.closePath(); fill(ctx, '#3c3f5c', r, null); CR.stroke(ctx, r, 1.4);
-      smile(ctx, r, 60, 41, 3, 0.6);
-      // 抱著的一疊卷宗
-      ctx.save(); ctx.translate(30, 62); ctx.rotate(-0.12);
-      ['#e8cf8a', '#8ec3c9', '#e9a0a8', '#e8cf8a'].forEach((c, i) => {
-        CR.rect(ctx, -16 + (i % 2) * 2, -12 - i * 5, 30, 6, r, 0.6); fill(ctx, c, r, null); CR.stroke(ctx, r, 1.6);
-      });
-      CR.rect(ctx, -16, -8, 30, 18, r, 0.8); fill(ctx, '#e8cf8a', r, null); CR.stroke(ctx, r, 2);
-      // 紅色「急件」章
-      ctx.save(); ctx.rotate(-0.2);
-      CR.rect(ctx, -10, -5, 18, 11, r, 0.6); CR.stroke(ctx, r, 1.6, '#d9605a');
-      text(ctx, '急件', -1, 0.6, 7.5, '#d9605a');
-      ctx.restore();
-      ctx.restore();
-      // 手抱住卷宗、另一隻手指著前面
-      arm(ctx, r, 38, 70, 45, 72, '#f0c9a8');
-      arm(ctx, r, 86, 54, 102, 44, '#f0c9a8');
-      CR.line(ctx, 103, 43, 109, 40, r, 2, INK, 0.2);
-      // 西裝口袋的手帕
-      ctx.beginPath(); ctx.moveTo(74, 52); ctx.lineTo(82, 52); ctx.lineTo(78, 46); ctx.closePath(); fill(ctx, '#e9b949', r, null); CR.stroke(ctx, r, 1.2);
+      [[42, 28], [78, 28]].forEach(([x, y]) => paint(ctx, r, E(x, y, 4, 7), [x - 4, y - 7, 8, 14], '#7b84a6', { lw: 1.6, shine: false }));
+      paint(ctx, r, E(60, 27, 19, 17), [41, 10, 38, 34], C.skin, { hue: '#e9a08a', at: [0.5, 1] });
+      ctx.save(); ctx.lineCap = 'round'; ctx.strokeStyle = INK; ctx.lineWidth = 3.6; ctx.beginPath(); ctx.moveTo(59, 11); ctx.quadraticCurveTo(54, 2, 63, 3); ctx.stroke();
+      ctx.strokeStyle = '#7b84a6'; ctx.lineWidth = 1.8; ctx.stroke(); ctx.restore();
+      brush(ctx, [[48, 21], [56, 23.5]], 2.6, '#3c4466'); brush(ctx, [[72, 21], [64, 23.5]], 2.6, '#3c4466');
+      face(ctx, 60, 27, 1.15, { gap: 6.5, nose: 'rgba(170,110,90,0.8)', lipW: 2.8 });
+      const ms = new Path2D(); ms.moveTo(60, 33.4); ms.quadraticCurveTo(52, 30.5, 47, 36); ms.quadraticCurveTo(54, 35, 60, 35.6); ms.quadraticCurveTo(66, 35, 73, 36); ms.quadraticCurveTo(68, 30.5, 60, 33.4); ms.closePath();
+      paint(ctx, r, ms, [47, 30, 26, 6], '#3c4466', { lw: 1.2, shine: false });
+      // 卷宗一疊
+      ['#e8cf8a', '#8ec3c9', '#e3a0aa', '#e8cf8a'].forEach((c, i) => paint(ctx, r, T(RR(-16 + (i % 2) * 2, -12 - i * 5, 31, 6, 2), 29, 62, -7), [12, 38, 34, 24], c, { lw: 1.6, shine: false }));
+      paint(ctx, r, T(RR(-16, -8, 31, 19, 2.5), 29, 62, -7), [12, 52, 34, 22], '#e8cf8a', { lw: 1.8, hue: '#e9b08a', at: [0.2, 1] });
+      ctx.save(); ctx.translate(28, 63); ctx.rotate(-0.32);
+      ctx.strokeStyle = 'rgba(201,85,94,0.9)'; ctx.lineWidth = 1.5; ctx.strokeRect(-10, -5.5, 19, 11);
+      text(ctx, '急件', -0.5, 0.4, 7.5, 'rgba(201,85,94,0.95)'); ctx.restore();
+      limb(ctx, [[37, 56], [38, 66], [44, 70]], 6.4, C.navy); ball(ctx, r, 45, 70, 3.6, 3.4, C.skin);
+      limb(ctx, [[84, 54], [94, 50], [101, 42]], 6.4, C.navy); ball(ctx, r, 102, 41, 3.6, 3.6, C.skin);
+      limb(ctx, [[104, 39], [108, 35]], 2, C.skin);
     }),
 
     // ---------- 廟口老街 ----------
-    // 燈猴：傳說中幫人間點燈的小猴子，身體是一盞紅燈籠，頭上頂著一小簇燈火，捲捲的尾巴
+    // 燈猴：傳說中幫人間點燈的小猴子，身體是一盞「福」字燈籠，頭上頂著一小簇燈火
     monkey: () => canvas(96, 84, 207, (ctx, r) => {
-      shadow(ctx, 48, 81, 20);
-      glow(ctx, 48, 54, 34, '240,190,110'); glow(ctx, 48, 7, 7, '240,190,110'); glow(ctx, 16, 32, 12, '240,190,110');
-      legs(ctx, r, [40, 56], 68, 77, '#8a5f45');
-      // 尾巴捲起來
-      ctx.beginPath(); ctx.moveTo(66, 62); ctx.quadraticCurveTo(84, 66, 82, 50); ctx.quadraticCurveTo(80, 40, 72, 44); ctx.quadraticCurveTo(76, 48, 74, 52);
-      CR.stroke(ctx, r, 5, INK); CR.stroke(ctx, r, 3, '#b07a4a');
-      // 燈籠身體
-      CR.rect(ctx, 38, 34, 20, 4, r, 0.4); fill(ctx, '#e9b949', r, null); CR.stroke(ctx, r, 1.6);
-      CR.blob(ctx, 48, 54, 18, 15, r, 0.03, 20); fill(ctx, '#d9605a', r, [30, 39, 36, 30], 1.2); CR.stroke(ctx, r, 2.6);
-      [-9, 0, 9].forEach(dx => { ctx.beginPath(); ctx.moveTo(48 + dx, 40); ctx.quadraticCurveTo(48 + dx * 1.7, 54, 48 + dx, 68); CR.stroke(ctx, r, 1.2, 'rgba(43,42,51,0.45)'); });
-      CR.rect(ctx, 39, 67, 18, 4, r, 0.4); fill(ctx, '#e9b949', r, null); CR.stroke(ctx, r, 1.6);
-      // 燈籠裡透出來的光
-      CR.blob(ctx, 48, 54, 7, 6, r, 0.1, 12); ctx.save(); ctx.globalAlpha = 0.55; ctx.fillStyle = '#e9b949'; ctx.fill(); ctx.restore();
-      text(ctx, '福', 48, 55, 9, '#e9b949');
-      // 頭：咖啡色毛，肉色的臉，大耳朵
-      [[30, 24], [66, 24]].forEach(([x, y]) => { CR.blob(ctx, x, y, 6, 6.5, r, 0.06, 12); fill(ctx, '#b07a4a', r, null); CR.stroke(ctx, r, 2); dot(ctx, x, y, 3, '#efc6a6'); });
-      CR.blob(ctx, 48, 23, 17, 15, r, 0.04, 18); fill(ctx, '#b07a4a', r, [31, 8, 34, 30], 1); CR.stroke(ctx, r, 2.6);
-      ctx.beginPath(); ctx.moveTo(36, 24); ctx.quadraticCurveTo(36, 14, 44, 16); ctx.quadraticCurveTo(48, 12, 52, 16); ctx.quadraticCurveTo(60, 14, 60, 24);
-      ctx.quadraticCurveTo(60, 34, 48, 35); ctx.quadraticCurveTo(36, 34, 36, 24); ctx.closePath(); fill(ctx, '#efc6a6', r, null); CR.stroke(ctx, r, 1.6);
-      eye(ctx, 43, 22, 2.4); eye(ctx, 53, 22, 2.4);
-      blush(ctx, [[39, 28], [57, 28]], 2.6);
-      smile(ctx, r, 48, 29, 3.4);
-      // 頭頂的小燈火
-      ctx.beginPath(); ctx.moveTo(48, 1); ctx.quadraticCurveTo(54, 6, 52, 9); ctx.quadraticCurveTo(48, 12, 44, 9); ctx.quadraticCurveTo(42, 6, 48, 1); ctx.closePath();
-      fill(ctx, '#f0a24a', r, null); CR.stroke(ctx, r, 1.6);
-      ctx.beginPath(); ctx.moveTo(48, 4); ctx.quadraticCurveTo(51, 8, 48, 10); ctx.quadraticCurveTo(45, 8, 48, 4); ctx.closePath(); ctx.fillStyle = '#fff2a8'; ctx.fill();
-      // 一手舉著小油燈
-      arm(ctx, r, 31, 50, 18, 40, '#efc6a6');
-      CR.blob(ctx, 16, 36, 6, 3, r, 0.08, 10); fill(ctx, '#c49a4a', r, null); CR.stroke(ctx, r, 1.4);
-      ctx.beginPath(); ctx.moveTo(16, 26); ctx.quadraticCurveTo(20, 31, 18, 33); ctx.quadraticCurveTo(16, 35, 14, 33); ctx.quadraticCurveTo(12, 31, 16, 26); ctx.closePath();
-      fill(ctx, '#f0a24a', r, null); CR.stroke(ctx, r, 1.2);
-      arm(ctx, r, 65, 52, 72, 60, '#efc6a6');
+      glow(ctx, 48, 55, 34, '#f0b060', 0.35);
+      shadow(ctx, 48, 79, 20);
+      limb(ctx, [[66, 62], [84, 64], [80, 48]], 4.2, '#a8754f'); limb(ctx, [[80, 48], [74, 44], [74, 52]], 4.2, '#a8754f');
+      limb(ctx, [[42, 66], [41, 75]], 4.4, '#a8754f'); limb(ctx, [[54, 66], [55, 75]], 4.4, '#a8754f');
+      shoes(ctx, r, [[40, 77], [56, 77]], '#8a5f45');
+      paint(ctx, r, RR(38, 34, 20, 5, 2), [38, 34, 20, 5], C.mustard, { lw: 1.6, shine: false });
+      paint(ctx, r, E(48, 54, 18, 15), [30, 39, 36, 30], C.coral, { hue: '#f0b060', at: [0.5, 0.5] });
+      [-9, 0, 9].forEach(dx => brush(ctx, [[48 + dx, 41], [48 + dx * 1.6, 54], [48 + dx, 67]], 1.2, 'rgba(150,50,50,0.35)'));
+      text(ctx, '福', 48, 55, 10, 'rgba(240,200,110,0.95)');
+      paint(ctx, r, RR(39, 67, 18, 5, 2), [39, 67, 18, 5], C.mustard, { lw: 1.6, shine: false });
+      limb(ctx, [[32, 50], [24, 46], [18, 38]], 4, '#a8754f'); ball(ctx, r, 18, 37, 3, 3, C.skin);
+      glow(ctx, 16, 28, 10, '#f0b060', 0.6);
+      paint(ctx, r, E(16, 35, 6, 2.6), [10, 32, 12, 6], '#c49a4a', { lw: 1.4, shine: false });
+      paint(ctx, r, flame(16, 29, 0.8), [12, 23, 8, 10], '#f0a24a', { lw: 1.2, shine: false, hue: '#fff0b0', at: [0.5, 0.8] });
+      limb(ctx, [[64, 52], [70, 56], [72, 62]], 4, '#a8754f'); ball(ctx, r, 72, 63, 3, 3, C.skin);
+      // 頭
+      [[31, 24], [65, 24]].forEach(([x, y]) => { paint(ctx, r, E(x, y, 6, 6.4), [x - 6, y - 6, 12, 13], '#a8754f', { lw: 1.8, shine: false }); dab(ctx, x, y, 3.2, 3.4, '#e7b493'); });
+      paint(ctx, r, E(48, 23, 17, 15), [31, 8, 34, 30], '#a8754f', { hue: '#c98a5a', at: [0.3, 0.2] });
+      const mask = new Path2D(); mask.moveTo(36, 24); mask.quadraticCurveTo(36, 14, 44, 16); mask.quadraticCurveTo(48, 12, 52, 16); mask.quadraticCurveTo(60, 14, 60, 24);
+      mask.quadraticCurveTo(60, 35, 48, 35); mask.quadraticCurveTo(36, 35, 36, 24); mask.closePath();
+      paint(ctx, r, mask, [36, 13, 24, 22], '#efc6a6', { lw: 1.4, hue: '#e9a08a', at: [0.5, 1] });
+      face(ctx, 48, 22, 1, { gap: 5, nose: 'rgba(170,110,90,0.8)', lipW: 2.6 });
+      glow(ctx, 48, 6, 7, '#f0b060', 0.7);
+      paint(ctx, r, flame(48, 6, 0.9), [43, -1, 10, 12], '#f0a24a', { lw: 1.4, shine: false, hue: '#fff0b0', at: [0.5, 0.8] });
     }),
 
-    // 石獅仔：廟口的小石獅，捲捲的鬃毛、脖子繫紅彩，腳下踩著一顆繡球，嘴巴張開含著一顆小石珠
+    // 石獅仔：廟口的小石獅，捲捲的鬃毛、脖子繫紅彩，腳踩繡球，嘴裡含著一顆石珠
     lion: () => canvas(96, 84, 208, (ctx, r) => {
-      shadow(ctx, 48, 81, 26);
-      const stone = '#a9bfb4', dark = '#8aa39a';
-      // 底座
-      CR.rect(ctx, 22, 70, 52, 9, r, 0.8); fill(ctx, '#93a0ac', r, [22, 70, 52, 9]); CR.stroke(ctx, r, 2.2);
-      // 身體（坐著）
-      CR.blob(ctx, 50, 56, 22, 16, r, 0.05, 18); fill(ctx, stone, r, [28, 40, 44, 32], 1.2); CR.stroke(ctx, r, 2.4);
-      // 尾巴（捲捲的一團）
-      [[74, 46, 5], [78, 40, 4], [74, 36, 3.4]].forEach(([x, y, s]) => { CR.blob(ctx, x, y, s, s, r, 0.1, 10); fill(ctx, dark, r, null); CR.stroke(ctx, r, 1.6); });
-      // 繡球
-      CR.blob(ctx, 28, 64, 8, 8, r, 0.05, 14); fill(ctx, '#d9605a', r, null); CR.stroke(ctx, r, 2);
-      CR.line(ctx, 21, 62, 35, 66, r, 1.2, '#e9b949', 0.4); CR.line(ctx, 26, 57, 30, 71, r, 1.2, '#e9b949', 0.4);
-      // 前腳踩著繡球
-      CR.rect(ctx, 32, 54, 8, 16, r, 0.6); fill(ctx, stone, r, null); CR.stroke(ctx, r, 2);
-      CR.blob(ctx, 34, 56, 6, 4, r, 0.08, 10); fill(ctx, stone, r, null); CR.stroke(ctx, r, 1.8);
-      CR.rect(ctx, 56, 58, 8, 13, r, 0.6); fill(ctx, stone, r, null); CR.stroke(ctx, r, 2);
-      // 鬃毛：一圈捲捲
+      shadow(ctx, 48, 80, 28);
+      const stone = C.sage, mane = '#86a397';
+      paint(ctx, r, RR(21, 69, 54, 10, 3), [21, 69, 54, 10], '#97a3b0', { lw: 2, shine: false });
+      [[74, 46, 5], [78, 40, 4.2], [74, 35, 3.4]].forEach(([x, y, s]) => paint(ctx, r, E(x, y, s, s), [x - s, y - s, s * 2, s * 2], mane, { lw: 1.6, shine: false }));
+      paint(ctx, r, E(51, 56, 22, 15), [29, 41, 44, 30], stone, { hue: '#c7d3c2', at: [0.3, 0.2] });
+      paint(ctx, r, RR(56, 58, 9, 13, 3), [56, 58, 9, 13], stone, { lw: 2, shine: false });
+      paint(ctx, r, E(27, 63, 8, 8), [19, 55, 16, 16], C.coral, { lw: 2, hue: '#e9967a', at: [0.3, 0.3] });
+      brush(ctx, [[20, 61], [27, 64], [34, 66]], 1.4, 'rgba(240,200,110,0.9)'); brush(ctx, [[26, 56], [27, 63], [29, 70]], 1.4, 'rgba(240,200,110,0.9)');
+      paint(ctx, r, RR(32, 54, 9, 16, 3), [32, 54, 9, 16], stone, { lw: 2, shine: false });
+      ball(ctx, r, 34, 56, 6, 4, stone);
       for (let i = 0; i < 12; i++) {
-        const a = (i / 12) * Math.PI * 2;
-        const x = 48 + Math.cos(a) * 18, y = 28 + Math.sin(a) * 16;
-        CR.blob(ctx, x, y, 6, 6, r, 0.1, 10); fill(ctx, dark, r, null); CR.stroke(ctx, r, 1.8);
-        ctx.beginPath(); ctx.arc(x, y, 2.4, 0, Math.PI * 1.5); CR.stroke(ctx, r, 1, 'rgba(43,42,51,0.5)');
+        const a = (i / 12) * Math.PI * 2, x = 48 + Math.cos(a) * 18, y = 28 + Math.sin(a) * 16;
+        paint(ctx, r, E(x, y, 6, 6), [x - 6, y - 6, 12, 12], mane, { lw: 1.6, shine: false });
+        dab(ctx, x - 1, y - 1, 2.2, 2.2, 'rgba(220,235,225,0.45)');
       }
-      // 臉
-      CR.blob(ctx, 48, 28, 16, 14, r, 0.05, 18); fill(ctx, stone, r, [32, 14, 32, 28], 1); CR.stroke(ctx, r, 2.4);
-      // 大眼睛（突出來的）＋粗眉
-      [[41, 24], [55, 24]].forEach(([x, y]) => {
-        dot(ctx, x, y, 4.6, '#f8f1e4'); ctx.beginPath(); ctx.arc(x, y, 4.6, 0, Math.PI * 2); CR.stroke(ctx, r, 1.6);
-        eye(ctx, x + 0.5, y + 0.5, 2.4);
-        ctx.beginPath(); ctx.arc(x, y - 4, 5, Math.PI * 1.15, Math.PI * 1.85); CR.stroke(ctx, r, 2.2);
-      });
-      // 圓鼻子
-      CR.blob(ctx, 48, 31, 4.6, 3, r, 0.08, 12); fill(ctx, dark, r, null); CR.stroke(ctx, r, 1.6);
-      // 張開的嘴含著石珠
-      ctx.beginPath(); ctx.moveTo(41, 35); ctx.quadraticCurveTo(48, 44, 55, 35); ctx.closePath(); fill(ctx, '#d98a8a', r, null); CR.stroke(ctx, r, 1.8);
-      dot(ctx, 48, 38.5, 2.6, '#f8f1e4'); ctx.beginPath(); ctx.arc(48, 38.5, 2.6, 0, Math.PI * 2); CR.stroke(ctx, r, 1);
-      blush(ctx, [[36, 32], [60, 32]], 2.8);
-      // 脖子上的紅彩＋鈴鐺
-      ctx.beginPath(); ctx.moveTo(32, 42); ctx.quadraticCurveTo(48, 50, 64, 42); ctx.lineTo(64, 46); ctx.quadraticCurveTo(48, 54, 32, 46); ctx.closePath();
-      fill(ctx, '#d9605a', r, null); CR.stroke(ctx, r, 1.6);
-      dot(ctx, 48, 51, 3.2, '#e9b949'); ctx.beginPath(); ctx.arc(48, 51, 3.2, 0, Math.PI * 2); CR.stroke(ctx, r, 1.2);
+      paint(ctx, r, E(48, 28, 16, 14), [32, 14, 32, 28], stone, { hue: '#c7d3c2', at: [0.3, 0.2] });
+      face(ctx, 48, 25, 1.1, { gap: 7, mouth: 'none' });
+      ball(ctx, r, 48, 30, 4.4, 3, mane);
+      const m = new Path2D(); m.moveTo(42, 35); m.quadraticCurveTo(48, 43, 54, 35); m.closePath();
+      paint(ctx, r, m, [42, 35, 12, 7], '#d98a8a', { lw: 1.6, shine: false });
+      ball(ctx, r, 48, 38, 2.6, 2.6, C.cream);
+      const rb = new Path2D(); rb.moveTo(32, 42); rb.quadraticCurveTo(48, 50, 64, 42); rb.lineTo(64, 46.5); rb.quadraticCurveTo(48, 54.5, 32, 46.5); rb.closePath();
+      paint(ctx, r, rb, [32, 42, 32, 12], C.coral, { lw: 1.6, shine: false });
+      ball(ctx, r, 48, 52, 3.2, 3.2, C.mustard);
     }),
 
-    // 小魔神仔：山裡愛惡作劇的小傢伙，紅紅的臉、頭戴一片大姑婆芋葉當帽子，手上拿著雞腿要騙你跟他走
+    // 小魔神仔：山裡愛惡作劇的小傢伙，紅紅的臉，頭頂一片大姑婆芋葉，拿雞腿騙你跟他走
     imp: () => canvas(96, 84, 209, (ctx, r) => {
-      shadow(ctx, 46, 81, 18);
-      // 赤腳（腳尖朝後，偷偷的傳說小細節）
-      [[40, 66], [52, 66]].forEach(([x, y]) => {
-        CR.line(ctx, x, y, x, 76, r, 2.6, INK, 0.3);
-        CR.blob(ctx, x - 2, 77.5, 4.4, 2.4, r, 0.08, 10); fill(ctx, '#d9785a', r, null); CR.stroke(ctx, r, 1.6);
-      });
-      // 草編小衣服
-      ctx.beginPath(); ctx.moveTo(34, 46); ctx.lineTo(58, 46); ctx.lineTo(62, 68); ctx.lineTo(30, 68); ctx.closePath();
-      fill(ctx, '#93b57f', r, [30, 46, 32, 22], 1.2); CR.stroke(ctx, r, 2.4);
-      [36, 42, 48, 54].forEach(x => CR.line(ctx, x, 60, x + 1, 68, r, 1.2, 'rgba(43,42,51,0.5)', 0.4));
-      // 頭：紅紅的臉
-      CR.blob(ctx, 46, 34, 14, 13, r, 0.05, 18); fill(ctx, '#df8a6a', r, [32, 21, 28, 26], 1); CR.stroke(ctx, r, 2.4);
-      // 尖尖的耳朵
+      shadow(ctx, 46, 80, 20);
+      const skin = '#d98466';
+      limb(ctx, [[40, 64], [39, 75]], 4.4, skin); limb(ctx, [[52, 64], [53, 75]], 4.4, skin);
+      ball(ctx, r, 37, 77, 4.6, 2.6, skin); ball(ctx, r, 55, 77, 4.6, 2.6, skin);
+      limb(ctx, [[34, 50], [28, 54], [26, 60]], 4, skin); ball(ctx, r, 26, 61, 3, 3, skin);
+      const dress = new Path2D(); dress.moveTo(35, 45); dress.lineTo(57, 45); dress.quadraticCurveTo(63, 56, 62, 67); dress.lineTo(30, 67); dress.quadraticCurveTo(29, 56, 35, 45); dress.closePath();
+      paint(ctx, r, dress, [29, 45, 34, 22], C.grass, { hue: '#c2c97a', at: [0.5, 1], dir: 1.5 });
+      [34, 39, 44, 49, 54, 59].forEach(x => brush(ctx, [[x, 58], [x + 1, 66.5]], 1.2, 'rgba(70,100,60,0.45)'));
+      // 頭
       [[31, 32, -1], [61, 32, 1]].forEach(([x, y, k]) => {
-        ctx.beginPath(); ctx.moveTo(x - k * 1, y - 4); ctx.lineTo(x + k * 7, y - 7); ctx.lineTo(x - k * 1, y + 4); ctx.closePath(); fill(ctx, '#df8a6a', r, null); CR.stroke(ctx, r, 1.8);
+        const p = new Path2D(); p.moveTo(x - k * 1, y - 4); p.lineTo(x + k * 8, y - 8); p.quadraticCurveTo(x + k * 4, y + 1, x - k * 1, y + 4); p.closePath();
+        paint(ctx, r, p, [Math.min(x - k, x + k * 8), y - 8, 9, 12], skin, { lw: 1.8, shine: false });
       });
-      // 調皮的眼睛（一隻眨眼）＋壞笑
-      eye(ctx, 40, 34, 2.6);
-      squint(ctx, r, 52, 34, 3, true);
-      ctx.beginPath(); ctx.moveTo(40, 40); ctx.quadraticCurveTo(47, 46, 53, 39); CR.stroke(ctx, r, 1.8);
-      ctx.beginPath(); ctx.moveTo(44, 42.4); ctx.lineTo(45.5, 44.6); ctx.lineTo(47, 42.8); ctx.closePath(); ctx.fillStyle = '#f8f1e4'; ctx.fill();
-      blush(ctx, [[36, 39], [56, 39]], 2.8);
-      // 頭上的大葉子帽
-      ctx.save(); ctx.translate(46, 20); ctx.rotate(-0.12);
-      ctx.beginPath(); ctx.moveTo(-26, 4); ctx.quadraticCurveTo(-20, -16, 0, -16); ctx.quadraticCurveTo(22, -16, 26, 2); ctx.quadraticCurveTo(14, -2, 0, 2); ctx.quadraticCurveTo(-14, -2, -26, 4); ctx.closePath();
-      fill(ctx, '#4f9a7a', r, [-26, -16, 52, 20], 1.2); CR.stroke(ctx, r, 2.4);
-      CR.line(ctx, -20, 0, 18, -6, r, 1.4, '#33735c', 0.6);
-      [-10, 0, 10].forEach(x => CR.line(ctx, x, -3, x + 4, -12, r, 1, '#33735c', 0.5));
-      CR.line(ctx, 24, 0, 30, 6, r, 2, '#33735c', 0.3); // 葉柄
+      paint(ctx, r, E(46, 34, 15, 13), [31, 21, 30, 26], skin, { hue: '#e9a07a', at: [0.3, 0.3] });
+      face(ctx, 46, 34, 1.05, { eyes: 'wink', gap: 6, mouth: 'smirk', lipW: 2.6, lips: '#a8404a' });
+      // 姑婆芋葉帽
+      const leaf = new Path2D(); leaf.moveTo(-27, 5); leaf.quadraticCurveTo(-22, -17, 0, -17); leaf.quadraticCurveTo(24, -17, 28, 3); leaf.quadraticCurveTo(14, -1, 0, 3); leaf.quadraticCurveTo(-14, -1, -27, 5); leaf.closePath();
+      paint(ctx, r, T(leaf, 46, 21, -7), [18, 3, 58, 24], '#4f9a7a', { hue: '#8fc49a', at: [0.3, 0.2], dir: -0.2 });
+      ctx.save(); ctx.translate(46, 21); ctx.rotate(-0.12);
+      brush(ctx, [[-21, 0], [18, -7]], 1.4, 'rgba(200,235,200,0.55)');
+      [-12, -2, 8].forEach(x => brush(ctx, [[x, -3], [x + 5, -12]], 1, 'rgba(200,235,200,0.45)'));
+      limb(ctx, [[26, 1], [31, 7]], 2.2, '#3f7f63'); ctx.restore();
+      // 拿雞腿
+      limb(ctx, [[58, 50], [66, 48], [72, 43]], 4, skin);
+      ctx.save(); ctx.translate(78, 37); ctx.rotate(-0.6);
+      limb(ctx, [[-6, 3], [-11, 6]], 2.6, C.cream); ball(ctx, r, -12, 6.6, 2.2, 2.2, C.cream);
+      paint(ctx, r, E(0, 0, 7.4, 5.6), [-7, -6, 15, 12], '#c98a4a', { lw: 1.8, hue: '#a8603a', at: [0.7, 0.9] });
       ctx.restore();
-      // 一手拿雞腿招手，一手藏在背後
-      arm(ctx, r, 58, 50, 72, 44, '#df8a6a');
-      ctx.save(); ctx.translate(78, 38); ctx.rotate(-0.6);
-      CR.blob(ctx, 0, 0, 7, 5.4, r, 0.1, 12); fill(ctx, '#c98a4a', r, null); CR.stroke(ctx, r, 1.8);
-      CR.line(ctx, -6, 3, -11, 6, r, 2.4, '#f8f1e4', 0.2);
-      dot(ctx, -12, 6.5, 2, '#f8f1e4');
-      ctx.restore();
-      arm(ctx, r, 34, 50, 28, 58, '#df8a6a');
-      // 「來～」的小波浪
-      [[84, 26], [88, 30]].forEach(([x, y]) => CR.line(ctx, x, y, x + 4, y - 3, r, 1.2, 'rgba(110,118,132,0.6)', 0.4));
+      ball(ctx, r, 72, 43, 3, 3, skin);
+      [[84, 26, 88, 23], [87, 31, 91, 28]].forEach(([a, b, c, d]) => brush(ctx, [[a, b], [c, d]], 1.4, 'rgba(150,150,180,0.8)'));
     }),
 
-    // 虎姑婆婆（頭目）：橘色老虎奶奶，頭上包髮髻插髮簪，戴圓眼鏡、披碎花披肩，提著一籃糖果，尾巴有條紋
+    // 虎姑婆婆（頭目）：橘色老虎奶奶，頭上包髮髻插髮簪，戴圓眼鏡、披碎花披肩，提著一籃糖果
     tiger: () => canvas(120, 100, 210, (ctx, r) => {
-      shadow(ctx, 60, 96, 34);
-      const fur = '#ec9a52', stripe = '#8a4a1a';
-      // 尾巴
-      ctx.beginPath(); ctx.moveTo(84, 82); ctx.quadraticCurveTo(110, 84, 108, 62); ctx.quadraticCurveTo(106, 52, 100, 56);
-      CR.stroke(ctx, r, 7.4, INK); CR.stroke(ctx, r, 5, fur);
-      [[104, 76], [108, 66]].forEach(([x, y]) => CR.line(ctx, x - 3, y, x + 3, y - 1, r, 2, stripe, 0.3));
-      legs(ctx, r, [50, 70], 84, 92, '#2b2a33');
-      // 長裙＋碎花披肩
-      ctx.beginPath(); ctx.moveTo(42, 50); ctx.quadraticCurveTo(34, 76, 36, 88); ctx.lineTo(84, 88); ctx.quadraticCurveTo(86, 76, 78, 50); ctx.closePath();
-      fill(ctx, '#6f5f9e', r, [34, 50, 52, 38], 1.2); CR.stroke(ctx, r, 2.6);
-      ctx.beginPath(); ctx.moveTo(38, 52); ctx.quadraticCurveTo(60, 74, 82, 52); ctx.quadraticCurveTo(76, 44, 60, 44); ctx.quadraticCurveTo(44, 44, 38, 52); ctx.closePath();
-      fill(ctx, '#e9a0a8', r, [38, 44, 44, 24], 0.8); CR.stroke(ctx, r, 2);
-      [[46, 52], [56, 58], [66, 56], [74, 51], [60, 49]].forEach(([x, y]) => {
-        [0, 1, 2, 3, 4].forEach(i => { const a = i / 5 * Math.PI * 2; dot(ctx, x + Math.cos(a) * 1.8, y + Math.sin(a) * 1.8, 1.2, '#f8f1e4'); });
-        dot(ctx, x, y, 1, '#e9b949');
+      shadow(ctx, 60, 95, 36);
+      const fur = '#ec9a52', stripe = 'rgba(160,80,40,0.85)';
+      limb(ctx, [[84, 82], [110, 84], [107, 60]], 6, fur);
+      [[103, 82], [109, 74], [108, 66]].forEach(([x, y]) => dab(ctx, x, y, 2.6, 1.2, stripe, 0.4));
+      limb(ctx, [[51, 84], [50, 92]], 5, '#3c4466'); limb(ctx, [[69, 84], [70, 92]], 5, '#3c4466');
+      shoes(ctx, r, [[48, 94], [72, 94]], '#5b4a52');
+      const dress = new Path2D(); dress.moveTo(43, 50); dress.quadraticCurveTo(34, 76, 36, 88); dress.lineTo(84, 88); dress.quadraticCurveTo(86, 76, 77, 50); dress.closePath();
+      paint(ctx, r, dress, [34, 50, 52, 38], '#6f5f9e', { hue: '#9b7fb8', at: [0.3, 0.3], dir: 1.4 });
+      const sh = new Path2D(); sh.moveTo(37, 52); sh.quadraticCurveTo(60, 76, 83, 52); sh.quadraticCurveTo(76, 43, 60, 43); sh.quadraticCurveTo(44, 43, 37, 52); sh.closePath();
+      paint(ctx, r, sh, [37, 43, 46, 24], C.pink, { hue: '#f0c0a0', at: [0.5, 1] });
+      [[46, 52], [56, 59], [66, 57], [74, 51], [60, 49], [51, 46]].forEach(([x, y]) => {
+        for (let i = 0; i < 5; i++) { const a = i / 5 * Math.PI * 2; dab(ctx, x + Math.cos(a) * 1.9, y + Math.sin(a) * 1.9, 1.3, 1.3, 'rgba(250,244,230,0.95)'); }
+        dab(ctx, x, y, 1, 1, C.mustard);
       });
-      // 頭：老虎臉
-      [[44, 14], [76, 14]].forEach(([x, y]) => { CR.blob(ctx, x, y, 6, 6, r, 0.06, 12); fill(ctx, fur, r, null); CR.stroke(ctx, r, 2); dot(ctx, x, y + 1, 2.8, '#f7c8a8'); });
-      CR.blob(ctx, 60, 28, 21, 18, r, 0.04, 22); fill(ctx, fur, r, [39, 10, 42, 36], 1); CR.stroke(ctx, r, 2.6);
-      // 額頭的「王」字條紋＋臉頰條紋
-      [[54, 15, 66, 15], [55, 19, 65, 19], [60, 13, 60, 22]].forEach(([a, b, c, d]) => CR.line(ctx, a, b, c, d, r, 1.8, stripe, 0.3));
-      [[40, 26, 46, 27], [40, 31, 46, 31], [80, 26, 74, 27], [80, 31, 74, 31]].forEach(([a, b, c, d]) => CR.line(ctx, a, b, c, d, r, 1.8, stripe, 0.3));
-      // 白白的嘴巴周圍
-      CR.blob(ctx, 60, 36, 10, 7, r, 0.06, 14); fill(ctx, '#fbf3e4', r, null); CR.stroke(ctx, r, 1.4);
-      CR.blob(ctx, 60, 32.5, 3, 2, r, 0.1, 10); fill(ctx, '#df8a6a', r, null); CR.stroke(ctx, r, 1.2);
-      ctx.beginPath(); ctx.moveTo(56, 38); ctx.quadraticCurveTo(58, 40, 60, 37.5); ctx.quadraticCurveTo(62, 40, 64, 38); CR.stroke(ctx, r, 1.4);
-      // 圓眼鏡（瞇瞇笑的眼睛）
-      [[51, 27], [69, 27]].forEach(([x, y]) => {
-        dot(ctx, x, y, 6, 'rgba(255,255,255,0.55)'); ctx.beginPath(); ctx.arc(x, y, 6, 0, Math.PI * 2); CR.stroke(ctx, r, 1.6, '#c49a4a');
-        squint(ctx, r, x, y + 1, 3, true);
+      // 手：一邊提糖果籃，一邊拿糖招手
+      limb(ctx, [[41, 56], [34, 62], [27, 64]], 5, fur);
+      ctx.save(); ctx.lineCap = 'round'; ctx.strokeStyle = INK; ctx.lineWidth = 3.4; ctx.beginPath(); ctx.moveTo(14, 66); ctx.quadraticCurveTo(26, 50, 37, 66); ctx.stroke();
+      ctx.strokeStyle = C.wood; ctx.lineWidth = 1.8; ctx.stroke(); ctx.restore();
+      [[19, 63, C.coral], [26, 61, '#5f9ea6'], [33, 63, C.mustard]].forEach(([x, y, c]) => {
+        [-1, 1].forEach(k => { const p = new Path2D(); p.moveTo(x + k * 3, y); p.lineTo(x + k * 6.4, y - 2.2); p.lineTo(x + k * 6.4, y + 2.2); p.closePath(); paint(ctx, r, p, [x - 7, y - 3, 14, 6], c, { lw: 1, shine: false }); });
+        ball(ctx, r, x, y, 3.6, 2.8, c);
       });
-      CR.line(ctx, 57, 27, 63, 27, r, 1.4, '#c49a4a', 0.2);
-      blush(ctx, [[46, 35], [74, 35]], 3);
+      const bk = new Path2D(); bk.moveTo(12, 66); bk.lineTo(39, 66); bk.lineTo(35, 81); bk.quadraticCurveTo(25, 83, 16, 81); bk.closePath();
+      paint(ctx, r, bk, [12, 66, 27, 16], '#d9a066', { hue: '#b9805a', at: [0.5, 1], dir: 1.5 });
+      [17, 23, 29, 34].forEach(x => brush(ctx, [[x, 68], [x - 0.6, 80]], 1.1, 'rgba(140,90,58,0.55)'));
+      brush(ctx, [[14, 73], [37, 73]], 1.1, 'rgba(140,90,58,0.55)');
+      ball(ctx, r, 28, 65, 3.6, 3.4, fur);
+      limb(ctx, [[79, 56], [88, 52], [95, 44]], 5, fur); ball(ctx, r, 96, 43, 3.6, 3.6, fur);
+      [-1, 1].forEach(k => { const p = new Path2D(); p.moveTo(99 + k * 3, 38); p.lineTo(99 + k * 6.4, 35.8); p.lineTo(99 + k * 6.4, 40.2); p.closePath(); paint(ctx, r, p, [92, 35, 14, 6], '#8cc3a0', { lw: 1, shine: false }); });
+      ball(ctx, r, 99, 38, 3.6, 2.8, '#8cc3a0');
+      // 頭
+      [[44, 15], [76, 15]].forEach(([x, y]) => { paint(ctx, r, E(x, y, 6.4, 6.4), [x - 6, y - 6, 13, 13], fur, { lw: 1.8, shine: false }); dab(ctx, x, y + 1, 3, 3, '#f3c8a8'); });
+      paint(ctx, r, E(60, 28, 21, 18), [39, 10, 42, 36], fur, { hue: '#f0c27a', at: [0.5, 0.9] });
+      // 條紋（用顏色畫，不描黑線）
+      [[54, 15, 66, 15], [55, 19, 65, 19]].forEach(([a, b, c, d]) => brush(ctx, [[a, b], [c, d]], 2.2, stripe));
+      brush(ctx, [[60, 12.5], [60, 21]], 2.2, stripe);
+      [[40, 25, 47, 27], [40, 31, 46, 31], [80, 25, 73, 27], [80, 31, 74, 31]].forEach(([a, b, c, d]) => brush(ctx, [[a, b], [c, d]], 2.4, stripe));
+      paint(ctx, r, E(60, 36, 10, 7), [50, 29, 20, 14], '#f6ebd8', { lw: 1.4, shine: false });
+      [[51, 27], [69, 27]].forEach(([x, y]) => { ctx.fillStyle = 'rgba(255,250,240,0.35)'; ctx.fill(E(x, y, 6, 6)); ctx.save(); ctx.strokeStyle = '#a07a3a'; ctx.lineWidth = 1.4; ctx.stroke(E(x, y, 6, 6)); ctx.restore(); });
+      brush(ctx, [[57, 27], [63, 27]], 1.3, '#a07a3a');
+      face(ctx, 60, 27, 1.1, { eyes: 'happy', gap: 8.2, mouth: 'none' });
+      ball(ctx, r, 60, 32.6, 2.8, 2, '#c9555e');
+      brush(ctx, [[56, 37.5], [58, 39.5], [60, 37.4], [62, 39.5], [64, 37.5]], 1.3, INK);
       // 髮髻＋髮簪
-      CR.blob(ctx, 60, 8, 10, 6, r, 0.06, 14); fill(ctx, '#d8d2c8', r, null); CR.stroke(ctx, r, 2.2);
-      ctx.beginPath(); ctx.arc(60, 8, 3.4, 0, Math.PI * 1.6); CR.stroke(ctx, r, 1.2, 'rgba(43,42,51,0.5)');
-      CR.line(ctx, 47, 5, 74, 12, r, 2.2, '#c49a4a', 0.2);
-      dot(ctx, 75, 12.4, 2.4, '#d9605a');
-      // 一手提糖果籃
-      arm(ctx, r, 40, 56, 26, 66, '#ec9a52');
-      ctx.beginPath(); ctx.moveTo(14, 66); ctx.quadraticCurveTo(26, 52, 36, 66); CR.stroke(ctx, r, 2, '#b07a4a');
-      ctx.beginPath(); ctx.moveTo(12, 66); ctx.lineTo(38, 66); ctx.lineTo(34, 80); ctx.lineTo(16, 80); ctx.closePath();
-      fill(ctx, '#d9a066', r, [12, 66, 26, 14], 1); CR.stroke(ctx, r, 2);
-      [16, 22, 28, 34].forEach(x => CR.line(ctx, x, 67, x - 1, 79, r, 1, 'rgba(138,90,58,0.6)', 0.3));
-      // 籃子裡冒出來的糖果（包糖果紙的那種）
-      [[19, 63, '#d9605a'], [27, 61, '#4b7fa3'], [33, 64, '#e9b949']].forEach(([x, y, c]) => {
-        CR.blob(ctx, x, y, 3.4, 2.6, r, 0.08, 10); fill(ctx, c, r, null); CR.stroke(ctx, r, 1.2);
-        [[-1], [1]].forEach(([k]) => { ctx.beginPath(); ctx.moveTo(x + k * 3.2, y); ctx.lineTo(x + k * 6, y - 2); ctx.lineTo(x + k * 6, y + 2); ctx.closePath(); fill(ctx, c, r, null); CR.stroke(ctx, r, 1); });
-      });
-      // 另一手招招手，手上拿一顆糖
-      arm(ctx, r, 80, 56, 94, 44, '#ec9a52');
-      CR.blob(ctx, 98, 40, 3.4, 2.6, r, 0.08, 10); fill(ctx, '#8cc3a0', r, null); CR.stroke(ctx, r, 1.2);
-      [[-1], [1]].forEach(([k]) => { ctx.beginPath(); ctx.moveTo(98 + k * 3.2, 40); ctx.lineTo(98 + k * 6, 38); ctx.lineTo(98 + k * 6, 42); ctx.closePath(); fill(ctx, '#8cc3a0', r, null); CR.stroke(ctx, r, 1); });
+      paint(ctx, r, E(60, 8, 10, 6), [50, 2, 20, 12], '#d8d2c8', { lw: 2 });
+      brush(ctx, [[57, 8], [60, 5], [63, 8]], 1.1, 'rgba(110,105,120,0.6)');
+      limb(ctx, [[47, 4], [74, 11]], 1.8, '#c49a4a');
+      ball(ctx, r, 75, 11.4, 2.4, 2.4, C.coral);
     }),
   };
 
@@ -488,5 +459,9 @@
   const NAMES = { sticky: '便利貼精', seen: '已讀飄飄', wok: '甩鍋鍋', octo: '會議章魚', clock: '加班鬧鐘', boss: '急件老闆',
     monkey: '燈猴', lion: '石獅仔', imp: '小魔神仔', tiger: '虎姑婆婆' };
 
-  root.HQ_FIELD_MOBS = { draw: (kind) => DRAW[kind] && DRAW[kind](), kinds: Object.keys(DRAW), NAMES };
+  root.HQ_FIELD_MOBS = {
+    // scale：畫布解析度（預設兩倍），預覽圖可以畫大一點
+    draw(kind, scale) { const s = SCALE; if (scale) SCALE = scale; try { return DRAW[kind] && DRAW[kind](); } finally { SCALE = s; } },
+    kinds: Object.keys(DRAW), NAMES,
+  };
 })(this);

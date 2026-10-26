@@ -2,13 +2,15 @@
 (function (root) {
   // 總部本體 40 格寬；右邊隔兩格空地（走不過去）是花蓮副本區，再隔兩格是古城候位區；
   // 再往右隔兩格是台北101副本區和 101 大廳候位區
-  // 副本區和候位區都走不過去，只能找指揮中心的 NPC 傳送
+  // 最右邊再隔兩格是副本大廳（指揮中心的副本傳送門通到這裡，各副本的 NPC 站在大廳裡）
+  // 副本區、候位區、副本大廳都走不過去，只能傳送
   const MW = 40;
   const DX = 42; // 花蓮副本區最左邊那一格
   const LX = DX + 24; // 古城候位區最左邊那一格
   const TDX = LX + 14; // 台北101副本區最左邊那一格
   const TLX = TDX + 24; // 101 大廳候位區最左邊那一格
-  const W = TLX + 12;
+  const HX = TLX + 14; // 副本大廳最左邊那一格
+  const W = HX + 16;
   const H = 46;
   const TILE = 48;
 
@@ -22,12 +24,14 @@
   // 副本區：(空白) 虛空    Y  峽谷岩壁    Z  深海       y  七星潭礫石灘
   //         u  洞穴地板    x  大理石要推到的凹槽         n  斷崖上的草地
   //         X  關卡之間的石門（關著的時候擋路）          E  七星潭石碑
-  // 候位區：Q  古城石牆    q  古城石板地    H  古城守門員（站在指揮中心）
+  // 候位區：Q  古城石牆    q  古城石板地    H  古城守門員（站在副本大廳）
   // 台北101：g  玻璃帷幕牆  k  天空         p  信義廣場地磚  f  阻尼球層的鋼板地
   //         c  控制台（踩上去）            o  觀景台地板    A  觀景台的大柱子
-  //         h  101 大廳大理石地            U  101 電梯小姐（站在指揮中心）
+  //         h  101 大廳大理石地            U  101 電梯小姐（站在副本大廳）
+  // 副本傳送門：e  指揮中心的副本傳送門（不擋路）
+  // 副本大廳：w  大廳的牆     j  大廳地板    b  副本告示板    D  還沒開放的空台座（敬請期待）
   const BLOCKING = new Set(['#', 'T', 'B', 'K', 'M', 'P', 'S', 'F', 'G', 'N', 'W', 'R', 'J', 'L', 'I', ' ', 'Y', 'Z', 'E', 'Q', 'H',
-    'g', 'k', 'A', 'U']);
+    'g', 'k', 'A', 'U', 'w', 'b', 'D']);
 
   const g = [];
   for (let y = 0; y < H; y++) g.push(new Array(W).fill(','));
@@ -58,12 +62,9 @@
   // 轉職導師站在螢幕牆右邊
   const MENTOR_TILE = { x: 17, y: 6 };
   set(MENTOR_TILE.x, MENTOR_TILE.y, 'N');
-  // 古城守門員站在螢幕牆左邊，跟他說話就送你去副本的候位區
-  const GUARD_TILE = { x: 6, y: 6 };
-  set(GUARD_TILE.x, GUARD_TILE.y, 'H');
-  // 101 電梯小姐站在指揮中心左下角，跟她說話就送你去 101 大廳候位區
-  const ELEVATOR_TILE = { x: 6, y: 11 };
-  set(ELEVATOR_TILE.x, ELEVATOR_TILE.y, 'U');
+  // 螢幕牆左邊的副本傳送門：走進去就到副本大廳，在大廳裡找各副本的 NPC
+  const HQ_PORTAL_TILE = { x: 6, y: 7 };
+  set(HQ_PORTAL_TILE.x, HQ_PORTAL_TILE.y, 'e');
   // 戰情室：電視牆、長會議桌、兩排椅子
   rect(23, 4, 32, 4, 'W');
   rect(24, 8, 31, 9, 'M');
@@ -226,6 +227,23 @@
   set(TPORTAL_TILE.x, TPORTAL_TILE.y, 'O');
   const TLOBBY = { x1: TLX + 1, y1: 3, x2: TLX + 10, y2: 14 };
 
+  // ---------------- 副本大廳 ----------------
+  // 上面牆上掛告示板（每個副本現在的狀態），中間一排台座站著各副本的 NPC，
+  // 空台座留給之後的副本；下面中間是回總部的傳送門
+  rect(HX, 2, HX + 15, 15, 'w');
+  rect(HX + 1, 3, HX + 14, 14, 'j');
+  rect(HX + 5, 3, HX + 10, 3, 'b');
+  const PEDESTALS = [3, 6, 9, 12].map(dx => ({ x: HX + dx, y: 7 }));
+  const GUARD_TILE = PEDESTALS[0], ELEVATOR_TILE = PEDESTALS[1];
+  set(GUARD_TILE.x, GUARD_TILE.y, 'H');
+  set(ELEVATOR_TILE.x, ELEVATOR_TILE.y, 'U');
+  // 還沒開放的副本：之後新增的時候換成那個副本 NPC 的格子
+  const SOON = [{ name: '阿里山', ...PEDESTALS[2] }, { name: '台南', ...PEDESTALS[3] }];
+  SOON.forEach(p => set(p.x, p.y, 'D'));
+  const HUB_EXIT_TILE = { x: HX + 7, y: 13 };
+  set(HUB_EXIT_TILE.x, HUB_EXIT_TILE.y, 'O');
+  const HUB = { x1: HX + 1, y1: 3, x2: HX + 14, y2: 14 };
+
   const px = (x) => (DX + x + 0.5) * TILE, py = (y) => (y + 0.5) * TILE;
   const tpx = (x) => (TDX + x + 0.5) * TILE;
   // 三關的範圍都一樣：第 1 關 3～12 排、第 2 關 14～28 排、第 3 關 30～44 排
@@ -318,6 +336,7 @@
     { id: 'd2', name: '🪨 太魯閣九曲洞', dungeon: 'hualien', x1: DX + 1, y1: 14, x2: DX + 20, y2: 28 },
     { id: 'd3', name: '⚔️ 清水斷崖', dungeon: 'hualien', boss: true, x1: DX + 1, y1: 30, x2: DX + 20, y2: 44 },
     { id: 'tlobby', name: '101 大廳候位區', lobby: 'taipei', ...TLOBBY },
+    { id: 'hub', name: '副本大廳', ...HUB },
     { id: 't1', name: '信義廣場', dungeon: 'taipei', x1: TDX + 1, y1: 3, x2: TDX + 20, y2: 12 },
     { id: 't2', name: '87 樓阻尼球', dungeon: 'taipei', x1: TDX + 1, y1: 14, x2: TDX + 20, y2: 28 },
     { id: 't3', name: '101 觀景台', dungeon: 'taipei', boss: true, x1: TDX + 1, y1: 30, x2: TDX + 20, y2: 44 },
@@ -328,8 +347,13 @@
   // 會變動的擋路格子（關著的石門、九曲洞的大理石）：'tx,ty'
   const dyn = new Set();
   const map = {
-    W, H, MW, DX, LX, TDX, TLX, TILE, BLOCKING, ROOMS, ITEMS, BAG_SLOTS, CRATES, MONSTER_ZONE, DUNGEON, DUNGEONS, DG_LIST, LOBBY, dyn,
+    W, H, MW, DX, LX, TDX, TLX, HX, HUB, TILE, BLOCKING, ROOMS, ITEMS, BAG_SLOTS, CRATES, MONSTER_ZONE, DUNGEON, DUNGEONS, DG_LIST, LOBBY, dyn,
     portal: DUNGEON.portal,
+    // 指揮中心的副本傳送門、副本大廳回總部的出口、還沒開放的台座（像素）
+    hqPortal: { x: (HQ_PORTAL_TILE.x + 0.5) * TILE, y: (HQ_PORTAL_TILE.y + 0.5) * TILE },
+    hubExit: { x: (HUB_EXIT_TILE.x + 0.5) * TILE, y: (HUB_EXIT_TILE.y + 0.5) * TILE },
+    hubBoard: { x: (HX + 8) * TILE, y: 3 * TILE },
+    soon: SOON.map(p => ({ name: p.name, x: (p.x + 0.5) * TILE, y: (p.y + 0.5) * TILE })),
     mentor: { x: (MENTOR_TILE.x + 0.5) * TILE, y: (MENTOR_TILE.y + 0.5) * TILE },
     guard: DUNGEON.npc,
     elevator: TAIPEI_DG.npc,
@@ -355,15 +379,22 @@
       const d = this.dungeonAt(px);
       return d ? d.stages.findIndex(s => px >= s.box.x1 && px < s.box.x2 && py >= s.box.y1 && py < s.box.y2) : -1;
     },
-    // 這個位置在哪一區：總部 hq、副本 dungeon、候位區 lobby（各區之間走不過去，只能傳送）
+    // 這個位置在哪一區：總部 hq、副本 dungeon、候位區 lobby、副本大廳 hub（各區之間走不過去，只能傳送）
     zoneOf(px) {
+      if (px >= HX * TILE) return 'hub';
       const d = this.dungeonAt(px);
       return !d ? 'hq' : px < d.lx * TILE ? 'dungeon' : 'lobby';
     },
     // 區域加上是哪個副本，例如 'lobby:taipei'（不同副本的候位區也不能直接走過去）
     areaOf(px) {
       const d = this.dungeonAt(px);
-      return d ? this.zoneOf(px) + ':' + d.id : 'hq';
+      return d ? this.zoneOf(px) + ':' + d.id : this.zoneOf(px);
+    },
+    nearHqPortal(px, py) { return Math.hypot(px - this.hqPortal.x, py - this.hqPortal.y) < 1.6 * TILE; },
+    nearHubExit(px, py) { return Math.hypot(px - this.hubExit.x, py - this.hubExit.y) < 1.6 * TILE; },
+    inHub(px, py) {
+      const tx = Math.floor(px / TILE), ty = Math.floor(py / TILE);
+      return tx >= HUB.x1 && tx <= HUB.x2 && ty >= HUB.y1 && ty <= HUB.y2;
     },
     nearNpc(d, px, py) {
       return Math.hypot(px - d.npc.x, py - d.npc.y) < 2 * TILE;

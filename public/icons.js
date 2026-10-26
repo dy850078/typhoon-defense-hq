@@ -311,6 +311,24 @@
       C.line(x, 24, 10, 24, 3, r, 1.8);
       x.beginPath(); x.moveTo(36, 6); x.lineTo(33, 12); x.lineTo(36, 12); x.lineTo(33, 18); C.stroke(x, r, 1.8, '#ffb020');
     },
+    // 進副本傳送門：石框裡一圈一圈轉的漩渦
+    'act-portal'(x, r) {
+      C.blob(x, 24, 26, 18, 18, r, 0.06); C.fill(x, '#9aa3b5', r, [6, 8, 36, 36]); C.stroke(x, r, 2.4);
+      C.blob(x, 24, 26, 13, 13, r, 0.06); C.fill(x, '#2f3b55', r, null); C.stroke(x, r, 1.8);
+      x.beginPath();
+      for (let i = 0; i <= 40; i++) { const a = i * 0.42, d = 1 + i * 0.27; x[i ? 'lineTo' : 'moveTo'](24 + Math.cos(a) * d, 26 + Math.sin(a) * d); }
+      C.stroke(x, r, 2, '#ffb020');
+      [[10, 9], [38, 11], [40, 38]].forEach(([a, b]) => { C.blob(x, a, b, 2.4, 2.4, r, 0.1, 8); C.fill(x, '#ffd23f', r, null); });
+    },
+    // 回總部：小小的總部房子
+    'act-home'(x, r) {
+      x.beginPath(); x.moveTo(6, 22); x.lineTo(24, 7); x.lineTo(42, 22); x.closePath();
+      C.fill(x, '#ff7a2f', r, [6, 7, 36, 15]); C.stroke(x, r, 2.4);
+      C.rect(x, 10, 21, 28, 19, r, 0.6); C.fill(x, '#f5ecd9', r, [10, 21, 28, 19]); C.stroke(x, r, 2.4);
+      C.rect(x, 20, 28, 8, 12, r, 0.4); C.fill(x, '#5a3d2a', r, null); C.stroke(x, r, 1.8);
+      C.rect(x, 13, 25, 5, 5, r, 0.3); C.fill(x, '#bcd4ea', r, null); C.stroke(x, r, 1.4);
+      C.rect(x, 31, 25, 5, 5, r, 0.3); C.fill(x, '#bcd4ea', r, null); C.stroke(x, r, 1.4);
+    },
     // 跟希臘少女說話：金色橄欖葉冠
     'act-greek'(x, r) {
       x.beginPath(); x.arc(24, 26, 15, Math.PI * 0.75, Math.PI * 2.25); C.stroke(x, r, 2, '#a07a20');

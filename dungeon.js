@@ -66,7 +66,7 @@ function createDungeon(ctx, D, region) {
     emit();
   }
 
-  // ---------------- NPC：總部 ⇄ 候位區 ----------------
+  // ---------------- NPC：副本大廳 ⇄ 候位區 ----------------
   function go(p) {
     if (p.dead) return { ok: false };
     if (st.members.has(p.id) && st.phase !== 'idle') return { ok: false };
@@ -92,7 +92,7 @@ function createDungeon(ctx, D, region) {
     st.phase = 'countdown';
     st.countdownAt = now0() + D.countdownMs;
     emit();
-    say(`🌀 ${p.name} 按下了出發！${D.countdownMs / 1000} 秒後前往${D.name}副本，想去的人快找指揮中心的${D.npcName}，到${D.lobbyName}集合（最多 ${D.maxPlayers} 人${D.minLevel ? `，要 Lv.${D.minLevel} 以上` : ''}）`);
+    say(`🌀 ${p.name} 按下了出發！${D.countdownMs / 1000} 秒後前往${D.name}副本，想去的人快從指揮中心的副本傳送門到副本大廳找${D.npcName}，到${D.lobbyName}集合（最多 ${D.maxPlayers} 人${D.minLevel ? `，要 Lv.${D.minLevel} 以上` : ''}）`);
     return { ok: true };
   }
   function launch() {

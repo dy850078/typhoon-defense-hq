@@ -1671,6 +1671,26 @@ io.on('connection', (socket) => {
   });
 
   // ---------------- 副本 ----------------
+  // 指揮中心的副本傳送門 ⇄ 副本大廳
+  const hubTeleport = (p, x, y) => {
+    p.x = x; p.y = y;
+    io.emit('playerMoved', { id: p.id, x, y, dir: p.dir, moving: false, teleport: true });
+  };
+  socket.on('hubGo', (ack) => {
+    const p = players.get(socket.id);
+    if (!p || typeof ack !== 'function') return;
+    if (p.dead || DG.isMember(p)) return ack({ ok: false });
+    if (!MAP.nearHqPortal(p.x, p.y)) return ack({ ok: false, error: '先走到副本傳送門旁邊' });
+    hubTeleport(p, MAP.hubExit.x + (Math.random() - 0.5) * 80, MAP.hubExit.y - 2.2 * MAP.TILE);
+    ack({ ok: true });
+  });
+  socket.on('hubHome', (ack) => {
+    const p = players.get(socket.id);
+    if (!p || typeof ack !== 'function') return;
+    if (p.dead || !MAP.inHub(p.x, p.y)) return ack({ ok: false });
+    hubTeleport(p, MAP.hqPortal.x + MAP.TILE * 1.4, MAP.hqPortal.y + MAP.TILE * 0.9);
+    ack({ ok: true });
+  });
   socket.on('dgGo', (ack) => {
     const p = players.get(socket.id);
     if (!p || typeof ack !== 'function') return;

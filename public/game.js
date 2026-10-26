@@ -1228,7 +1228,9 @@
   const MUSIC = (() => {
     let draft = '', results = null;
     let state = {}, gotAt = 0, area = 'all', player = null, apiP = null, playing = null, startTimer = null;
-    let vol = Number(saved('hq-vol') == null ? 60 : saved('hq-vol')), muted = saved('hq-mute') === '1';
+    // 音量 0 就是靜音；last 記住靜音前的音量，按喇叭時恢復
+    let vol = Number(saved('hq-vol') == null ? 60 : saved('hq-vol')), last = Number(saved('hq-vol-last')) || 60;
+    if (saved('hq-mute') === '1') { if (vol) last = vol; vol = 0; store('hq-mute', '0'); }
     const cur = () => (state[area] && state[area].now) || null;
     // 現在這首應該播到第幾秒
     const pos = () => { const n = cur(); return n ? (n.at + performance.now() - gotAt) / 1000 : 0; };
@@ -1267,10 +1269,11 @@
     }
     function applyVol() {
       $('music-vol').value = vol;
-      $('music-mute').replaceChildren(icon(muted || !vol ? 'btn-mute' : 'btn-vol', ''));
+      $('music-mute').replaceChildren(icon(vol ? 'btn-vol' : 'btn-mute', ''));
+      $('music-mute').title = vol ? '靜音' : '開聲音';
       if (!player || !player.setVolume) return;
       player.setVolume(vol);
-      if (muted) player.mute(); else player.unMute();
+      if (vol) player.unMute(); else player.mute();
     }
     // 跟伺服器的進度對齊：換歌、跳到對的秒數，播不出聲音就顯示「點一下開始聽」
     function sync() {
@@ -1320,10 +1323,21 @@
     fold(saved('hq-music-mini') == null ? matchMedia('(max-width: 600px)').matches : saved('hq-music-mini') === '1');
     $('music-fold').onclick = (e) => { e.stopPropagation(); fold(!$('music').classList.contains('mini')); };
     $('music').addEventListener('click', (e) => { if ($('music').classList.contains('mini') && !e.target.closest('#music-start')) fold(false); });
-    $('music-mute').onclick = () => { muted = !muted; store('hq-mute', muted ? '1' : '0'); applyVol(); };
+    const setVol = (v, before) => {
+      if (!v && vol) last = before || vol;
+      else if (v) last = v;
+      vol = v;
+      store('hq-vol', String(vol)); store('hq-vol-last', String(last));
+      applyVol();
+    };
+    $('music-mute').onclick = () => setVol(vol ? 0 : last);
+    // 拖到底的路上會經過 5、4 這種小音量，靜音前的音量要記開始拖之前的
+    let dragFrom = 0;
+    $('music-vol').onpointerdown = () => { dragFrom = vol; };
     // 拉完就放掉焦點，方向鍵才不會跑去調音量
-    $('music-vol').onchange = $('music-vol').onpointerup = (e) => e.target.blur();
-    $('music-vol').oninput = (e) => { vol = Number(e.target.value); muted = false; store('hq-vol', String(vol)); store('hq-mute', '0'); applyVol(); };
+    $('music-vol').onchange = $('music-vol').onpointerup = (e) => { dragFrom = 0; e.target.blur(); };
+    // 拉到 3 以下就當作拉到底，手指不用對得很準
+    $('music-vol').oninput = (e) => { const v = Number(e.target.value); setVol(v <= 3 ? 0 : v, dragFrom); };
     $('music-open').onclick = () => open();
     applyVol();
 

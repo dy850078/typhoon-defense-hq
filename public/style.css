@@ -881,6 +881,9 @@ button.inv-item:hover { border-color: var(--accent); }
 .bag-tab.on { background: var(--ink); color: var(--paper); }
 .bag-tab-n { font-size: 10px; opacity: .75; }
 .bag-cell { touch-action: none; user-select: none; -webkit-user-select: none; }
+/* 裝備 60 格：格子區自己捲，露出 5 排半，看得出下面還有；手機上下滑是捲動，左右拖才是把東西拖出去 */
+.bag-grid.tall { max-height: min(310px, 42vh); overflow-y: auto; overscroll-behavior: contain; padding: 2px 4px 2px 2px; }
+.bag-grid.tall .bag-cell { touch-action: pan-y; }
 .bag-cell img { -webkit-user-drag: none; pointer-events: none; }
 .bag-cell.r-SR { border-color: #ffb020; box-shadow: inset 0 0 0 1px #ffd27a; }
 .bag-cell.r-SSR { border-color: #e46bd6; box-shadow: inset 0 0 0 1px #f2c4ff; }

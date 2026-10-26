@@ -1824,13 +1824,12 @@
     const S = BAG.SECTIONS[bagTab], cells = bagCells(bagTab);
     if (bagSel != null && !cells[bagSel]) bagSel = null;
     if (bagSel == null && cells.length) bagSel = 0;
-    const grid = el('div', 'bag-grid');
+    // 格子超過 6 排（裝備 60 格）就讓格子區自己上下滑，下面的說明不用滑很久才看得到
+    const grid = el('div', 'bag-grid' + (S.slots > 30 ? ' tall' : ''));
     // 寶石不佔格子：排在 cells 最後面，畫在格子下面的寶石袋
     const nGrid = cells.filter(c => !c.gem).length;
     // 只有身上那件的裝備不算格，格子多畫幾格給它們
     const nSlots = S.slots + cells.filter(c => c.free).length;
-    // 格子很多的時候（裝備 60 格）空格只畫到 30 格或多一排，不然手機上要滑很久才看到下面的說明
-    const nDraw = Math.min(nSlots, Math.max(30, Math.ceil((nGrid + 1) / 5) * 5));
     const setup = (cell, c, i) => {
       cell.appendChild(icon(bagIcon(c.kind, c.k), c.kind === 'food' ? MAP.ITEMS[c.k].icon : ''));
       if (c.n > 1 || c.kind === 'food') cell.appendChild(el('span', 'bag-cnt', String(c.n)));
@@ -1846,7 +1845,7 @@
         bagSel = i; openBag();
       };
     };
-    for (let i = 0; i < Math.max(nDraw, nGrid); i++) {
+    for (let i = 0; i < Math.max(nSlots, nGrid); i++) {
       const c = cells[i];
       const cell = el('button', 'bag-cell' + (c ? '' : ' empty') + (c && i === bagSel ? ' on' : '') + (c && c.kind === 'gear' ? ' r-' + GR.GEAR[c.k].rarity : '') + (i >= nSlots ? ' over' : ''));
       cell.type = 'button';

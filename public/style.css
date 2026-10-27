@@ -126,6 +126,9 @@ button.inv-item:hover { border-color: var(--accent); }
   box-shadow: var(--note-shadow); padding: 7px 16px; font-weight: 700; animation: toast 2.2s ease forwards; white-space: nowrap; }
 #toasts .toast.tap { pointer-events: auto; cursor: pointer; } /* 副本提示點一下就關掉 */
 @keyframes toast { 0% { opacity: 0; transform: translateY(-6px); } 10%, 80% { opacity: 1; transform: none; } 100% { opacity: 0; } }
+/* 同一句又按了一次：不疊新的，原本那張跳一下、重新計時 */
+.toast.again { animation-name: toast-again; }
+@keyframes toast-again { 0% { opacity: 1; transform: scale(1.08); } 6% { transform: none; } 80% { opacity: 1; } 100% { opacity: 0; } }
 /* 場景互動（敲箱子、點歌…）：技能列上面的小膠囊 */
 /* 技能列：一排蠟筆風小方塊，角落標快捷鍵 */
 #skillbar { right: 16px; bottom: 52px; display: flex; gap: 8px; align-items: flex-end; }

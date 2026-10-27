@@ -3226,13 +3226,26 @@
     '颱風天也要記得許願喔',
   ];
   // iconKey：手繪 icon 的 key（public/icons.js、icons-more.js），放在文字前面
+  // 打怪會一直按：同一句還在畫面上就不再疊一張，只讓那張跳一下、重新計時；一般提示最多同時 3 張
+  const TOAST_MAX = 3;
   function toast(text, iconKey, ms) {
-    const t = el('div', 'toast', plain(text));
-    if (iconKey && window.HQ_ICONS && HQ_ICONS.url(iconKey)) t.prepend(icon(iconKey, ''), ' ');
+    const msg = plain(text), box = $('toasts');
+    const live = [...box.children];
+    let t = live.find(x => x.dataset.msg === msg);
+    if (t) {
+      t.classList.remove('again'); void t.offsetWidth; t.classList.add('again');
+    } else {
+      const plainOnes = live.filter(x => !x.classList.contains('tap')); // 要點掉的副本提示不算，免得被擠掉
+      plainOnes.slice(0, Math.max(0, plainOnes.length - TOAST_MAX + 1)).forEach(x => x.remove());
+      t = el('div', 'toast', msg);
+      t.dataset.msg = msg;
+      if (iconKey && window.HQ_ICONS && HQ_ICONS.url(iconKey)) t.prepend(icon(iconKey, ''), ' ');
+      box.appendChild(t);
+    }
     // 淡出動畫跟著停留時間走，不然長的提示 2 秒多就看不到了
     if (ms) t.style.animationDuration = ms + 'ms';
-    $('toasts').appendChild(t);
-    setTimeout(() => t.remove(), ms || 2600);
+    clearTimeout(t.timer);
+    t.timer = setTimeout(() => t.remove(), ms || 2600);
     return t;
   }
   // 走進這些地方提醒一句規則；副本的也會常駐在副本面板上
@@ -6834,7 +6847,7 @@
       const sk = ST.SKILLS[id];
       if (this.drawing) { const same = this.drawing.id === id; this.cancelWall(); if (same) { toast('取消畫城牆'); return; } }
       const left = (cooldowns[id] || 0) - performance.now();
-      if (left > 0) { toast(`${sk.name}還在冷卻，${Math.ceil(left / 1000)} 秒後可以再用`); return; }
+      if (left > 0) return; // 冷卻看技能鈕上的遮罩就好，不跳文字
       if (myStats && myStats.mp < sk.mp) { toast(`魔力不夠，${sk.name}要 ${sk.mp} 點`); return; }
       const room = MAP.roomAt(this.me.x, this.me.y);
       if (!room || (!room.field && !room.dungeon)) { toast('要在野區或副本裡才能畫城牆'); return; }
@@ -7225,7 +7238,7 @@
     castSkill(id, target) {
       const sk = ST.SKILLS[id];
       const left = (cooldowns[id] || 0) - performance.now();
-      if (left > 0) { if (!sk.basic) toast(`${sk.name}還在冷卻，${Math.ceil(left / 1000)} 秒後可以再用`); return; }
+      if (left > 0) return; // 冷卻看技能鈕上的遮罩就好，不跳文字
       if (myStats && myStats.mp < sk.mp) { toast(`魔力不夠，${sk.name}要 ${sk.mp} 點，喝礦泉水可以補`); return; }
       socket.emit('attack', id, target || 'boss', (res) => {
         if (res && res.ok) cooldowns[id] = performance.now() + sk.cooldown;

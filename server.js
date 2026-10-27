@@ -2158,7 +2158,11 @@ io.on('connection', (socket) => {
       draw.log(`主持人 ${p.name}：${t}`, 'chat'); return ack({ ok: true });
     }
     if (!draw.answer) { draw.log(`${p.name}：${t}`, 'chat'); return ack({ ok: true }); }
-    if (draw.correct.has(p.id)) return ack({ ok: false, error: '你已經猜對了，等下一題' });
+    // 猜對的人還是可以聊天，跟主持人一樣不能說出答案
+    if (draw.correct.has(p.id)) {
+      if (norm(t).includes(norm(draw.answer))) return ack({ ok: false, error: '不能說出答案喔' });
+      draw.log(`${p.name}：${t}`, 'chat'); return ack({ ok: true });
+    }
     if (norm(t) !== norm(draw.answer)) { draw.log(`${p.name}：${t}`, 'guess'); return ack({ ok: true, correct: false }); }
     draw.correct.add(p.id);
     draw.addScore(p, 1);
@@ -2197,8 +2201,11 @@ io.on('connection', (socket) => {
     }
     if (!song.title) { song.log(`${p.name}：${t}`, 'chat'); return ack({ ok: true }); }
     const hadS = song.gotSinger.has(p.id), hadT = song.gotTitle.has(p.id);
-    if (hadS && hadT) return ack({ ok: false, error: '你已經全部答對了，等下一首' });
-    const g = norm(t), hitS = !hadS && songHit(g, song.singer), hitT = !hadT && songHit(g, song.title);
+    const g = norm(t);
+    // 答對的部分不能再講出來，全部答對之後就是一般聊天
+    if ((hadS && songHit(g, song.singer)) || (hadT && songHit(g, song.title))) return ack({ ok: false, error: '不能說出答案喔' });
+    if (hadS && hadT) { song.log(`${p.name}：${t}`, 'chat'); return ack({ ok: true }); }
+    const hitS = !hadS && songHit(g, song.singer), hitT = !hadT && songHit(g, song.title);
     if (!hitS && !hitT) { song.log(`${p.name}：${t}`, 'guess'); return ack({ ok: true, correct: false }); }
     if (hitS) {
       const rank = song.gotSinger.size, pts = rankPts(song.singerPts, rank);

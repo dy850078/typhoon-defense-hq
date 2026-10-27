@@ -4,7 +4,9 @@
   "description": "颱風天防衛總部：小型多人線上世界",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "serve": "node scripts/serve.js",
+    "deploy": "node scripts/deploy.js"
   },
   "author": "",
   "license": "MIT",

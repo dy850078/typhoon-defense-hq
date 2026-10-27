@@ -60,6 +60,29 @@ npm start
 
 打開瀏覽器到 <http://localhost:3000> 就能進去了。終端機也會印出這次的 Jitsi 視訊房間網址。
 
+### 長期開著：npm run serve
+
+```bash
+cp .env.example .env   # 第一次：把金鑰、管理員密碼、固定的 JITSI_ROOM 填進 .env
+npm run serve
+```
+
+`npm run serve` 跟 `npm start` 一樣，差別是 node 關掉後會自動重開（意外當掉也會），上版時不用再 Ctrl+C。`.env` 不會被推上 GitHub；指令上直接帶的變數優先於 `.env`。
+
+### 上版：npm run deploy
+
+伺服器用 `npm run serve` 開著時，另開一個終端機：
+
+```bash
+npm run deploy
+```
+
+它會依序：確認這台電腦沒有改到一半的檔案 → `git pull`（套件有變自動 `npm install`）→ 收集 `changes/` 裡還沒公告過的更新小紙條，寫進 `data/releases.json` → 打版本標籤 `vYYYY.MM.DD-N` 並推上 GitHub → 通知 serve 存檔後用新版本重開。玩家畫面會跳「總部更新了」，重新整理後第一次進來會看到這次的更新內容。
+
+- 建議先在管理員介面按「更新公告」倒數，倒數結束再上版。打王、遊戲室進行中時避免上版（王的血量、分數會重置）。
+- 沒有新東西時不會重開；真的要重開加 `npm run deploy -- --force`。
+- 每個 PR 的更新小紙條寫法見 [changes/README.md](changes/README.md)。
+
 ## 讓朋友連進來（不需要 public IP 或網域）
 
 伺服器跑起來之後，再開一個終端機，用下面任一種「通道（tunnel）」把你電腦上的 3000 port 分享出去。它會給你一個公開的 https 網址，把網址傳給朋友就好。
@@ -115,6 +138,8 @@ npm start
 | `GARDEN_SPEED` | `1` | 公共花園的時間加速幾倍（測試用，例如 `600` 就是 1 小時變 6 秒） |
 | `CAKE_CODE` | `CAKE` | 隱藏彩蛋的暗號（不分大小寫） |
 | `ADMIN_PASSWORD` | 第一次啟動隨機產生 | 管理員介面（`/admin.html`）的密碼，沒設的話啟動時會印在終端機上 |
+
+這些也可以寫在專案資料夾的 `.env` 檔裡（格式見 `.env.example`）。
 
 例如：`JITSI_ROOM=OurTyphoonParty2026 npm start`（Windows PowerShell：`$env:JITSI_ROOM="OurTyphoonParty2026"; npm start`）
 

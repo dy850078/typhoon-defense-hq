@@ -1,3 +1,4 @@
+require('./env'); // 先讀 .env，後面的設定才拿得到
 const path = require('path');
 const fs = require('fs');
 const http = require('http');
@@ -304,6 +305,13 @@ app.post('/api/admin/password', (req, res) => {
   res.json({ ok: true });
 });
 // ---------------- 更新公告 ----------------
+// npm run deploy 寫下的版本紀錄，玩家進總部時看這次更新了什麼
+let RELEASES = [];
+try { RELEASES = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'releases.json'), 'utf8')).releases || []; } catch (e) { /* 還沒用 deploy 上過版 */ }
+const VERSION = RELEASES[0] ? RELEASES[0].version : '';
+app.get('/api/releases', (req, res) => {
+  res.json({ version: VERSION, releases: RELEASES.slice(0, 30).map(r => ({ version: r.version, at: r.at, notes: r.notes || [] })) });
+});
 // 每次啟動有不同的版本號，瀏覽器重新連上時發現版本變了，就請玩家重新整理
 const BOOT_ID = Date.now().toString(36);
 // 管理員預告：所有人畫面上出現倒數，時間到先幫大家存檔，再提醒管理員可以重啟
@@ -1444,7 +1452,7 @@ const GAMES = [draw, song];
 
 io.on('connection', (socket) => {
   let lastChat = 0;
-  socket.emit('hello', { boot: BOOT_ID, notice: noticeState() });
+  socket.emit('hello', { boot: BOOT_ID, version: VERSION, notice: noticeState() });
   // 閃斷後接回原本的連線：角色還在就繼續；剛好已經被收掉的話請瀏覽器重新加入
   if (socket.recovered) {
     if (players.has(socket.id)) comeBack(players.get(socket.id));
@@ -2515,7 +2523,7 @@ app.use((err, req, res, next) => {
 
 server.listen(PORT, () => {
   iceServers(); // 先拿一次 TURN 通行證，第一個進小樹屋的人就不用等
-  console.log(`🌀 颱風天防衛總部已啟動：http://localhost:${PORT}`);
+  console.log(`🌀 颱風天防衛總部已啟動：http://localhost:${PORT}${VERSION ? `（${VERSION}）` : ''}`);
   console.log(`🔑 管理員介面：http://localhost:${PORT}/admin.html  密碼：${process.env.ADMIN_PASSWORD ? '（用 ADMIN_PASSWORD 設定的）' : settings.adminPassword}`);
   console.log(`📹 視訊房間：https://${JITSI_DOMAIN}/${JITSI_ROOM}`);
   console.log(TURN_PROVIDER ? `🌳 小樹屋語音：使用 ${TURN_PROVIDER} TURN 中繼` : process.env.TURN_URL ? '🌳 小樹屋語音：使用 TURN_URL 中繼' : '🌳 小樹屋語音：只有 STUN（手機網路之間可能接不通，見 README 的「小樹屋語音」）');

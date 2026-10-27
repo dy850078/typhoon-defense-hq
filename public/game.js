@@ -207,6 +207,7 @@
       $('messages').innerHTML = '';
       res.history.forEach(addMessage);
       const start = () => scene.setupWorld(res);
+      setTimeout(maybeShowRelease, 800);
       if (scene) start(); else pending.push(start);
     });
   }
@@ -316,6 +317,51 @@
     renderNotice();
   });
   socket.on('notice', (n) => { notice = n; noticeAt = performance.now(); renderNotice(); });
+
+  // ---------------- 更新紀錄 ----------------
+  // npm run deploy 上版後，玩家第一次進總部跳一張紙卡說這次更新了什麼；同一版只跳一次
+  // 第一次來玩的人不跳（他們還沒玩過舊版），直接記成看過了
+  const veteran = !!saved('hq-level');
+  let releases = null;
+  const releasesReady = fetch('/api/releases').then(r => r.json()).then((r) => {
+    releases = r;
+    if (r.version) { $('release-link').textContent = `更新紀錄 · ${r.version}`; $('release-link').hidden = false; }
+  }).catch(() => {});
+  const dayText = (iso) => { const d = new Date(iso); return `${d.getMonth() + 1}/${d.getDate()}`; };
+  function releaseNotes(r) {
+    const ul = el('ul', 'release-notes');
+    r.notes.forEach(t => ul.appendChild(el('li', null, plain(t))));
+    return ul;
+  }
+  function showLatestRelease() {
+    const r = releases.releases[0], box = el('div', 'release-box');
+    box.appendChild(el('p', 'release-ver', `${r.version} · ${dayText(r.at)}`));
+    box.appendChild(releaseNotes(r));
+    const btns = el('div', 'update-btns');
+    const ok = el('button', 'primary', '知道了'); ok.type = 'button'; ok.onclick = closeModal;
+    const all = el('button', 'hud-btn', '以前的更新'); all.type = 'button'; all.onclick = showAllReleases;
+    btns.append(ok, all);
+    box.appendChild(btns);
+    openModal('release', '總部更新了', box);
+  }
+  function showAllReleases() {
+    const box = el('div', 'release-box');
+    const list = releases ? releases.releases.filter(r => r.notes.length) : [];
+    if (!list.length) box.appendChild(el('p', 'sub', '還沒有更新紀錄'));
+    list.forEach((r) => {
+      box.appendChild(el('p', 'release-ver', `${r.version} · ${dayText(r.at)}`));
+      box.appendChild(releaseNotes(r));
+    });
+    openModal('release', '更新紀錄', box);
+  }
+  $('release-link').onclick = showAllReleases;
+  function maybeShowRelease() {
+    releasesReady.then(() => {
+      if (!releases || !releases.version || saved('hq-seen-ver') === releases.version) return;
+      store('hq-seen-ver', releases.version);
+      if (veteran && releases.releases[0].notes.length && !modalKind) showLatestRelease();
+    });
+  }
   // 在別的分頁登入或註冊了：這個分頁的角色也換成帳號的，畫面上才不會同時有兩個自己
   let joinedToken = '';
   window.addEventListener('storage', (e) => {

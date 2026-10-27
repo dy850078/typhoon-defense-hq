@@ -2690,7 +2690,7 @@
       else if (!state.playing) info = host ? '你是主持人：先輸入答案、按「出題」，出題後才能開始畫！' : `主持人 ${state.hostName} 正在想題目…`;
       else info = host ? `答案「${answer}」· 已猜對 ${right} / ${guessers.length}` : `${state.hostName} 出題中 · 答案有 ${state.len} 個字 · 已猜對 ${right} / ${guessers.length}`;
       gameRender('draw', state, { info, tag: (id) => (state.correct.includes(id) ? '✓ ' : ''),
-        placeholder: state.playing ? `猜猜看（${state.len} 個字）` : '聊天…' });
+        placeholder: !state.playing ? '聊天…' : state.correct.includes(me && me.id) ? '猜對了，可以聊天…' : `猜猜看（${state.len} 個字）` });
     }
     function onState(st) { state = st; if (!amHost()) { answer = ''; $('draw-answer').value = ''; } render(); }
 
@@ -2862,8 +2862,8 @@
       $('song-pts-text').textContent = state.playing ? `歌手：${ptsText(state.singerPts)}　歌名：${ptsText(state.titlePts)}` : '';
       gameRender('song', state, { info,
         tag: (id) => { const s = state.gotSinger.includes(id), t = state.gotTitle.includes(id); return s && t ? '✓✓ ' : s ? '歌手✓ ' : t ? '歌名✓ ' : ''; },
-        placeholder: !state.playing ? '聊天…' : gotS && gotT ? '你全部答對了！' : gotS ? '再猜歌名…' : gotT ? '再猜歌手…' : '猜歌手或歌名…' });
-      $('song-guess').disabled = host || (state.playing && gotS && gotT);
+        placeholder: !state.playing ? '聊天…' : gotS && gotT ? '全部答對了，可以聊天…' : gotS ? '再猜歌名…' : gotT ? '再猜歌手…' : '猜歌手或歌名…' });
+      $('song-guess').disabled = host;
     }
     function onState(st) { state = st; if (!amHost() || !st.playing) answer = null; render(); }
     $('song-start-form').onsubmit = (e) => {

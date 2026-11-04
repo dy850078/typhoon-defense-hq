@@ -102,6 +102,17 @@ npm run serve
 
 > 電腦關機、睡眠或關掉終端機，大家就會斷線，開回來之後同一個網址就能繼續玩。
 
+### 伺服器沒開時顯示休息頁（只要做一次）
+
+沒開伺服器時，朋友點網址會看到 Cloudflare 的錯誤頁。在 Cloudflare 放一個小程式（Worker，免費）擋在網域前面，就會改成顯示「總部休息中」。這一頁開著就好，每 30 秒會檢查一次，總部一開門就自動帶大家進去。伺服器有開的時候，所有東西都原封不動轉給總部。
+
+1. Cloudflare 後台 → **Workers & Pages** → **Create** → **Create Worker**，名稱取 `hq-offline`，按 **Deploy**。
+2. 按 **Edit code**，把裡面的程式碼全部刪掉，貼上 [`cloudflare/offline-worker.js`](cloudflare/offline-worker.js) 的全部內容，按 **Deploy**。
+3. 回到這個 Worker 的 **Settings** → **Domains & Routes** → **Add** → 選 **Route**（不要選 Custom domain，那個會蓋掉通道的設定）：Zone 選你的網域，Route 填 `你的網域.com/*`，按 **Add route**。
+4. 關掉伺服器，打開網址看看，應該會看到休息頁。
+
+免費方案每天可以處理 10 萬個請求，20 個人遠遠用不完；萬一超過，Cloudflare 會直接放行到總部，不會擋人。之後改了 `offline-worker.js`，重做第 2 步就好。
+
 ### 還沒買網域的話：快速通道
 
 `.env` 沒有 `TUNNEL` 時，`npm run serve` 只開伺服器。另外開一個終端機：

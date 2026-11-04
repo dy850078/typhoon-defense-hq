@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node server.js",
     "serve": "node scripts/serve.js",
-    "deploy": "node scripts/deploy.js"
+    "deploy": "node scripts/deploy.js",
+    "tunnel:setup": "node scripts/tunnel-setup.js"
   },
   "author": "",
   "license": "MIT",

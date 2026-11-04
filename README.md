@@ -49,65 +49,92 @@
 
 報名時會一起建立帳號，邀請函和角色存在伺服器的 `data/accounts.json`（不用資料庫），下次登入就能拿回來。
 
-## 在自己的電腦啟動
+## 架站與上版（給站長）
 
-需要先安裝 [Node.js](https://nodejs.org/)（18 版以上）。
+總部架在自己的電腦上（Windows 的 WSL 裡），用 Cloudflare 快速通道讓朋友連進來，不需要 public IP、網域或資料庫。
+
+### 第一次架站
+
+1. 在 WSL 裡裝好 [Node.js](https://nodejs.org/)（18 版以上）和 git。
+2. 抓程式碼、裝套件：
+
+   ```bash
+   git clone https://github.com/dy850078/typhoon-defense-hq.git
+   cd typhoon-defense-hq
+   npm install
+   ```
+
+3. 建立設定檔：
+
+   ```bash
+   cp .env.example .env
+   ```
+
+   打開 `.env` 填上：`ADMIN_PASSWORD`（管理員密碼）、`JITSI_ROOM`（固定的視訊房間名稱，取個不好猜的）、小樹屋語音的 `CF_TURN_KEY_ID` / `CF_TURN_KEY_TOKEN`（見下面「小樹屋語音」）。`.env` 不會被推上 GitHub；指令上直接帶的變數優先於 `.env`。其他可以設的值見下面「設定」。
+
+4. 安裝 cloudflared（WSL / Ubuntu 用 [官方說明](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/) 的 `.deb`；macOS：`brew install cloudflared`；Windows：`winget install --id Cloudflare.cloudflared`）。
+5. 讓上版時能把版本標籤推上 GitHub（只要做一次）：
+
+   ```bash
+   gh auth login
+   gh auth setup-git
+   ```
+
+   沒做也能上版，只是標籤會推不上去，終端機會提醒你之後手動 `git push origin <版本>`。
+
+### 每次開站
+
+開兩個終端機，都在專案資料夾裡：
 
 ```bash
-npm install
-npm start
-```
-
-打開瀏覽器到 <http://localhost:3000> 就能進去了。終端機也會印出這次的 Jitsi 視訊房間網址。
-
-### 長期開著：npm run serve
-
-```bash
-cp .env.example .env   # 第一次：把金鑰、管理員密碼、固定的 JITSI_ROOM 填進 .env
+# 終端機 A：總部伺服器
 npm run serve
 ```
 
-`npm run serve` 跟 `npm start` 一樣，差別是 node 關掉後會自動重開（意外當掉也會），上版時不用再 Ctrl+C。`.env` 不會被推上 GitHub；指令上直接帶的變數優先於 `.env`。
-
-### 上版：npm run deploy
-
-伺服器用 `npm run serve` 開著時，另開一個終端機：
-
 ```bash
-npm run deploy
+# 終端機 B：通道
+cloudflared tunnel --url http://localhost:3000
 ```
 
-它會依序：確認這台電腦沒有改到一半的檔案 → `git pull`（套件有變自動 `npm install`）→ 收集 `changes/` 裡還沒公告過的更新小紙條，寫進 `data/releases.json` → 打版本標籤 `vYYYY.MM.DD-N` 並推上 GitHub → 通知 serve 存檔後用新版本重開。玩家畫面會跳「總部更新了」，重新整理後第一次進來會看到這次的更新內容。
+終端機 B 會出現 `https://xxxx-xxxx.trycloudflare.com`，把這個網址傳給朋友。自己測試直接開 <http://localhost:3000>。
 
-- 建議先在管理員介面按「更新公告」倒數，倒數結束再上版。打王、遊戲室進行中時避免上版（王的血量、分數會重置）。
-- 沒有新東西時不會重開；真的要重開加 `npm run deploy -- --force`。
-- 每個 PR 的更新小紙條寫法見 [changes/README.md](changes/README.md)。
+`npm run serve` 會在 node 關掉後自動重開（意外當掉也會），上版時不用 Ctrl+C。如果 30 秒內連續當 3 次，它會停下來，先看上面的錯誤訊息。只想在本機試玩、不需要自動重開的話，用 `npm start` 也可以。
 
-## 讓朋友連進來（不需要 public IP 或網域）
+> ⚠️ **cloudflared 不要重開**。快速通道的網址每次重開都會變，網址一換，大家瀏覽器裡存的東西（沒登入帳號的角色、等級）就拿不回來，也要重新傳網址給所有人。上版只重開 node，交給 `npm run deploy` 就好。關掉終端機或電腦睡眠，大家也會斷線。
 
-伺服器跑起來之後，再開一個終端機，用下面任一種「通道（tunnel）」把你電腦上的 3000 port 分享出去。它會給你一個公開的 https 網址，把網址傳給朋友就好。
+### 上版
 
-### 方法 A：Cloudflare Tunnel（免費、免註冊）
+PR 合併進 main 之後：
 
-1. 安裝 cloudflared
-   - macOS：`brew install cloudflared`
-   - Windows：`winget install --id Cloudflare.cloudflared`
-2. 執行：
+1. 打開管理員介面 `/admin.html`，在「預告更新」選 1／3／5 分鐘按「發布」，大家畫面上方會倒數；倒數完會先幫大家存好角色，管理員頁顯示「可以重啟了」。打王、遊戲室進行中時盡量避開（王的血量、分數會重置）。
+2. 看到「可以重啟了」之後，**再開一個終端機**（終端機 A、B 都不要動），在專案資料夾執行：
+
    ```bash
-   cloudflared tunnel --url http://localhost:3000
+   npm run deploy
    ```
-3. 畫面上會出現 `https://xxxx-xxxx.trycloudflare.com`，傳給朋友。
 
-### 方法 B：ngrok
+它會依序：確認這台電腦沒有改到一半的檔案、確認在 main 分支 → `git pull`（套件有變自動 `npm install`）→ 收集 `changes/` 裡還沒公告過的更新小紙條，寫進 `data/releases.json` → 打版本標籤 `vYYYY.MM.DD-N` 並推上 GitHub → 通知 `npm run serve` 存檔後用新版本重開。玩家畫面會跳「總部更新了」，重新整理後第一次進來會看到這次的更新內容。
+
+每個 PR 的更新小紙條寫法見 [changes/README.md](changes/README.md)。
+
+### 上版遇到狀況
+
+| 畫面上看到 | 怎麼辦 |
+| --- | --- |
+| 「這些檔案在這台電腦上被改過」，列出 `package-lock.json` | 通常是 `npm install` 自己改的，丟掉就好：`git checkout package-lock.json`，再跑一次 `npm run deploy` |
+| 「這些檔案在這台電腦上被改過」，列出其他檔案 | 先 `git diff` 看改了什麼，不要的話 `git checkout <檔名>` |
+| 「現在在 xxx 分支」 | `git checkout main` 再跑一次 |
+| 「已經是最新版了」 | 沒有新東西所以沒重開；真的要重開伺服器用 `npm run deploy -- --force` |
+| 「標籤沒推上去」 | 上版已經成功。照上面「第一次架站」第 5 步做 `gh auth login` + `gh auth setup-git`，再手動 `git push origin <版本>` |
+| 「找不到用 npm run serve 開的伺服器」 | 伺服器是用 `npm start` 開的，或已經關掉了。到終端機 A 按 Ctrl+C，改用 `npm run serve` 開 |
+| `git pull` 失敗（不能 fast-forward） | 這台電腦上有沒推上去的 commit，先看 `git log origin/main..` 再決定要不要留 |
+
+### 不用 Cloudflare 的話：ngrok
 
 1. 到 <https://ngrok.com/> 註冊並安裝，照網站指示設定 authtoken。
-2. 執行：
-   ```bash
-   ngrok http 3000
-   ```
-3. 把畫面上 `Forwarding` 那行的 https 網址傳給朋友。
+2. 執行 `ngrok http 3000`，把畫面上 `Forwarding` 那行的 https 網址傳給朋友。
 
-> 注意：關掉終端機或電腦睡眠，大家就會斷線。快速通道的網址每次重開都會變，要重新傳一次。
+免費版的網址一樣每次重開都會變，注意事項跟上面 cloudflared 相同。
 
 ## 帳號和管理員介面
 
@@ -117,7 +144,7 @@ npm run deploy
 - 同一個帳號只能在一個地方玩，在別的地方登入會把舊的那個擠掉
 - 管理員介面 `/admin.html`：改派對日期和時間（報名頁、邀請函、IG 限時動態、總部的 VIP Pass 都會跟著換），查看帳號、幫忘記密碼的人重設密碼、刪除帳號。設定存在 `data/settings.json`
 - 換電腦架站的話，把整個 `data/` 資料夾一起帶走就好
-- 更新提醒：伺服器每次重啟後，大家的畫面會跳出「總部更新了」，10 秒後自動重新整理（打怪中可以按「稍後」，2 分鐘後再提醒）。要更新前可以先在管理員介面「預告更新」，選 1／3／5 分鐘，大家畫面上方會倒數，時間到會先幫大家存好角色，再重啟伺服器
+- 更新提醒（上版流程見上面「架站與上版」）：伺服器每次重啟後，大家的畫面會跳出「總部更新了」，10 秒後自動重新整理（打怪中可以按「稍後」，2 分鐘後再提醒）。管理員介面的「預告更新」可以先倒數，時間到會先幫大家存好角色
 
 ## 設定（環境變數，可不設）
 

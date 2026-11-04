@@ -51,7 +51,7 @@
 
 ## 架站與上版（給站長）
 
-總部架在自己的電腦上（Windows 的 WSL 裡），用 Cloudflare 快速通道讓朋友連進來，不需要 public IP、網域或資料庫。
+總部架在自己的電腦上（Windows 的 WSL 裡），用 Cloudflare 通道讓朋友連進來，不需要 public IP 或資料庫。買一個網域就有固定網址（第 6 步）；還沒買的話可以先用快速通道。
 
 ### 第一次架站
 
@@ -82,32 +82,48 @@
 
    沒做也能上版，只是標籤會推不上去，終端機會提醒你之後手動 `git push origin <版本>`。
 
+6. 設定固定網址（只要做一次）。先在 Cloudflare 後台的 Domain Registration 買一個網域（例如 `example.com`），再執行：
+
+   ```bash
+   npm run tunnel:setup -- hq.example.com
+   ```
+
+   網域可以用整個 `example.com`，也可以用子網域 `hq.example.com`。它會依序：檢查 cloudflared → 沒登入過就開瀏覽器登入 Cloudflare（選你的網域按 Authorize）→ 建立名叫 `hq` 的通道 → 把網域指到通道 → 寫通道設定檔 `~/.cloudflared/hq.yml` → 在 `.env` 記上 `TUNNEL=hq` 和 `PUBLIC_URL`。重跑也沒關係，做過的步驟會跳過；想換網域就帶新的網域再跑一次。
+
 ### 每次開站
 
-開兩個終端機，都在專案資料夾裡：
-
 ```bash
-# 終端機 A：總部伺服器
 npm run serve
 ```
 
+伺服器和通道會一起開，看到 `🌐 通道已連上：https://hq.example.com` 就可以把網址傳給朋友。網址固定不變，伺服器關掉再開、電腦重開都一樣。自己測試直接開 <http://localhost:3000>。
+
+`npm run serve` 會在 node 關掉後自動重開（意外當掉也會），上版時不用 Ctrl+C。如果 30 秒內連續當 3 次，它會停下來，先看上面的錯誤訊息。通道斷線也會自己重新連上。只想在本機試玩、不需要自動重開和通道的話，用 `npm start` 也可以。
+
+> 電腦關機、睡眠或關掉終端機，大家就會斷線，開回來之後同一個網址就能繼續玩。
+
+### 還沒買網域的話：快速通道
+
+`.env` 沒有 `TUNNEL` 時，`npm run serve` 只開伺服器。另外開一個終端機：
+
 ```bash
-# 終端機 B：通道
 cloudflared tunnel --url http://localhost:3000
 ```
 
-終端機 B 會出現 `https://xxxx-xxxx.trycloudflare.com`，把這個網址傳給朋友。自己測試直接開 <http://localhost:3000>。
+會出現 `https://xxxx-xxxx.trycloudflare.com`，把這個網址傳給朋友。
 
-`npm run serve` 會在 node 關掉後自動重開（意外當掉也會），上版時不用 Ctrl+C。如果 30 秒內連續當 3 次，它會停下來，先看上面的錯誤訊息。只想在本機試玩、不需要自動重開的話，用 `npm start` 也可以。
+> ⚠️ 快速通道的網址每次重開都會變，大家要重新拿網址、重新登入（角色存在帳號裡不會不見，但瀏覽器裡的小設定會重置）。這個終端機不要關，上版只重開 node，交給 `npm run deploy` 就好。
 
-> ⚠️ **cloudflared 不要重開**。快速通道的網址每次重開都會變，網址一換，大家瀏覽器裡存的東西（沒登入帳號的角色、等級）就拿不回來，也要重新傳網址給所有人。上版只重開 node，交給 `npm run deploy` 就好。關掉終端機或電腦睡眠，大家也會斷線。
+### 搬到固定網址
+
+從快速通道換成固定網址那天：伺服器開著的話先用管理員介面的「預告更新」幫大家存檔，再照上面第 6 步設定、重開 `npm run serve`。公告新網址，請大家到新網址重新登入一次就好，角色、等級、裝備都存在 `data/accounts.json` 裡。忘記密碼的人到 `/admin.html` 幫他重設。
 
 ### 上版
 
 PR 合併進 main 之後：
 
 1. 打開管理員介面 `/admin.html`，在「預告更新」選 1／3／5 分鐘按「發布」，大家畫面上方會倒數；倒數完會先幫大家存好角色，管理員頁顯示「可以重啟了」。打王、遊戲室進行中時盡量避開（王的血量、分數會重置）。
-2. 看到「可以重啟了」之後，**再開一個終端機**（終端機 A、B 都不要動），在專案資料夾執行：
+2. 看到「可以重啟了」之後，**再開一個終端機**（開著 `npm run serve` 的那個不要動），在專案資料夾執行：
 
    ```bash
    npm run deploy
@@ -126,7 +142,7 @@ PR 合併進 main 之後：
 | 「現在在 xxx 分支」 | `git checkout main` 再跑一次 |
 | 「已經是最新版了」 | 沒有新東西所以沒重開；真的要重開伺服器用 `npm run deploy -- --force` |
 | 「標籤沒推上去」 | 上版已經成功。照上面「第一次架站」第 5 步做 `gh auth login` + `gh auth setup-git`，再手動 `git push origin <版本>` |
-| 「找不到用 npm run serve 開的伺服器」 | 伺服器是用 `npm start` 開的，或已經關掉了。到終端機 A 按 Ctrl+C，改用 `npm run serve` 開 |
+| 「找不到用 npm run serve 開的伺服器」 | 伺服器是用 `npm start` 開的，或已經關掉了。到開伺服器的終端機按 Ctrl+C，改用 `npm run serve` 開 |
 | `git pull` 失敗（不能 fast-forward） | 這台電腦上有沒推上去的 commit，先看 `git log origin/main..` 再決定要不要留 |
 
 ### 不用 Cloudflare 的話：ngrok
@@ -134,7 +150,7 @@ PR 合併進 main 之後：
 1. 到 <https://ngrok.com/> 註冊並安裝，照網站指示設定 authtoken。
 2. 執行 `ngrok http 3000`，把畫面上 `Forwarding` 那行的 https 網址傳給朋友。
 
-免費版的網址一樣每次重開都會變，注意事項跟上面 cloudflared 相同。
+免費版的網址一樣每次重開都會變，注意事項跟上面快速通道相同。
 
 ## 帳號和管理員介面
 
@@ -151,6 +167,7 @@ PR 合併進 main 之後：
 | 變數 | 預設 | 說明 |
 | --- | --- | --- |
 | `PORT` | `3000` | 伺服器 port |
+| `TUNNEL` / `PUBLIC_URL` | 不設 | 固定網址的通道名稱和網址，`npm run tunnel:setup` 會自動寫進 `.env`；有 `TUNNEL` 時 `npm run serve` 會順便開通道 |
 | `MAX_PLAYERS` | `40` | 最多同時上線人數 |
 | `JITSI_ROOM` | 每次啟動隨機產生 | 視訊房間名稱，想固定的話自己設一個不好猜的名字 |
 | `JITSI_DOMAIN` | `meet.jit.si` | 如果有自架 Jitsi 可以換掉 |

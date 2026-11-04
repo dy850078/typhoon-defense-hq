@@ -65,7 +65,7 @@ p b { color: var(--ink); }
 <div class="meta"><span class="left">THIS IS NOT A PARTY</span><span>CLOSED</span></div>
 <main>
   <div class="row">
-    <h1><span class="soft">這不是一個</span><span class="hot">打烊</span></h1>
+    <h1><span class="soft">總部</span><span class="hot">休息中</span></h1>
     <svg class="icon" viewBox="0 0 240 240" aria-hidden="true">
       <g class="spin">
         <circle cx="120" cy="120" r="108" fill="none" stroke="#B5B5BA" stroke-width="6" stroke-linecap="round" stroke-dasharray="0 13"></circle>
@@ -79,7 +79,7 @@ p b { color: var(--ink); }
       <path d="M36 196 v16 M28 204 h16" stroke="#FF6A13" stroke-width="3" stroke-linecap="round"></path>
     </svg>
   </div>
-  <p><b>總部休息中</b>，只是站長的電腦還在睡。<br>這一頁開著就好，總部開門會自動帶你進去。</p>
+  <p>站長的電腦還在睡。<br>這一頁開著就好，總部開門會自動帶你進去。</p>
   <div class="status" id="status" role="status"><span class="dot"></span><span id="status-text">每 30 秒看一次門開了沒</span></div>
 </main>
 <script>

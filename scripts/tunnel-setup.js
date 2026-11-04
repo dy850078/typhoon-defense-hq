@@ -43,7 +43,10 @@ else {
 function findTunnel() {
   const r = cf(['tunnel', 'list', '--output', 'json']);
   if (r.status !== 0) fail('讀不到通道清單：\n' + (r.stderr || r.stdout));
-  try { return (JSON.parse(r.stdout) || []).find(t => t.name === name && !t.deleted_at); }
+  // 只取 JSON 那段（前面偶爾會夾著版本過舊之類的提醒）
+  // 注意：沒刪掉的通道 deleted_at 也有值（0001-01-01…），清單本來就不含已刪除的，所以只比名字
+  const out = r.stdout.slice(Math.max(0, r.stdout.indexOf('[')));
+  try { return (JSON.parse(out) || []).find(t => t.name === name); }
   catch (e) { fail('看不懂通道清單：\n' + r.stdout); }
 }
 

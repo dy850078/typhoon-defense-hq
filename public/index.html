@@ -139,7 +139,7 @@ body {
 .field { display: flex; flex-direction: column; gap: 8px; }
 .field label, .label-txt { font-weight: 700; font-size: 15px; }
 .req { color: var(--accent-ink); font: 700 12px var(--mono); margin-left: 6px; letter-spacing: 0.06em; }
-.field input[type=text], .field input[type=password] {
+.field input[type=text], .field input[type=password], .field input[type=email] {
   font: 500 18px var(--display);
   color: var(--ink);
   background: var(--paper);
@@ -149,7 +149,7 @@ body {
   min-height: 48px;
   width: 100%;
 }
-.field input[type=text]:focus, .field input[type=password]:focus { outline: none; border-color: var(--accent); }
+.field input[type=text]:focus, .field input[type=password]:focus, .field input[type=email]:focus { outline: none; border-color: var(--accent); }
 /* 登入 */
 .login-form { grid-template-columns: minmax(0, 460px); }
 .acct { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding-bottom: 22px; border-bottom: 2px dashed var(--line); }
@@ -166,6 +166,22 @@ body {
 }
 .chip:hover { border-color: var(--accent); }
 .err { color: #C0391B; font-size: 14px; min-height: 1em; margin: 0; }
+.ok { color: #1F7A4D; font-size: 14px; min-height: 1em; margin: 0; line-height: 1.6; }
+/* 忘記密碼、email 驗證、帳號設定 */
+.forgot-row { margin: 4px 0 0; font-size: 14px; }
+.mailbox { margin: 18px 0 0; padding: 18px 20px; border: 2px solid var(--accent); border-radius: 18px; background: var(--paper); display: grid; gap: 12px; max-width: 560px; }
+.mailbox.soft { border-color: var(--line); }
+.mailbox b { font-size: 17px; }
+.mailbox p { margin: 0; color: var(--muted); line-height: 1.7; }
+.mailbox .btnrow, .acct-box .btnrow { display: flex; flex-wrap: wrap; gap: 10px; }
+.mailbox .btn, .acct-box .btn { min-height: 44px; padding: 10px 18px; font-size: 15px; }
+.mail-edit { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.mail-edit input { flex: 1 1 14em; font: 500 16px var(--display); color: var(--ink); background: var(--ground); border: 2px solid var(--line); border-radius: 12px; padding: 10px 12px; min-height: 44px; }
+.acct-box { display: grid; gap: 14px; max-width: 460px; padding: 20px 22px; border: 2px solid var(--line); border-radius: 20px; margin-top: 20px; }
+.acct-box h3 { margin: 0; font-size: 18px; }
+.mailbox .err:empty, .mailbox .ok:empty, .acct-box .err:empty, .acct-box .ok:empty { display: none; }
+.acct-box .kv { margin: 0; color: var(--muted); line-height: 1.7; }
+.acct-box .kv b { color: var(--ink); }
 .submit-row { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 10px;
@@ -350,9 +366,11 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outlin
           <input type="password" id="l-pass" autocomplete="current-password">
         </div>
         <p class="err" id="login-err" role="alert"></p>
+        <p class="ok" id="login-ok" role="status"></p>
         <div class="submit-row">
           <button type="submit" class="btn primary" id="l-submit">登入</button>
         </div>
+        <p class="forgot-row"><button type="button" class="linkish" id="to-forgot">忘記帳號或密碼？</button></p>
       </div>
     </form>
     <div class="first">
@@ -368,6 +386,7 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outlin
     <h2 class="h2" id="reg-title">先報到，領一張識別證</h2>
     <p class="lede" id="reg-lede">設定帳號密碼、填好下面四項，就會生成你專屬的識別證，總部入口也只有報到後才會出現。識別證和總部裡的角色會存在伺服器上，下次用帳號登入就能拿回來。</p>
     <p class="who" id="to-login-row">已經有帳號了？<button type="button" class="linkish" id="to-login">直接登入</button></p>
+    <p class="who" id="edit-who" hidden>已登入：<b id="edit-who-name"></b>・<button type="button" class="linkish" id="to-account2">帳號設定</button></p>
     <div style="height: 20px"></div>
     <form class="form" id="reg-form" novalidate>
       <div class="photo-field">
@@ -387,6 +406,10 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outlin
           <div class="field">
             <label for="f-pass">密碼<span class="req">必填</span></label>
             <input type="password" id="f-pass" autocomplete="new-password" placeholder="至少 4 個字">
+          </div>
+          <div class="field" style="grid-column: 1 / -1">
+            <label for="f-email">Email<span class="req">必填</span></label>
+            <input type="email" id="f-email" maxlength="120" autocomplete="email" autocapitalize="off" spellcheck="false" placeholder="會寄驗證信，忘記密碼時也靠它">
           </div>
         </div>
         <div class="field">
@@ -424,11 +447,116 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outlin
     </form>
   </section>
 
+  <!-- 忘記帳號或密碼 -->
+  <section id="forgot" hidden aria-labelledby="forgot-title">
+    <p class="eyebrow">FORGOT / 忘記帳號或密碼</p>
+    <h2 class="h2" id="forgot-title">忘記了沒關係</h2>
+    <p class="lede">輸入你的帳號，或報到時填的 email。如果帳號有驗證過 email，我們會寄一封信給你，信裡有你的帳號名稱和重設密碼的連結。</p>
+    <div style="height: 20px"></div>
+    <form class="form login-form" id="forgot-form" novalidate>
+      <div class="fields">
+        <div class="field">
+          <label for="fg-who">帳號或 email</label>
+          <input type="text" id="fg-who" maxlength="120" autocomplete="username" autocapitalize="off" spellcheck="false">
+        </div>
+        <p class="err" id="forgot-err" role="alert"></p>
+        <p class="ok" id="forgot-ok" role="status"></p>
+        <div class="submit-row">
+          <button type="submit" class="btn primary" id="fg-submit">寄信給我</button>
+          <button type="button" class="linkish" id="forgot-back">回到登入</button>
+        </div>
+      </div>
+    </form>
+  </section>
+
+  <!-- 用信裡的連結設新密碼 -->
+  <section id="reset" hidden aria-labelledby="reset-title">
+    <p class="eyebrow">RESET / 設定新密碼</p>
+    <h2 class="h2" id="reset-title">設定新密碼</h2>
+    <p class="lede" id="reset-lede"></p>
+    <div style="height: 20px"></div>
+    <form class="form login-form" id="reset-form" novalidate>
+      <div class="fields">
+        <div class="field">
+          <label for="rs-pass">新密碼</label>
+          <input type="password" id="rs-pass" autocomplete="new-password" placeholder="至少 4 個字">
+        </div>
+        <div class="field">
+          <label for="rs-pass2">再輸入一次</label>
+          <input type="password" id="rs-pass2" autocomplete="new-password">
+        </div>
+        <p class="err" id="reset-err" role="alert"></p>
+        <div class="submit-row">
+          <button type="submit" class="btn primary" id="rs-submit">設定並登入</button>
+          <button type="button" class="linkish" id="reset-back">回到登入</button>
+        </div>
+      </div>
+    </form>
+  </section>
+
+  <!-- 帳號設定 -->
+  <section id="account" hidden aria-labelledby="account-title">
+    <p class="eyebrow">ACCOUNT / 帳號設定</p>
+    <h2 class="h2" id="account-title">帳號設定</h2>
+    <p class="who"><button type="button" class="linkish" id="account-back">回到我的識別證</button></p>
+    <div class="acct-box">
+      <h3>帳號</h3>
+      <p class="kv">帳號名稱：<b id="ac-user"></b></p>
+      <p class="kv">Email：<b id="ac-email"></b> <span id="ac-email-state"></span></p>
+    </div>
+    <form class="acct-box" id="ac-mail-form" novalidate>
+      <h3 id="ac-mail-title">更換 email</h3>
+      <div class="field">
+        <label for="ac-mail">新的 email</label>
+        <input type="email" id="ac-mail" maxlength="120" autocomplete="email" autocapitalize="off" spellcheck="false">
+      </div>
+      <div class="field" id="ac-mail-pw-row">
+        <label for="ac-mail-pw">目前的密碼</label>
+        <input type="password" id="ac-mail-pw" autocomplete="current-password">
+      </div>
+      <p class="note-sm">會寄一封驗證信到新的 email，點了信裡的連結才會換過去。</p>
+      <p class="err" id="ac-mail-err" role="alert"></p>
+      <p class="ok" id="ac-mail-ok" role="status"></p>
+      <div class="btnrow"><button type="submit" class="btn primary" id="ac-mail-submit">寄驗證信</button></div>
+    </form>
+    <form class="acct-box" id="ac-pw-form" novalidate>
+      <h3>改密碼</h3>
+      <input type="text" autocomplete="username" id="ac-pw-user" hidden>
+      <div class="field">
+        <label for="ac-old">目前的密碼</label>
+        <input type="password" id="ac-old" autocomplete="current-password">
+      </div>
+      <div class="field">
+        <label for="ac-new">新密碼</label>
+        <input type="password" id="ac-new" autocomplete="new-password" placeholder="至少 4 個字">
+      </div>
+      <p class="note-sm">改好之後，其他手機和電腦上的登入會被登出，要用新密碼重新登入。</p>
+      <p class="err" id="ac-pw-err" role="alert"></p>
+      <p class="ok" id="ac-pw-ok" role="status"></p>
+      <div class="btnrow"><button type="submit" class="btn primary" id="ac-pw-submit">改密碼</button></div>
+    </form>
+  </section>
+
   <!-- Personal invitation -->
   <section id="invite" hidden aria-labelledby="inv-title">
     <p class="eyebrow">STEP 02 / 你的識別證</p>
     <h2 class="h2" id="inv-title">報到成功，總部見！</h2>
-    <p class="who" id="who" hidden>已登入：<b id="who-name"></b>・<button type="button" class="linkish" id="logout-btn">登出</button></p>
+    <p class="who" id="who" hidden>已登入：<b id="who-name"></b>・<button type="button" class="linkish" id="to-account">帳號設定</button>・<button type="button" class="linkish" id="logout-btn">登出</button></p>
+    <div class="mailbox" id="mail-box" hidden>
+      <b id="mb-title"></b>
+      <p id="mb-text"></p>
+      <div class="btnrow" id="mb-actions">
+        <button type="button" class="btn primary" id="mb-check">我驗證好了</button>
+        <button type="button" class="btn" id="mb-resend">重寄驗證信</button>
+        <button type="button" class="btn" id="mb-fix">email 打錯了</button>
+      </div>
+      <form class="mail-edit" id="mb-edit" hidden novalidate>
+        <input type="email" id="mb-email" maxlength="120" autocomplete="email" autocapitalize="off" spellcheck="false" aria-label="正確的 email">
+        <button type="submit" class="btn primary" id="mb-save">改好並重寄</button>
+      </form>
+      <p class="err" id="mb-err" role="alert"></p>
+      <p class="ok" id="mb-ok" role="status"></p>
+    </div>
     <div style="height: 20px"></div>
     <article class="vip" id="card" aria-label="識別證">
       <div class="vip-main">
@@ -680,12 +808,65 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outlin
     $('redo-btn').textContent = mine ? '修改識別證' : '我也要報到';
     $('who').hidden = !(mine && ACC.user());
     $('who-name').textContent = ACC.user();
-    $('join').hidden = !mine;
+    var mail = mine ? ACC.mail() : null;
+    $('join').hidden = !mine || !!(mail && mail.needVerify);
     show('invite');
+    showMailBox(mine ? mail : null);
   }
+  // 識別證上面的 email 提醒：新帳號還沒驗證就不能進總部；舊帳號沒綁 email 的只是提醒
+  function showMailBox(m) {
+    var box = $('mail-box'), need = !!(m && m.needVerify), none = !!(m && !m.email && ACC.user());
+    box.hidden = !need && !none;
+    box.classList.toggle('soft', !need);
+    $('mb-err').textContent = ''; if (!need) $('mb-ok').textContent = '';
+    $('mb-edit').hidden = true;
+    if (need) {
+      $('mb-title').textContent = '最後一步：去信箱點驗證信';
+      $('mb-text').textContent = '驗證信寄到「' + m.email + '」了，點信裡的連結就能進總部。找不到的話看一下垃圾郵件。';
+      $('mb-resend').hidden = false; $('mb-check').hidden = false;
+      $('mb-fix').textContent = 'email 打錯了';
+    } else if (none) {
+      $('mb-title').textContent = '幫帳號綁一個 email';
+      $('mb-text').textContent = '綁好之後，忘記密碼也可以自己重設，不用等管理員。';
+      $('mb-resend').hidden = true; $('mb-check').hidden = true;
+      $('mb-fix').textContent = '綁定 email';
+    }
+  }
+  function mailAct(btn, req, okText) {
+    btn.disabled = true; $('mb-err').textContent = ''; $('mb-ok').textContent = '';
+    return req.then(function (r) {
+      btn.disabled = false;
+      if (r.status === 401) { ACC.logout(); showLogin(); $('login-err').textContent = '登入過期了，請重新登入'; return r; }
+      if (!r.ok) { $('mb-err').textContent = r.error || '失敗了，再試一次'; return r; }
+      showMailBox(ACC.mail());
+      $('join').hidden = !!r.needVerify;
+      if (okText) $('mb-ok').textContent = typeof okText === 'function' ? okText(r) : okText;
+      return r;
+    });
+  }
+  $('mb-resend').addEventListener('click', function () { mailAct(this, ACC.resendVerify(), '寄出去了，去信箱看看'); });
+  $('mb-check').addEventListener('click', function () {
+    var btn = this;
+    mailAct(btn, ACC.sync().then(function (r) { return r || { ok: false, error: '連不上伺服器，等等再試' }; }), function (r) {
+      return r.needVerify ? '還沒收到驗證喔，點了信裡的連結之後再按一次' : 'email 驗證好了，可以進總部了';
+    });
+  });
+  $('mb-fix').addEventListener('click', function () {
+    var m = ACC.mail();
+    $('mb-edit').hidden = false;
+    $('mb-email').value = m && m.needVerify ? m.email : '';
+    $('mb-save').textContent = m && m.email ? '改好並重寄' : '寄驗證信';
+    $('mb-email').focus();
+  });
+  $('mb-edit').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var v = $('mb-email').value.trim();
+    if (!v) { $('mb-err').textContent = '請輸入 email'; return; }
+    mailAct($('mb-save'), ACC.changeEmail(v), function (r) { return '驗證信寄到「' + (r.emailNew || r.email) + '」了'; });
+  });
   var ACC = window.HQ_ACCOUNT;
   function show(id) {
-    ['login', 'register', 'invite'].forEach(function (k) { $(k).hidden = k !== id; });
+    ['login', 'register', 'invite', 'forgot', 'reset', 'account'].forEach(function (k) { $(k).hidden = k !== id; });
     if (id !== 'invite') $('join').hidden = true;
     if (booted) $(id).scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
@@ -714,6 +895,7 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outlin
     }
     $('acct-fields').hidden = mode === 'edit';
     $('to-login-row').hidden = mode === 'edit';
+    $('edit-who').hidden = !(mode === 'edit' && ACC.user()); $('edit-who-name').textContent = ACC.user();
     $('reg-lede').hidden = mode === 'edit';
     $('reg-title').textContent = mode === 'edit' ? '修改你的識別證' : mode === 'claim' ? '幫你的識別證建立帳號' : '先報到，領一張識別證';
     $('f-submit').textContent = mode === 'edit' ? '更新我的識別證' : mode === 'claim' ? '建立帳號並保存' : '生成我的識別證';
@@ -729,9 +911,100 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outlin
       ? '這台裝置上有「' + v.name + '」的識別證，設定帳號密碼就能永久保存，角色也會跟著帳號走。'
       : '回答四個小問題，就會生成你專屬的識別證，同時建立帳號。';
     $('to-reg').textContent = v ? '幫它建立帳號' : '報到領識別證';
-    $('login-err').textContent = '';
+    $('login-err').textContent = ''; $('login-ok').textContent = '';
     show('login');
   }
+  /* ---------- 忘記帳號或密碼 ---------- */
+  $('to-forgot').addEventListener('click', function () {
+    $('forgot-form').reset(); $('forgot-err').textContent = ''; $('forgot-ok').textContent = '';
+    $('fg-who').value = $('l-user').value.trim();
+    show('forgot');
+  });
+  $('forgot-back').addEventListener('click', showLogin);
+  $('forgot-form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var who = $('fg-who').value.trim();
+    if (!who) { $('forgot-err').textContent = '請輸入帳號或 email'; return; }
+    $('fg-submit').disabled = true; $('forgot-err').textContent = ''; $('forgot-ok').textContent = '';
+    ACC.forgot(who).then(function (r) {
+      $('fg-submit').disabled = false;
+      if (!r.ok) { $('forgot-err').textContent = r.error || '失敗了，再試一次'; return; }
+      $('forgot-ok').textContent = '如果這個帳號有驗證過 email，信已經寄出了，去信箱看看（也看一下垃圾郵件）。還沒綁 email 或一直收不到的話，寫信到 ' + (r.contact || 'info@thisisnotahq.com') + ' 找管理員幫忙。';
+    });
+  });
+  /* ---------- 信裡的重設密碼連結 ---------- */
+  var resetToken = '';
+  function showReset(t) {
+    resetToken = t;
+    history.replaceState(null, '', location.pathname);
+    $('reset-form').reset(); $('reset-err').textContent = '';
+    $('reset-lede').textContent = '檢查連結中…';
+    $('reset-form').hidden = true;
+    show('reset');
+    ACC.checkReset(t).then(function (r) {
+      if (!r.ok) { $('reset-lede').textContent = r.error || '這個連結不能用了，請重新申請一次'; return; }
+      $('reset-lede').textContent = '你的帳號是「' + r.username + '」，設一組新的密碼，設好就會直接登入。';
+      $('reset-form').hidden = false;
+      $('rs-pass').focus();
+    });
+  }
+  $('reset-back').addEventListener('click', showLogin);
+  $('reset-form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var a = $('rs-pass').value, b = $('rs-pass2').value;
+    if (a.length < 4) { $('reset-err').textContent = '密碼至少要 4 個字'; return; }
+    if (a !== b) { $('reset-err').textContent = '兩次輸入的密碼不一樣'; return; }
+    $('rs-submit').disabled = true; $('reset-err').textContent = '';
+    ACC.reset(resetToken, a).then(function (r) {
+      $('rs-submit').disabled = false;
+      if (!r.ok) { $('reset-err').textContent = r.error || '失敗了，再試一次'; return; }
+      photoBig = null;
+      showMine();
+    });
+  });
+  /* ---------- 帳號設定 ---------- */
+  function showAccount() {
+    var m = ACC.mail() || {};
+    $('ac-user').textContent = ACC.user(); $('ac-pw-user').value = ACC.user();
+    $('ac-email').textContent = m.email || '還沒綁定';
+    $('ac-email-state').textContent = !m.email ? '' : m.emailOk ? '（已驗證）' : '（還沒驗證）';
+    if (m.emailNew) $('ac-email-state').textContent += '・等「' + m.emailNew + '」驗證中';
+    $('ac-mail-title').textContent = m.email ? '更換 email' : '綁定 email';
+    $('ac-mail-pw-row').hidden = !m.emailOk;
+    ['ac-mail-form', 'ac-pw-form'].forEach(function (f) { $(f).reset(); });
+    ['ac-mail-err', 'ac-mail-ok', 'ac-pw-err', 'ac-pw-ok'].forEach(function (k) { $(k).textContent = ''; });
+    show('account');
+  }
+  ['to-account', 'to-account2'].forEach(function (id) { $(id).addEventListener('click', function () { ACC.sync().then(function () { showAccount(); }); }); });
+  $('account-back').addEventListener('click', function () { showMine(); });
+  $('ac-mail-form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var v = $('ac-mail').value.trim(), pw = $('ac-mail-pw').value, m = ACC.mail() || {};
+    if (!v) { $('ac-mail-err').textContent = '請輸入 email'; return; }
+    if (m.emailOk && !pw) { $('ac-mail-err').textContent = '請輸入目前的密碼'; return; }
+    $('ac-mail-submit').disabled = true; $('ac-mail-err').textContent = ''; $('ac-mail-ok').textContent = '';
+    ACC.changeEmail(v, pw).then(function (r) {
+      $('ac-mail-submit').disabled = false;
+      if (r.status === 401) { ACC.logout(); showLogin(); $('login-err').textContent = '登入過期了，請重新登入'; return; }
+      if (!r.ok) { $('ac-mail-err').textContent = r.error || '失敗了，再試一次'; return; }
+      showAccount();
+      $('ac-mail-ok').textContent = '驗證信寄到「' + (r.emailNew || r.email) + '」了，點信裡的連結就完成';
+    });
+  });
+  $('ac-pw-form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var o = $('ac-old').value, n = $('ac-new').value;
+    if (!o) { $('ac-pw-err').textContent = '請輸入目前的密碼'; return; }
+    if (n.length < 4) { $('ac-pw-err').textContent = '新密碼至少要 4 個字'; return; }
+    $('ac-pw-submit').disabled = true; $('ac-pw-err').textContent = ''; $('ac-pw-ok').textContent = '';
+    ACC.changePassword(o, n).then(function (r) {
+      $('ac-pw-submit').disabled = false;
+      if (r.status === 401) { ACC.logout(); showLogin(); $('login-err').textContent = '登入過期了，請重新登入'; return; }
+      if (!r.ok) { $('ac-pw-err').textContent = r.error || '失敗了，再試一次'; return; }
+      $('ac-pw-form').reset();
+      $('ac-pw-ok').textContent = '密碼改好了';
+    });
+  });
   function showMine() {
     var v = localVip();
     photoBig = hdUrl();
@@ -767,8 +1040,10 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outlin
     if (!d.name) miss.push('暱稱');
     if (!d.song) miss.push('擅長的歌曲');
     if (!d.drink) miss.push('今晚要喝的酒');
-    var user = $('f-user').value.trim(), pw = $('f-pass').value;
+    var user = $('f-user').value.trim(), pw = $('f-pass').value, email = $('f-email').value.trim();
     if (formMode !== 'edit') {
+      if (!email) miss.unshift('Email');
+      else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { $('form-err').textContent = 'Email 格式不對，再檢查一下'; return; }
       if (!pw) miss.unshift('密碼');
       if (!user) miss.unshift('帳號');
     }
@@ -782,7 +1057,7 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outlin
     if (formMode === 'new' && !(Number(save.level) > 1)) save.cls = 'staff';
     var btn = $('f-submit'), label = btn.textContent;
     btn.disabled = true; btn.textContent = '存檔中…';
-    var req = formMode === 'edit' ? ACC.save(photoHd ? { name: save.name, vip: vip, photoHd: photoHd } : { name: save.name, vip: vip }) : ACC.register(user, pw, save);
+    var req = formMode === 'edit' ? ACC.save(photoHd ? { name: save.name, vip: vip, photoHd: photoHd } : { name: save.name, vip: vip }) : ACC.register(user, pw, save, email);
     req.then(function (r) {
       btn.disabled = false; btn.textContent = label;
       if (r.status === 401) { ACC.logout(); showLogin(); $('login-err').textContent = '登入過期了，請重新登入'; return; }
@@ -1078,15 +1353,32 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outlin
   /* ---------- open a shared personal link ---------- */
   function route() {
     var h = (location.hash || '').slice(1);
+    if (/^reset=/.test(h)) { booted = true; showReset(h.slice(6)); return; }
+    // 從驗證信的連結回來
+    var mq = (location.search.match(/[?&]mail=(ok|bad)/) || [])[1];
+    if (mq) {
+      history.replaceState(null, '', location.pathname + location.hash);
+      mailNote = mq === 'ok' ? 'email 驗證好了，可以進總部了' : '這個驗證連結已經用過或過期了，可以登入後重寄一次';
+      mailBad = mq === 'bad';
+    }
     var d = decode(h);
     if (d) { showInvite(d, false); return; }
     // 沒登入就是登入頁；有登入就先跟伺服器同步，再顯示自己的識別證
-    if (!ACC.token()) { showLogin(); booted = true; return; }
-    if (localVip()) showMine();
+    if (!ACC.token()) { showLogin(); booted = true; flashMail('login'); return; }
+    if (localVip() && !mailNote) showMine();
     ACC.sync().then(function (r) {
       if (r) showMine(); else showLogin();
       booted = true;
+      flashMail(r ? 'mb' : 'login');
     });
+  }
+  var mailNote = '', mailBad = false;
+  // 驗證結果的小字：已登入顯示在識別證上方，沒登入顯示在登入表單
+  function flashMail(where) {
+    if (!mailNote) return;
+    if (where === 'mb' && $('mail-box').hidden) { $('mail-box').hidden = false; $('mail-box').classList.add('soft'); $('mb-title').textContent = ''; $('mb-text').textContent = ''; $('mb-actions').hidden = true; }
+    $(mailBad ? where + '-err' : where + '-ok').textContent = mailNote;
+    mailNote = '';
   }
   window.addEventListener('hashchange', route);
   route();

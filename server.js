@@ -481,6 +481,12 @@ app.post('/api/admin/gift', (req, res) => {
   if (sent) pushChat({ system: true, text: `管理員送出了【${g.rarity}】${g.name}${all ? '給大家' : `給 ${users[0].save.name || users[0].username}`}！`, t: Date.now() });
   res.json({ ok: true, sent, had });
 });
+app.post('/api/admin/role', (req, res) => {
+  if (!isAdmin(req)) return res.status(401).json({ ok: false });
+  const b = req.body || {}, r = accounts.setAdmin(b.username, !!b.admin);
+  if (r.error) return res.status(400).json({ ok: false, error: r.error });
+  res.json(r);
+});
 app.post('/api/admin/delete', (req, res) => {
   if (!isAdmin(req)) return res.status(401).json({ ok: false });
   const name = String((req.body || {}).username || '');
@@ -500,7 +506,7 @@ app.post('/api/admin/garden', (req, res) => {
 app.post('/api/admin/wish', (req, res) => {
   if (!isAdmin(req)) return res.status(401).json({ ok: false });
   const b = req.body || {}, id = Number(b.id);
-  const r = b.delete ? wishes.remove(id) : wishes.setStatus(id, b.status);
+  const r = b.cid ? wishes.uncomment(id, Number(b.cid), '', true) : b.delete ? wishes.remove(id) : wishes.setStatus(id, b.status);
   if (r.error) return res.status(400).json({ ok: false, error: r.error });
   if (r.wish && r.wish.status === 'done' && r.was !== 'done') pushChat({ system: true, text: `許願池：「${r.wish.title}」完成了！謝謝 ${r.wish.name} 的願望`, t: Date.now() });
   io.emit('wishes');
@@ -2512,10 +2518,29 @@ io.on('connection', (socket) => {
     ack(r.error ? { ok: false, error: r.error } : Object.assign({ ok: true }, r));
   });
   onWish('wishList', (p, m) => Object.assign(wishes.query(m, voterOf(p, m.wid), userOf(p)),
-    { login: !!p.account, left: wishes.left(userOf(p)), perDay: wishes.PER_DAY, titleLen: wishes.TITLE_LEN, bodyLen: wishes.BODY_LEN }));
+    { login: !!p.account, admin: !!(p.account && p.account.admin), left: wishes.left(userOf(p)), perDay: wishes.PER_DAY,
+      titleLen: wishes.TITLE_LEN, bodyLen: wishes.BODY_LEN, commentLen: wishes.COMMENT_LEN }));
   onWish('wishGet', (p, m) => {
     const w = wishes.get(Number(m.id), voterOf(p, m.wid), userOf(p));
-    return w ? { wish: w } : { error: '這個願望已經不在了' };
+    return w ? { wish: w, login: !!p.account, admin: !!(p.account && p.account.admin) } : { error: '這個願望已經不在了' };
+  });
+  onWish('wishComment', (p, m) => {
+    const admin = !!(p.account && p.account.admin);
+    const r = wishes.comment(Number(m.id), userOf(p), p.name, admin, m.text);
+    if (r.error) return r;
+    // 管理員回覆了：願望的作者在線上的話跳一則個人提示（自己回自己的不用）
+    const by = String(r.wish.by).toLowerCase();
+    if (admin && by !== userOf(p).toLowerCase()) {
+      players.forEach((q, id) => { if (q.account && q.account.username.toLowerCase() === by) tell(id, `管理員回覆了你的願望「${r.wish.title}」`); });
+    }
+    io.emit('wishes');
+    return {};
+  });
+  onWish('wishUncomment', (p, m) => {
+    const r = wishes.uncomment(Number(m.id), Number(m.cid), userOf(p), !!(p.account && p.account.admin));
+    if (r.error) return r;
+    io.emit('wishes');
+    return {};
   });
   onWish('wishAdd', (p, m) => {
     const r = wishes.add(userOf(p), p.name, m);

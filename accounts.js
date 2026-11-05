@@ -205,8 +205,16 @@ function create(dataDir) {
     get(username) { return db.users[key(username)] || null; },
     list() {
       return Object.values(db.users).map(u => ({ username: u.username, name: (u.save && u.save.name) || '', cls: (u.save && u.save.cls) || 'staff',
-        level: (u.save && u.save.level) || 1, vip: !!(u.save && u.save.vip), created: u.created, seen: u.seen,
+        level: (u.save && u.save.level) || 1, vip: !!(u.save && u.save.vip), admin: !!u.admin, created: u.created, seen: u.seen,
         email: u.email || '', emailOk: !!u.emailOk, emailNew: u.emailNew || '' }));
+    },
+    // 管理員帳號：在許願池留言會標「管理員」，也能刪別人的留言（存在帳號上，不在 save 裡，玩家改不到）
+    setAdmin(username, on) {
+      const u = db.users[key(username)];
+      if (!u) return { error: '找不到這個帳號' };
+      if (on) u.admin = true; else delete u.admin;
+      save();
+      return { ok: true, admin: !!u.admin };
     },
     remove(username) {
       const k = key(username);

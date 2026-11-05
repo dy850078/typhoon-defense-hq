@@ -91,12 +91,15 @@ app.get(['/', '/index.html'], (req, res) => {
     const P = partyInfo();
     const fill = { __ORIGIN__: origin, __PARTY_DATE_DOT__: P.dateDot, __PARTY_MD__: P.md, __PARTY_DOW_EN__: P.dowEn,
       __PARTY_DOW_ZH__: P.dowZh, __PARTY_TIME__: P.time, __PARTY_ISO__: P.iso };
-    res.type('html').send(Object.entries(fill).reduce((h, [k, v]) => h.split(k).join(v), html));
+    res.set('Cache-Control', 'no-cache').type('html').send(Object.entries(fill).reduce((h, [k, v]) => h.split(k).join(v), html));
   });
 });
-app.use(express.static(path.join(__dirname, 'public')));
-app.use('/shared', express.static(path.join(__dirname, 'shared')));
-app.use('/vendor', express.static(path.join(__dirname, 'node_modules/phaser/dist')));
+// 靜態檔都回 no-cache：瀏覽器和 Cloudflare 每次都先問伺服器有沒有新版（沒變只回 304，幾乎不花流量）
+// 不然 Cloudflare 會把 .js/.css 快取在邊緣，更新後玩家重新整理還是拿到舊的
+const fresh = { setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache') };
+app.use(express.static(path.join(__dirname, 'public'), fresh));
+app.use('/shared', express.static(path.join(__dirname, 'shared'), fresh));
+app.use('/vendor', express.static(path.join(__dirname, 'node_modules/phaser/dist'), fresh));
 // 小樹屋語音用的 ICE 伺服器：預設只有 Google 的 STUN；有些公司、學校網路連不上的話，設 TURN_URL/TURN_USER/TURN_PASS 加一台中繼
 const ICE_SERVERS = [{ urls: 'stun:stun.l.google.com:19302' }].concat(process.env.TURN_URL
   ? [{ urls: process.env.TURN_URL.split(','), username: process.env.TURN_USER || '', credential: process.env.TURN_PASS || '' }] : []);
@@ -194,7 +197,7 @@ function logLogin(req, username, why, pw) {
 }
 const bearer = (req) => String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
 // 帳號的 email 狀態：新報到的帳號一定有 email，要驗證過才能進總部；舊帳號沒有 email 的照常能玩，只會提醒去綁
-const mailOf = (u) => ({ email: u.email || '', emailOk: !!u.emailOk, emailNew: u.emailNew || '', needVerify: !!(u.email && !u.emailOk) });
+const mailOf = (u) => ({ email: u.email || '', emailOk: !!u.emailOk, emailNew: u.emailNew || '', needVerify: !!(u.email && !u.emailOk), wishMail: !u.noWishMail });
 const meOf = (u) => Object.assign({ ok: true, username: u.username, save: u.save, since: u.created || 0 }, mailOf(u));
 // 信裡的連結：有 PUBLIC_URL 就用固定網址，沒有的話用這次連進來的網址
 const baseUrl = (req) => (process.env.PUBLIC_URL || `${req.headers['x-forwarded-proto'] || req.protocol}://${req.headers['x-forwarded-host'] || req.get('host')}`).replace(/\/+$/, '');
@@ -243,6 +246,13 @@ app.post('/api/email/change', async (req, res) => {
   if (r.same) return res.json(meOf(u));
   const m = await sendVerify(req, u, r);
   if (!m.ok) return res.status(502).json({ ok: false, error: '信寄不出去，等等再試，或寫信給 ' + MAILER.from });
+  res.json(meOf(u));
+});
+// 通知設定：願望有管理員回覆時要不要寄信
+app.post('/api/notify', (req, res) => {
+  const u = accounts.byToken(bearer(req));
+  if (!u) return res.status(401).json({ ok: false });
+  accounts.setWishMail(u, !!(req.body || {}).wishMail);
   res.json(meOf(u));
 });
 // 點驗證信裡的連結
@@ -881,6 +891,18 @@ function pushChat(msg) {
 }
 // 只跟某個人有關的系統訊息：在他自己畫面上跳小提示，不進聊天區
 function tell(id, text) { io.to(id).emit('sysToast', { text }); }
+const wishMailAt = new Map(); // 願望 id -> 上次寄信的時間
+function wishReplyMail(wish, comment, socket) {
+  const u = accounts.get(wish.by);
+  if (!u || !u.email || !u.emailOk || u.noWishMail) return;
+  const now = Date.now();
+  if ((wishMailAt.get(wish.id) || 0) > now - 10 * 60000) return;
+  wishMailAt.set(wish.id, now);
+  const h = socket.handshake.headers;
+  const base = (process.env.PUBLIC_URL || `${h['x-forwarded-proto'] || 'http'}://${h['x-forwarded-host'] || h.host}`).replace(/\/+$/, '');
+  MAILER.wishReply(u.email, (u.save && u.save.name) || u.username, wish.title, comment.text, base + '/hq.html')
+    .then(m => { if (!m.ok) console.error(`✉️ 給「${u.username}」的願望回覆通知沒寄出去`); });
+}
 
 // ---------------- 角色數值 ----------------
 // 防禦力 = 職業的防禦 + 還沒過期的增益
@@ -2506,6 +2528,7 @@ io.on('connection', (socket) => {
   });
 
   // ---------- 許願池 ----------
+  // 管理員回覆時，許願者有驗證過的 email、沒關掉通知，就寄一封信；同一個願望 10 分鐘內只寄一封
   // 按讚用帳號算；沒登入的用瀏覽器存的裝置代號（wid）
   const voterOf = (p, wid) => p.account ? 'u:' + p.account.username.toLowerCase()
     : (typeof wid === 'string' && /^[a-z0-9]{8,24}$/.test(wid) ? 'g:' + wid : '');
@@ -2532,6 +2555,7 @@ io.on('connection', (socket) => {
     const by = String(r.wish.by).toLowerCase();
     if (admin && by !== userOf(p).toLowerCase()) {
       players.forEach((q, id) => { if (q.account && q.account.username.toLowerCase() === by) tell(id, `管理員回覆了你的願望「${r.wish.title}」`); });
+      wishReplyMail(r.wish, r.comment, socket);
     }
     io.emit('wishes');
     return {};

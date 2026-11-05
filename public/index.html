@@ -182,6 +182,9 @@ body {
 .mailbox .err:empty, .mailbox .ok:empty, .acct-box .err:empty, .acct-box .ok:empty { display: none; }
 .acct-box .kv { margin: 0; color: var(--muted); line-height: 1.7; }
 .acct-box .kv b { color: var(--ink); }
+.acct-box .check { display: flex; align-items: center; gap: 10px; font-weight: 700; cursor: pointer; }
+.acct-box .check input { width: 20px; height: 20px; margin: 0; accent-color: var(--accent, #FF5A1F); }
+.acct-box .note-sm { margin: 0; }
 .submit-row { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 10px;
@@ -503,6 +506,12 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outlin
       <h3>帳號</h3>
       <p class="kv">帳號名稱：<b id="ac-user"></b></p>
       <p class="kv">Email：<b id="ac-email"></b> <span id="ac-email-state"></span></p>
+    </div>
+    <div class="acct-box">
+      <h3>通知</h3>
+      <label class="check"><input type="checkbox" id="ac-wish-mail"> 願望有管理員回覆時寄信通知我</label>
+      <p class="note-sm" id="ac-wish-note"></p>
+      <p class="ok" id="ac-notify-ok" role="status"></p>
     </div>
     <form class="acct-box" id="ac-mail-form" novalidate>
       <h3 id="ac-mail-title">更換 email</h3>
@@ -983,11 +992,23 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outlin
     $('ac-mail-title').textContent = m.email ? '更換 email' : '綁定 email';
     $('ac-mail-pw-row').hidden = !m.emailOk;
     ['ac-mail-form', 'ac-pw-form'].forEach(function (f) { $(f).reset(); });
-    ['ac-mail-err', 'ac-mail-ok', 'ac-pw-err', 'ac-pw-ok'].forEach(function (k) { $(k).textContent = ''; });
+    ['ac-mail-err', 'ac-mail-ok', 'ac-pw-err', 'ac-pw-ok', 'ac-notify-ok'].forEach(function (k) { $(k).textContent = ''; });
+    $('ac-wish-mail').checked = m.wishMail !== false;
+    $('ac-wish-note').textContent = m.emailOk ? '會寄到「' + m.email + '」。' : '要先綁定並驗證 email 才收得到信。';
     show('account');
   }
   ['to-account', 'to-account2'].forEach(function (id) { $(id).addEventListener('click', function () { ACC.sync().then(function () { showAccount(); }); }); });
   $('account-back').addEventListener('click', function () { showMine(); });
+  $('ac-wish-mail').addEventListener('change', function () {
+    var box = $('ac-wish-mail'), on = box.checked;
+    box.disabled = true; $('ac-notify-ok').textContent = '';
+    ACC.setNotify(on).then(function (r) {
+      box.disabled = false;
+      if (r.status === 401) { ACC.logout(); showLogin(); $('login-err').textContent = '登入過期了，請重新登入'; return; }
+      if (!r.ok) { box.checked = !on; $('ac-notify-ok').textContent = ''; return; }
+      $('ac-notify-ok').textContent = on ? '已開啟' : '已關閉，不會再寄這種信';
+    });
+  });
   $('ac-mail-form').addEventListener('submit', function (e) {
     e.preventDefault();
     var v = $('ac-mail').value.trim(), pw = $('ac-mail-pw').value, m = ACC.mail() || {};

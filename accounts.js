@@ -171,6 +171,11 @@ function create(dataDir) {
       return { token: newToken(k) };
     },
     checkPassword(user, pw) { return checkPw(user, pw); },
+    // 願望有管理員回覆時要不要寄信（預設要，關掉才記 noWishMail）
+    setWishMail(user, on) {
+      if (on) delete user.noWishMail; else user.noWishMail = true;
+      save();
+    },
     // 管理員手動標成已驗證（例如寄信還沒設定好的時候）
     markVerified(username) {
       const u = db.users[key(username)];

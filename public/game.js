@@ -186,9 +186,11 @@
         box.appendChild(Object.assign(document.createElement('a'), { href: './', textContent: '綁 email（忘記密碼時才能自己重設）' }));
       }
     } else {
-      box.append('還沒登入，角色只存在這台裝置上・');
-      box.appendChild(Object.assign(document.createElement('a'), { href: './', textContent: '登入或建立帳號' }));
+      // 沒登入不能進總部：不讓他在這台裝置另外捏一個新角色
+      box.append('進總部要先登入帳號，換裝置也會是同一個角色・');
+      box.appendChild(Object.assign(document.createElement('a'), { href: './?next=hq', textContent: '登入或建立帳號' }));
     }
+    $('join-form').classList.toggle('need-login', !u);
   };
   showAcct();
   const synced = ACC.sync().then((r) => {
@@ -205,7 +207,9 @@
     if (scene && scene.me) Object.assign(data, { x: Math.round(scene.me.x), y: Math.round(scene.me.y) });
     joinedToken = data.token;
     socket.emit('join', data, (res) => {
-      if (!res.ok) { $('join-error').textContent = res.error; if (res.needVerify) ACC.sync().then(showAcct); return; }
+      // 登入過期了（例如斷線重連的時候）：重新整理，回到「請先登入」的畫面
+      if (!res.ok && res.needLogin && joined) { joined = false; ACC.sync().then(() => location.reload()); return; }
+      if (!res.ok) { $('join-error').textContent = res.error; if (res.needLogin) ACC.sync().then(showAcct); if (res.needVerify) ACC.sync().then(showAcct); return; }
       joined = true;
       me = res.you;
       setBag({ gear: res.you.gear || {}, seen: res.you.seen || [], owned: res.you.owned || [], furn: res.you.furn || {} });
@@ -224,6 +228,7 @@
   $('join-form').addEventListener('submit', (e) => {
     e.preventDefault();
     profile.name = $('name').value.trim();
+    if (!ACC.user()) { $('join-error').textContent = '請先登入帳號才能進總部'; return; }
     if (!profile.name) { $('join-error').textContent = '請輸入名字'; return; }
     Object.entries(profile).forEach(([k, v]) => localStorage.setItem('hq-' + k, v));
     $('join-error').textContent = '';

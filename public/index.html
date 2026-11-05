@@ -1054,6 +1054,8 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outlin
       $('l-submit').disabled = false;
       if (!r.ok) { $('login-err').textContent = r.error || '登入失敗'; return; }
       $('l-pass').value = '';
+      // 從總部入口被帶來登入的：登入完直接回總部（還沒驗證 email 的留在這裡看提示）
+      if (/[?&]next=hq/.test(location.search) && !r.needVerify) { location.href = 'hq.html'; return; }
       showMine();
     });
   });

@@ -23,10 +23,10 @@ function backup(dataDir, file) {
 
 function create(dataDir) {
   const file = path.join(dataDir, 'accounts.json');
-  let db = { users: {}, tokens: {} };
+  let db = { users: {}, tokens: {}, mail: {} };
   try {
     const saved = JSON.parse(fs.readFileSync(file, 'utf8'));
-    db = { users: saved.users || {}, tokens: saved.tokens || {} };
+    db = { users: saved.users || {}, tokens: saved.tokens || {}, mail: saved.mail || {} };
   } catch (e) { /* 第一次啟動還沒有檔案 */ }
   backup(dataDir, file);
 
@@ -63,17 +63,122 @@ function create(dataDir) {
     return '';
   }
 
+  // Email：存小寫；同一個 email 只能綁一個帳號（忘記帳號時才找得回唯一的那個）
+  const mailKey = (email) => String(email || '').trim().toLowerCase();
+  function validEmail(email) {
+    const e = mailKey(email);
+    if (!e) return '請填 email';
+    if (e.length > 120 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) return 'email 格式不對';
+    return '';
+  }
+  const emailTaken = (e, except) => Object.entries(db.users).some(([k, u]) => k !== except && (u.email === e || u.emailNew === e));
+
+  // 寄信用的一次性連結：只存雜湊，就算帳號檔外流也拿不到能用的連結
+  const MAIL_TTL = { verify: 24 * 3600000, reset: 30 * 60000 };
+  const sha = (t) => crypto.createHash('sha256').update(String(t || '')).digest('hex');
+  function cleanMail() {
+    const now = Date.now();
+    Object.keys(db.mail).forEach(h => { if (db.mail[h].until < now || !db.users[db.mail[h].user]) delete db.mail[h]; });
+  }
+  function mailToken(k, kind, email) {
+    cleanMail();
+    // 同一種連結只留最新的一封，舊信裡的連結就失效
+    Object.keys(db.mail).forEach(h => { if (db.mail[h].user === k && db.mail[h].kind === kind) delete db.mail[h]; });
+    const t = crypto.randomBytes(24).toString('hex');
+    db.mail[sha(t)] = { user: k, kind, email: email || '', until: Date.now() + MAIL_TTL[kind] };
+    save();
+    return t;
+  }
+  function takeMail(t, kind, keep) {
+    const h = sha(t), m = db.mail[h];
+    if (!m || m.kind !== kind || m.until < Date.now() || !db.users[m.user]) return null;
+    if (!keep) { delete db.mail[h]; save(); }
+    return m;
+  }
+  function killTokens(k) { Object.keys(db.tokens).forEach(t => { if (db.tokens[t].user === k) delete db.tokens[t]; }); }
+
   return {
-    register(username, password, data) {
+    validEmail,
+    register(username, password, data, email) {
       const bad = validName(username);
       if (bad) return { error: bad };
       if (String(password || '').length < 4) return { error: '密碼至少要 4 個字' };
-      const k = key(username);
+      const badMail = validEmail(email);
+      if (badMail) return { error: badMail };
+      const k = key(username), e = mailKey(email);
       if (db.users[k]) return { error: '這個帳號已經有人用了，換一個試試' };
+      if (emailTaken(e)) return { error: '這個 email 已經綁了別的帳號，忘記帳號的話可以用「忘記帳號或密碼？」找回來' };
       const salt = crypto.randomBytes(16).toString('hex');
-      db.users[k] = { username: String(username).trim(), salt, hash: hashPw(password, salt), created: Date.now(), seen: Date.now(), save: data || {} };
+      db.users[k] = { username: String(username).trim(), salt, hash: hashPw(password, salt), created: Date.now(), seen: Date.now(), save: data || {},
+        email: e, emailOk: false };
       save();
-      return { token: newToken(k), user: db.users[k] };
+      return { token: newToken(k), user: db.users[k], verify: mailToken(k, 'verify', e) };
+    },
+    // 新的 email 先放在 emailNew，點了驗證信才換掉原本的；還沒驗證過的就直接換
+    setEmail(user, email) {
+      const badMail = validEmail(email);
+      if (badMail) return { error: badMail };
+      const k = key(user.username), e = mailKey(email);
+      if (emailTaken(e, k)) return { error: '這個 email 已經綁了別的帳號' };
+      if (e === user.email && user.emailOk) { delete user.emailNew; save(); return { same: true }; }
+      if (user.emailOk) user.emailNew = e; else { user.email = e; delete user.emailNew; }
+      save();
+      return { verify: mailToken(k, 'verify', e), email: e };
+    },
+    // 重寄驗證信：寄到還在等驗證的那個 email
+    verifyAgain(user) {
+      const e = user.emailNew || (!user.emailOk && user.email);
+      if (!e) return { error: '沒有要驗證的 email' };
+      return { verify: mailToken(key(user.username), 'verify', e), email: e };
+    },
+    verify(t) {
+      const m = takeMail(t, 'verify');
+      if (!m) return null;
+      const u = db.users[m.user];
+      if (emailTaken(m.email, m.user)) return null;
+      u.email = m.email; u.emailOk = true; delete u.emailNew;
+      save();
+      return u;
+    },
+    // 忘記密碼：只寄給驗證過的 email
+    resetToken(user) { return user.email && user.emailOk ? mailToken(key(user.username), 'reset') : ''; },
+    checkReset(t) { const m = takeMail(t, 'reset', true); return m ? db.users[m.user] : null; },
+    useReset(t, password) {
+      if (String(password || '').length < 4) return { error: '密碼至少要 4 個字' };
+      const m = takeMail(t, 'reset');
+      if (!m) return { error: '這個連結已經用過或過期了，請重新申請一次' };
+      const u = db.users[m.user];
+      u.salt = crypto.randomBytes(16).toString('hex');
+      u.hash = hashPw(password, u.salt);
+      killTokens(m.user);
+      u.seen = Date.now();
+      save();
+      return { token: newToken(m.user), user: u };
+    },
+    byEmail(email) {
+      const e = mailKey(email);
+      return e ? Object.values(db.users).find(u => u.email === e && u.emailOk) || null : null;
+    },
+    // 自己改密碼：要先輸入舊密碼；其他裝置會被登出，這台換一張新的登入憑證
+    changePassword(user, oldPw, password) {
+      if (!checkPw(user, oldPw)) return { error: '舊密碼不對' };
+      if (String(password || '').length < 4) return { error: '新密碼至少要 4 個字' };
+      const k = key(user.username);
+      user.salt = crypto.randomBytes(16).toString('hex');
+      user.hash = hashPw(password, user.salt);
+      killTokens(k);
+      save();
+      return { token: newToken(k) };
+    },
+    checkPassword(user, pw) { return checkPw(user, pw); },
+    // 管理員手動標成已驗證（例如寄信還沒設定好的時候）
+    markVerified(username) {
+      const u = db.users[key(username)];
+      if (!u || !(u.emailNew || u.email)) return false;
+      if (u.emailNew) { u.email = u.emailNew; delete u.emailNew; }
+      u.emailOk = true;
+      save();
+      return true;
     },
     login(username, password) {
       const u = db.users[key(username)];
@@ -100,7 +205,8 @@ function create(dataDir) {
     get(username) { return db.users[key(username)] || null; },
     list() {
       return Object.values(db.users).map(u => ({ username: u.username, name: (u.save && u.save.name) || '', cls: (u.save && u.save.cls) || 'staff',
-        level: (u.save && u.save.level) || 1, vip: !!(u.save && u.save.vip), admin: !!u.admin, created: u.created, seen: u.seen }));
+        level: (u.save && u.save.level) || 1, vip: !!(u.save && u.save.vip), admin: !!u.admin, created: u.created, seen: u.seen,
+        email: u.email || '', emailOk: !!u.emailOk, emailNew: u.emailNew || '' }));
     },
     // 管理員帳號：在許願池留言會標「管理員」，也能刪別人的留言（存在帳號上，不在 save 裡，玩家改不到）
     setAdmin(username, on) {
@@ -114,7 +220,8 @@ function create(dataDir) {
       const k = key(username);
       if (!db.users[k]) return false;
       delete db.users[k];
-      Object.keys(db.tokens).forEach(t => { if (db.tokens[t].user === k) delete db.tokens[t]; });
+      killTokens(k);
+      cleanMail();
       save();
       return true;
     },
@@ -125,7 +232,7 @@ function create(dataDir) {
       u.salt = crypto.randomBytes(16).toString('hex');
       u.hash = hashPw(password, u.salt);
       // 改密碼後，其他裝置的登入都要重新登入
-      Object.keys(db.tokens).forEach(t => { if (db.tokens[t].user === key(username)) delete db.tokens[t]; });
+      killTokens(key(username));
       save();
       return { ok: true };
     },

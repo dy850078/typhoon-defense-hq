@@ -142,7 +142,7 @@ td.wish button.x { flex-shrink: 0; width: 22px; height: 22px; min-height: 0; pad
       <p class="msg" id="acct-msg"></p>
       <div class="scroll">
         <table>
-          <thead><tr><th>帳號</th><th>角色</th><th>職業</th><th>等級</th><th>邀請函</th><th>最後上線</th><th></th></tr></thead>
+          <thead><tr><th>帳號</th><th>Email</th><th>角色</th><th>職業</th><th>等級</th><th>邀請函</th><th>最後上線</th><th></th></tr></thead>
           <tbody id="rows"></tbody>
         </table>
       </div>
@@ -189,12 +189,28 @@ td.wish button.x { flex-shrink: 0; width: 22px; height: 22px; min-height: 0; pad
   function render(list) {
     var tb = $('rows'); tb.textContent = '';
     $('count').textContent = list.length;
-    if (!list.length) { var r0 = tb.insertRow(); var c0 = td('還沒有人建立帳號'); c0.colSpan = 7; c0.className = 'empty'; r0.appendChild(c0); return; }
+    if (!list.length) { var r0 = tb.insertRow(); var c0 = td('還沒有人建立帳號'); c0.colSpan = 8; c0.className = 'empty'; r0.appendChild(c0); return; }
     list.sort(function (a, b) { return (b.seen || 0) - (a.seen || 0); }).forEach(function (a) {
       var tr = document.createElement('tr');
       var first = td(a.username + (a.admin ? '（管理員）' : ''));
       if (a.online) { var dot = document.createElement('span'); dot.className = 'dot'; dot.title = '在總部裡'; first.prepend(dot); }
       tr.appendChild(first);
+      var mail = td(a.email ? a.email + (a.emailOk ? '' : '（未驗證）') : '—');
+      if (a.emailNew) mail.appendChild(document.createTextNode('・換成 ' + a.emailNew + ' 驗證中'));
+      if (a.email && (!a.emailOk || a.emailNew)) {
+        var ok = document.createElement('button'); ok.type = 'button'; ok.className = 'small'; ok.textContent = '設為已驗證';
+        ok.style.marginLeft = '6px';
+        ok.onclick = function () {
+          var to = a.emailNew || a.email;
+          if (!confirm('確定「' + a.username + '」的 email「' + to + '」是本人的？')) return;
+          api('/api/admin/email-ok', { username: a.username }).then(function (r) {
+            say('acct-msg', r.ok ? '已把「' + a.username + '」的 email 設為已驗證' : '失敗了', r.ok);
+            if (r.ok) load();
+          });
+        };
+        mail.appendChild(ok);
+      }
+      tr.appendChild(mail);
       tr.appendChild(td(a.name || '—'));
       var cls = window.HQ_STATS && HQ_STATS.CLASSES[a.cls];
       tr.appendChild(td(cls ? cls.name : a.cls));
@@ -351,7 +367,7 @@ td.wish button.x { flex-shrink: 0; width: 22px; height: 22px; min-height: 0; pad
     $('w-count').textContent = list.length;
     var rows = list.filter(function (w) { return (!f || w.status === f) && (!fc || w.cat === fc); })
       .sort(function (a, b) { return (b.updated || b.at) - (a.updated || a.at); });
-    if (!rows.length) { var r0 = tb.insertRow(); var c0 = td(list.length ? '沒有符合的願望' : '還沒有人許願'); c0.colSpan = 7; c0.className = 'empty'; r0.appendChild(c0); return; }
+    if (!rows.length) { var r0 = tb.insertRow(); var c0 = td(list.length ? '沒有符合的願望' : '還沒有人許願'); c0.colSpan = 8; c0.className = 'empty'; r0.appendChild(c0); return; }
     rows.forEach(function (w) {
       var tr = document.createElement('tr');
       tr.appendChild(td(String(w.likes)));

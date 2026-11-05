@@ -174,8 +174,17 @@
   const showAcct = () => {
     const u = ACC.user(), box = $('join-acct');
     box.innerHTML = '';
-    if (u) {
+    const mail = ACC.mail();
+    if (u && mail && mail.needVerify) {
+      // 新報到的帳號要先驗證 email 才能進總部
+      box.append('還差一步：到信箱點驗證信，驗證完才能進總部・');
+      box.appendChild(Object.assign(document.createElement('a'), { href: './', textContent: '重寄或改 email' }));
+    } else if (u) {
       box.append('已登入：', Object.assign(document.createElement('b'), { textContent: u }), '・角色會自動存到帳號');
+      if (mail && !mail.email) {
+        box.append('・');
+        box.appendChild(Object.assign(document.createElement('a'), { href: './', textContent: '綁 email（忘記密碼時才能自己重設）' }));
+      }
     } else {
       box.append('還沒登入，角色只存在這台裝置上・');
       box.appendChild(Object.assign(document.createElement('a'), { href: './', textContent: '登入或建立帳號' }));
@@ -196,7 +205,7 @@
     if (scene && scene.me) Object.assign(data, { x: Math.round(scene.me.x), y: Math.round(scene.me.y) });
     joinedToken = data.token;
     socket.emit('join', data, (res) => {
-      if (!res.ok) { $('join-error').textContent = res.error; return; }
+      if (!res.ok) { $('join-error').textContent = res.error; if (res.needVerify) ACC.sync().then(showAcct); return; }
       joined = true;
       me = res.you;
       setBag({ gear: res.you.gear || {}, seen: res.you.seen || [], owned: res.you.owned || [], furn: res.you.furn || {} });

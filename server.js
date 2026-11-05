@@ -91,12 +91,15 @@ app.get(['/', '/index.html'], (req, res) => {
     const P = partyInfo();
     const fill = { __ORIGIN__: origin, __PARTY_DATE_DOT__: P.dateDot, __PARTY_MD__: P.md, __PARTY_DOW_EN__: P.dowEn,
       __PARTY_DOW_ZH__: P.dowZh, __PARTY_TIME__: P.time, __PARTY_ISO__: P.iso };
-    res.type('html').send(Object.entries(fill).reduce((h, [k, v]) => h.split(k).join(v), html));
+    res.set('Cache-Control', 'no-cache').type('html').send(Object.entries(fill).reduce((h, [k, v]) => h.split(k).join(v), html));
   });
 });
-app.use(express.static(path.join(__dirname, 'public')));
-app.use('/shared', express.static(path.join(__dirname, 'shared')));
-app.use('/vendor', express.static(path.join(__dirname, 'node_modules/phaser/dist')));
+// 靜態檔都回 no-cache：瀏覽器和 Cloudflare 每次都先問伺服器有沒有新版（沒變只回 304，幾乎不花流量）
+// 不然 Cloudflare 會把 .js/.css 快取在邊緣，更新後玩家重新整理還是拿到舊的
+const fresh = { setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache') };
+app.use(express.static(path.join(__dirname, 'public'), fresh));
+app.use('/shared', express.static(path.join(__dirname, 'shared'), fresh));
+app.use('/vendor', express.static(path.join(__dirname, 'node_modules/phaser/dist'), fresh));
 // 小樹屋語音用的 ICE 伺服器：預設只有 Google 的 STUN；有些公司、學校網路連不上的話，設 TURN_URL/TURN_USER/TURN_PASS 加一台中繼
 const ICE_SERVERS = [{ urls: 'stun:stun.l.google.com:19302' }].concat(process.env.TURN_URL
   ? [{ urls: process.env.TURN_URL.split(','), username: process.env.TURN_USER || '', credential: process.env.TURN_PASS || '' }] : []);

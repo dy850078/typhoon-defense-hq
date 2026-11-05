@@ -186,7 +186,7 @@ td.wish p { white-space: pre-wrap; margin: 6px 0 0; color: var(--muted); }
     if (!list.length) { var r0 = tb.insertRow(); var c0 = td('還沒有人建立帳號'); c0.colSpan = 7; c0.className = 'empty'; r0.appendChild(c0); return; }
     list.sort(function (a, b) { return (b.seen || 0) - (a.seen || 0); }).forEach(function (a) {
       var tr = document.createElement('tr');
-      var first = td(a.username);
+      var first = td(a.username + (a.admin ? '（管理員）' : ''));
       if (a.online) { var dot = document.createElement('span'); dot.className = 'dot'; dot.title = '在總部裡'; first.prepend(dot); }
       tr.appendChild(first);
       tr.appendChild(td(a.name || '—'));
@@ -225,7 +225,16 @@ td.wish p { white-space: pre-wrap; margin: 6px 0 0; color: var(--muted); }
           load();
         });
       };
-      act.appendChild(reset); act.appendChild(lv); act.appendChild(del);
+      var role = document.createElement('button'); role.type = 'button'; role.className = 'small'; role.style.marginLeft = '6px';
+      role.textContent = a.admin ? '取消管理員' : '設為管理員';
+      role.title = '管理員在許願池留言會標「管理員」，也能刪別人的留言';
+      role.onclick = function () {
+        api('/api/admin/role', { username: a.username, admin: !a.admin }).then(function (r) {
+          say('acct-msg', r.ok ? '「' + a.username + '」' + (r.admin ? '現在是管理員了' : '不是管理員了') : (r.error || '失敗了'), r.ok);
+          if (r.ok) load();
+        });
+      };
+      act.appendChild(reset); act.appendChild(lv); act.appendChild(role); act.appendChild(del);
       tr.appendChild(act);
       tb.appendChild(tr);
     });
@@ -342,9 +351,25 @@ td.wish p { white-space: pre-wrap; margin: 6px 0 0; color: var(--muted); }
       tr.appendChild(td(String(w.likes)));
       tr.appendChild(td(WISH_CAT[w.cat] || w.cat));
       var t = document.createElement('td'); t.className = 'wish';
-      if (w.body) {
-        var d = document.createElement('details'), sm = document.createElement('summary'), bp = document.createElement('p');
-        sm.textContent = w.title; bp.textContent = w.body; d.appendChild(sm); d.appendChild(bp); t.appendChild(d);
+      var cmts = w.comments || [];
+      if (w.body || cmts.length) {
+        var d = document.createElement('details'), sm = document.createElement('summary');
+        sm.textContent = w.title + (cmts.length ? '（' + cmts.length + ' 則留言）' : ''); d.appendChild(sm);
+        if (w.body) { var bp = document.createElement('p'); bp.textContent = w.body; d.appendChild(bp); }
+        cmts.forEach(function (c) {
+          var cp = document.createElement('p'), cx = document.createElement('button');
+          cp.textContent = (c.admin ? '【管理員】' : '') + c.name + '：' + c.text + '　';
+          cx.type = 'button'; cx.className = 'small danger'; cx.textContent = '刪留言';
+          cx.onclick = function () {
+            if (!confirm('刪掉這則留言？\n' + c.name + '：' + c.text)) return;
+            api('/api/admin/wish', { id: w.id, cid: c.id }).then(function (r) {
+              say('wish-msg', r.ok ? '留言已刪除' : (r.error || '刪除失敗'), r.ok);
+              if (r.ok) renderWishes(r.wishes);
+            });
+          };
+          cp.appendChild(cx); d.appendChild(cp);
+        });
+        t.appendChild(d);
       } else t.textContent = w.title;
       tr.appendChild(t);
       tr.appendChild(td(w.name + (w.name !== w.by ? '（' + w.by + '）' : '')));

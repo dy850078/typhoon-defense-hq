@@ -1556,6 +1556,8 @@
     let detailId = 0, editing = null; // editing：{ id（新許願是 0）, title, cat, body }
     let info = { login: false, left: 0, titleLen: 40, bodyLen: 2000 };
     let results = null, searchTimer = 0;
+    // 留言打到一半，有人按讚、留言整頁重畫時要留著：{ id, text, focus }
+    let draft = { id: 0, text: '', focus: false };
     const ago = (t) => {
       const m = Math.round((Date.now() - t) / 60000);
       return m < 1 ? '剛剛' : m < 60 ? `${m} 分鐘前` : m < 1440 ? `${Math.round(m / 60)} 小時前` : `${Math.round(m / 1440)} 天前`;
@@ -1634,7 +1636,7 @@
         const main = el('div', 'wish-row-main');
         const top = el('div', 'wish-row-top');
         top.append(catTag(w.cat), el('b', 'wish-title', w.title));
-        main.append(top, el('small', null, `${w.name}・${query.sort === 'new' ? ago(w.at) : '更新於 ' + ago(w.updated)}${w.mine ? '・我許的' : ''}`));
+        main.append(top, el('small', null, `${w.name}・${query.sort === 'new' ? ago(w.at) : '更新於 ' + ago(w.updated)}${w.comments ? `・${w.comments} 則留言` : ''}${w.mine ? '・我許的' : ''}`));
         const likes = el('span', 'wish-likes' + (w.liked ? ' on' : ''));
         likes.append(icon(w.liked ? 'wish-heart' : 'wish-heart-off', ''), el('b', null, String(w.likes)));
         li.append(main, statusTag(w.status), likes);
@@ -1680,11 +1682,63 @@
           del.onclick = () => { if (confirm('要把這個願望收回來嗎？')) send('wishWithdraw', { id }, () => { toast('願望收回來了'); backToList(); }); };
           acts.append(edit, del);
         }
-        box.append(back, paper, acts);
+        box.append(back, paper, acts, commentBox(w, r));
         show(box);
+        if (draft.id === id && draft.focus) {
+          const ta = box.querySelector('.wish-cmt-form textarea');
+          if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
+        }
       });
     }
-    function backToList() { view = 'list'; shell = null; loadList(); }
+    // 留言區：照時間排，名字旁邊貼小紙條標「管理員」「許願者」
+    function commentBox(w, r) {
+      const id = w.id, sec = el('div', 'wish-cmts');
+      sec.appendChild(el('div', 'label', w.comments.length ? `留言（${w.comments.length}）` : '留言'));
+      const ul = el('ul', 'wish-cmt-list');
+      if (!w.comments.length) ul.appendChild(el('li', 'wish-empty', '還沒有人留言'));
+      w.comments.forEach((c) => {
+        const li = el('li', 'wish-cmt' + (c.admin ? ' admin' : ''));
+        const head = el('div', 'wish-cmt-head');
+        head.appendChild(el('b', null, c.name));
+        if (c.admin) head.appendChild(el('span', 'wish-role r-admin', '管理員'));
+        if (c.author) head.appendChild(el('span', 'wish-role r-author', '許願者'));
+        head.appendChild(el('small', null, ago(c.at)));
+        if (c.mine || r.admin) {
+          const del = el('button', 'wish-cmt-del', '刪除'); del.type = 'button';
+          del.onclick = () => { if (confirm('要刪掉這則留言嗎？')) send('wishUncomment', { id, cid: c.id }, () => openDetail(id)); };
+          head.appendChild(del);
+        }
+        li.append(head, el('p', null, c.text));
+        ul.appendChild(li);
+      });
+      sec.appendChild(ul);
+      if (!r.login) { sec.appendChild(el('p', 'modal-hint', '登入帳號才能留言。')); return sec; }
+      const form = el('form', 'wish-cmt-form');
+      const max = info.commentLen || 300;
+      const ta = el('textarea'); ta.rows = 2; ta.maxLength = max; ta.placeholder = r.admin ? '以管理員身分回覆' : '說說你的想法';
+      ta.value = draft.id === id ? draft.text : '';
+      const keep = () => { draft = { id, text: ta.value, focus: document.activeElement === ta }; };
+      ta.oninput = keep; ta.onfocus = keep; ta.onblur = () => setTimeout(keep, 0);
+      const count = el('small', 'wish-count', `${ta.value.length}/${max}`);
+      ta.addEventListener('input', () => { count.textContent = `${ta.value.length}/${max}`; });
+      const submit = el('button', 'primary small', '送出留言'); submit.type = 'submit';
+      const foot = el('div', 'wish-foot'); foot.append(count, submit);
+      form.append(ta, foot);
+      form.onsubmit = (ev) => {
+        ev.preventDefault();
+        if (!ta.value.trim()) { ta.focus(); return; }
+        submit.disabled = true;
+        socket.emit('wishComment', { wid, id, text: ta.value }, (res) => {
+          submit.disabled = false;
+          if (!res || !res.ok) { toast((res && res.error) || '沒送出去，再試一次'); return; }
+          draft = { id: 0, text: '', focus: false };
+          openDetail(id);
+        });
+      };
+      sec.appendChild(form);
+      return sec;
+    }
+    function backToList() { view = 'list'; shell = null; draft = { id: 0, text: '', focus: false }; loadList(); }
 
     // ---------- 許願／修改 ----------
     function openForm(w) {

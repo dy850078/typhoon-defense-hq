@@ -773,6 +773,23 @@ button.inv-item:hover { border-color: var(--accent); }
 .wish-foot { display: flex; justify-content: flex-end; }
 .wish-err { margin: 0; min-height: 1.2em; color: #c0391b; font-size: 14px; font-weight: 700; text-align: right; }
 .wish-cats.bad .wish-tab { border-color: #e06a5a; }
+/* 留言區：管理員的留言底色淡一點的藍，名字旁的小紙條標身分 */
+.wish-cmts { display: flex; flex-direction: column; gap: 8px; border-top: 1.5px dashed var(--line); padding-top: 10px; }
+.wish-cmts > .label { margin: 0; font-size: 14px; }
+.wish-cmt-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.wish-cmt { background: var(--paper); border: 1.5px solid var(--line); border-radius: 10px; padding: 8px 12px; }
+.wish-cmt.admin { background: #eef4fd; border-color: #a9c3ea; }
+.wish-cmt-head { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; font-size: 13px; }
+.wish-cmt-head small { color: var(--muted); font-size: 12px; }
+.wish-cmt p { margin: 4px 0 0; font-size: 14px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
+.wish-cmt.admin p { color: #1f2a3a; }
+.wish-role { font: 700 11px var(--display); padding: 1px 7px; border-radius: 4px; border: 1.5px solid; transform: rotate(-2deg); white-space: nowrap; }
+.wish-role.r-admin { background: #2c5596; color: #fff; border-color: #2c5596; }
+.wish-role.r-author { background: #ffefb8; color: #6b4f00; border-color: #f0d27a; }
+.wish-cmt-del { margin-left: auto; border: none; background: none; color: var(--muted); font-size: 12px; cursor: pointer; padding: 2px 4px; }
+.wish-cmt-form { display: flex; flex-direction: column; gap: 6px; }
+.wish-cmt-form textarea { resize: vertical; min-height: 56px; line-height: 1.6; padding: 8px 10px; border-radius: 10px; }
+.wish-cmt-form .wish-foot { align-items: center; gap: 10px; }
 .wish-form .wish-tab.on.c-bug { background: #b3202f; border-color: #b3202f; }
 .wish-form .wish-tab.on.c-feature { background: #d65a00; border-color: #d65a00; }
 .wish-form .wish-tab.on.c-improve { background: #2c5596; border-color: #2c5596; }

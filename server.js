@@ -1599,8 +1599,10 @@ io.on('connection', (socket) => {
     if (!d.name) return ack({ ok: false, error: '請輸入名字' });
     // 有登入的話，同一個帳號只能在一個地方玩，舊的那個踢掉
     const account = data.token ? accounts.byToken(data.token) : null;
-    if (account && account.email && !account.emailOk) return ack({ ok: false, error: '請先到信箱點驗證信，驗證完 email 才能進總部', needVerify: true });
-    if (account) [...players.values()].filter(o => o.account === account).forEach(o => {
+    // 一定要登入才能進：角色跟著帳號走，換裝置也不會變成另一個新角色
+    if (!account) return ack({ ok: false, error: '請先登入帳號才能進總部', needLogin: true });
+    if (account.email && !account.emailOk) return ack({ ok: false, error: '請先到信箱點驗證信，驗證完 email 才能進總部', needVerify: true });
+    [...players.values()].filter(o => o.account === account).forEach(o => {
       const s2 = io.sockets.sockets.get(o.id);
       if (s2) { s2.emit('kicked', '你的帳號在別的地方登入了'); s2.disconnect(true); }
       else removePlayer(o.id); // 斷線中留著的舊角色
@@ -1612,7 +1614,7 @@ io.on('connection', (socket) => {
     // 副本裡的位置不能直接接回去（副本要從候位區出發）
     const back = Number.isFinite(x) && Number.isFinite(y) && !MAP.isBlocked(x, y) && MAP.zoneOf(x) !== 'dungeon';
 
-    if (account) keepProgress(d, account);
+    keepProgress(d, account);
     const p = Object.assign({
       id: socket.id,
       x: back ? x : MAP.spawn.x + (Math.random() - 0.5) * 60,

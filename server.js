@@ -12,6 +12,7 @@ const DECOR = require('./shared/decor');
 const BAG = require('./shared/bag');
 const GACHA = require('./shared/gacha');
 const ACCOUNTS = require('./accounts');
+const MAILER = require('./mailer');
 const WISHES = require('./wishes');
 const GARDEN = require('./garden');
 const G = require('./shared/garden');
@@ -192,13 +193,110 @@ function logLogin(req, username, why, pw) {
   });
 }
 const bearer = (req) => String(req.headers.authorization || '').replace(/^Bearer\s+/i, '');
-const meOf = (u) => ({ ok: true, username: u.username, save: u.save, since: u.created || 0 });
+// 帳號的 email 狀態：新報到的帳號一定有 email，要驗證過才能進總部；舊帳號沒有 email 的照常能玩，只會提醒去綁
+const mailOf = (u) => ({ email: u.email || '', emailOk: !!u.emailOk, emailNew: u.emailNew || '', needVerify: !!(u.email && !u.emailOk) });
+const meOf = (u) => Object.assign({ ok: true, username: u.username, save: u.save, since: u.created || 0 }, mailOf(u));
+// 信裡的連結：有 PUBLIC_URL 就用固定網址，沒有的話用這次連進來的網址
+const baseUrl = (req) => (process.env.PUBLIC_URL || `${req.headers['x-forwarded-proto'] || req.protocol}://${req.headers['x-forwarded-host'] || req.get('host')}`).replace(/\/+$/, '');
+// 寄信的次數限制：同一個帳號 2 分鐘一封，同一個 IP 10 分鐘最多 6 封
+const mailWait = new Map(); // username -> 下次可以寄的時間
+const mailIp = new Map(); // ip -> { n, until }
+function mailLimit(req, key) {
+  const now = Date.now(), ip = ipOf(req), f = mailIp.get(ip);
+  if (f && f.until > now && f.n >= 6) return '寄太多封了，10 分鐘後再試';
+  if (key && (mailWait.get(key) || 0) > now) return `信剛寄出，${Math.ceil((mailWait.get(key) - now) / 1000)} 秒後才能再寄一次`;
+  mailIp.set(ip, f && f.until > now ? { n: f.n + 1, until: f.until } : { n: 1, until: now + 10 * 60000 });
+  if (key) mailWait.set(key, now + 2 * 60000);
+  return '';
+}
+const sendVerify = (req, u, r) => MAILER.verify(r.email || u.email, u.username, `${baseUrl(req)}/api/verify?t=${r.verify}`);
 app.post('/api/register', (req, res) => {
   const b = req.body || {};
-  const r = accounts.register(b.username, b.password, sanitizeSave(b.save || {}));
+  const r = accounts.register(b.username, b.password, sanitizeSave(b.save || {}), b.email);
   if (r.error) return res.status(400).json({ ok: false, error: r.error });
+  mailLimit(req, r.user.username);
+  sendVerify(req, r.user, r).then(m => { if (!m.ok) console.error(`✉️ 「${r.user.username}」的驗證信沒寄出去`); });
   res.json(Object.assign(meOf(r.user), { token: r.token }));
 });
+// 重寄驗證信
+app.post('/api/email/resend', async (req, res) => {
+  const u = accounts.byToken(bearer(req));
+  if (!u) return res.status(401).json({ ok: false });
+  if (!u.emailNew && (u.emailOk || !u.email)) return res.status(400).json({ ok: false, error: '沒有要驗證的 email' });
+  const wait = mailLimit(req, u.username);
+  if (wait) return res.status(429).json({ ok: false, error: wait });
+  const r = accounts.verifyAgain(u);
+  const m = await sendVerify(req, u, r);
+  if (!m.ok) return res.status(502).json({ ok: false, error: '信寄不出去，等等再試，或寫信給 ' + MAILER.from });
+  res.json(meOf(u));
+});
+// 換 email：已經驗證過的帳號要輸入密碼；還沒驗證的（報到時打錯字）直接換
+app.post('/api/email/change', async (req, res) => {
+  const u = accounts.byToken(bearer(req));
+  if (!u) return res.status(401).json({ ok: false });
+  const b = req.body || {};
+  if (u.emailOk && !accounts.checkPassword(u, b.password)) return res.status(400).json({ ok: false, error: '密碼不對' });
+  const wait = mailLimit(req, 'change:' + u.username);
+  if (wait) return res.status(429).json({ ok: false, error: wait });
+  const r = accounts.setEmail(u, b.email);
+  if (r.error) return res.status(400).json({ ok: false, error: r.error });
+  if (r.same) return res.json(meOf(u));
+  const m = await sendVerify(req, u, r);
+  if (!m.ok) return res.status(502).json({ ok: false, error: '信寄不出去，等等再試，或寫信給 ' + MAILER.from });
+  res.json(meOf(u));
+});
+// 點驗證信裡的連結
+app.get('/api/verify', (req, res) => {
+  const u = accounts.verify(String(req.query.t || ''));
+  res.redirect(u ? '/?mail=ok' : '/?mail=bad');
+});
+// 忘記帳號或密碼：輸入帳號或 email。不管有沒有這個人都回一樣的話，免得被拿來猜帳號
+app.post('/api/forgot', async (req, res) => {
+  const who = String((req.body || {}).who || '').trim().slice(0, 120);
+  if (!who) return res.status(400).json({ ok: false, error: '請輸入帳號或 email' });
+  const found = who.includes('@') ? accounts.byEmail(who) : accounts.get(who);
+  const u = found && found.email && found.emailOk ? found : null;
+  const wait = mailLimit(req, u && 'reset:' + u.username);
+  // 同一個帳號剛寄過：不再寄，但回一樣的話（不透露這個帳號存不存在）
+  if (wait && !/秒後/.test(wait)) return res.status(429).json({ ok: false, error: wait });
+  const t = !wait && u && accounts.resetToken(u);
+  if (t) {
+    const m = await MAILER.reset(u.email, u.username, `${baseUrl(req)}/#reset=${t}`);
+    if (!m.ok) return res.status(502).json({ ok: false, error: '信寄不出去，等等再試，或寫信給 ' + MAILER.from });
+  }
+  res.json({ ok: true, contact: MAILER.from });
+});
+// 重設密碼頁：先看連結還能不能用，再設新密碼（設好直接登入）
+app.post('/api/reset/check', (req, res) => {
+  const u = accounts.checkReset((req.body || {}).t);
+  if (!u) return res.status(400).json({ ok: false, error: '這個連結已經用過或過期了，請重新申請一次' });
+  res.json({ ok: true, username: u.username });
+});
+app.post('/api/reset', (req, res) => {
+  const b = req.body || {};
+  const r = accounts.useReset(b.t, b.password);
+  if (r.error) return res.status(400).json({ ok: false, error: r.error });
+  kickAccount(r.user, '你的密碼剛改過了，請重新登入');
+  res.json(Object.assign(meOf(r.user), { token: r.token }));
+});
+// 自己改密碼
+app.post('/api/password', (req, res) => {
+  const u = accounts.byToken(bearer(req));
+  if (!u) return res.status(401).json({ ok: false });
+  if (tooMany(req)) return res.status(429).json({ ok: false, error: '試太多次了，10 分鐘後再試' });
+  const b = req.body || {};
+  const r = accounts.changePassword(u, b.old, b.password);
+  if (r.error) { if (r.error === '舊密碼不對') failed(req); return res.status(400).json({ ok: false, error: r.error }); }
+  res.json(Object.assign(meOf(u), { token: r.token }));
+});
+// 密碼改了：在總部裡的角色先存檔再請他離開（舊的登入憑證已經失效）
+function kickAccount(u, why) {
+  [...players.values()].filter(p => p.account === u).forEach(p => {
+    snapshot(p); p.account = null;
+    const s = io.sockets.sockets.get(p.id);
+    if (s) { s.emit('kicked', why); s.disconnect(true); }
+  });
+}
 app.post('/api/login', (req, res) => {
   const b = req.body || {};
   if (tooMany(req)) { logLogin(req, b.username, '被鎖住（這個 IP 錯太多次）'); return res.status(429).json({ ok: false, error: '試太多次了，10 分鐘後再試' }); }
@@ -318,6 +416,10 @@ const BOOT_ID = Date.now().toString(36);
 let notice = null; // { text, until, ready }
 let noticeTimer = null;
 const noticeState = () => notice && { text: notice.text, ms: Math.max(0, notice.until - Date.now()), ready: notice.ready };
+app.post('/api/admin/email-ok', (req, res) => {
+  if (!isAdmin(req)) return res.status(401).json({ ok: false });
+  res.json({ ok: accounts.markVerified((req.body || {}).username) });
+});
 app.post('/api/admin/announce', (req, res) => {
   if (!isAdmin(req)) return res.status(401).json({ ok: false });
   const b = req.body || {};
@@ -1469,6 +1571,7 @@ io.on('connection', (socket) => {
     if (!d.name) return ack({ ok: false, error: '請輸入名字' });
     // 有登入的話，同一個帳號只能在一個地方玩，舊的那個踢掉
     const account = data.token ? accounts.byToken(data.token) : null;
+    if (account && account.email && !account.emailOk) return ack({ ok: false, error: '請先到信箱點驗證信，驗證完 email 才能進總部', needVerify: true });
     if (account) [...players.values()].filter(o => o.account === account).forEach(o => {
       const s2 = io.sockets.sockets.get(o.id);
       if (s2) { s2.emit('kicked', '你的帳號在別的地方登入了'); s2.disconnect(true); }

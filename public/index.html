@@ -818,6 +818,7 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outlin
     var box = $('mail-box'), need = !!(m && m.needVerify), none = !!(m && !m.email && ACC.user());
     box.hidden = !need && !none;
     box.classList.toggle('soft', !need);
+    $('mb-actions').hidden = false;
     $('mb-err').textContent = ''; if (!need) $('mb-ok').textContent = '';
     $('mb-edit').hidden = true;
     if (need) {
@@ -832,14 +833,24 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outlin
       $('mb-fix').textContent = '綁定 email';
     }
   }
+  function showVerified() {
+    $('mail-box').hidden = false; $('mail-box').classList.remove('soft');
+    $('mb-title').textContent = 'email 驗證好了';
+    $('mb-text').textContent = '現在可以進總部了，入口在識別證下面。以後忘記密碼，也可以用這個信箱自己重設。';
+    $('mb-actions').hidden = true; $('mb-edit').hidden = true;
+    $('mb-err').textContent = ''; $('mb-ok').textContent = '';
+  }
   function mailAct(btn, req, okText) {
     btn.disabled = true; $('mb-err').textContent = ''; $('mb-ok').textContent = '';
     return req.then(function (r) {
       btn.disabled = false;
       if (r.status === 401) { ACC.logout(); showLogin(); $('login-err').textContent = '登入過期了，請重新登入'; return r; }
       if (!r.ok) { $('mb-err').textContent = r.error || '失敗了，再試一次'; return r; }
+      var was = !$('mail-box').classList.contains('soft') && !$('mb-resend').hidden;
       showMailBox(ACC.mail());
       $('join').hidden = !!r.needVerify;
+      // 剛剛還在等驗證、現在驗證好了：換成「驗證好了」的提示框
+      if (was && !r.needVerify && r.email) { showVerified(); return r; }
       if (okText) $('mb-ok').textContent = typeof okText === 'function' ? okText(r) : okText;
       return r;
     });
@@ -1376,7 +1387,8 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outlin
   // 驗證結果的小字：已登入顯示在識別證上方，沒登入顯示在登入表單
   function flashMail(where) {
     if (!mailNote) return;
-    if (where === 'mb' && $('mail-box').hidden) { $('mail-box').hidden = false; $('mail-box').classList.add('soft'); $('mb-title').textContent = ''; $('mb-text').textContent = ''; $('mb-actions').hidden = true; }
+    // 已登入而且驗證好了：用跟「最後一步」一樣的提示框，標題加一句說明
+    if (where === 'mb' && !mailBad && $('mail-box').hidden) { showVerified(); mailNote = ''; return; }
     $(mailBad ? where + '-err' : where + '-ok').textContent = mailNote;
     mailNote = '';
   }

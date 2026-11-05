@@ -41,7 +41,7 @@
     return d.getFullYear() + '.' + String(d.getMonth() + 1).padStart(2, '0') + '.' + String(d.getDate()).padStart(2, '0');
   }
   // email 狀態也記一份，總部的入口畫面要用（還沒驗證不能進、沒綁的提醒一下）
-  function setMail(r) { set('hq-mail', r ? JSON.stringify({ email: r.email || '', emailOk: !!r.emailOk, emailNew: r.emailNew || '', needVerify: !!r.needVerify }) : null); }
+  function setMail(r) { set('hq-mail', r ? JSON.stringify({ email: r.email || '', emailOk: !!r.emailOk, emailNew: r.emailNew || '', needVerify: !!r.needVerify, wishMail: r.wishMail !== false }) : null); }
   function signedIn(res) {
     set('hq-token', res.token); set('hq-user', res.username); setSince(res.since); setMail(res);
     write(res.save);
@@ -77,6 +77,7 @@
     save: function (patch) { return api('/api/save', patch); },
     resendVerify: function () { return api('/api/email/resend', {}).then(mailed); },
     changeEmail: function (email, password) { return api('/api/email/change', { email: email, password: password }).then(mailed); },
+    setNotify: function (wishMail) { return api('/api/notify', { wishMail: wishMail }).then(mailed); },
     forgot: function (who) { return api('/api/forgot', { who: who }); },
     checkReset: function (t) { return api('/api/reset/check', { t: t }); },
     // 用信裡的連結設新密碼，設好就直接登入

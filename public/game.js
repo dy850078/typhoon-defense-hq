@@ -1410,10 +1410,24 @@
       }).catch(() => { $('music-title').textContent = '連不到 YouTube，聽不到音樂'; });
     }
     // 每 5 秒檢查一次，差太多就跳到正確的位置
-    setInterval(() => {
+    // 跳過去 YouTube 要重新緩衝，所以多跳 1.5 秒；剛跳完 15 秒內先不檢查，等它播穩
+    // 同一首最多跳 3 次：怎樣都對不準就讓它照常播，慢幾秒也不要一直跳針
+    let fixes = 0, fixVid = null, fixUntil = 0;
+    function drift(why) {
       if (!player || !playing || !player.getCurrentTime || player.getPlayerState() !== YT.PlayerState.PLAYING) return;
-      if (Math.abs(player.getCurrentTime() - pos()) > 3) player.seekTo(pos(), true);
-    }, 5000);
+      if (fixVid !== playing) { fixVid = playing; fixes = 0; }
+      if (fixes >= 3 || performance.now() < fixUntil) return;
+      const at = player.getCurrentTime(), want = pos();
+      if (Math.abs(at - want) <= 3) return;
+      fixes++;
+      fixUntil = performance.now() + 15000;
+      // 記下來，之後又跳針才查得到原因
+      report('music', `${why}對齊第 ${fixes} 次：播放器 ${at.toFixed(1)} 秒，應該 ${want.toFixed(1)} 秒（${document.visibilityState}）`);
+      player.seekTo(want + 1.5, true);
+    }
+    setInterval(() => drift('定時'), 5000);
+    // 從背景切回來，等 2 秒播穩了再檢查一次
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') setTimeout(() => drift('切回來'), 2000); });
     $('music-start').onclick = () => { if (player) { player.seekTo(Math.max(0, pos()), true); player.playVideo(); applyVol(); } };
     // 播放器可以收成一顆小膠囊（歌照樣播），點一下再展開
     const fold = (mini) => {

@@ -4794,7 +4794,7 @@
 
   // ---------------- Phaser 場景 ----------------
   class HQScene extends Phaser.Scene {
-    constructor() { super('hq'); this.remotes = new Map(); this.drops = []; this.told = {}; this.walls = new Map(); this.storms = new Map(); this.drawing = null; }
+    constructor() { super('hq'); this.remotes = new Map(); this.told = {}; this.walls = new Map(); this.storms = new Map(); this.drawing = null; }
 
     create() {
       // 地圖切成幾塊畫：上面是總部和副本區，下面是往南延伸的野區（副本區下面全是虛空，不用畫）
@@ -5036,13 +5036,9 @@
         this.tweens.add({ targets: b, alpha: { from: 1, to: 0 }, duration: 380, onComplete: () => b.destroy() });
       } });
 
-      // 雨
-      this.rain = this.add.graphics().setScrollFactor(0).setDepth(1000);
-      for (let i = 0; i < 160; i++) this.drops.push(this.newDrop(true));
-      // 閃電
+      // 雨和閃電拿掉了（每一格都要重畫雨線，手機會發燙）；白光留給頭目變身、爆炸這些特效用
       this.flash = this.add.rectangle(0, 0, 10, 10, 0xffffff).setOrigin(0).setScrollFactor(0)
         .setDepth(1001).setAlpha(0);
-      this.scheduleLightning();
 
       this.initDungeon();
       this.lastSent = 0;
@@ -5053,21 +5049,6 @@
     applyZoom() {
       const small = Math.min(this.scale.width, this.scale.height) < 600;
       this.cameras.main.setZoom(small ? 0.75 : 1);
-    }
-
-    newDrop(anywhere) {
-      const w = this.scale.width, h = this.scale.height;
-      return { x: Math.random() * (w + 200), y: anywhere ? Math.random() * h : -20, len: 10 + Math.random() * 14,
-        v: 600 + Math.random() * 400 };
-    }
-
-    scheduleLightning() {
-      this.time.delayedCall(12000 + Math.random() * 20000, () => {
-        this.flash.setSize(this.scale.width, this.scale.height);
-        this.tweens.add({ targets: this.flash, alpha: { from: 0.7, to: 0 }, duration: 450, ease: 'Quad.out' });
-        this.cameras.main.shake(200, 0.003);
-        this.scheduleLightning();
-      });
     }
 
     makeAvatar(p) {
@@ -5516,7 +5497,8 @@
       const on = MUSIC.playing();
       d.discs.forEach((c, i) => { if (on) c.rotation += (i ? 0.004 : 0.0045) * delta; });
       d.sign.setText(on ? 'DJ ♪' : 'DJ');
-      if (on && time > d.nextNote) {
+      // 音符只在 DJ 台出現在畫面上時才冒（看不到還一直產生新的字，手機會白白耗電）
+      if (on && time > d.nextNote && this.cameras.main.worldView.contains(MAP.dj.x, MAP.dj.y)) {
         d.nextNote = time + 650;
         const n = this.add.text(MAP.dj.x + (Math.random() - 0.5) * 60, MAP.dj.y - 20, Math.random() < 0.5 ? '♪' : '♫',
           { fontFamily: FONT, fontSize: '20px', fontStyle: '900', color: ['#ffd23f', '#ff8fab', '#7fd1ff'][Math.floor(Math.random() * 3)],
@@ -8037,7 +8019,6 @@
       const now = performance.now();
       const dt = Math.min(0.1, (now - (this.prevNow || now)) / 1000);
       this.prevNow = now;
-      this.updateRain(dt);
       this.updateStorms(dt);
       if (!this.me) return;
 
@@ -8281,18 +8262,6 @@
         // 其他地方的玩法交給頭上的提示紙條，只有不講會不知道規則的地方才提醒一句
         if (ROOM_TIPS[rid] && !this.told[rid]) { this.told[rid] = true; hint(ROOM_TIPS[rid]); }
       }
-    }
-
-    updateRain(dt) {
-      const g = this.rain;
-      g.clear();
-      g.lineStyle(2, 0xcfe6ff, 0.55);
-      const h = this.scale.height;
-      this.drops.forEach((d, i) => {
-        d.y += d.v * dt; d.x -= d.v * 0.35 * dt;
-        if (d.y > h + 20 || d.x < -40) this.drops[i] = d = this.newDrop(false);
-        g.lineBetween(d.x, d.y, d.x + d.len * 0.35, d.y - d.len);
-      });
     }
   }
 

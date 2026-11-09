@@ -222,7 +222,7 @@
     // skills：三招，邏輯在 field-boss.js（every／first 是幾毫秒出一次的範圍，delay 是地上預告多久）
     fart: { name: '愛放屁的馬', zone: 'walk', elite: true, level: 20, hp: 5000, dmg: [14, 20], range: 100, speed: 50, exp: 700,
       scale: 0.82, gap: { half: 46, top: 150, bottom: 14 }, barY: -178, respawnMs: 3 * 60 * 1000,
-      say: ['蛤？', '你剛剛說什麼？', 'ㄟ~? 你有手順嗎', '那這個呢？', '再問一個就好', '我沒感冒啦', '我先忙我的'],
+      say: ['蛤？', '你剛剛說什麼？', 'ㄟ~? 你有手順嗎', 'ㄟ~? 報意思', '那這個呢？', '再問一個就好', '我沒感冒啦', '我先忙我的'],
       drops: { n: [1, 3], food: 25, decor: 25, gear: 25, rare: true },
       skills: {
         reach: 420, // 附近多遠有人才會出招
@@ -231,7 +231,7 @@
         bang: { first: [7000, 9000], every: [13000, 16000], delay: 1600, r: 300, dmg: [18, 26], stillMs: 1500, stillMul: 1.5,
           say: ['乒乒乓乓！', '我拿個東西而已', '你在睡喔？'] },
         loop: { hp: 0.5, every: 30000, delay: 1000, ms: 6000, laps: 3, r: 150, hitR: 70, dmg: [12, 18], dizzy: 3000, dizzyMul: 2,
-          say: ['咦？這裡剛剛走過了？', '我再確認一次', '等等，從頭開始'], bump: ['借過借過', '蛤？', 'ㄟ~? 你有手順嗎'] },
+          say: ['咦？這裡剛剛走過了？', '我再確認一次', '等等，從頭開始'], bump: ['ㄟ~? 報意思', '蛤？', 'ㄟ~? 你有手順嗎'] },
       } },
     octo: { name: '會議章魚', zone: 'office', level: 24, hp: 1500, dmg: [16, 24], range: 95, speed: 55, exp: 220,
       say: ['我們對齊一下', '再開一個會', '會後再議', '先拉個群組'], drops: { n: [0, 2], food: 30, decor: 22, gear: 7 } },

@@ -428,6 +428,8 @@
   socket.on('dgBallHit', (e) => scene && scene.onBallHit(e));
   socket.on('dgAttack', (a) => scene && scene.onFuAttack(a));
   socket.on('dgAttackHit', (a) => scene && scene.onFuAttackHit(a));
+  socket.on('fieldAttack', (a) => scene && scene.onFieldAttack(a));
+  socket.on('fieldAttackHit', (a) => scene && scene.onFieldAttackHit(a));
   socket.on('dgClear', (c) => scene && scene.onDgClear(c));
   socket.on('mobHit', (m) => scene && scene.onMobHit(m));
   socket.on('mobAttack', (a) => scene && scene.onMobAttack(a));
@@ -2090,7 +2092,7 @@
       const ex = el('div', 'gacha-ex');
       ex.append(rec, gem);
       side.appendChild(ex);
-      if (!tickets()) side.appendChild(el('p', 'gacha-hint', '打倒頭目（急件老闆、虎姑婆婆、副本頭目）有機會掉扭蛋券，有出力的人各自有機會。'));
+      if (!tickets()) side.appendChild(el('p', 'gacha-hint', '打倒頭目（愛放屁的馬、急件老闆、虎姑婆婆、副本頭目）有機會掉扭蛋券，有出力的人各自有機會。'));
       top.appendChild(side);
       box.appendChild(top);
       // 裡面有什麼：扭蛋限定的裝備，有的亮著、沒有的灰色
@@ -3378,7 +3380,7 @@
   }
   // 走進這些地方提醒一句規則；副本的也會常駐在副本面板上
   const ROOM_TIPS = {
-    walk: '野區的怪會追人，打不過就回到圍欄裡',
+    walk: '野區的怪會追人，打不過就回到圍欄裡；愛放屁的馬也在這裡晃',
     office: '這一區的怪比較強，急件老闆也在這裡',
     temple: '最強的一區，小心虎姑婆婆',
     d1: '石碑上的顏色順序只亮一下，快記下來再照順序踩',
@@ -7962,6 +7964,102 @@
         this.time.delayedCall(a.delay + 60, () => safe.destroy());
         say(a.label || '天龍暴風！', '#ff8f8f');
         if (this.inDg() && this.roomId === 't3') toast(`天龍暴風要來了！${Math.round(a.delay / 1000)} 秒內躲到柱子後面的綠色影子裡`);
+      }
+    }
+    // ---------- 野外頭目的招式（愛放屁的馬，伺服器在 field-boss.js） ----------
+    // 我在不在這個範圍附近（不在同一區的人就不跳提示、不震畫面）
+    nearField(x, y, r) { return !!this.me && !this.isDead() && Math.hypot(this.me.x - x, this.me.y - y) <= r; }
+    // 馬頭上冒一句話
+    fieldSay(m, text) {
+      if (!m || !text) return;
+      if (m.say) m.say.destroy();
+      const say = m.say = this.bubbleImg(0, -150 * (m.k || 1), text);
+      m.add(say);
+      this.time.delayedCall(1800, () => { if (m.say === say) { say.destroy(); m.say = null; } });
+    }
+    onFieldAttack(a) {
+      if (fxOff()) return;
+      const m = this.mobs.get(a.mid);
+      this.fieldSay(m, a.say);
+      // 地上的預告圈：一閃一閃，裡面慢慢填滿，時間到就消失
+      const ring = (x, y, rx, ry, col) => {
+        const g = this.add.graphics({ x, y }).setDepth(-5);
+        g.fillStyle(col, 0.16); g.fillEllipse(0, 0, rx * 2, ry * 2); g.lineStyle(3, col, 0.9); g.strokeEllipse(0, 0, rx * 2, ry * 2);
+        this.tweens.add({ targets: g, alpha: { from: 1, to: 0.55 }, duration: 160, yoyo: true, repeat: -1 });
+        const fill = this.add.graphics({ x, y }).setDepth(-5).setScale(0);
+        fill.fillStyle(col, 0.3); fill.fillEllipse(0, 0, rx * 2, ry * 2);
+        this.tweens.add({ targets: fill, scale: 1, duration: a.delay, onComplete: () => fill.destroy() });
+        this.time.delayedCall(a.delay + 60, () => { this.tweens.killTweensOf(g); g.destroy(); });
+      };
+      if (a.type === 'fart') {
+        ring(a.x, a.y, a.r, a.r * 0.7, 0x8fb050);
+        if (m) this.tweens.add({ targets: m.body_, angle: { from: 0, to: -8 }, duration: 200, yoyo: true, repeat: 1 });
+        if (this.nearField(a.x, a.y, a.r * 1.05)) toast('愛放屁的馬要放屁了！快離開綠色範圍');
+      } else if (a.type === 'bang') {
+        ring(a.x, a.y, a.r, a.r * 0.7, 0xff8a3d);
+        if (m) this.tweens.add({ targets: m.body_, y: -6, duration: 120, yoyo: true, repeat: Math.floor(a.delay / 240) });
+        if (this.nearField(a.x, a.y, a.r * 1.05)) toast('乒乒乓乓要來了！跑出橘色圈，站著不動會被吵醒扣更多');
+      } else if (a.type === 'loop') {
+        // 鬼打牆：地上先畫出馬要繞的那一圈虛線
+        const g = this.add.graphics({ x: a.x, y: a.y }).setDepth(-5);
+        g.lineStyle(5, 0xb39cff, 0.85);
+        for (let i = 0; i < 24; i++) {
+          if (i % 2) continue;
+          const t0 = i / 24 * Math.PI * 2, t1 = (i + 1) / 24 * Math.PI * 2;
+          g.beginPath(); g.moveTo(Math.cos(t0) * a.rx, Math.sin(t0) * a.ry);
+          for (let k = 1; k <= 4; k++) { const t = t0 + (t1 - t0) * k / 4; g.lineTo(Math.cos(t) * a.rx, Math.sin(t) * a.ry); }
+          g.strokePath();
+        }
+        this.tweens.add({ targets: g, alpha: { from: 1, to: 0.4 }, duration: 300, yoyo: true, repeat: -1 });
+        this.time.delayedCall(a.delay + a.ms, () => { this.tweens.killTweensOf(g); g.destroy(); });
+        if (this.nearField(a.x, a.y, Math.max(a.rx, a.ry) + 160)) toast('愛放屁的馬開始鬼打牆了！別站在紫色虛線上，繞完他會頭暈');
+      }
+    }
+    onFieldAttackHit(a) {
+      if (fxOff()) return;
+      const m = this.mobs.get(a.mid);
+      if (a.type === 'fart') {
+        // 一團綠綠的臭氣留在地上，慢慢晃，時間到淡掉
+        const puffs = [];
+        for (let i = 0; i < 9; i++) {
+          const ang = Math.random() * Math.PI * 2, d = Math.random() * a.r * 0.7;
+          const x = a.x + Math.cos(ang) * d, y = a.y + Math.sin(ang) * d * 0.7;
+          const g = this.add.graphics({ x, y }).setDepth(y + 60).setAlpha(0);
+          const rr = 34 + Math.random() * 26;
+          g.fillStyle(0xa9c27a, 0.45); g.fillCircle(0, 0, rr); g.fillStyle(0xd8d07a, 0.35); g.fillCircle(-rr * 0.3, -rr * 0.3, rr * 0.55);
+          this.tweens.add({ targets: g, alpha: 1, duration: 300 });
+          this.tweens.add({ targets: g, x: x + (Math.random() - 0.5) * 30, y: y - 10 - Math.random() * 16, duration: 1400 + Math.random() * 600, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
+          puffs.push(g);
+        }
+        const ground = this.add.graphics({ x: a.x, y: a.y }).setDepth(-5);
+        ground.fillStyle(0x8fb050, 0.28); ground.fillEllipse(0, 0, a.r * 2, a.r * 1.4);
+        puffs.push(ground);
+        this.time.delayedCall(a.ms - 500, () => puffs.forEach(g => this.tweens.add({ targets: g, alpha: 0, duration: 500, onComplete: () => { this.tweens.killTweensOf(g); g.destroy(); } })));
+        if (m) this.floatText(m.x, m.y - 170, '噗～', '#cfe39a', 24);
+      } else if (a.type === 'bang') {
+        // 乒！乓！一圈一圈的音波往外擴散
+        for (let i = 0; i < 3; i++) {
+          const g = this.add.graphics({ x: a.x, y: a.y }).setDepth(a.y + 80).setScale(0.2);
+          g.lineStyle(6, i % 2 ? 0xffd23f : 0xff8a3d, 0.9); g.strokeEllipse(0, 0, a.r * 2, a.r * 1.4);
+          this.tweens.add({ targets: g, scale: 1, alpha: 0, duration: 520, delay: i * 140, onComplete: () => g.destroy() });
+        }
+        ['乒！', '乓！', '乒！'].forEach((t, i) => this.time.delayedCall(i * 150, () =>
+          this.floatText(a.x + (i - 1) * 70, a.y - 150 - (i % 2) * 24, t, i % 2 ? '#ffd23f' : '#ff9a3c', 26)));
+        if (this.nearField(a.x, a.y, a.r)) this.cameras.main.shake(260, 0.008);
+        (a.woke || []).forEach(id => { const w = this.actorOf(id); if (w) this.floatText(w.x, w.y - 120, '被吵醒了！', '#ffb4b4', 18); });
+        if (me && (a.woke || []).includes(me.id)) toast('你站著不動，被乒乒乓乓吵醒了，多扣了一些血');
+      } else if (a.type === 'loop') {
+        // 繞完頭暈：頭上有星星在轉，這時候打他傷害加倍
+        if (!m) return;
+        this.floatText(m.x, m.y - 170, '頭好暈…', '#d9c4ff', 22);
+        const stars = [0, 1, 2].map(() => this.add.image(0, 0, 'fx-star').setScale(0.5).setTint(0xffd23f));
+        const born = performance.now();
+        const ev = this.time.addEvent({ delay: 30, loop: true, callback: () => {
+          const t = (performance.now() - born) / 1000;
+          stars.forEach((s, i) => { const ang = t * 4 + i * Math.PI * 2 / 3; s.setPosition(m.x + Math.cos(ang) * 34, m.y - 150 + Math.sin(ang) * 10).setDepth(m.y + 200); });
+        } });
+        this.time.delayedCall(a.ms, () => { ev.remove(); stars.forEach(s => s.destroy()); });
+        if (this.nearField(m.x, m.y, 500)) toast(`愛放屁的馬頭暈了！${Math.round(a.ms / 1000)} 秒內打他傷害加倍`);
       }
     }
     onFuAttackHit(a) {

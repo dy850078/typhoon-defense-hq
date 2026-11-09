@@ -18,6 +18,7 @@ const GARDEN = require('./garden');
 const G = require('./shared/garden');
 const createDungeons = require('./dungeon');
 const createLoot = require('./loot');
+const createFieldBoss = require('./field-boss');
 
 const PORT = Number(process.env.PORT) || 3000;
 const MAX_PLAYERS = Number(process.env.MAX_PLAYERS) || 40;
@@ -801,12 +802,14 @@ function tickMob(m, now) {
     if (now < m.respawnAt + Math.max(0, (def.respawnMs || 0) - STATS.MOB_RESPAWN_MS)) return;
     Object.assign(m, { alive: true, hp: def.hp, frozenUntil: 0, weakUntil: 0 });
     m.damage.clear();
+    FB.reset(m);
     placeMob(m);
     io.emit('mob', mobState(m));
     if (def.elite) pushChat({ system: true, text: `${def.name}出現在${MAP.ROOMS.find(r => r.id === m.zone).name}了！`, t: now });
     return;
   }
   if (now < m.frozenUntil || now < (m.stunUntil || 0)) return;
+  if (def.skills && FB.tick(m, now)) return; // 有招式的頭目（愛放屁的馬）：放招、繞圈、頭暈的時候不照一般方式走
   // 追最近的人（只追在自己這一區的），召喚物也會被追
   let prey = null, pd = 280;
   fieldPlayers().concat(summons).forEach(p => {
@@ -1171,6 +1174,7 @@ function damageFoe(p, foe, isBoss, dmg, crit, skillId, hitBy) {
   if (foe.dg) return DG.damage(p, foe, dmg, crit, skillId, hitBy);
   const now = Date.now();
   if (isBoss && now < monster.transformUntil) return; // 變身中打不動
+  if (!isBoss) dmg = Math.round(dmg * FB.dmgMul(foe, now)); // 愛放屁的馬頭暈中：傷害加倍
   foe.hp = Math.max(0, foe.hp - dmg);
   foe.damage.set(p.name, (foe.damage.get(p.name) || 0) + dmg);
   gainExp(p, dmg);
@@ -2681,6 +2685,9 @@ app.use((err, req, res, next) => {
   if (req.path === '/api/login') logLogin(req, '', '請求被擋掉：' + (err.type || err.message));
   next(err);
 });
+
+// 野外頭目的招式（要等 summons、hurt 這些都準備好才建）
+const FB = createFieldBoss({ io, STATS, fieldPlayers, summons, hurt, hurtSummon, dist, rand, clamp, zoneOf, TICK });
 
 server.listen(PORT, () => {
   iceServers(); // 先拿一次 TURN 通行證，第一個進小樹屋的人就不用等

@@ -312,6 +312,72 @@
       limb(ctx, [[104, 39], [108, 35]], 2, C.skin);
     }),
 
+    // 愛放屁的馬（頭目，下班路上）：站著的棕色胖馬，皺皺的上班族襯衫，一臉狀況外的半睜眼，
+    // 口罩掛在下巴沒戴好、一邊耳朵塞著耳機，屁股後面冒綠色屁屁雲，手上抱著鐵鍋跟湯匙敲敲打打
+    fart: () => canvas(120, 100, 211, (ctx, r) => {
+      const fur = '#a8754f', mane = '#5a3b2e', gas = '#a9c27a';
+      // 屁屁雲（在身體後面）：一朵一朵凹凸的雲＋飄起來的臭味線
+      const cloud = (x, y, rx, ry) => {
+        // 幾顆圓疊在一起：先全部描深色邊再一起上色，外面就只剩一圈完整的外框
+        const puffs = [[0, 0.15, 0.62], [-0.5, 0.2, 0.48], [0.5, 0.22, 0.5], [-0.22, -0.3, 0.5], [0.28, -0.28, 0.46]].map(([dx, dy, k]) => [x + dx * rx, y + dy * ry * 1.4, rx * k, ry * k * 1.25]);
+        glow(ctx, x, y, rx * 1.7, gas, 0.3);
+        puffs.forEach(([px, py, a, b2]) => { ctx.save(); ctx.strokeStyle = INK; ctx.lineWidth = 3.2; ctx.stroke(E(px, py, a, b2)); ctx.restore(); });
+        const u = new Path2D(); puffs.forEach(([px, py, a, b2]) => u.addPath(E(px, py, a, b2)));
+        paint(ctx, r, u, [x - rx * 1.1, y - ry * 1.2, rx * 2.2, ry * 2.4], gas, { lw: 0, hue: '#e2dc9a', at: [0.3, 0.3] });
+      };
+      cloud(101, 76, 11, 8); cloud(108, 58, 8, 6); cloud(111, 44, 5.4, 4.2);
+      [[[96, 66], [93, 60], [97, 55]], [[114, 70], [117, 64], [114, 58]]].forEach(pts => brush(ctx, pts, 1.4, 'rgba(110,140,70,0.85)'));
+      shadow(ctx, 60, 95, 36);
+      // 尾巴
+      limb(ctx, [[80, 76], [94, 80], [92, 92]], 5.4, mane);
+      // 腳＋蹄
+      limb(ctx, [[51, 82], [50, 91]], 7, fur); limb(ctx, [[69, 82], [70, 91]], 7, fur);
+      shoes(ctx, r, [[49, 93], [71, 93]], '#3e3340');
+      // 身體＋襯衫
+      paint(ctx, r, S([[60, 42], [80, 46], [88, 64], [84, 86], [60, 90], [36, 86], [32, 64], [40, 46]]), [32, 42, 56, 48], '#cfdde0', { hue: '#e8e2cf', at: [0.5, 1] });
+      // 襯衫皺褶、沒扣好的扣子、塞一半的衣角
+      [[[44, 56], [48, 62], [45, 68]], [[76, 58], [72, 64], [75, 70]], [[52, 78], [56, 82], [62, 79]]].forEach(pts => brush(ctx, pts, 1.2, 'rgba(90,110,130,0.5)'));
+      [[60, 56], [60, 64], [61, 72]].forEach(([x, y], i) => i === 1 ? brush(ctx, [[x - 2, y - 1], [x + 2, y + 1]], 1.2, INK) : ball(ctx, r, x, y, 1.6, 1.6, '#f3ecdf'));
+      brush(ctx, [[64, 86], [68, 89], [73, 85]], 1.2, 'rgba(90,110,130,0.5)'); // 衣角一半沒塞好
+      // 領子歪一邊
+      const col = new Path2D(); col.moveTo(48, 45); col.lineTo(58, 47); col.lineTo(52, 53); col.closePath(); paint(ctx, r, col, [48, 45, 10, 8], '#eef4f2', { lw: 1.4, shine: false });
+      const col2 = new Path2D(); col2.moveTo(72, 44); col2.lineTo(62, 47); col2.lineTo(70, 50); col2.closePath(); paint(ctx, r, col2, [62, 44, 10, 6], '#eef4f2', { lw: 1.4, shine: false });
+      // 左手抱鐵鍋
+      const pot = new Path2D(); pot.moveTo(14, 64); pot.lineTo(40, 64); pot.quadraticCurveTo(39, 80, 27, 80); pot.quadraticCurveTo(15, 80, 14, 64); pot.closePath();
+      paint(ctx, r, pot, [14, 64, 26, 16], '#8d97a6', { hue: '#c9d0d8', at: [0.3, 0.2] });
+      paint(ctx, r, E(27, 64, 13.5, 2.8), [13, 61, 27, 6], '#b7bfca', { lw: 1.6, shine: false });
+      limb(ctx, [[12, 66], [8, 66]], 2.4, '#3e3340'); limb(ctx, [[42, 66], [46, 66]], 2.4, '#3e3340');
+      limb(ctx, [[39, 56], [40, 62], [42, 65]], 6.4, fur); ball(ctx, r, 43, 66, 4, 3.6, '#3e3340');
+      // 右手拿湯匙往鍋子敲
+      limb(ctx, [[81, 54], [91, 50], [96, 42]], 6.4, fur); ball(ctx, r, 97, 41, 4, 3.8, '#3e3340');
+      limb(ctx, [[97, 38], [104, 26]], 2.4, '#b7bfca');
+      paint(ctx, r, E(106, 23, 4, 5.4, 0.5), [102, 17, 8, 11], '#b7bfca', { lw: 1.6, shine: false });
+      // 敲出來的聲音線
+      [[[108, 12], [112, 8]], [[112, 18], [117, 17]], [[103, 11], [104, 5]]].forEach(pts => brush(ctx, pts, 1.6, 'rgba(60,68,102,0.8)'));
+      // 耳朵（右耳塞耳機）
+      [[47, 9, -0.35], [73, 9, 0.35]].forEach(([x, y, a]) => {
+        paint(ctx, r, T(S([[0, -9], [5, 2], [3, 7], [-3, 7], [-5, 2]]), x, y, a * 57.3), [x - 6, y - 9, 12, 17], fur, { lw: 1.8, shine: false });
+        dab(ctx, x + a * 2, y + 2, 1.8, 3.6, '#d9a586', a);
+      });
+      ball(ctx, r, 76, 15, 2.8, 2.8, '#f3ecdf'); limb(ctx, [[76, 18], [80, 30], [76, 40]], 1.1, '#f3ecdf');
+      // 頭：長長的馬臉，下面的嘴巴寬一點、顏色淡一點
+      const head = S([[60, 6], [72, 10], [76, 22], [75, 34], [72, 44], [60, 48], [48, 44], [45, 34], [44, 22], [48, 10]]);
+      paint(ctx, r, head, [44, 6, 32, 42], fur, { hue: '#c98a5a', at: [0.5, 0.2] });
+      paint(ctx, r, E(60, 39, 13, 8.6), [47, 30, 26, 18], '#e2b48c', { lw: 1.6, shine: false, hue: '#d99a80', at: [0.5, 1] });
+      // 鬃毛瀏海
+      [[52, 8, 6, 4.4, -0.4], [60, 6, 6, 5, 0], [67, 9, 5.4, 4, 0.5], [57, 13, 4, 3.6, 0.2]].forEach(([x, y, rx, ry, a]) => paint(ctx, r, E(x, y, rx, ry, a), [x - rx, y - ry, rx * 2, ry * 2], mane, { lw: 1.6, shine: false }));
+      // 半睜的眼睛、鼻孔、嘴角一撇
+      face(ctx, 60, 24, 1.15, { eyes: 'sleepy', gap: 9, mouth: 'none', blush: false });
+      [-1, 1].forEach(k => glow(ctx, 60 + k * 13, 30, 4.4, '#e88a8a', 0.5));
+      [-1, 1].forEach(k => dab(ctx, 60 + k * 5, 37, 1.5, 2.2, 'rgba(70,40,40,0.85)', k * 0.3));
+      brush(ctx, [[56, 43.5], [60, 44.5], [64, 43]], 1.3, INK);
+      // 口罩掛在下巴
+      const mask = new Path2D(); mask.moveTo(49, 45); mask.quadraticCurveTo(60, 42, 71, 45); mask.lineTo(69, 52); mask.quadraticCurveTo(60, 55, 51, 52); mask.closePath();
+      paint(ctx, r, mask, [49, 42, 22, 13], '#cfe3e8', { lw: 1.6, shine: false });
+      [[51, 47.5, 69, 47.5], [52, 50.4, 68, 50.4]].forEach(([a, b, c, d]) => brush(ctx, [[a, b], [c, d]], 0.9, 'rgba(90,120,140,0.6)'));
+      [[49.5, 46.5, 46, 44, 45, 40], [70.5, 46.5, 74, 44, 75, 40]].forEach(([a, b, c, d, e, f]) => brush(ctx, [[a, b], [c, d], [e, f]], 1.2, '#eef4f2'));
+    }),
+
     // ---------- 廟口老街 ----------
     // 燈猴：傳說中幫人間點燈的小猴子，身體是一盞「福」字燈籠，頭上頂著一小簇燈火
     lamp: () => canvas(96, 84, 207, (ctx, r) => {
@@ -457,7 +523,7 @@
   };
 
   // 名字（跟 shared/stats.js 的 MOBS 對應）
-  const NAMES = { sticky: '便利貼精', seen: '已讀飄飄', wok: '甩鍋鍋', octo: '會議章魚', clock: '加班鬧鐘', boss: '急件老闆',
+  const NAMES = { sticky: '便利貼精', seen: '已讀飄飄', wok: '甩鍋鍋', octo: '會議章魚', clock: '加班鬧鐘', boss: '急件老闆', fart: '愛放屁的馬',
     lamp: '燈猴', lion: '石獅仔', imp: '小魔神仔', tiger: '虎姑婆婆' };
 
   root.HQ_FIELD_MOBS = {

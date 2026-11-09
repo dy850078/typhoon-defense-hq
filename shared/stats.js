@@ -218,6 +218,21 @@
       say: ['已讀', '……', '嗯', '晚點回你'], drops: { n: [0, 2], food: 30, decor: 22, gear: 5 } },
     wok: { name: '甩鍋鍋', zone: 'walk', level: 16, hp: 1000, dmg: [10, 16], range: 90, speed: 65, exp: 160,
       say: ['不是我喔～', '這鍋給你', '我只是路過', '問他啦'], drops: { n: [0, 2], food: 32, decor: 22, gear: 6 } },
+    // 愛放屁的馬（頭目）：玩家推薦的角色。裝傻不聽人說話、輪到自己就巴著人問問題、鬼打牆、不戴口罩、乒乒乓乓吵人
+    // skills：三招，邏輯在 field-boss.js（every／first 是幾毫秒出一次的範圍，delay 是地上預告多久）
+    fart: { name: '愛放屁的馬', zone: 'walk', elite: true, level: 20, hp: 5000, dmg: [14, 20], range: 100, speed: 50, exp: 700,
+      scale: 0.82, gap: { half: 46, top: 150, bottom: 14 }, barY: -178, respawnMs: 3 * 60 * 1000,
+      say: ['蛤？', '你剛剛說什麼？', 'ㄟ~? 你有手順嗎', 'ㄟ~? 報意思', '那這個呢？', '再問一個就好', '我沒感冒啦', '我先忙我的'],
+      drops: { n: [1, 3], food: 25, decor: 25, gear: 25, rare: true },
+      skills: {
+        reach: 420, // 附近多遠有人才會出招
+        fart: { first: [3000, 5000], every: [9000, 12000], delay: 1200, r: 140, ms: 5000, dmg: [6, 9],
+          say: ['噗～', '不是我喔', '有味道嗎？我沒聞到', '我沒感冒啦'] },
+        bang: { first: [7000, 9000], every: [13000, 16000], delay: 1600, r: 300, dmg: [18, 26], stillMs: 1500, stillMul: 1.5,
+          say: ['乒乒乓乓！', '我拿個東西而已', '你在睡喔？'] },
+        loop: { hp: 0.5, every: 30000, delay: 1000, ms: 6000, laps: 3, r: 150, hitR: 70, dmg: [12, 18], dizzy: 3000, dizzyMul: 2,
+          say: ['咦？這裡剛剛走過了？', '我再確認一次', '等等，從頭開始'], bump: ['ㄟ~? 報意思', '蛤？', 'ㄟ~? 你有手順嗎'] },
+      } },
     octo: { name: '會議章魚', zone: 'office', level: 24, hp: 1500, dmg: [16, 24], range: 95, speed: 55, exp: 220,
       say: ['我們對齊一下', '再開一個會', '會後再議', '先拉個群組'], drops: { n: [0, 2], food: 30, decor: 22, gear: 7 } },
     clock: { name: '加班鬧鐘', zone: 'office', level: 30, hp: 1900, dmg: [20, 30], range: 90, speed: 70, exp: 280,
@@ -236,7 +251,7 @@
       say: ['乖乖睡喔', '吃糖糖', '虎姑婆婆來囉', '誰還沒睡？', '糖給你一顆'], drops: { n: [1, 3], food: 20, decor: 20, gear: 35, rare: true } },
   });
   // 野區每一種怪要生成幾隻
-  const FIELD_MOBS = { sticky: 3, seen: 3, wok: 3, octo: 3, clock: 3, boss: 1, lamp: 3, lion: 3, imp: 3, tiger: 1 };
+  const FIELD_MOBS = { sticky: 3, seen: 3, wok: 3, fart: 1, octo: 3, clock: 3, boss: 1, lamp: 3, lion: 3, imp: 3, tiger: 1 };
   const MOB_RESPAWN_MS = 45000;
   // 打倒怪會在地上噴出掉落物：每隻怪可以寫自己的 drops，沒寫的用這裡的預設
   // n：一次噴幾個（最少、最多）；food / decor / gear：每一個抽到補品、家具、裝備的權重，加起來不到 100 的部分算沒掉

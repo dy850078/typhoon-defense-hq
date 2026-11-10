@@ -535,7 +535,6 @@ app.post('/api/admin/wish', (req, res) => {
   res.json({ ok: true, wishes: wishes.all() });
 });
 // 願望狀態改了：完成時廣播到聊天室；許願者在線上就跳小提示（不寄信）
-const WISH_STATUS = { new: '待處理', review: '評估中', doing: '處理中', done: '已完成', no: '不處理' };
 function wishStatusChanged(r) {
   if (r.was === r.wish.status) return;
   if (r.wish.status === 'done') pushChat({ system: true, text: `許願池：「${r.wish.title}」完成了！謝謝 ${r.wish.name} 的願望`, t: Date.now() });

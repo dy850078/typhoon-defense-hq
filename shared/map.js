@@ -4,8 +4,9 @@
   // 再往右隔兩格是台北101副本區和 101 大廳候位區
   // 最右邊再隔兩格是副本大廳（指揮中心的副本傳送門通到這裡，各副本的 NPC 站在大廳裡）
   // 副本區、候位區、副本大廳都走不過去，只能傳送
-  const MW = 40;
-  const DX = 42; // 花蓮副本區最左邊那一格
+  const MW = 54; // 總部這一塊的寬度（右邊 14 格是可愛生物休息區加蓋出去的地方）
+  const FW = 40; // 野區的寬度（比總部窄，右邊多出來的地方種滿樹）
+  const DX = MW + 2; // 花蓮副本區最左邊那一格
   const LX = DX + 46; // 古城候位區最左邊那一格（花蓮副本有兩欄，各 22 格寬）
   const TDX = LX + 14; // 台北101副本區最左邊那一格
   const TLX = TDX + 46; // 101 大廳候位區最左邊那一格（台北副本也有兩欄）
@@ -40,9 +41,14 @@
   //         （野區用中文字當代號，免得和副本、副本大廳的英文字母撞在一起）
   // 花園：  圃  花圃（一格一株，擋路）    箱  種子認養箱
   // 物資倉庫：扭  扭蛋機（一格，畫出來有兩格高，靠著上面的牆）
+  // 可愛生物休息區：扉  休息區（沙發那間）通過去的門    花  花磚地板
+  //   寵物功能還沒開放的人看不到這個房間的門：扉只有 setHotel(true) 之後才走得過去，門也只畫給看得到的人
   const BLOCKING = new Set(['#', 'T', 'B', 'K', 'M', 'P', 'S', 'F', 'G', 'N', 'W', 'R', 'J', 'L', 'I', ' ', 'Y', 'Z', 'E', 'Q', 'H',
     'g', 'k', 'A', 'U', 'w', 'b', 'D', 's', 'v',
     '燈', '牌', '桌', '盆', '爐', '籠', '籬', '圃', '箱', '扭']);
+  // 只疊在寵物功能開放的人畫面上的格子（平常畫成牆）
+  const HOTEL_TILES = new Set(['扉']);
+  let hotelOn = false;
 
   const g = [];
   for (let y = 0; y < H; y++) g.push(new Array(W).fill(','));
@@ -53,6 +59,13 @@
 
   // 建築本體
   rect(4, 3, 35, 24, '#');
+  // 可愛生物休息區：休息區（沙發那間）右邊加蓋的房間，跟休息區一樣大；門開在兩間中間那面牆
+  // 中間一大塊鋪花磚，小窩可以放在房間裡任何地方；散步的寵物會回自己的小窩睡午覺
+  const PET_ROOM = { x1: 36, y1: 15, x2: 49, y2: 23 };
+  rect(PET_ROOM.x1 - 1, PET_ROOM.y1 - 1, PET_ROOM.x2 + 1, PET_ROOM.y2 + 1, '#');
+  rect(PET_ROOM.x1, PET_ROOM.y1, PET_ROOM.x2, PET_ROOM.y2, '.');
+  rect(39, 17, 46, 21, '花');
+  rect(35, 18, 35, 19, '扉');
   rect(5, 4, 34, 23, '.');
   rect(21, 4, 34, 13, 'V');
   // 內牆
@@ -103,26 +116,29 @@
   rect(20, 26, 21, 27, 'L');
   const GREEK_TILE = { x: 22, y: 26 };
   set(GREEK_TILE.x, GREEK_TILE.y, 'I');
-  [[2, 2], [37, 2], [1, 12], [38, 10], [2, 26], [37, 27], [12, 27], [18, 28], [36, 18], [1, 19]]
+  [[2, 2], [37, 2], [1, 12], [38, 10], [2, 26], [37, 27], [12, 27], [18, 28], [1, 19],
+    [44, 3], [51, 6], [47, 10], [52, 12], [41, 8], [52, 19], [43, 27], [50, 28], [52, 25]]
     .forEach(([x, y]) => set(x, y, 'T'));
-  [[15, 26], [33, 28], [34, 28], [38, 23], [1, 6], [2, 6]]
+  [[15, 26], [33, 28], [34, 28], [1, 6], [2, 6], [46, 6], [47, 6], [47, 27]]
     .forEach(([x, y]) => set(x, y, '~'));
   // 公共花園：物資倉庫後門出去左手邊，兩排各 6 格花圃，中間那排是走道；右上角是種子認養箱
   const PLOTS = [];
   [26, 28].forEach(y => { for (let x = 4; x <= 9; x++) { set(x, y, '圃'); PLOTS.push({ x, y }); } });
   const SEEDBOX_TILE = { x: 10, y: 26 };
   set(SEEDBOX_TILE.x, SEEDBOX_TILE.y, '箱');
-
   // 野區：圍欄以南，中間留一個出口；往南依序是下班路上 → 打卡大樓 → 廟口老街，每區之間隔一排矮樹籬
   const FIELD = [
     { id: 'walk', name: '下班路上', y1: 31, y2: 46, floor: '人' },
     { id: 'office', name: '打卡大樓', y1: 48, y2: 64, floor: '毯' },
     { id: 'temple', name: '廟口老街', y1: 66, y2: H - 1, floor: '磚' },
   ];
-  FIELD.forEach(z => rect(0, z.y1, MW - 1, z.y2, z.floor));
+  FIELD.forEach(z => rect(0, z.y1, FW - 1, z.y2, z.floor));
   rect(0, 30, MW - 1, 30, 'F');
+  // 野區右邊多出來的地方：靠近總部那幾排種滿樹，再往南是走不到也看不到的空地
+  rect(FW, 31, MW - 1, H - 1, ' ');
+  rect(FW, 31, MW - 1, 44, 'T');
   rect(26, 30, 29, 30, ',');
-  [[47, '人'], [65, '毯']].forEach(([y, c]) => { rect(0, y, MW - 1, y, '籬'); rect(17, y, 22, y, c); });
+  [[47, '人'], [65, '毯']].forEach(([y, c]) => { rect(0, y, FW - 1, y, '籬'); rect(17, y, 22, y, c); });
   // 每區入口的路牌
   set(14, 32, '牌'); set(14, 49, '牌'); set(14, 67, '牌');
   // 下班路上：路燈、水窪、行道樹
@@ -503,8 +519,10 @@
     { id: 'storage', name: '📦 物資倉庫', x1: 5, y1: 15, x2: 19, y2: 23 },
     { id: 'kitchen', name: '🍜 煮泡麵區', x1: 30, y1: 20, x2: 34, y2: 23 },
     { id: 'lounge', name: '🛋️ 休息區', x1: 21, y1: 15, x2: 34, y2: 23 },
+    // 可愛生物休息區：畫面上先不寫出這是什麼地方，名字跟隔壁休息區一樣
+    { id: 'pethotel', name: '🛋️ 休息區', noDecor: true, pets: true, ...PET_ROOM },
     // 野區的三區：field 標記可以打怪、畫城牆、召喚
-    ...FIELD.map(z => ({ id: z.id, name: z.name, field: true, x1: 0, y1: z.y1 - (z.id === 'walk' ? 0 : 1), x2: MW - 1, y2: z.y2 })),
+    ...FIELD.map(z => ({ id: z.id, name: z.name, field: true, x1: 0, y1: z.y1 - (z.id === 'walk' ? 0 : 1), x2: FW - 1, y2: z.y2 })),
     { id: 'lobby', name: '🏯 古城候位區', lobby: 'hualien', ...LOBBY },
     { id: 'd1', name: '🌊 七星潭', dungeon: 'hualien', x1: DX + 1, y1: 3, x2: DX + 20, y2: 12 },
     { id: 'd2', name: '🪨 太魯閣九曲洞', dungeon: 'hualien', x1: DX + 1, y1: 14, x2: DX + 20, y2: 28 },
@@ -520,16 +538,16 @@
     { id: 't5', name: '101 觀景台', dungeon: 'taipei', boss: true, x1: TDX + 23, y1: 30, x2: TDX + 42, y2: 44 },
   ];
   // 颱風怪物活動的範圍（像素）：下班路上那一區
-  const MONSTER_ZONE = { x1: 4 * TILE, y1: 34 * TILE, x2: (MW - 4) * TILE, y2: 44 * TILE };
+  const MONSTER_ZONE = { x1: 4 * TILE, y1: 34 * TILE, x2: (FW - 4) * TILE, y2: 44 * TILE };
   // 每一區小怪活動的範圍（像素），和整個野區的範圍
   const FIELD_ZONES = {};
-  FIELD.forEach(z => { FIELD_ZONES[z.id] = { x1: 2 * TILE, y1: (z.y1 + 1.5) * TILE, x2: (MW - 2) * TILE, y2: (z.y2 - 1) * TILE }; });
-  const FIELD_BOX = { x1: 0, y1: 31 * TILE, x2: MW * TILE, y2: H * TILE };
+  FIELD.forEach(z => { FIELD_ZONES[z.id] = { x1: 2 * TILE, y1: (z.y1 + 1.5) * TILE, x2: (FW - 2) * TILE, y2: (z.y2 - 1) * TILE }; });
+  const FIELD_BOX = { x1: 0, y1: 31 * TILE, x2: FW * TILE, y2: H * TILE };
 
   // 會變動的擋路格子（關著的石門、九曲洞的大理石）：'tx,ty'
   const dyn = new Set();
   const map = {
-    W, H, MW, DX, LX, TDX, TLX, HX, HUB, DH, TILE, BLOCKING, ROOMS, ITEMS, CRATES, MONSTER_ZONE, FIELD, FIELD_ZONES, FIELD_BOX, DUNGEON, DUNGEONS, DG_LIST, LOBBY, dyn, PLOTS,
+    W, H, MW, FW, DX, LX, TDX, TLX, HX, HUB, DH, TILE, BLOCKING, ROOMS, ITEMS, CRATES, MONSTER_ZONE, FIELD, FIELD_ZONES, FIELD_BOX, DUNGEON, DUNGEONS, DG_LIST, LOBBY, dyn, PLOTS, PET_ROOM,
     portal: DUNGEON.portal,
     // 指揮中心的副本傳送門、副本大廳回總部的出口、還沒開放的台座（像素）
     hqPortal: { x: (HQ_PORTAL_TILE.x + 0.5) * TILE, y: (HQ_PORTAL_TILE.y + 0.5) * TILE },
@@ -545,8 +563,12 @@
       const tx = Math.floor(px / TILE);
       const ty = Math.floor(py / TILE);
       if (tx < 0 || ty < 0 || tx >= W || ty >= H) return true;
-      return BLOCKING.has(g[ty][tx]) || (dyn.size > 0 && dyn.has(tx + ',' + ty));
+      return BLOCKING.has(g[ty][tx]) || (!hotelOn && g[ty][tx] === '扉') || (dyn.size > 0 && dyn.has(tx + ',' + ty));
     },
+    // 可愛生物休息區開不開（寵物功能開放給這個人才開）：門走不走得過去，房間名稱顯不顯示
+    setHotel(on) { hotelOn = !!on; },
+    hotelOn() { return hotelOn; },
+    HOTEL_TILES,
     // 石門開關：副本 d 的第 i 道（0 起算）
     setGate(d, i, open) {
       d.gates[i].forEach(([x, y]) => { if (open) dyn.delete(x + ',' + y); else dyn.add(x + ',' + y); });
@@ -643,10 +665,15 @@
     nearSeedBox(px, py) {
       return Math.hypot(px - this.seedBox.x, py - this.seedBox.y) < 1.7 * TILE;
     },
+    // (px, py) 在不在可愛生物休息區裡面（小窩只能放在這間）
+    inPetRoom(px, py) {
+      const tx = Math.floor(px / TILE), ty = Math.floor(py / TILE);
+      return tx >= PET_ROOM.x1 && tx <= PET_ROOM.x2 && ty >= PET_ROOM.y1 && ty <= PET_ROOM.y2;
+    },
     roomAt(px, py) {
       const tx = Math.floor(px / TILE);
       const ty = Math.floor(py / TILE);
-      return ROOMS.find(r => tx >= r.x1 && tx <= r.x2 && ty >= r.y1 && ty <= r.y2) || null;
+      return ROOMS.find(r => tx >= r.x1 && tx <= r.x2 && ty >= r.y1 && ty <= r.y2 && (!r.pets || hotelOn)) || null;
     },
   };
 

@@ -9,6 +9,7 @@ const AVATAR = require('./shared/avatar');
 const STATS = require('./shared/stats');
 const GEAR = require('./shared/gear');
 const DECOR = require('./shared/decor');
+const PETS = require('./shared/pets');
 const BAG = require('./shared/bag');
 const GACHA = require('./shared/gacha');
 const ACCOUNTS = require('./accounts');
@@ -18,6 +19,7 @@ const GARDEN = require('./garden');
 const G = require('./shared/garden');
 const createDungeons = require('./dungeon');
 const createLoot = require('./loot');
+const createPetWorld = require('./pet-world');
 const createFieldBoss = require('./field-boss');
 
 const PORT = Number(process.env.PORT) || 3000;
@@ -396,7 +398,7 @@ app.post('/api/admin/login', (req, res) => {
 app.get('/api/admin/state', (req, res) => {
   if (!isAdmin(req)) return res.status(401).json({ ok: false });
   const online = new Set([...players.values()].map(p => p.account && p.account.username));
-  res.json({ ok: true, party: partyInfo(), notice: noticeState(), wishes: wishes.all(), garden: garden.list(), turn: turnState(), accounts: accounts.list().map(a => Object.assign(a, { online: online.has(a.username) })) });
+  res.json({ ok: true, party: partyInfo(), petsOpen: !!settings.petsOpen, notice: noticeState(), wishes: wishes.all(), garden: garden.list(), turn: turnState(), accounts: accounts.list().map(a => Object.assign(a, { online: online.has(a.username) })) });
 });
 app.post('/api/admin/settings', (req, res) => {
   if (!isAdmin(req)) return res.status(401).json({ ok: false });
@@ -407,6 +409,13 @@ app.post('/api/admin/settings', (req, res) => {
   saveSettings();
   io.emit('party', partyInfo());
   res.json({ ok: true, party: partyInfo() });
+});
+// 寵物功能開放給所有人／只給管理員（重新整理後生效）
+app.post('/api/admin/pets', (req, res) => {
+  if (!isAdmin(req)) return res.status(401).json({ ok: false });
+  settings.petsOpen = !!(req.body || {}).open;
+  saveSettings();
+  res.json({ ok: true, open: settings.petsOpen });
 });
 app.post('/api/admin/password', (req, res) => {
   if (!isAdmin(req)) return res.status(401).json({ ok: false });
@@ -506,6 +515,7 @@ app.post('/api/admin/rename', (req, res) => {
   if (r.error) return res.status(400).json({ ok: false, error: r.error });
   wishes.rename(r.from, r.to);
   garden.rename('u:' + r.from.toLowerCase(), 'u:' + r.to.toLowerCase());
+  PETW.renameKey(r.from.toLowerCase(), r.to.toLowerCase());
   console.log(`🪪 管理員把帳號「${r.from}」改成「${r.to}」`);
   res.json({ ok: true, from: r.from, to: r.to });
 });
@@ -868,6 +878,7 @@ setInterval(() => {
   const now = Date.now();
   mobs.forEach(m => tickMob(m, now));
   summons.slice().forEach(sm => tickSummon(sm, now));
+  PETW.tick(now);
   tickMonster(now);
   DG.tick(now);
   LOOT.tick(now);
@@ -880,6 +891,7 @@ setInterval(() => {
     boss: monster.alive ? [Math.round(monster.x), Math.round(monster.y)] : null,
     storms: storms.map(s => [s.id, ...s.twisters.flatMap(t => [Math.round(t.x), Math.round(t.y)])]),
   });
+  PETW.sendWorld();
 }, TICK);
 
 function tickMonster(now) {
@@ -1324,6 +1336,11 @@ const DG = createDungeons({
   ticketRolls: (damage) => ticketRolls(damage),
 });
 // 地上的掉落物（loot.js）
+// 寵物（pet-world.js）：跟著主人、在總部散步、一起打怪；可愛生物休息區的小窩
+// 寵物功能先只開放給管理員（帳號設為管理員的人）；管理員介面打開「開放給所有人」之後大家都有
+MAP.setHotel(true); // 伺服器這邊可愛生物休息區一直都在（寵物找路用）
+const petsAllowed = (p) => !!settings.petsOpen || !!(p.account && p.account.admin);
+const PETW = createPetWorld({ io, players, MAP, PETS, DG, fs, path, DATA_DIR, dist, clamp, inField, mobs, monster: () => monster, damageFoe, snapshot, TICK, allowed: petsAllowed });
 const LOOT = createLoot({ io, players, MAP, STATS, GEAR, DECOR, BAG, pushChat: (m) => pushChat(m), dgOf: (p) => DG.dgOf(p) });
 
 // ---------------- 室內設計：家具 ----------------
@@ -1370,7 +1387,7 @@ const decorList = () => [...decor.entries()].map(([key, d]) => ({ key, k: d.k, b
 // 這格能不能擺家具：要在室內、不能是牆或門、不能擋到東西
 function canDecorate(tx, ty) {
   const room = MAP.roomAt((tx + 0.5) * T, (ty + 0.5) * T);
-  if (!room || room.field || room.dungeon || room.lobby) return false;
+  if (!room || room.field || room.dungeon || room.lobby || room.noDecor) return false;
   const ch = MAP.tiles[ty] && MAP.tiles[ty][tx];
   return !!ch && !MAP.BLOCKING.has(ch) && ch !== '=' && ch !== ',';
 }
@@ -1440,6 +1457,8 @@ function sanitizeSave(data) {
     inv: Object.fromEntries(Object.keys(MAP.ITEMS).map(k => [k, clamp(Math.floor(Number(data.inv && data.inv[k])) || 0, 0, INV_MAX)])),
     // 扭蛋機：距離上一次扭到 SSR 已經扭了幾次（保底用）
     gachaPity: clamp(Math.floor(Number(data.gachaPity)) || 0, 0, GACHA.PITY - 1),
+    // 領養的寵物（外觀、名字、模式），沒有是 null
+    pet: PETS.sanitize(data.pet),
   };
 }
 // 有登入的話，進度以帳號和瀏覽器比較高的那邊為準，舊分頁或別台裝置帶來的舊資料不會把等級拉低
@@ -1459,13 +1478,14 @@ function keepProgress(d, account) {
   else Object.keys(d.furn).forEach(k => { d.furn[k] = Math.max(d.furn[k], a.furn[k]); });
   if (account.save.inv) d.inv = a.inv;
   if (account.save.gachaPity != null) d.gachaPity = a.gachaPity;
+  d.pet = a.pet; // 寵物只存在帳號裡
 }
 // 把總部裡的角色狀態存回帳號
 function snapshot(p) {
   if (!p.account) return;
   accounts.update(p.account, { name: p.name, hair: p.hair, skin: p.skin, hairColor: p.hairColor, outfit: p.outfit, glasses: p.glasses, face: p.face,
     cls: p.cls, level: p.level, exp: p.exp, owned: p.owned, gear: p.gear, seen: p.seen, equip: p.equip, furn: p.furn, inv: p.inv, vip: p.vip,
-    gachaPity: p.gachaPity });
+    gachaPity: p.gachaPity, pet: p.pet });
 }
 setInterval(() => players.forEach(snapshot), 20000);
 
@@ -1485,7 +1505,7 @@ garden.start((st) => io.emit('garden', st), (note) => {
 });
 
 function publicPlayer(p) {
-  const { cooldowns, buffs, atkBuff, regenMs, cooking, eatAt, vip, owned, gear, seen, inv, cakeUntil, furn, account, photoHd, rk, ...rest } = p;
+  const { cooldowns, buffs, atkBuff, regenMs, cooking, eatAt, vip, owned, gear, seen, inv, cakeUntil, furn, account, photoHd, rk, pet, ...rest } = p;
   return Object.assign(rest, publicStats(p), { hasVip: !!vip, cakeMs: Math.max(0, cakeUntil - Date.now()) });
 }
 
@@ -1653,11 +1673,14 @@ io.on('connection', (socket) => {
     players.set(socket.id, p);
 
     growMonster();
-    ack({ ok: true, you: Object.assign(publicPlayer(p), { owned: p.owned, gear: p.gear, seen: p.seen, furn: p.furn, inv: p.inv, gachaPity: p.gachaPity }), loot: LOOT.list(), players: [...players.values()].map(publicPlayer), history,
+    ack({ ok: true, you: Object.assign(publicPlayer(p), { owned: p.owned, gear: p.gear, seen: p.seen, furn: p.furn, inv: p.inv, gachaPity: p.gachaPity,
+      pet: p.pet, petsOn: petsAllowed(p) }), loot: LOOT.list(), players: [...players.values()].map(publicPlayer), history,
       monster: monsterState(), mobs: mobs.map(mobState).concat(DG.allFoes().map(mobState)), emptyCrates: emptyCrates(), dungeon: DG.state(),
       summons: summons.map(summonState), decor: decorList(), garden: garden.state(),
+      ...(petsAllowed(p) ? { pets: PETW.list(), petBeds: PETW.bedList() } : {}),
       walls: walls.map(w => ({ id: w.id, kind: w.kind, pts: w.pts, ms: w.until - Date.now() })), storms: storms.map(stormState), music: musicState() });
     socket.broadcast.emit('playerJoined', publicPlayer(p));
+    PETW.spawn(p);
     pushChat({ system: true, text: `${p.name} 進入了防衛總部`, t: Date.now() });
   });
 
@@ -2651,6 +2674,21 @@ io.on('connection', (socket) => {
     io.emit('emote', { id: p.id, face });
   });
 
+  // 寵物：領養／換外觀／換模式、在可愛生物休息區放小窩、收回小窩、摸摸
+  let lastPet = 0;
+  const petCall = (fn) => (data, ack) => {
+    const p = players.get(socket.id);
+    if (!p || typeof ack !== 'function') return;
+    const now = Date.now();
+    if (now - lastPet < 400) return ack({ ok: false });
+    lastPet = now;
+    ack(fn(p, data));
+  };
+  socket.on('petSave', petCall((p, data) => PETW.save(p, data)));
+  socket.on('petBed', petCall((p) => PETW.placeBed(p)));
+  socket.on('petBedTake', petCall((p, i) => PETW.takeBed(p, i)));
+  socket.on('petPat', petCall((p, m) => PETW.pat(p, m)));
+
   socket.on('disconnect', (reason) => {
     if (process.env.DEBUG) console.log('disconnect', socket.id, reason);
     const p = players.get(socket.id);
@@ -2705,6 +2743,7 @@ function removePlayer(id) {
   const hadVideo = !!p.video;
   const hadTree = leaveTree(p);
   players.delete(id);
+  PETW.despawn(id);
   if (hadVideo) io.emit('videoRooms', videoList());
   if (hadTree) emitTrees();
   io.emit('playerLeft', id);

@@ -77,6 +77,16 @@ td.wish button.x { flex-shrink: 0; width: 22px; height: 22px; min-height: 0; pad
       <p class="msg" id="party-msg"></p>
     </form>
 
+    <form class="card" id="pets-card">
+      <h2>寵物功能</h2>
+      <div class="row">
+        <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="pets-open" style="width:auto;margin:0"> 開放給所有人</label>
+        <button type="submit" class="primary">儲存</button>
+      </div>
+      <p class="note">沒打開的時候，只有帳號「設為管理員」的人看得到寵物、領養得到，也進得去休息區右邊那個房間（可愛生物休息區）。改完請大家重新整理一次。</p>
+      <p class="msg" id="pets-msg"></p>
+    </form>
+
     <form class="card" id="announce">
       <h2>預告更新</h2>
       <p class="note" style="margin: 0 0 12px">要重啟伺服器（例如 git pull 新版本）之前先預告，大家畫面上方會出現倒數；時間到會先幫大家存好角色，這裡顯示「可以重啟了」再重啟。重啟後大家會自動收到「重新整理」的提醒。</p>
@@ -291,8 +301,16 @@ td.wish button.x { flex-shrink: 0; width: 22px; height: 22px; min-height: 0; pad
       renderWishes(r.wishes || []);
       renderGarden(r.garden || []);
       showTurn(r.turn);
+      $('pets-open').checked = !!r.petsOpen;
     });
   }
+  $('pets-card').addEventListener('submit', function (e) {
+    e.preventDefault();
+    api('/api/admin/pets', { open: $('pets-open').checked }).then(function (r) {
+      if (r.ok) say('pets-msg', r.open ? '已開放給所有人（大家重新整理後生效）' : '只開放給管理員', true);
+      else say('pets-msg', r.error || '儲存失敗');
+    });
+  });
   $('login').addEventListener('submit', function (e) {
     e.preventDefault();
     api('/api/admin/login', { password: $('pw').value }).then(function (r) {

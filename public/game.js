@@ -2622,6 +2622,17 @@
     wander: '在總部和門口的草地自己慢慢晃。幫牠放了小窩的話，牠會走回去睡午覺。',
     fight: '在野區和副本裡幫你打附近的怪（不會被打倒），其他時候跟在你身邊。',
   };
+  const hexToHsl = (hex) => {
+    const n = parseInt(hex.slice(1), 16), r = (n >> 16) / 255, g = ((n >> 8) & 255) / 255, b = (n & 255) / 255;
+    const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2, d = mx - mn;
+    if (!d) return [0, 0, l];
+    const h = mx === r ? ((g - b) / d + 6) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+    return [h * 60, d / (1 - Math.abs(2 * l - 1)), l];
+  };
+  const hslToHex = (h, s, l) => {
+    const f = (k) => { const a = s * Math.min(l, 1 - l), t = (k + h / 30) % 12; return Math.round(255 * (l - a * Math.max(-1, Math.min(t - 3, 9 - t, 1)))).toString(16).padStart(2, '0'); };
+    return '#' + f(0) + f(8) + f(4);
+  };
   function openPet() {
     if (!me) return;
     const draft = Object.assign({}, PT.DEFAULT, me.pet || {});
@@ -2649,6 +2660,20 @@
         list.appendChild(b);
       });
       fields.appendChild(list);
+      if (kind !== 'color') return;
+      // 色相拉桿：深淺跟著上面選的顏色，拉桿只換色相（灰色、黑色拉了會帶一點顏色）
+      const hue = el('input', 'pet-hue'); hue.type = 'range'; hue.min = 0; hue.max = 360; hue.step = 1;
+      hue.setAttribute('aria-label', label + '的色相');
+      const cur = () => hexToHsl(/^#/.test(draft[key]) ? draft[key] : '#e3b23c');
+      hue.value = Math.round(cur()[0]);
+      list.addEventListener('click', () => { hue.value = Math.round(cur()[0]); });
+      hue.oninput = () => {
+        const [, sat, lit] = cur();
+        draft[key] = hslToHex(Number(hue.value) % 360, Math.max(sat, 0.3), Math.min(0.88, Math.max(0.2, lit)));
+        [...list.children].forEach(x => x.classList.remove('on'));
+        draw();
+      };
+      fields.appendChild(hue);
     };
     const zip = (vals, names) => vals.map((v, i) => [v, names[i]]);
     row('耳朵', 'ears', Object.entries(PT.EARS));

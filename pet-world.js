@@ -186,11 +186,16 @@ module.exports = function createPetWorld(ctx) {
       else follow(pt, p, now);
     });
   }
-  // 位置每個 tick 送一次（只送給看得到寵物的人，沒有寵物就不送）
+  // 位置只送給看得到寵物的人，有變才送（沒有寵物、大家都沒動就不送）
+  // 不能用 volatile：同一個 tick 裡 server.js 已經送了一則 volatile 的 world，後面這則會被丟掉，寵物就停在原地
+  let lastWorld = '';
   function sendWorld() {
-    if (!live.size) return;
+    if (!live.size) { lastWorld = ''; return; }
     const list = [...live.values()].map(pt => [pt.id, Math.round(pt.x), Math.round(pt.y), ACT[pt.act] || 0]);
-    players.forEach(q => { if (allowed(q)) io.to(q.id).volatile.emit('petsWorld', list); });
+    const sig = JSON.stringify(list);
+    if (sig === lastWorld) return;
+    lastWorld = sig;
+    players.forEach(q => { if (allowed(q)) io.to(q.id).emit('petsWorld', list); });
   }
 
   // 換外觀、取名字、換模式

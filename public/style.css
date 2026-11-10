@@ -1088,6 +1088,12 @@ button.inv-item:hover { border-color: var(--accent); }
 .pet-ed .fields .label { margin: 12px 0 6px; }
 .pet-ed .chips button { font-size: 13px; padding: 5px 12px; }
 .pet-bed-hint { margin-top: 14px; }
+/* 色相拉桿：全站的 input 樣式要先清掉，才畫得出彩虹軌道 */
+.pet-ed input.pet-hue { -webkit-appearance: none; appearance: none; display: block; width: 100%; max-width: 260px; height: 14px; margin: 8px 0 2px; padding: 0;
+  border: 2px solid var(--ink, #2b2a33); border-radius: 999px; box-shadow: none;
+  background: linear-gradient(90deg, #e06666, #e0c366, #9be066, #66e0a6, #66c3e0, #7a66e0, #d966e0, #e06666); }
+.pet-ed input.pet-hue::-webkit-slider-thumb { -webkit-appearance: none; width: 20px; height: 20px; border-radius: 50%; background: #fff; border: 2px solid var(--ink, #2b2a33); cursor: pointer; }
+.pet-ed input.pet-hue::-moz-range-thumb { width: 16px; height: 16px; border-radius: 50%; background: #fff; border: 2px solid var(--ink, #2b2a33); cursor: pointer; }
 .pet-save { display: block; margin: 18px auto 4px; padding: 10px 40px; }
 @media (max-width: 600px) {
   .pet-create { flex-direction: column; align-items: center; gap: 10px; }

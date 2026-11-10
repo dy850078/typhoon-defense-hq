@@ -1,17 +1,19 @@
 // 寵物：每個帳號一隻，跟著主人上線、下線
 // 三種模式：跟在身邊（主人停下來會坐下、待久了趴著睡）、自由散步（在總部和門口的草地閒晃，
-// 主人在寵物旅館放了小窩的話，會走回去睡午覺）、一起打怪（在野區和副本打主人附近的怪，不會被打倒）
+// 主人在可愛生物休息區放了小窩的話，會走回去睡午覺）、一起打怪（在野區和副本打主人附近的怪，不會被打倒）
 // 小窩存在 data/petbeds.json；主人不在線上的時候，畫面上牠就睡在自己的小窩裡
 // 外觀、選項、畫法在 shared/pets.js；server.js 把要用到的東西傳進來
 module.exports = function createPetWorld(ctx) {
-  const { io, players, MAP, PETS, DG, fs, path, DATA_DIR, dist, clamp, inField, mobs, monster, damageFoe, snapshot } = ctx;
+  const { io, players, MAP, PETS, DG, fs, path, DATA_DIR, dist, clamp, inField, mobs, monster, damageFoe, snapshot, allowed } = ctx;
+  // 寵物功能還沒開放給所有人（allowed：管理員，或管理員介面打開了「開放給所有人」）：寵物的事件只送給看得到的人
+  const send = (ev, data) => players.forEach(q => { if (allowed(q)) io.to(q.id).emit(ev, data); });
   const T = MAP.TILE;
   const live = new Map(); // 主人的 socket id -> 寵物
   let seq = 0;
   const ACT = { walk: 0, sit: 1, sleep: 2 };
   // 散步的範圍：總部和門口的草地（圍欄以北），不會走到野區
   const HOME = { x1: 0, y1: 0, x2: MAP.MW - 1, y2: 29 };
-  const HOTEL_DOOR = { x: 31.5 * T, y: 27.5 * T };
+  const HOTEL_DOOR = { x: 36.5 * T, y: 19 * T }; // 可愛生物休息區門口進去那一格
   const keyOf = (p) => (p.account ? p.account.username.toLowerCase() : null);
 
   // ---------------- 小窩 ----------------
@@ -38,7 +40,7 @@ module.exports = function createPetWorld(ctx) {
   // 主人在線上的話是主人的 socket id（寵物跟著主人，小窩空著）
   const ownerOn = (key) => { for (const pt of live.values()) if (pt.key === key) return pt.owner; return null; };
   const bedList = () => [...beds.entries()].map(([i, b]) => { const pid = ownerOn(b.key); return { i, ownerName: b.ownerName, pet: b.pet, on: !!pid, pid }; });
-  const emitBeds = () => io.emit('petBeds', bedList());
+  const emitBeds = () => send('petBeds', bedList());
   const bedSpot = (i) => ({ x: (MAP.BEDS[i].x + 0.5) * T, y: (MAP.BEDS[i].y + 0.5) * T + 4 });
 
   // ---------------- 找路（只在散步時用）：總部範圍的格子做 BFS ----------------
@@ -72,21 +74,21 @@ module.exports = function createPetWorld(ctx) {
   // ---------------- 寵物本體 ----------------
   const state = (pt) => ({ id: pt.id, owner: pt.owner, ownerName: pt.ownerName, pet: pt.pet, x: Math.round(pt.x), y: Math.round(pt.y), act: pt.act });
   function spawn(p) {
-    if (!p.pet || live.has(p.id)) return;
+    if (!p.pet || live.has(p.id) || !allowed(p)) return;
     const pt = { id: 'pt' + (++seq), owner: p.id, ownerName: p.name, key: keyOf(p), pet: p.pet, x: p.x - 40, y: p.y + 6, act: 'walk',
       until: 0, route: null, nextHit: 0, lx: p.x, ly: p.y, still: Date.now(), atBed: false, patUntil: 0 };
     if (p.pet.mode === 'wander') placeHome(pt, p);
     live.set(p.id, pt);
     const bi = pt.key ? bedOf(pt.key) : -1;
     if (bi >= 0) { Object.assign(beds.get(bi), { ownerName: p.name, pet: p.pet }); saveBeds(); }
-    io.emit('pet', state(pt));
+    send('pet', state(pt));
     emitBeds();
   }
   function despawn(id) {
     const pt = live.get(id);
     if (!pt) return;
     live.delete(id);
-    io.emit('petGone', { id: pt.id });
+    send('petGone', { id: pt.id });
     emitBeds();
   }
   // 散步模式的起點：主人在總部附近就從主人旁邊出發，不然從自己的小窩（或旅館門口）
@@ -182,10 +184,16 @@ module.exports = function createPetWorld(ctx) {
       else follow(pt, p, now);
     });
   }
-  const world = () => [...live.values()].map(pt => [pt.id, Math.round(pt.x), Math.round(pt.y), ACT[pt.act] || 0]);
+  // 位置每個 tick 送一次（只送給看得到寵物的人，沒有寵物就不送）
+  function sendWorld() {
+    if (!live.size) return;
+    const list = [...live.values()].map(pt => [pt.id, Math.round(pt.x), Math.round(pt.y), ACT[pt.act] || 0]);
+    players.forEach(q => { if (allowed(q)) io.to(q.id).volatile.emit('petsWorld', list); });
+  }
 
   // 換外觀、取名字、換模式
   function save(p, data) {
+    if (!allowed(p)) return { ok: false, error: '寵物功能還沒開放' };
     const pet = PETS.sanitize(data);
     if (!pet) return { ok: false, error: '寵物的資料不對' };
     const was = p.pet;
@@ -199,14 +207,15 @@ module.exports = function createPetWorld(ctx) {
       pt.pet = pet;
       if (pet.mode === 'wander' && (!was || was.mode !== 'wander')) placeHome(pt, p);
       if (pet.mode !== 'wander') { pt.route = null; pt.toBed = false; pt.atBed = false; }
-      io.emit('pet', state(pt));
+      send('pet', state(pt));
       if (bi >= 0) emitBeds();
     }
     return { ok: true, pet };
   }
 
-  // 在寵物旅館放小窩（每個人一個；已經有的話搬過來）、收回小窩
+  // 在可愛生物休息區放小窩（每個人一個；已經有的話搬過來）、收回小窩
   function placeBed(p, i) {
+    if (!allowed(p)) return { ok: false };
     i = Math.floor(Number(i));
     if (!MAP.BEDS[i]) return { ok: false };
     if (!p.pet) return { ok: false, error: '先到「寵物」那裡領養一隻，再來放小窩' };
@@ -230,17 +239,18 @@ module.exports = function createPetWorld(ctx) {
   }
   // 摸摸：線上的寵物（id）或睡在小窩裡的（bed）
   function pat(p, m) {
+    if (!allowed(p)) return { ok: false };
     if (m && typeof m.id === 'string') {
       const pt = [...live.values()].find(q => q.id === m.id);
       if (!pt || dist(pt.x, pt.y, p.x, p.y) > 2.2 * T) return { ok: false };
       if (pt.act !== 'sleep') pt.patUntil = Date.now() + 2500;
-      io.emit('petPat', { id: pt.id, by: p.name });
+      send('petPat', { id: pt.id, by: p.name });
       return { ok: true };
     }
     const i = Math.floor(Number(m && m.bed));
     const b = MAP.BEDS[i];
     if (!beds.has(i) || dist(p.x, p.y, (b.x + 0.5) * T, (b.y + 0.5) * T) > 2.2 * T) return { ok: false };
-    io.emit('petPat', { bed: i, by: p.name });
+    send('petPat', { bed: i, by: p.name });
     return { ok: true };
   }
   const list = () => [...live.values()].map(state);
@@ -250,5 +260,5 @@ module.exports = function createPetWorld(ctx) {
     saveBeds();
   }
 
-  return { spawn, despawn, tick, world, list, bedList, save, placeBed, takeBed, pat, renameKey };
+  return { spawn, despawn, tick, sendWorld, list, bedList, save, placeBed, takeBed, pat, renameKey };
 };

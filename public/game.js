@@ -408,7 +408,6 @@
     if (!scene) return;
     scene.moveMobs(w.mobs);
     if (w.summons.length) scene.moveSummons(w.summons);
-    if (w.pets && w.pets.length) scene.movePets(w.pets);
     if (w.boss) scene.moveMonster({ x: w.boss[0], y: w.boss[1] });
     if (w.storms) scene.moveStorms(w.storms);
   });
@@ -465,6 +464,7 @@
   socket.on('petGone', (g) => scene && scene.onPetGone(g));
   socket.on('petBeds', (list) => { if (scene) scene.setPetBeds(list); });
   socket.on('petPat', (m) => scene && scene.onPetPat(m));
+  socket.on('petsWorld', (list) => scene && scene.movePets(list));
   socket.on('decor', (d) => scene && scene.setDecor(d));
   socket.on('garden', (st) => { if (scene) scene.setGarden(st); if (modalKind === 'plot') GARDEN_UI.refresh(); });
   socket.on('gardenFx', (f) => scene && scene.gardenFx(f));
@@ -1319,10 +1319,12 @@
     furn.append(icon('btn-furn', '🪑'), ' 家具');
     furn.onclick = openFurn;
     box.appendChild(furn);
-    const pet = el('button', 'inv-item bag-btn');
-    pet.append(icon('btn-pet', ''), ' 寵物');
-    pet.onclick = () => openPet();
-    box.appendChild(pet);
+    if (me && me.petsOn) { // 寵物功能先只開放給管理員
+      const pet = el('button', 'inv-item bag-btn');
+      pet.append(icon('btn-pet', ''), ' 寵物');
+      pet.onclick = () => openPet();
+      box.appendChild(pet);
+    }
     const song = el('button', 'inv-item bag-btn');
     song.append(icon('btn-song', '🎵'), ' 點歌');
     song.onclick = () => MUSIC.open();
@@ -2617,7 +2619,7 @@
   // ---------------- 寵物：領養、捏外觀、取名字、換模式 ----------------
   const PET_MODE_DESC = {
     follow: '跟在你旁邊走，你停下來牠會坐下，待久了就趴著睡。',
-    wander: '在總部和門口的草地自己慢慢晃。在寵物旅館放了小窩的話，牠會走回去睡午覺。',
+    wander: '在總部和門口的草地自己慢慢晃。在可愛生物休息區放了小窩的話，牠會走回去睡午覺。',
     fight: '在野區和副本裡幫你打附近的怪（不會被打倒），其他時候跟在你身邊。',
   };
   function openPet() {
@@ -2657,6 +2659,7 @@
     row('眼睛', 'eyes', zip(PT.EYES, PT.EYE_NAMES), 'color');
     row('鼻子', 'nose', zip(PT.NOSES, PT.NOSE_NAMES), 'color');
     row('尾巴', 'tail', Object.entries(PT.TAILS));
+    row('表情', 'face', Object.entries(PT.FACES));
     wrap.appendChild(fields);
     box.appendChild(wrap);
     // 模式
@@ -2672,8 +2675,8 @@
     // 小窩
     const bed = scene ? scene.myBed() : -1;
     box.appendChild(el('p', 'modal-hint pet-bed-hint', bed >= 0
-      ? '牠在寵物旅館有一個小窩。你不在的時候，牠會在那裡睡覺。'
-      : '總部門口右手邊有一間寵物旅館，走到空位上按空白鍵（手機點一下）就能幫牠放一個小窩。'));
+      ? '牠在可愛生物休息區有一個小窩。你不在的時候，牠會在那裡睡覺。'
+      : '總部門口右手邊有一間可愛生物休息區，走到空位上按空白鍵（手機點一下）就能幫牠放一個小窩。'));
     if (bed >= 0) {
       const take = el('button', 'hud-btn tiny', '收回小窩'); take.type = 'button';
       take.onclick = () => socket.emit('petBedTake', bed, (res) => { if (res && res.ok) openPet(); else if (res && res.error) toast(res.error); });
@@ -4355,14 +4358,19 @@
 
   // ---------------- 畫地圖（蠟筆手繪風） ----------------
   // 一次畫一塊（x0~x1、y0~y1 格，不含 x1、y1）：整張地圖太大，手機的畫布會超過上限，所以切成幾塊
-  function drawMap(x0, y0, x1, y1) {
+  // hotel：只畫可愛生物休息區的門、招牌、小窩位置（寵物功能開放的人才疊上去）；平常的地圖不畫這些
+  function drawMap(x0, y0, x1, y1, hotel) {
     const c = document.createElement('canvas');
     c.width = (x1 - x0) * T; c.height = (y1 - y0) * T;
     const ctx = c.getContext('2d');
     ctx.translate(-x0 * T, -y0 * T);
     // 畫的範圍多抓幾格：旁邊格子的東西（樹、石碑、冰箱）會凸進這一塊
     const ys = (m) => [Math.max(0, y0 - m), Math.min(MAP.H, y1 + m)], xs = (m) => [Math.max(0, x0 - m), Math.min(MAP.W, x1 + m)];
-    const at = (x, y) => (x < 0 || y < 0 || x >= MAP.W || y >= MAP.H ? ' ' : MAP.tiles[y][x]);
+    // 可愛生物休息區的門和招牌：平常的地圖畫成牆，只有疊上去的那張才畫出來
+    const at = (x, y) => {
+      const ch = x < 0 || y < 0 || x >= MAP.W || y >= MAP.H ? ' ' : MAP.tiles[y][x];
+      return !hotel && MAP.HOTEL_TILES.has(ch) ? '#' : ch;
+    };
     const inVideo = (x, y) => y >= 4 && y <= 13 && x >= 21 && x <= 34;
     const kitchen = MAP.ROOMS.find(rm => rm.id === 'kitchen');
     const inKitchen = (x, y) => x >= kitchen.x1 && x <= kitchen.x2 && y >= kitchen.y1 && y <= kitchen.y2;
@@ -4386,14 +4394,14 @@
         const z = MAP.FIELD.filter(f => y >= f.y1 - 1).pop();
         return { walk: 'paver', office: 'office', temple: 'brick' }[z.id];
       }
-      if (',T~BFOLI圃箱柵旅窩'.includes(ch)) return 'grass';
+      if (',T~BFOLI圃箱'.includes(ch)) return 'grass';
       if (ch === '#') return 'wall';
       if (inKitchen(x, y)) return 'tile';
       return inVideo(x, y) ? 'carpet' : 'wood';
     };
 
     // 1. 地板
-    for (let y = ys(1)[0]; y < ys(1)[1]; y++) {
+    for (let y = ys(1)[0]; y < (hotel ? 0 : ys(1)[1]); y++) {
       for (let x = xs(1)[0]; x < xs(1)[1]; x++) {
         const ch = at(x, y), px = x * T, py = y * T;
         const r = CR.rng(x * 7919 + y * 104729 + 1);
@@ -4561,6 +4569,7 @@
     for (let y = ys(3)[0]; y < ys(3)[1]; y++) {
       for (let x = xs(3)[0]; x < xs(3)[1]; x++) {
         const ch = at(x, y), px = x * T, py = y * T;
+        if (!!hotel !== (MAP.HOTEL_TILES.has(ch) || ch === '窩')) continue;
         const r = CR.rng(x * 15485863 + y * 32452843 + 7);
         if (ch === '#') {
           ctx.fillStyle = '#c3c9d3'; ctx.fillRect(px, py, T, T);
@@ -4664,29 +4673,26 @@
           if (at(x - 1, y) !== '圃') wood(px + 2, py + 2, px + 2, py + T - 2);
           if (at(x + 1, y) !== '圃') wood(px + T - 2, py + 2, px + T - 2, py + T - 2);
           else CR.line(ctx, px + T, py + 6, px + T, py + T - 6, r, 1.2, 'rgba(110,76,44,0.5)', 0.6);
-        } else if (ch === '柵') {
-          // 寵物旅館的矮木柵欄：橫的兩條木條，左右兩邊那排是直的
-          const wood = (x1, y1, x2, y2, w) => { CR.line(ctx, x1, y1, x2, y2, r, w + 2, '#2b2a33', 0.6); CR.line(ctx, x1, y1, x2, y2, r, w, '#d6a46a', 0.6); };
-          const hz = at(x - 1, y) === '柵' || at(x + 1, y) === '柵' || at(x - 1, y) === '旅' || at(x + 1, y) === '旅';
-          if (hz) {
-            wood(px - 1, py + 22, px + T + 1, py + 22, 3); wood(px - 1, py + 32, px + T + 1, py + 32, 3);
-            if (at(x - 1, y) !== '柵') wood(px + 6, py + 14, px + 6, py + 40, 5);
-            wood(px + T - 6, py + 14, px + T - 6, py + 40, 5);
-          } else {
-            wood(px + 20, py - 1, px + 20, py + T + 1, 3); wood(px + 28, py - 1, px + 28, py + T + 1, 3);
-            wood(px + 24, py + 10, px + 24, py + 30, 5);
-          }
+        } else if (ch === '扉') {
+          // 休息區通到可愛生物休息區的門：把牆打開，鋪木地板，上下兩邊描牆的切口，中間一塊腳踏墊
+          ctx.fillStyle = '#f5ecd9'; ctx.fillRect(px - 1, py, T + 2, T);
+          CR.plaid(ctx, px, py, T, T, 24, 'rgba(255,122,47,0.18)', r, 2.4);
+          if (at(x, y - 1) !== '扉') CR.line(ctx, px - 1, py, px + T + 1, py, r, 3);
+          if (at(x, y + 1) !== '扉') CR.line(ctx, px - 1, py + T, px + T + 1, py + T, r, 3);
+          CR.rect(ctx, px + 10, py + 4, T - 20, T - 8, r, 1.5); CR.fill(ctx, '#e8b9a0', r, [px + 10, py + 4, T - 20, T - 8]);
+          CR.dots(ctx, px + 12, py + 6, T - 24, T - 12, 5, 'rgba(255,255,255,0.6)', r, 1.6);
+          CR.rect(ctx, px + 10, py + 4, T - 20, T - 8, r, 1.5); CR.stroke(ctx, r, 2.2);
         } else if (ch === '旅') {
-          // 寵物旅館的招牌：木頭立牌，旁邊畫一個小腳印
-          ctx.fillStyle = 'rgba(19,26,40,0.16)'; ctx.beginPath(); ctx.ellipse(px + 24, py + 42, 14, 4, 0, 0, Math.PI * 2); ctx.fill();
-          CR.rect(ctx, px + 21, py + 2, 6, 40, r, 0.5); CR.fill(ctx, '#9a6b46', r, null); CR.stroke(ctx, r, 2);
-          CR.rect(ctx, px - 16, py - 20, T + 32, 26, r, 1); CR.fill(ctx, '#e8c48e', r, [px - 16, py - 20, T + 32, 26]); CR.stroke(ctx, r, 2.2);
-          ctx.font = '900 13px ' + FONT; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#4a3020';
-          ctx.fillText('寵物旅館', px + 28, py - 7);
+          // 門上面掛的木頭招牌，左邊畫一個小腳印
+          CR.line(ctx, px + 4, py + 8, px + 4, py + 18, r, 1.6, '#4a3020');
+          CR.line(ctx, px + T - 4, py + 8, px + T - 4, py + 18, r, 1.6, '#4a3020');
+          CR.rect(ctx, px - 36, py + 16, T + 72, 24, r, 1); CR.fill(ctx, '#e8c48e', r, [px - 36, py + 16, T + 72, 24]); CR.stroke(ctx, r, 2.2);
+          ctx.font = '900 12px ' + FONT; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#4a3020';
+          ctx.fillText('可愛生物休息區', px + 30, py + 28);
           const paw = (cx, cy) => { [[0, 2.2, 2.6], [-2.8, -1.4, 1.2], [-0.9, -2.8, 1.2], [0.9, -2.8, 1.2], [2.8, -1.4, 1.2]].forEach(([dx, dy, s2]) => { ctx.beginPath(); ctx.ellipse(cx + dx, cy + dy, s2, s2 * 0.9, 0, 0, Math.PI * 2); ctx.fillStyle = '#b5623f'; ctx.fill(); }); };
-          paw(px - 6, py - 7);
+          paw(px - 24, py + 28);
         } else if (ch === '窩') {
-          // 放小窩的位置：草地上一圈淡淡的虛線
+          // 放小窩的位置：地板上一圈淡淡的虛線
           ctx.save(); ctx.setLineDash([3, 5]);
           CR.blob(ctx, px + 24, py + 30, 17, 8, r, 0.05, 16); CR.stroke(ctx, r, 1.6, 'rgba(110,86,50,0.45)');
           ctx.restore();
@@ -4917,6 +4923,7 @@
       }
     }
 
+    if (hotel) return c;
     // 3. 物資箱上貼一張手繪的內容物貼紙（台灣小吃畫珍奶，綜合畫問號箱）
     MAP.CRATES.forEach((cr, i) => {
       const r = CR.rng(i + 99);
@@ -5764,6 +5771,13 @@
       this.summons.forEach(sm => sm.destroy());
       this.summons.clear();
       (res.summons || []).forEach(sm => this.onSummon(sm));
+      // 寵物功能有開放給自己才看得到可愛生物休息區（門、招牌、小窩位置疊在地圖上面）
+      MAP.setHotel(!!res.you.petsOn);
+      if (res.you.petsOn && !this.hotelImg) {
+        const x0 = 33, y0 = 13;
+        this.textures.addCanvas('map-hotel', drawMap(x0, y0, 40, 25, true));
+        this.hotelImg = this.add.image(x0 * T, y0 * T, 'map-hotel').setOrigin(0).setDepth(-9);
+      }
       this.pets.forEach(c => c.destroy());
       this.pets.clear();
       (res.pets || []).forEach(pt => this.onPet(pt));
@@ -6889,7 +6903,7 @@
       if (MAP.tiles[ty] && MAP.tiles[ty][tx] === '箱' && MAP.nearSeedBox(this.me.x, this.me.y)) return { type: 'seedbox', tx, ty };
       // 扭蛋機畫得比一格高，點上面那半也算
       if (Math.hypot(x - MAP.gacha.x, y - (MAP.gacha.y - 20)) < 44 && MAP.nearGacha(this.me.x, this.me.y)) return { type: 'gacha' };
-      // 點寵物摸摸、點寵物旅館的空位放小窩
+      // 點寵物摸摸、點可愛生物休息區的空位放小窩
       for (const [id, c] of this.pets) {
         if (Math.hypot(x - c.x, y - (c.y - 14)) < 26 && Math.hypot(this.me.x - c.x, this.me.y - c.y) < 100) return { type: 'pat', id, label: '摸摸' + c.state.pet.name };
       }
@@ -7526,7 +7540,7 @@
       this.pets.delete(g.id);
       c.destroy();
     }
-    // 寵物旅館的小窩：主人不在線上，就畫牠睡在小窩裡
+    // 可愛生物休息區的小窩：主人不在線上，就畫牠睡在小窩裡
     setPetBeds(list) {
       const seen = new Set();
       list.forEach(b => {
@@ -7598,7 +7612,7 @@
       });
       return best;
     }
-    // 寵物旅館裡空著的小窩位置
+    // 可愛生物休息區裡空著的小窩位置
     nearBedSpot() {
       if (!me || !me.pet || this.myBed() >= 0) return null; // 已經有小窩：要搬家的話直接點空位
       const i = MAP.BEDS.findIndex((b, k) => !this.petBeds.has(k) && MAP.nearBed(k, this.me.x, this.me.y));

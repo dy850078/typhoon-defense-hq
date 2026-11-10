@@ -13,15 +13,17 @@
   const MARKS = ['#4a4646', '#2e2b2f', '#8b8a90', '#6e4a30', '#d9772f'];
   const MARK_NAMES = ['深灰', '黑', '灰', '咖啡', '橘'];
   const WHITES = { none: '沒有白毛', muzzle: '白嘴邊白胸口', socks: '再加白襪子' };
-  const EYES = ['#8db04b', '#c2c94a', '#e3b23c', '#c97b35', '#79b3e3', 'odd'];
-  const EYE_NAMES = ['綠', '黃綠', '金', '銅', '藍', '異色'];
-  const NOSES = ['#e39a7c', '#f2a3b0', '#c56a5a', '#3a3436'];
-  const NOSE_NAMES = ['粉橘', '粉紅', '磚紅', '黑'];
+  const EYES = ['#8db04b', '#a3cc98', '#c2c94a', '#e3b23c', '#c97b35', '#79b3e3', 'odd'];
+  const EYE_NAMES = ['綠', '薄荷綠', '黃綠', '金', '銅', '藍', '異色'];
+  const NOSES = ['#cf8a68', '#f2a3b0', '#c56a5a', '#3a3436'];
+  const NOSE_NAMES = ['橘棕', '粉紅', '磚紅', '黑'];
+  // 表情：微笑（ω 嘴、腮紅）或淡定（嘴巴平平、眼皮稍微壓下來）
+  const FACES = { smile: '微笑', calm: '淡定' };
   const TAILS = { long: '長尾巴', short: '短尾巴', fluffy: '蓬蓬尾' };
   const NAME_MAX = 8;
 
   const DEFAULT = { kind: 'cat', name: '', ears: 'up', fur: FURS[3], pattern: 'mackerel', mark: MARKS[4], white: 'muzzle',
-    eyes: EYES[2], nose: NOSES[1], tail: 'long', mode: 'follow' };
+    eyes: '#e3b23c', nose: NOSES[1], tail: 'long', face: 'smile', mode: 'follow' };
 
   const pick = (v, list, d) => (list.includes(v) ? v : d);
   const has = (o, k) => typeof k === 'string' && Object.prototype.hasOwnProperty.call(o, k);
@@ -40,11 +42,12 @@
       eyes: pick(p.eyes, EYES, DEFAULT.eyes),
       nose: pick(p.nose, NOSES, DEFAULT.nose),
       tail: has(TAILS, p.tail) ? p.tail : DEFAULT.tail,
+      face: has(FACES, p.face) ? p.face : DEFAULT.face,
       mode: has(MODES, p.mode) ? p.mode : DEFAULT.mode,
     };
   }
   // 外觀相同就共用同一張貼圖
-  const lookKey = (p) => [p.kind, p.ears, p.fur, p.pattern, p.mark, p.white, p.eyes, p.nose, p.tail].join('|').replace(/#/g, '');
+  const lookKey = (p) => [p.kind, p.ears, p.fur, p.pattern, p.mark, p.white, p.eyes, p.nose, p.tail, p.face].join('|').replace(/#/g, '');
 
   // ---------------- 畫法（只在瀏覽器用） ----------------
   const W = 2.1;
@@ -162,18 +165,33 @@
       const ex = cx + k * 5.6 * s;
       if (closed) { ctx.beginPath(); ctx.moveTo(ex - 2.6 * s, ey); ctx.quadraticCurveTo(ex, ey + 2.4 * s, ex + 2.6 * s, ey); C.stroke(ctx, r, 1.5); return; }
       const col = p.eyes === 'odd' ? (k < 0 ? '#79b3e3' : '#e3b23c') : p.eyes;
-      C.blob(ctx, ex, ey, 3.1 * s, 3.4 * s, r, 0.05, 14); C.fill(ctx, col, r, null); C.stroke(ctx, r, 1.5);
-      dot(ctx, ex + k * 0.2 * s, ey + 0.3 * s, 1.15 * s, 2.5 * s, '#1d1c24');
-      dot(ctx, ex - 1 * s, ey - 1.3 * s, 0.9 * s, 0.9 * s, '#ffffff');
+      // 圓圓的眼睛：外圈深色眼線、虹膜中間亮一點、直直的瞳孔
+      const efn = (q) => C.blob(ctx, ex, ey, 3.4 * s, 3.4 * s, q, 0.03, 16);
+      shape(ctx, C, 600 + k, efn); C.fill(ctx, col, r, null);
+      clipDo(ctx, C, 600 + k, efn, () => {
+        dot(ctx, ex + 0.6 * s, ey + 0.9 * s, 2 * s, 2 * s, 'rgba(255,255,255,0.28)');
+        dot(ctx, ex + k * 0.15 * s, ey + 0.2 * s, 1.05 * s, 2.6 * s, '#1d1c24');
+        // 淡定：上眼皮稍微壓下來一點
+        if (p.face === 'calm') { ctx.fillStyle = mainOf(p); ctx.fillRect(ex - 4 * s, ey - 4 * s, 8 * s, 1.6 * s); }
+      });
+      shape(ctx, C, 600 + k, efn); C.stroke(ctx, r, 1.7);
+      dot(ctx, ex - 1.1 * s, ey - (p.face === 'calm' ? 0.6 : 1.2) * s, 0.85 * s, 0.85 * s, '#ffffff');
     });
     // 腮紅
-    [-1, 1].forEach(k => dot(ctx, cx + k * 9.6 * s, cy + 4.2 * s, 2.2 * s, 1.4 * s, 'rgba(244,120,120,0.28)'));
+    [-1, 1].forEach(k => dot(ctx, cx + k * 9.6 * s, cy + 4.2 * s, 2.2 * s, 1.4 * s, p.face === 'calm' ? 'rgba(244,120,120,0.12)' : 'rgba(244,120,120,0.28)'));
     // 鼻子、嘴巴
     const ny = cy + 3.6 * s;
     ctx.beginPath(); ctx.moveTo(cx - 1.9 * s, ny); ctx.lineTo(cx + 1.9 * s, ny); ctx.lineTo(cx, ny + 2.1 * s); ctx.closePath();
     C.fill(ctx, p.nose, r, null); C.stroke(ctx, r, 1.2);
-    ctx.beginPath(); ctx.moveTo(cx - 2.6 * s, ny + 3.1 * s); ctx.quadraticCurveTo(cx - 1.3 * s, ny + 4.4 * s, cx, ny + 2.4 * s);
-    ctx.quadraticCurveTo(cx + 1.3 * s, ny + 4.4 * s, cx + 2.6 * s, ny + 3.1 * s); C.stroke(ctx, r, 1.1);
+    if (p.face === 'calm') {
+      // 淡定的嘴：鼻子下一小段直線，再分成兩邊（像「人」字），不笑
+      ctx.beginPath(); ctx.moveTo(cx, ny + 2.1 * s); ctx.lineTo(cx, ny + 3.1 * s);
+      ctx.quadraticCurveTo(cx - 0.8 * s, ny + 3.4 * s, cx - 1.9 * s, ny + 4.3 * s);
+      ctx.moveTo(cx, ny + 3.1 * s); ctx.quadraticCurveTo(cx + 0.8 * s, ny + 3.4 * s, cx + 1.9 * s, ny + 4.3 * s); C.stroke(ctx, r, 1);
+    } else {
+      ctx.beginPath(); ctx.moveTo(cx - 2.6 * s, ny + 3.1 * s); ctx.quadraticCurveTo(cx - 1.3 * s, ny + 4.4 * s, cx, ny + 2.4 * s);
+      ctx.quadraticCurveTo(cx + 1.3 * s, ny + 4.4 * s, cx + 2.6 * s, ny + 3.1 * s); C.stroke(ctx, r, 1.1);
+    }
     // 鬍鬚
     [-1, 1].forEach(k => {
       C.line(ctx, cx + k * 7 * s, ny + 1.6 * s, cx + k * 15.5 * s, ny + 0.2 * s, r, 0.7, 'rgba(43,42,51,0.55)', 0.3);
@@ -187,11 +205,18 @@
     if (p.pattern === 'mackerel') {
       for (let x = bx - rx + 4; x < bx + rx - 3; x += 4.6) stripe(ctx, C, r, x + 1.5, by - ry - 1, x - 0.8, by + ry * 0.35, 2.2, m);
     } else if (p.pattern === 'classic') {
-      // 身體側邊一大圈漩渦（像靶心），背上一條深色的背線
-      C.blob(ctx, bx - rx * 0.12, by + ry * 0.05, rx * 0.42, ry * 0.5, r, 0.08, 14); C.stroke(ctx, r, 2.8, m);
-      C.blob(ctx, bx - rx * 0.12, by + ry * 0.05, rx * 0.15, ry * 0.2, r, 0.12, 10); ctx.fillStyle = m; ctx.fill();
-      ctx.beginPath(); ctx.moveTo(bx - rx, by - ry * 0.75); ctx.quadraticCurveTo(bx, by - ry * 1.3, bx + rx, by - ry * 0.75); C.stroke(ctx, r, 3.4, m);
-      [-0.55, 0.45, 0.7].forEach(k => stripe(ctx, C, r, bx + rx * k, by - ry, bx + rx * k - 1, by - ry * 0.1, 2, m));
+      // 漩渦虎斑：背上一條深色背線，身體側邊一道從背上繞下來、捲進中間的寬紋（像逗號），邊緣淡淡暈開
+      const P = (pts) => pts.map(([a, b]) => [bx + rx * a, by + ry * b]);
+      const soft = (w) => { ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = m;
+        ctx.globalAlpha = 0.15; ctx.lineWidth = w * 1.8; ctx.stroke(); ctx.globalAlpha = 0.85; ctx.lineWidth = w; ctx.stroke(); ctx.restore(); };
+      const open = (pts) => { // 不封口的平滑曲線
+        ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]);
+        for (let i = 1; i < pts.length - 1; i++) ctx.quadraticCurveTo(pts[i][0], pts[i][1], (pts[i][0] + pts[i + 1][0]) / 2, (pts[i][1] + pts[i + 1][1]) / 2);
+        ctx.lineTo(pts[pts.length - 1][0], pts[pts.length - 1][1]);
+      };
+      ctx.beginPath(); ctx.moveTo(bx - rx, by - ry * 0.62); ctx.quadraticCurveTo(bx - rx * 0.1, by - ry * 1.2, bx + rx * 0.95, by - ry * 0.72); soft(3.4);
+      open(P([[0.3, -0.75], [-0.15, -0.62], [-0.5, -0.25], [-0.42, 0.28], [-0.05, 0.48], [0.28, 0.22], [0.16, -0.1], [-0.06, 0.02]])); soft(3);
+      open(P([[0.62, -0.8], [0.8, -0.3], [0.68, 0.25]])); soft(1.8);
     } else if (p.pattern === 'spots') {
       [[-0.5, -0.3], [0, -0.5], [0.4, -0.1], [-0.2, 0.2], [0.55, -0.55]].forEach(([a, b]) => dot(ctx, bx + rx * a, by + ry * b, 2.4, 1.9, m));
     } else if (p.pattern === 'calico') {
@@ -228,7 +253,7 @@
           // 胸口一圈一圈的項鍊紋、身體兩側的條紋
           [-3, 1.5].forEach(dy => { ctx.beginPath(); ctx.moveTo(bx - rx * 0.8, by + dy - 3); ctx.quadraticCurveTo(bx, by + dy + 4, bx + rx * 0.8, by + dy - 3); C.stroke(ctx, r, 2, m); });
           [-1, 1].forEach(k => [0, 4.5].forEach(dy => stripe(ctx, C, r, bx + k * rx * 1.1, by + dy - 2, bx + k * rx * 0.55, by + dy, 2.2, m)));
-          if (p.pattern === 'classic') [-1, 1].forEach(k => { C.blob(ctx, bx + k * rx * 0.85, by + ry * 0.55, 3.6, 4, r, 0.1, 10); C.stroke(ctx, r, 2.2, m); });
+          if (p.pattern === 'classic') [-1, 1].forEach(k => { ctx.beginPath(); ctx.moveTo(bx + k * rx * 1.05, by + ry * 0.15); ctx.quadraticCurveTo(bx + k * rx * 0.55, by + ry * 0.5, bx + k * rx * 0.95, by + ry * 1); C.stroke(ctx, r, 2.4, m); });
         } else if (p.pattern === 'spots') {
           [[-0.6, 0], [0.6, -0.2], [-0.7, 0.6], [0.7, 0.5]].forEach(([a, b]) => dot(ctx, bx + rx * a, by + ry * b, 2.2, 1.8, m));
         } else if (p.pattern === 'calico') {
@@ -268,7 +293,7 @@
     p = sanitize(p) || sanitize(DEFAULT);
     head(ctx, C, C.rng(99), p, cx, cy, s, false);
   }
-  // 寵物旅館的小窩：芥末黃的圓坐墊，畫在 48x40 的框裡，中心 (24, 24)
+  // 可愛生物休息區的小窩：芥末黃的圓坐墊，畫在 48x40 的框裡，中心 (24, 24)
   function drawBed(ctx) {
     const C = root.HQ_CRAYON, r = C.rng(4242);
     ctx.fillStyle = 'rgba(19,26,40,0.16)'; ctx.beginPath(); ctx.ellipse(24, 32, 22, 5, 0, 0, Math.PI * 2); ctx.fill();
@@ -280,7 +305,7 @@
   // 手繪 icon：寵物按鈕（一顆貓頭）、摸摸（小腳印＋愛心）、放小窩
   if (root.HQ_ICONS && root.HQ_CRAYON) {
     const C = root.HQ_CRAYON;
-    const ICON_CAT = { kind: 'cat', ears: 'fold', fur: FURS[0], pattern: 'classic', mark: MARKS[0], white: 'muzzle', eyes: EYES[0], nose: NOSES[0], tail: 'long' };
+    const ICON_CAT = { kind: 'cat', ears: 'fold', fur: FURS[0], pattern: 'classic', mark: MARKS[0], white: 'muzzle', eyes: EYES[1], nose: NOSES[0], tail: 'long', face: 'calm' };
     const heart = (x, cx, cy, s, col) => {
       x.beginPath(); x.moveTo(cx, cy + s * 0.9);
       x.bezierCurveTo(cx - s * 1.3, cy, cx - s * 0.7, cy - s * 1, cx, cy - s * 0.35);
@@ -301,7 +326,7 @@
     });
   }
 
-  const pets = { KINDS, MODES, EARS, FURS, FUR_NAMES, PATTERNS, MARKS, MARK_NAMES, WHITES, EYES, EYE_NAMES, NOSES, NOSE_NAMES, TAILS, NAME_MAX,
+  const pets = { KINDS, MODES, EARS, FACES, FURS, FUR_NAMES, PATTERNS, MARKS, MARK_NAMES, WHITES, EYES, EYE_NAMES, NOSES, NOSE_NAMES, TAILS, NAME_MAX,
     DEFAULT, sanitize, lookKey, drawPet, drawHead, drawBed, WIDTH: 64, HEIGHT: 56 };
   if (typeof module !== 'undefined' && module.exports) module.exports = pets;
   else root.HQ_PETS = pets;

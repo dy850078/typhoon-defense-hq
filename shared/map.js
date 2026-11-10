@@ -40,10 +40,14 @@
   //         （野區用中文字當代號，免得和副本、副本大廳的英文字母撞在一起）
   // 花園：  圃  花圃（一格一株，擋路）    箱  種子認養箱
   // 物資倉庫：扭  扭蛋機（一格，畫出來有兩格高，靠著上面的牆）
-  // 寵物旅館：柵  矮木柵欄    旅  旅館的木頭招牌    窩  放小窩的位置（不擋路）
+  // 可愛生物休息區：扉  休息區（沙發那間）通過去的門    旅  門上面的木頭招牌（擋路）    窩  放小窩的位置（不擋路）
+  //   寵物功能還沒開放的人看不到這個房間的門：扉只有 setHotel(true) 之後才走得過去，門、招牌、小窩位置也只畫給看得到的人
   const BLOCKING = new Set(['#', 'T', 'B', 'K', 'M', 'P', 'S', 'F', 'G', 'N', 'W', 'R', 'J', 'L', 'I', ' ', 'Y', 'Z', 'E', 'Q', 'H',
     'g', 'k', 'A', 'U', 'w', 'b', 'D', 's', 'v',
-    '燈', '牌', '桌', '盆', '爐', '籠', '籬', '圃', '箱', '扭', '柵', '旅']);
+    '燈', '牌', '桌', '盆', '爐', '籠', '籬', '圃', '箱', '扭', '旅']);
+  // 只疊在寵物功能開放的人畫面上的格子（平常畫成牆）
+  const HOTEL_TILES = new Set(['扉', '旅']);
+  let hotelOn = false;
 
   const g = [];
   for (let y = 0; y < H; y++) g.push(new Array(W).fill(','));
@@ -54,6 +58,15 @@
 
   // 建築本體
   rect(4, 3, 35, 24, '#');
+  // 可愛生物休息區：休息區（沙發那間）右邊加蓋的小房間，三格寬；門開在中間，招牌掛在門上面
+  // 裡面右邊兩排放小窩（門口那兩排空著當走道）；散步的寵物會回自己的小窩睡午覺
+  rect(35, 14, 39, 24, '#');
+  rect(36, 15, 38, 23, '.');
+  rect(35, 18, 35, 19, '扉');
+  const HOTEL_SIGN = { x: 35, y: 17 };
+  set(HOTEL_SIGN.x, HOTEL_SIGN.y, '旅');
+  const BEDS = [];
+  [15, 16, 17, 20, 21, 22].forEach(y => [37, 38].forEach(x => { set(x, y, '窩'); BEDS.push({ x, y }); }));
   rect(5, 4, 34, 23, '.');
   rect(21, 4, 34, 13, 'V');
   // 內牆
@@ -104,25 +117,15 @@
   rect(20, 26, 21, 27, 'L');
   const GREEK_TILE = { x: 22, y: 26 };
   set(GREEK_TILE.x, GREEK_TILE.y, 'I');
-  [[2, 2], [37, 2], [1, 12], [38, 10], [2, 26], [12, 27], [18, 28], [36, 18], [1, 19]]
+  [[2, 2], [37, 2], [1, 12], [38, 10], [2, 26], [37, 27], [12, 27], [18, 28], [1, 19]]
     .forEach(([x, y]) => set(x, y, 'T'));
-  [[15, 26], [38, 23], [1, 6], [2, 6]]
+  [[15, 26], [33, 28], [34, 28], [1, 6], [2, 6]]
     .forEach(([x, y]) => set(x, y, '~'));
   // 公共花園：物資倉庫後門出去左手邊，兩排各 6 格花圃，中間那排是走道；右上角是種子認養箱
   const PLOTS = [];
   [26, 28].forEach(y => { for (let x = 4; x <= 9; x++) { set(x, y, '圃'); PLOTS.push({ x, y }); } });
   const SEEDBOX_TILE = { x: 10, y: 26 };
   set(SEEDBOX_TILE.x, SEEDBOX_TILE.y, '箱');
-  // 寵物旅館：總部門口右手邊的小院子，矮木柵欄圍起來，左邊留兩格寬的入口，招牌立在入口上面
-  // 裡面上下兩排各 6 個位置可以放小窩，中間那排是走道；散步的寵物會回自己的小窩睡午覺
-  rect(32, 25, 39, 29, '柵');
-  rect(33, 26, 38, 28, ',');
-  rect(32, 27, 32, 28, ',');
-  const HOTEL_SIGN = { x: 32, y: 26 };
-  set(HOTEL_SIGN.x, HOTEL_SIGN.y, '旅');
-  const BEDS = [];
-  [26, 28].forEach(y => { for (let x = 33; x <= 38; x++) { set(x, y, '窩'); BEDS.push({ x, y }); } });
-
   // 野區：圍欄以南，中間留一個出口；往南依序是下班路上 → 打卡大樓 → 廟口老街，每區之間隔一排矮樹籬
   const FIELD = [
     { id: 'walk', name: '下班路上', y1: 31, y2: 46, floor: '人' },
@@ -513,7 +516,7 @@
     { id: 'storage', name: '📦 物資倉庫', x1: 5, y1: 15, x2: 19, y2: 23 },
     { id: 'kitchen', name: '🍜 煮泡麵區', x1: 30, y1: 20, x2: 34, y2: 23 },
     { id: 'lounge', name: '🛋️ 休息區', x1: 21, y1: 15, x2: 34, y2: 23 },
-    { id: 'pethotel', name: '寵物旅館', outdoor: true, x1: 33, y1: 26, x2: 38, y2: 28 },
+    { id: 'pethotel', name: '可愛生物休息區', noDecor: true, pets: true, x1: 36, y1: 15, x2: 38, y2: 23 },
     // 野區的三區：field 標記可以打怪、畫城牆、召喚
     ...FIELD.map(z => ({ id: z.id, name: z.name, field: true, x1: 0, y1: z.y1 - (z.id === 'walk' ? 0 : 1), x2: MW - 1, y2: z.y2 })),
     { id: 'lobby', name: '🏯 古城候位區', lobby: 'hualien', ...LOBBY },
@@ -556,8 +559,12 @@
       const tx = Math.floor(px / TILE);
       const ty = Math.floor(py / TILE);
       if (tx < 0 || ty < 0 || tx >= W || ty >= H) return true;
-      return BLOCKING.has(g[ty][tx]) || (dyn.size > 0 && dyn.has(tx + ',' + ty));
+      return BLOCKING.has(g[ty][tx]) || (!hotelOn && g[ty][tx] === '扉') || (dyn.size > 0 && dyn.has(tx + ',' + ty));
     },
+    // 可愛生物休息區開不開（寵物功能開放給這個人才開）：門走不走得過去，房間名稱顯不顯示
+    setHotel(on) { hotelOn = !!on; },
+    hotelOn() { return hotelOn; },
+    HOTEL_TILES,
     // 石門開關：副本 d 的第 i 道（0 起算）
     setGate(d, i, open) {
       d.gates[i].forEach(([x, y]) => { if (open) dyn.delete(x + ',' + y); else dyn.add(x + ',' + y); });
@@ -654,7 +661,7 @@
     nearSeedBox(px, py) {
       return Math.hypot(px - this.seedBox.x, py - this.seedBox.y) < 1.7 * TILE;
     },
-    // (tx, ty) 是寵物旅館第幾個小窩位置，不是就回傳 -1
+    // (tx, ty) 是可愛生物休息區第幾個小窩位置，不是就回傳 -1
     bedAt(tx, ty) {
       return BEDS.findIndex(b => b.x === tx && b.y === ty);
     },
@@ -665,7 +672,7 @@
     roomAt(px, py) {
       const tx = Math.floor(px / TILE);
       const ty = Math.floor(py / TILE);
-      return ROOMS.find(r => tx >= r.x1 && tx <= r.x2 && ty >= r.y1 && ty <= r.y2) || null;
+      return ROOMS.find(r => tx >= r.x1 && tx <= r.x2 && ty >= r.y1 && ty <= r.y2 && (!r.pets || hotelOn)) || null;
     },
   };
 

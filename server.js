@@ -78,6 +78,7 @@ const garden = GARDEN.create(DATA_DIR, { speed: process.env.GARDEN_SPEED });
 const CRATE_SEED_RATE = 0.08; // 敲物資箱順便掉種子的機率
 const MOB_SEED_RATE = 0.1; // 打倒小怪掉種子的機率
 const WISH_CAT = { bug: 'Bug 回報', feature: '新功能', improve: '功能優化', other: '其他' };
+const WISH_STATUS = { new: '待處理', review: '評估中', doing: '處理中', done: '已完成', no: '不處理' };
 
 const app = express();
 app.use(express.json({ limit: '400kb' }));
@@ -903,7 +904,11 @@ function wishReplyMail(wish, comment, socket) {
   wishMailAt.set(wish.id, now);
   const h = socket.handshake.headers;
   const base = (process.env.PUBLIC_URL || `${h['x-forwarded-proto'] || 'http'}://${h['x-forwarded-host'] || h.host}`).replace(/\/+$/, '');
-  MAILER.wishReply(u.email, (u.save && u.save.name) || u.username, wish.title, comment.text, base + '/hq.html')
+  // 時間用台灣時間：11/06 01:12
+  const when = new Date(comment.at + 8 * 3600000).toISOString().replace(/^\d{4}-(\d\d)-(\d\d)T(\d\d:\d\d).*$/, '$1/$2 $3');
+  MAILER.wishReply(u.email, (u.save && u.save.name) || u.username,
+    { title: wish.title, cat: wish.cat, catName: WISH_CAT[wish.cat] || '其他', statusName: WISH_STATUS[wish.status] || '待處理' },
+    { name: comment.name, when, text: comment.text }, base + '/hq.html')
     .then(m => { if (!m.ok) console.error(`✉️ 給「${u.username}」的願望回覆通知沒寄出去`); });
 }
 

@@ -404,11 +404,11 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outlin
         <div class="acct" id="acct-fields">
           <div class="field">
             <label for="f-user">帳號<span class="req">必填</span></label>
-            <input type="text" id="f-user" maxlength="20" autocomplete="username" autocapitalize="off" spellcheck="false" placeholder="登入用，2～20 個字">
+            <input type="text" id="f-user" maxlength="20" autocomplete="username" autocapitalize="off" spellcheck="false" placeholder="登入用，2～20 個英文或數字">
           </div>
           <div class="field">
             <label for="f-pass">密碼<span class="req">必填</span></label>
-            <input type="password" id="f-pass" autocomplete="new-password" placeholder="至少 4 個字">
+            <input type="password" id="f-pass" autocomplete="new-password" placeholder="4～64 個英文或數字">
           </div>
           <div class="field" style="grid-column: 1 / -1">
             <label for="f-email">Email<span class="req">必填</span></label>
@@ -482,7 +482,7 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outlin
       <div class="fields">
         <div class="field">
           <label for="rs-pass">新密碼</label>
-          <input type="password" id="rs-pass" autocomplete="new-password" placeholder="至少 4 個字">
+          <input type="password" id="rs-pass" autocomplete="new-password" placeholder="4～64 個英文或數字">
         </div>
         <div class="field">
           <label for="rs-pass2">再輸入一次</label>
@@ -537,7 +537,7 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outlin
       </div>
       <div class="field">
         <label for="ac-new">新密碼</label>
-        <input type="password" id="ac-new" autocomplete="new-password" placeholder="至少 4 個字">
+        <input type="password" id="ac-new" autocomplete="new-password" placeholder="4～64 個英文或數字">
       </div>
       <p class="note-sm">改好之後，其他手機和電腦上的登入會被登出，要用新密碼重新登入。</p>
       <p class="err" id="ac-pw-err" role="alert"></p>
@@ -968,11 +968,18 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outlin
       $('rs-pass').focus();
     });
   }
+  // 帳號密碼只能用英文字母和數字（伺服器也會檢查）
+  function pwBad(p, label) {
+    label = label || '密碼';
+    if (p.length < 4 || p.length > 64) return label + '要 4～64 個字';
+    if (!/^[A-Za-z0-9]+$/.test(p)) return label + '只能用英文字母和數字';
+    return '';
+  }
   $('reset-back').addEventListener('click', showLogin);
   $('reset-form').addEventListener('submit', function (e) {
     e.preventDefault();
     var a = $('rs-pass').value, b = $('rs-pass2').value;
-    if (a.length < 4) { $('reset-err').textContent = '密碼至少要 4 個字'; return; }
+    var badA = pwBad(a); if (badA) { $('reset-err').textContent = badA; return; }
     if (a !== b) { $('reset-err').textContent = '兩次輸入的密碼不一樣'; return; }
     $('rs-submit').disabled = true; $('reset-err').textContent = '';
     ACC.reset(resetToken, a).then(function (r) {
@@ -1027,7 +1034,7 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outlin
     e.preventDefault();
     var o = $('ac-old').value, n = $('ac-new').value;
     if (!o) { $('ac-pw-err').textContent = '請輸入目前的密碼'; return; }
-    if (n.length < 4) { $('ac-pw-err').textContent = '新密碼至少要 4 個字'; return; }
+    var badN = pwBad(n, '新密碼'); if (badN) { $('ac-pw-err').textContent = badN; return; }
     $('ac-pw-submit').disabled = true; $('ac-pw-err').textContent = ''; $('ac-pw-ok').textContent = '';
     ACC.changePassword(o, n).then(function (r) {
       $('ac-pw-submit').disabled = false;
@@ -1082,6 +1089,10 @@ a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outlin
       if (!user) miss.unshift('帳號');
     }
     if (miss.length) { $('form-err').textContent = '還差：' + miss.join('、'); return; }
+    if (formMode !== 'edit') {
+      if (!/^[A-Za-z0-9]{2,20}$/.test(user)) { $('form-err').textContent = '帳號要 2～20 個字，只能用英文字母和數字'; return; }
+      var badPw = pwBad(pw); if (badPw) { $('form-err').textContent = badPw; return; }
+    }
     $('form-err').textContent = '';
     // 識別證也存一份，進總部後別人點「個人資料」就看得到
     var vip = { name: d.name, song: d.song, drink: d.drink, theme: d.theme, photo: d.photo };

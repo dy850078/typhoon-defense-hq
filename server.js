@@ -498,6 +498,16 @@ app.post('/api/admin/role', (req, res) => {
   if (r.error) return res.status(400).json({ ok: false, error: r.error });
   res.json(r);
 });
+// 改帳號名稱（登入用的那個）：許願池、花園跟著換；在總部裡的人可以繼續玩，下次要用新名稱登入
+app.post('/api/admin/rename', (req, res) => {
+  if (!isAdmin(req)) return res.status(401).json({ ok: false });
+  const b = req.body || {}, r = accounts.rename(b.username, b.to);
+  if (r.error) return res.status(400).json({ ok: false, error: r.error });
+  wishes.rename(r.from, r.to);
+  garden.rename('u:' + r.from.toLowerCase(), 'u:' + r.to.toLowerCase());
+  console.log(`🪪 管理員把帳號「${r.from}」改成「${r.to}」`);
+  res.json({ ok: true, from: r.from, to: r.to });
+});
 app.post('/api/admin/delete', (req, res) => {
   if (!isAdmin(req)) return res.status(401).json({ ok: false });
   const name = String((req.body || {}).username || '');

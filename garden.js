@@ -187,6 +187,17 @@ function create(dataDir, opts) {
       return true;
     },
     hasDaily: (key, now) => daily[key] !== dayOf(now),
+    // 管理員改了帳號名稱：種的花、幫忙澆過的水、今天領過的種子都跟著換成新名稱
+    rename(from, to) {
+      if (from === to) return;
+      plots.forEach(p => {
+        if (!p) return;
+        if (p.byKey === from) p.byKey = to;
+        if (p.helpers[from]) { if (!p.helpers[to]) p.helpers[to] = p.helpers[from]; delete p.helpers[from]; }
+      });
+      if (daily[from]) { if (!daily[to] || daily[to] < daily[from]) daily[to] = daily[from]; delete daily[from]; }
+      save();
+    },
   };
 }
 

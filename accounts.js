@@ -55,11 +55,18 @@ function create(dataDir) {
     return t;
   }
 
-  // 帳號名稱：2～20 個字，中英文、數字、底線、點、減號都可以
+  // 帳號名稱：2～20 個字，只能用英文字母和數字（舊帳號不符合的照樣能登入，管理員可以幫忙改名）
   function validName(username) {
     const u = String(username || '').trim();
     if (u.length < 2 || u.length > 20) return '帳號要 2～20 個字';
-    if (!/^[\p{L}\p{N}_.-]+$/u.test(u)) return '帳號只能用中英文、數字、底線、點和減號';
+    if (!/^[A-Za-z0-9]+$/.test(u)) return '帳號只能用英文字母和數字';
+    return '';
+  }
+  // 密碼：4～64 個字，只能用英文字母和數字（只檢查新設的密碼，舊密碼照樣能登入）
+  function validPw(password, label) {
+    const p = String(password || '');
+    if (p.length < 4 || p.length > 64) return (label || '密碼') + '要 4～64 個字';
+    if (!/^[A-Za-z0-9]+$/.test(p)) return (label || '密碼') + '只能用英文字母和數字';
     return '';
   }
 
@@ -102,7 +109,8 @@ function create(dataDir) {
     register(username, password, data, email) {
       const bad = validName(username);
       if (bad) return { error: bad };
-      if (String(password || '').length < 4) return { error: '密碼至少要 4 個字' };
+      const badPw = validPw(password);
+      if (badPw) return { error: badPw };
       const badMail = validEmail(email);
       if (badMail) return { error: badMail };
       const k = key(username), e = mailKey(email);
@@ -144,7 +152,8 @@ function create(dataDir) {
     resetToken(user) { return user.email && user.emailOk ? mailToken(key(user.username), 'reset') : ''; },
     checkReset(t) { const m = takeMail(t, 'reset', true); return m ? db.users[m.user] : null; },
     useReset(t, password) {
-      if (String(password || '').length < 4) return { error: '密碼至少要 4 個字' };
+      const badPw = validPw(password);
+      if (badPw) return { error: badPw };
       const m = takeMail(t, 'reset');
       if (!m) return { error: '這個連結已經用過或過期了，請重新申請一次' };
       const u = db.users[m.user];
@@ -162,7 +171,8 @@ function create(dataDir) {
     // 自己改密碼：要先輸入舊密碼；其他裝置會被登出，這台換一張新的登入憑證
     changePassword(user, oldPw, password) {
       if (!checkPw(user, oldPw)) return { error: '舊密碼不對' };
-      if (String(password || '').length < 4) return { error: '新密碼至少要 4 個字' };
+      const badPw = validPw(password, '新密碼');
+      if (badPw) return { error: badPw };
       const k = key(user.username);
       user.salt = crypto.randomBytes(16).toString('hex');
       user.hash = hashPw(password, user.salt);
@@ -211,7 +221,7 @@ function create(dataDir) {
     list() {
       return Object.values(db.users).map(u => ({ username: u.username, name: (u.save && u.save.name) || '', cls: (u.save && u.save.cls) || 'staff',
         level: (u.save && u.save.level) || 1, vip: !!(u.save && u.save.vip), admin: !!u.admin, created: u.created, seen: u.seen,
-        email: u.email || '', emailOk: !!u.emailOk, emailNew: u.emailNew || '' }));
+        email: u.email || '', emailOk: !!u.emailOk, emailNew: u.emailNew || '', oldName: !!validName(u.username) }));
     },
     // 管理員帳號：在許願池留言會標「管理員」，也能刪別人的留言（存在帳號上，不在 save 裡，玩家改不到）
     setAdmin(username, on) {
@@ -230,10 +240,29 @@ function create(dataDir) {
       save();
       return true;
     },
+    // 管理員改帳號名稱（登入用的那個）：搬到新名稱底下，所有裝置都要用新名稱重新登入；密碼和存檔不變
+    rename(username, next) {
+      const k = key(username), u = db.users[k];
+      if (!u) return { error: '找不到這個帳號' };
+      const bad = validName(next);
+      if (bad) return { error: bad };
+      const to = String(next).trim(), nk = key(to);
+      if (u.username === to) return { error: '新帳號跟原本一樣' };
+      if (nk !== k && db.users[nk]) return { error: '這個帳號已經有人用了' };
+      const from = u.username;
+      delete db.users[k];
+      u.username = to;
+      db.users[nk] = u;
+      killTokens(k);
+      Object.values(db.mail).forEach(m => { if (m.user === k) m.user = nk; });
+      save();
+      return { ok: true, from, to, user: u };
+    },
     setPassword(username, password) {
       const u = db.users[key(username)];
       if (!u) return { error: '找不到這個帳號' };
-      if (String(password || '').length < 4) return { error: '密碼至少要 4 個字' };
+      const badPw = validPw(password);
+      if (badPw) return { error: badPw };
       u.salt = crypto.randomBytes(16).toString('hex');
       u.hash = hashPw(password, u.salt);
       // 改密碼後，其他裝置的登入都要重新登入

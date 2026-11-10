@@ -151,6 +151,19 @@ function create(dataDir) {
       return { ok: true };
     },
     // 管理員用
+    // 管理員改了帳號名稱：許的願、留言、按讚都跟著換成新名稱
+    rename(from, to) {
+      const was = owner(from), likeWas = 'u:' + was, likeTo = 'u:' + owner(to);
+      let n = 0;
+      list.forEach(w => {
+        if (owner(w.by) === was) { w.by = to; n++; }
+        w.comments.forEach(c => { if (owner(c.by) === was) { c.by = to; n++; } });
+        const i = w.likes.indexOf(likeWas);
+        if (i >= 0) { n++; if (w.likes.includes(likeTo)) w.likes.splice(i, 1); else w.likes[i] = likeTo; }
+      });
+      if (n) save();
+      return n;
+    },
     all: () => list.map(w => ({ id: w.id, title: w.title, cat: w.cat, body: w.body, by: w.by, name: w.name, at: w.at, updated: w.updated,
       status: w.status, likes: w.likes.length, comments: w.comments.map(c => ({ id: c.id, by: c.by, name: c.name, at: c.at, text: c.text, admin: !!c.admin })) })),
     setStatus(id, status) {

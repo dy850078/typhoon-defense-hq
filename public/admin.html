@@ -36,6 +36,7 @@ table { width: 100%; border-collapse: collapse; font-size: 14px; }
 th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); white-space: nowrap; }
 th { color: var(--muted); font-weight: 700; }
 .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #34C759; margin-right: 4px; }
+.old-name { display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 6px; background: #FFF4D6; color: #8A6100; font-size: 11px; }
 .empty { color: var(--muted); padding: 16px 0; }
 td.wish { white-space: normal; min-width: 200px; max-width: 360px; }
 td.wish summary { cursor: pointer; font-weight: 700; }
@@ -193,6 +194,7 @@ td.wish button.x { flex-shrink: 0; width: 22px; height: 22px; min-height: 0; pad
     list.sort(function (a, b) { return (b.seen || 0) - (a.seen || 0); }).forEach(function (a) {
       var tr = document.createElement('tr');
       var first = td(a.username + (a.admin ? '（管理員）' : ''));
+      if (a.oldName) { var old = document.createElement('span'); old.className = 'old-name'; old.textContent = '不是英文數字'; old.title = '舊規則建的帳號，照樣能登入；可以按「改帳號」換成英文數字'; first.appendChild(old); }
       if (a.online) { var dot = document.createElement('span'); dot.className = 'dot'; dot.title = '在總部裡'; first.prepend(dot); }
       tr.appendChild(first);
       var mail = td(a.email ? a.email + (a.emailOk ? '' : '（未驗證）') : '—');
@@ -220,11 +222,24 @@ td.wish button.x { flex-shrink: 0; width: 22px; height: 22px; min-height: 0; pad
       var act = document.createElement('td');
       var reset = document.createElement('button'); reset.type = 'button'; reset.className = 'small'; reset.textContent = '重設密碼';
       reset.onclick = function () {
-        var pw = prompt('幫「' + a.username + '」設定新密碼（至少 4 個字）：');
+        var pw = prompt('幫「' + a.username + '」設定新密碼（4～64 個英文字母或數字）：');
         if (!pw) return;
         api('/api/admin/password', { username: a.username, password: pw }).then(function (r) {
           if (r.ok) say('acct-msg', '「' + a.username + '」的新密碼是：' + pw + '，記得轉告對方。', true);
           else say('acct-msg', r.error || '失敗了');
+        });
+      };
+      var ren = document.createElement('button'); ren.type = 'button'; ren.className = 'small'; ren.textContent = '改帳號';
+      ren.style.marginLeft = '6px';
+      ren.title = '改登入用的帳號名稱，密碼、角色、等級都不變';
+      ren.onclick = function () {
+        var to = prompt('把「' + a.username + '」的帳號（登入用）改成什麼？（2～20 個英文字母或數字）\n改好後他所有裝置都要用新帳號重新登入，密碼不變。', a.username);
+        if (to == null) return;
+        to = to.trim();
+        if (!to || to === a.username) return;
+        api('/api/admin/rename', { username: a.username, to: to }).then(function (r) {
+          say('acct-msg', r.ok ? '已把「' + r.from + '」改成「' + r.to + '」，記得轉告對方用新帳號登入。' : (r.error || '失敗了'), r.ok);
+          if (r.ok) load();
         });
       };
       var lv = document.createElement('button'); lv.type = 'button'; lv.className = 'small'; lv.textContent = '調整等級';
@@ -256,7 +271,7 @@ td.wish button.x { flex-shrink: 0; width: 22px; height: 22px; min-height: 0; pad
           if (r.ok) load();
         });
       };
-      act.appendChild(reset); act.appendChild(lv); act.appendChild(role); act.appendChild(del);
+      act.appendChild(reset); act.appendChild(ren); act.appendChild(lv); act.appendChild(role); act.appendChild(del);
       tr.appendChild(act);
       tb.appendChild(tr);
     });

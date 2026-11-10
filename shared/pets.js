@@ -25,7 +25,8 @@
   const DEFAULT = { kind: 'cat', name: '', ears: 'up', fur: FURS[3], pattern: 'mackerel', mark: MARKS[4], white: 'muzzle',
     eyes: '#e3b23c', nose: NOSES[1], tail: 'long', face: 'smile', mode: 'follow' };
 
-  const pick = (v, list, d) => (list.includes(v) ? v : d);
+  // 顏色：選單裡的，或自己拉色相調出來的（#rrggbb）
+  const pick = (v, list, d) => (list.includes(v) ? v : typeof v === 'string' && /^#[0-9a-f]{6}$/.test(v) ? v : d);
   const has = (o, k) => typeof k === 'string' && Object.prototype.hasOwnProperty.call(o, k);
   // 存檔檢查：不對的值換回預設；沒有寵物是 null
   function sanitize(p) {

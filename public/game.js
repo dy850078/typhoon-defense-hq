@@ -4468,19 +4468,19 @@
           CR.plaid(ctx, px + 12, py + 12, T, T, 24, 'rgba(255,255,255,0.9)', r, 1.4);
         } else if (base === 'flower') {
           // 可愛生物休息區的花磚：一格一朵，四個角是米白色（靠中間那個角是圓的）、四邊是淺綠色、中間一朵紅色的四瓣花
-          ctx.fillStyle = '#d9d2c4'; ctx.fillRect(px, py, T, T);
+          ctx.fillStyle = '#e6e0d5'; ctx.fillRect(px, py, T, T);
           const rr = (x1, y1, w, h, rad, col) => { // rad：[左上, 右上, 右下, 左下]
             ctx.beginPath(); ctx.moveTo(x1 + rad[0], y1);
             ctx.arcTo(x1 + w, y1, x1 + w, y1 + h, rad[1]); ctx.arcTo(x1 + w, y1 + h, x1, y1 + h, rad[2]);
             ctx.arcTo(x1, y1 + h, x1, y1, rad[3]); ctx.arcTo(x1, y1, x1 + w, y1, rad[0]); ctx.closePath();
             ctx.fillStyle = col; ctx.fill();
           };
-          const cream = (r() < 0.5 ? '#f6e3cc' : '#f4dfc6'), green = '#b5cf8c';
+          const cream = (r() < 0.5 ? '#f9ecdc' : '#f8e9d8'), green = '#cfe0b4';
           rr(px + 1.5, py + 1.5, 16, 16, [2, 2, 9, 2], cream); rr(px + 30.5, py + 1.5, 16, 16, [2, 2, 2, 9], cream);
           rr(px + 1.5, py + 30.5, 16, 16, [2, 9, 2, 2], cream); rr(px + 30.5, py + 30.5, 16, 16, [9, 2, 2, 2], cream);
           rr(px + 19, py + 1.5, 10, 14, [2, 2, 2, 2], green); rr(px + 19, py + 32.5, 10, 14, [2, 2, 2, 2], green);
           rr(px + 1.5, py + 19, 14, 10, [2, 2, 2, 2], green); rr(px + 32.5, py + 19, 14, 10, [2, 2, 2, 2], green);
-          ctx.fillStyle = '#c9506a';
+          ctx.fillStyle = '#dc8c9c';
           [[-4.6, -4.6], [4.6, -4.6], [-4.6, 4.6], [4.6, 4.6]].forEach(([dx, dy]) => { ctx.beginPath(); ctx.arc(px + 24 + dx, py + 24 + dy, 5.6, 0, Math.PI * 2); ctx.fill(); });
           ctx.fillRect(px + 20, py + 20, 8, 8);
           ctx.fillStyle = 'rgba(255,255,255,0.35)'; ctx.beginPath(); ctx.arc(px + 21, py + 20, 2, 0, Math.PI * 2); ctx.fill();

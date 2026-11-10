@@ -530,10 +530,18 @@ app.post('/api/admin/wish', (req, res) => {
   const b = req.body || {}, id = Number(b.id);
   const r = b.cid ? wishes.uncomment(id, Number(b.cid), '', true) : b.delete ? wishes.remove(id) : wishes.setStatus(id, b.status);
   if (r.error) return res.status(400).json({ ok: false, error: r.error });
-  if (r.wish && r.wish.status === 'done' && r.was !== 'done') pushChat({ system: true, text: `許願池：「${r.wish.title}」完成了！謝謝 ${r.wish.name} 的願望`, t: Date.now() });
+  if (r.wish && !b.cid && !b.delete) wishStatusChanged(r);
   io.emit('wishes');
   res.json({ ok: true, wishes: wishes.all() });
 });
+// 願望狀態改了：完成時廣播到聊天室；許願者在線上就跳小提示（不寄信）
+const WISH_STATUS = { new: '待處理', review: '評估中', doing: '處理中', done: '已完成', no: '不處理' };
+function wishStatusChanged(r) {
+  if (r.was === r.wish.status) return;
+  if (r.wish.status === 'done') pushChat({ system: true, text: `許願池：「${r.wish.title}」完成了！謝謝 ${r.wish.name} 的願望`, t: Date.now() });
+  const by = String(r.wish.by).toLowerCase();
+  players.forEach((q, id) => { if (q.account && q.account.username.toLowerCase() === by) tell(id, `你的願望「${r.wish.title}」變成${WISH_STATUS[r.wish.status]}了`); });
+}
 
 // ---------------- 視訊房間 ----------------
 // Jitsi 的會議開久了可能會斷，所以讓大家自己開新房間、輸入房號加入，不用重開伺服器
@@ -2567,6 +2575,15 @@ io.on('connection', (socket) => {
   onWish('wishGet', (p, m) => {
     const w = wishes.get(Number(m.id), voterOf(p, m.wid), userOf(p));
     return w ? { wish: w, login: !!p.account, admin: !!(p.account && p.account.admin) } : { error: '這個願望已經不在了' };
+  });
+  // 管理員在遊戲裡直接改願望狀態（伺服器這邊也檢查管理員，不是只藏按鈕）
+  onWish('wishStatus', (p, m) => {
+    if (!(p.account && p.account.admin)) return { error: '只有管理員可以改狀態' };
+    const r = wishes.setStatus(Number(m.id), String(m.status || ''));
+    if (r.error) return r;
+    wishStatusChanged(r);
+    io.emit('wishes');
+    return {};
   });
   onWish('wishComment', (p, m) => {
     const admin = !!(p.account && p.account.admin);

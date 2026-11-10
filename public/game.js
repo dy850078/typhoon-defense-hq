@@ -2619,7 +2619,7 @@
   // ---------------- 寵物：領養、捏外觀、取名字、換模式 ----------------
   const PET_MODE_DESC = {
     follow: '跟在你旁邊走，你停下來牠會坐下，待久了就趴著睡。',
-    wander: '在總部和門口的草地自己慢慢晃。在可愛生物休息區放了小窩的話，牠會走回去睡午覺。',
+    wander: '在總部和門口的草地自己慢慢晃。幫牠放了小窩的話，牠會走回去睡午覺。',
     fight: '在野區和副本裡幫你打附近的怪（不會被打倒），其他時候跟在你身邊。',
   };
   function openPet() {
@@ -2675,8 +2675,8 @@
     // 小窩
     const bed = scene ? scene.myBed() : -1;
     box.appendChild(el('p', 'modal-hint pet-bed-hint', bed >= 0
-      ? '牠在可愛生物休息區有一個小窩。你不在的時候，牠會在那裡睡覺。'
-      : '總部門口右手邊有一間可愛生物休息區，走到空位上按空白鍵（手機點一下）就能幫牠放一個小窩。'));
+      ? '牠有一個小窩了。你不在的時候，牠會在那裡睡覺。想換位置的話，先收回再重新放。'
+      : '休息區（沙發那間）右邊的房間可以幫牠放一個小窩：走到喜歡的位置，按空白鍵（手機點頭上的紙條）。'));
     if (bed >= 0) {
       const take = el('button', 'hud-btn tiny', '收回小窩'); take.type = 'button';
       take.onclick = () => socket.emit('petBedTake', bed, (res) => { if (res && res.ok) openPet(); else if (res && res.error) toast(res.error); });
@@ -4358,7 +4358,7 @@
 
   // ---------------- 畫地圖（蠟筆手繪風） ----------------
   // 一次畫一塊（x0~x1、y0~y1 格，不含 x1、y1）：整張地圖太大，手機的畫布會超過上限，所以切成幾塊
-  // hotel：只畫可愛生物休息區的門、招牌、小窩位置（寵物功能開放的人才疊上去）；平常的地圖不畫這些
+  // hotel：只畫可愛生物休息區的門（寵物功能開放的人才疊上去）；平常的地圖不畫這些
   function drawMap(x0, y0, x1, y1, hotel) {
     const c = document.createElement('canvas');
     c.width = (x1 - x0) * T; c.height = (y1 - y0) * T;
@@ -4366,7 +4366,7 @@
     ctx.translate(-x0 * T, -y0 * T);
     // 畫的範圍多抓幾格：旁邊格子的東西（樹、石碑、冰箱）會凸進這一塊
     const ys = (m) => [Math.max(0, y0 - m), Math.min(MAP.H, y1 + m)], xs = (m) => [Math.max(0, x0 - m), Math.min(MAP.W, x1 + m)];
-    // 可愛生物休息區的門和招牌：平常的地圖畫成牆，只有疊上去的那張才畫出來
+    // 可愛生物休息區的門：平常的地圖畫成牆，只有疊上去的那張才畫出來
     const at = (x, y) => {
       const ch = x < 0 || y < 0 || x >= MAP.W || y >= MAP.H ? ' ' : MAP.tiles[y][x];
       return !hotel && MAP.HOTEL_TILES.has(ch) ? '#' : ch;
@@ -4390,11 +4390,13 @@
         : ch === 'a' ? 'gorge' : 'msv'.includes(ch) ? 'trail' : 'cave';
       // 野區：看是哪一區的地板（樹、路燈這些東西底下也鋪那一區的地板）
       if (y > 30) {
+        if (x >= MAP.FW) return 'grass'; // 野區右邊多出來的那片樹林
         if (ch === '人' || ch === '毯' || ch === '磚') return { 人: y === 38 || y === 39 ? 'road' : 'paver', 毯: 'office', 磚: 'brick' }[ch];
         const z = MAP.FIELD.filter(f => y >= f.y1 - 1).pop();
         return { walk: 'paver', office: 'office', temple: 'brick' }[z.id];
       }
       if (',T~BFOLI圃箱'.includes(ch)) return 'grass';
+      if (ch === '花') return 'flower';
       if (ch === '#') return 'wall';
       if (inKitchen(x, y)) return 'tile';
       return inVideo(x, y) ? 'carpet' : 'wood';
@@ -4464,6 +4466,25 @@
           ctx.fillStyle = '#f5ecd9'; ctx.fillRect(px, py, T, T);
           CR.plaid(ctx, px, py, T, T, 24, 'rgba(255,122,47,0.18)', r, 2.4);
           CR.plaid(ctx, px + 12, py + 12, T, T, 24, 'rgba(255,255,255,0.9)', r, 1.4);
+        } else if (base === 'flower') {
+          // 可愛生物休息區的花磚：一格一朵，四個角是米白色（靠中間那個角是圓的）、四邊是淺綠色、中間一朵紅色的四瓣花
+          ctx.fillStyle = '#d9d2c4'; ctx.fillRect(px, py, T, T);
+          const rr = (x1, y1, w, h, rad, col) => { // rad：[左上, 右上, 右下, 左下]
+            ctx.beginPath(); ctx.moveTo(x1 + rad[0], y1);
+            ctx.arcTo(x1 + w, y1, x1 + w, y1 + h, rad[1]); ctx.arcTo(x1 + w, y1 + h, x1, y1 + h, rad[2]);
+            ctx.arcTo(x1, y1 + h, x1, y1, rad[3]); ctx.arcTo(x1, y1, x1 + w, y1, rad[0]); ctx.closePath();
+            ctx.fillStyle = col; ctx.fill();
+          };
+          const cream = (r() < 0.5 ? '#f6e3cc' : '#f4dfc6'), green = '#b5cf8c';
+          rr(px + 1.5, py + 1.5, 16, 16, [2, 2, 9, 2], cream); rr(px + 30.5, py + 1.5, 16, 16, [2, 2, 2, 9], cream);
+          rr(px + 1.5, py + 30.5, 16, 16, [2, 9, 2, 2], cream); rr(px + 30.5, py + 30.5, 16, 16, [9, 2, 2, 2], cream);
+          rr(px + 19, py + 1.5, 10, 14, [2, 2, 2, 2], green); rr(px + 19, py + 32.5, 10, 14, [2, 2, 2, 2], green);
+          rr(px + 1.5, py + 19, 14, 10, [2, 2, 2, 2], green); rr(px + 32.5, py + 19, 14, 10, [2, 2, 2, 2], green);
+          ctx.fillStyle = '#c9506a';
+          [[-4.6, -4.6], [4.6, -4.6], [-4.6, 4.6], [4.6, 4.6]].forEach(([dx, dy]) => { ctx.beginPath(); ctx.arc(px + 24 + dx, py + 24 + dy, 5.6, 0, Math.PI * 2); ctx.fill(); });
+          ctx.fillRect(px + 20, py + 20, 8, 8);
+          ctx.fillStyle = 'rgba(255,255,255,0.35)'; ctx.beginPath(); ctx.arc(px + 21, py + 20, 2, 0, Math.PI * 2); ctx.fill();
+          CR.dots(ctx, px, py, T, T, 4, 'rgba(255,255,255,0.4)', r, 1.4);
         } else if (base === 'void') {
           ctx.fillStyle = '#131a28'; ctx.fillRect(px, py, T, T);
         } else if (base === 'sand') {
@@ -4569,7 +4590,7 @@
     for (let y = ys(3)[0]; y < ys(3)[1]; y++) {
       for (let x = xs(3)[0]; x < xs(3)[1]; x++) {
         const ch = at(x, y), px = x * T, py = y * T;
-        if (!!hotel !== (MAP.HOTEL_TILES.has(ch) || ch === '窩')) continue;
+        if (!!hotel !== MAP.HOTEL_TILES.has(ch)) continue;
         const r = CR.rng(x * 15485863 + y * 32452843 + 7);
         if (ch === '#') {
           ctx.fillStyle = '#c3c9d3'; ctx.fillRect(px, py, T, T);
@@ -4682,20 +4703,6 @@
           CR.rect(ctx, px + 10, py + 4, T - 20, T - 8, r, 1.5); CR.fill(ctx, '#e8b9a0', r, [px + 10, py + 4, T - 20, T - 8]);
           CR.dots(ctx, px + 12, py + 6, T - 24, T - 12, 5, 'rgba(255,255,255,0.6)', r, 1.6);
           CR.rect(ctx, px + 10, py + 4, T - 20, T - 8, r, 1.5); CR.stroke(ctx, r, 2.2);
-        } else if (ch === '旅') {
-          // 門上面掛的木頭招牌，左邊畫一個小腳印
-          CR.line(ctx, px + 4, py + 8, px + 4, py + 18, r, 1.6, '#4a3020');
-          CR.line(ctx, px + T - 4, py + 8, px + T - 4, py + 18, r, 1.6, '#4a3020');
-          CR.rect(ctx, px - 36, py + 16, T + 72, 24, r, 1); CR.fill(ctx, '#e8c48e', r, [px - 36, py + 16, T + 72, 24]); CR.stroke(ctx, r, 2.2);
-          ctx.font = '900 12px ' + FONT; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#4a3020';
-          ctx.fillText('可愛生物休息區', px + 30, py + 28);
-          const paw = (cx, cy) => { [[0, 2.2, 2.6], [-2.8, -1.4, 1.2], [-0.9, -2.8, 1.2], [0.9, -2.8, 1.2], [2.8, -1.4, 1.2]].forEach(([dx, dy, s2]) => { ctx.beginPath(); ctx.ellipse(cx + dx, cy + dy, s2, s2 * 0.9, 0, 0, Math.PI * 2); ctx.fillStyle = '#b5623f'; ctx.fill(); }); };
-          paw(px - 24, py + 28);
-        } else if (ch === '窩') {
-          // 放小窩的位置：地板上一圈淡淡的虛線
-          ctx.save(); ctx.setLineDash([3, 5]);
-          CR.blob(ctx, px + 24, py + 30, 17, 8, r, 0.05, 16); CR.stroke(ctx, r, 1.6, 'rgba(110,86,50,0.45)');
-          ctx.restore();
         } else if (ch === '扭') {
           // 扭蛋機：一格寬，往上畫到牆上，像是靠牆放著
           ctx.fillStyle = 'rgba(19,26,40,0.18)'; ctx.beginPath(); ctx.ellipse(px + 24, py + 44, 20, 4, 0, 0, Math.PI * 2); ctx.fill();
@@ -5771,11 +5778,11 @@
       this.summons.forEach(sm => sm.destroy());
       this.summons.clear();
       (res.summons || []).forEach(sm => this.onSummon(sm));
-      // 寵物功能有開放給自己才看得到可愛生物休息區（門、招牌、小窩位置疊在地圖上面）
+      // 寵物功能有開放給自己才看得到可愛生物休息區（門疊在地圖上面）
       MAP.setHotel(!!res.you.petsOn);
       if (res.you.petsOn && !this.hotelImg) {
-        const x0 = 33, y0 = 13;
-        this.textures.addCanvas('map-hotel', drawMap(x0, y0, 40, 25, true));
+        const x0 = 34, y0 = 17;
+        this.textures.addCanvas('map-hotel', drawMap(x0, y0, 37, 21, true));
         this.hotelImg = this.add.image(x0 * T, y0 * T, 'map-hotel').setOrigin(0).setDepth(-9);
       }
       this.pets.forEach(c => c.destroy());
@@ -6903,15 +6910,12 @@
       if (MAP.tiles[ty] && MAP.tiles[ty][tx] === '箱' && MAP.nearSeedBox(this.me.x, this.me.y)) return { type: 'seedbox', tx, ty };
       // 扭蛋機畫得比一格高，點上面那半也算
       if (Math.hypot(x - MAP.gacha.x, y - (MAP.gacha.y - 20)) < 44 && MAP.nearGacha(this.me.x, this.me.y)) return { type: 'gacha' };
-      // 點寵物摸摸、點可愛生物休息區的空位放小窩
+      // 點寵物摸摸（線上的、睡在小窩裡的）
       for (const [id, c] of this.pets) {
         if (Math.hypot(x - c.x, y - (c.y - 14)) < 26 && Math.hypot(this.me.x - c.x, this.me.y - c.y) < 100) return { type: 'pat', id, label: '摸摸' + c.state.pet.name };
       }
-      const pb = MAP.bedAt(tx, ty);
-      if (pb >= 0) {
-        const b = this.petBeds.get(pb);
-        if (b && b.sleeper && Math.hypot(this.me.x - (tx + 0.5) * T, this.me.y - (ty + 0.5) * T) < 100) return { type: 'pat', bed: pb, tx, ty, label: '摸摸' + b.st.pet.name };
-        if (!b && me && me.pet && MAP.nearBed(pb, this.me.x, this.me.y)) return { type: 'bed', i: pb, tx, ty };
+      for (const [bi, b] of this.petBeds) {
+        if (b.sleeper && Math.hypot(x - b.st.x, y - (b.st.y - 8)) < 26 && Math.hypot(this.me.x - b.st.x, this.me.y - b.st.y) < 100) return { type: 'pat', bed: bi, px: b.st.x, py: b.st.y, label: '摸摸' + b.st.pet.name };
       }
       return null;
     }
@@ -6943,7 +6947,8 @@
       if (act.type === 'well') return { x: MAP.well.x, top: MAP.well.y - 60, y: MAP.well.y, half: 44 };
       if (act.type === 'gacha') return { x: MAP.gacha.x, top: MAP.gacha.y - 56, y: MAP.gacha.y - 10, half: 22 };
       if (act.type === 'pat' && act.id) { const c = this.pets.get(act.id); if (c) return { x: c.x, top: c.y - 34, y: c.y - 14, half: 18 }; }
-      if (act.type === 'pat' || act.type === 'bed') return { x: (act.tx + 0.5) * T, top: (act.ty + 0.5) * T - 18, y: (act.ty + 0.5) * T + 2, half: 22 };
+      if (act.type === 'pat') return { x: act.px, top: act.py - 26, y: act.py - 6, half: 22 };
+      if (act.type === 'bed') return { x: this.me.x, top: this.me.y - 78, y: this.me.y - 30, half: 20 };
       let tx = act.tx, ty = act.ty;
       if (act.type === 'cook') {
         const cx = Math.floor(this.me.x / T), cy = Math.floor(this.me.y / T);
@@ -6978,7 +6983,7 @@
     }
 
     updateHint(act, time) {
-      const key = act ? act.type + (act.tx != null ? act.tx + ',' + act.ty : '') + (act.label || '') + (act.id || '') : '';
+      const key = act ? act.type + (act.tx != null ? act.tx + ',' + act.ty : '') + (act.label || '') + (act.id || '') + (act.bed || '') : '';
       const touch = matchMedia('(pointer: coarse)').matches;
       if (key !== this.hintKey) {
         this.hintKey = key;
@@ -7004,6 +7009,7 @@
       this.hint.setScale(z * (0.6 + 0.4 * Phaser.Math.Easing.Back.Out(k)));
       const pc = act.type === 'pat' && act.id && this.pets.get(act.id); // 寵物會走動，紙條跟著牠
       if (pc && pl.tail === 'down') this.hint.setPosition(pc.x, pc.y - 34 - 3 - wob);
+      else if (act.type === 'bed' && pl.tail === 'down') this.hint.setPosition(this.me.x, this.me.y - 78 - 3 - wob); // 放小窩的紙條跟著自己走
       else if (pl.tail === 'down') this.hint.setPosition(pl.x, pl.y - 3 - wob);
       else this.hint.setPosition(pl.x + (pl.tail === 'left' ? 4 + wob : -4 - wob), pl.y);
     }
@@ -7090,7 +7096,7 @@
       } else if (act.type === 'pat') {
         socket.emit('petPat', act.id ? { id: act.id } : { bed: act.bed }, () => {});
       } else if (act.type === 'bed') {
-        socket.emit('petBed', act.i, (res) => {
+        socket.emit('petBed', null, (res) => {
           if (!res || !res.ok) { if (res && res.error) toast(res.error); return; }
           toast(res.moved ? `把${me.pet.name}的小窩搬過來了` : `幫${me.pet.name}放好小窩了，散步累了牠會回來睡`, 'act-bed');
         });
@@ -7545,15 +7551,14 @@
       const seen = new Set();
       list.forEach(b => {
         seen.add(b.i);
-        const at = MAP.BEDS[b.i];
-        if (!at) return;
-        const x = (at.x + 0.5) * T, y = (at.y + 0.5) * T + 6; // 和 pet-world.js 的 bedSpot 一樣
+        const x = b.x, y = b.y + 2; // b.x, b.y 是牠睡的那一點
         let d = this.petBeds.get(b.i);
         if (!d) {
           d = { img: this.add.image(x, y + 1, this.bedTex()).setOrigin(0.5, 28 / 40).setScale(0.6).setDepth(y - 2) };
           this.petBeds.set(b.i, d);
         }
         d.st = b;
+        d.img.setPosition(x, y + 1).setDepth(y - 2);
         if (d.sleeper) { d.sleeper.destroy(); d.sleeper = null; }
         if (!b.on) {
           d.sleeper = this.add.image(x + 1, y - 2, this.petTex(b.pet, 'sleep')).setOrigin(0.5, 52 / 56).setScale(PET_SCALE).setDepth(y - 1);
@@ -7583,7 +7588,7 @@
     onPetPat(m) {
       let x, y;
       if (m.id) { const c = this.pets.get(m.id); if (!c) return; x = c.x; y = c.y - 34; }
-      else { const at = MAP.BEDS[m.bed]; if (!at) return; x = (at.x + 0.5) * T; y = (at.y + 0.5) * T - 22; }
+      else { const d = this.petBeds.get(m.bed); if (!d) return; x = d.st.x; y = d.st.y - 30; }
       if (fxOff()) return;
       // 小愛心從牠頭上冒出來（蓋在提示紙條上面，才不會被擋住）
       const tex = this.iconTexture('pet-heart');
@@ -7607,16 +7612,15 @@
       });
       this.petBeds.forEach((b, i) => {
         if (!b.sleeper) return;
-        const at = MAP.BEDS[i], d = Math.hypot(this.me.x - (at.x + 0.5) * T, this.me.y - (at.y + 0.5) * T - 8);
-        if (d < bd) { bd = d; best = { type: 'pat', bed: i, tx: at.x, ty: at.y, label: '摸摸' + b.st.pet.name }; }
+        const d = Math.hypot(this.me.x - b.st.x, this.me.y - b.st.y);
+        if (d < bd) { bd = d; best = { type: 'pat', bed: i, px: b.st.x, py: b.st.y, label: '摸摸' + b.st.pet.name }; }
       });
       return best;
     }
-    // 可愛生物休息區裡空著的小窩位置
+    // 人在可愛生物休息區裡、還沒有小窩：可以把小窩放在腳邊
     nearBedSpot() {
-      if (!me || !me.pet || this.myBed() >= 0) return null; // 已經有小窩：要搬家的話直接點空位
-      const i = MAP.BEDS.findIndex((b, k) => !this.petBeds.has(k) && MAP.nearBed(k, this.me.x, this.me.y));
-      return i >= 0 ? { type: 'bed', i, tx: MAP.BEDS[i].x, ty: MAP.BEDS[i].y } : null;
+      if (!me || !me.pet || !MAP.hotelOn() || this.myBed() >= 0) return null; // 已經有小窩：要搬家的話先在寵物頁收回
+      return MAP.inPetRoom(this.me.x, this.me.y + 8) ? { type: 'bed' } : null;
     }
 
     // ---------- 家具 ----------
@@ -8556,11 +8560,13 @@
       const cam = this.cameras.main, vw = cam.width / cam.zoom, vh = cam.height / cam.zoom;
       // 有兩欄的副本（花蓮）：鏡頭只看自己在的那一欄
       const col = inD && zd.cols > 1 && this.me.x >= (zd.dx + 22) * T ? 1 : 0;
-      const camKey = MAP.areaOf(this.me.x) + col + '|' + Math.round(vw) + 'x' + Math.round(vh);
+      // 野區比總部窄：人在野區時鏡頭不要看到右邊多出來的樹林和空地
+      const south = zone === 'hq' && this.me.y > 30.5 * T;
+      const camKey = MAP.areaOf(this.me.x) + col + (south ? 's' : '') + '|' + Math.round(vw) + 'x' + Math.round(vh);
       if (camKey !== this.camKey) {
         this.camKey = camKey;
         const [x1, x2, y1, y2] = zone === 'dungeon' ? [zd.dx + col * 22, zd.dx + col * 22 + 22, 0, MAP.H]
-          : zone === 'lobby' ? [zd.lx, zd.lx + 12, 0, 18] : zone === 'hub' ? [MAP.HX, MAP.HX + 16, 0, 18] : [0, MAP.MW, 0, MAP.H];
+          : zone === 'lobby' ? [zd.lx, zd.lx + 12, 0, 18] : zone === 'hub' ? [MAP.HX, MAP.HX + 16, 0, 18] : [0, south ? MAP.FW : MAP.MW, 0, MAP.H];
         const w = (x2 - x1) * T, h = (y2 - y1) * T;
         const bw = Math.max(w, vw), bh = Math.max(h, vh), bx = x1 * T - (bw - w) / 2, by = y1 * T - (bh - h) / 2;
         cam.setBounds(bx, by, bw, bh);

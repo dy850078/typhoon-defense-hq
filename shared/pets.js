@@ -205,18 +205,11 @@
     if (p.pattern === 'mackerel') {
       for (let x = bx - rx + 4; x < bx + rx - 3; x += 4.6) stripe(ctx, C, r, x + 1.5, by - ry - 1, x - 0.8, by + ry * 0.35, 2.2, m);
     } else if (p.pattern === 'classic') {
-      // 漩渦虎斑：背上一條深色背線，身體側邊一道從背上繞下來、捲進中間的寬紋（像逗號），邊緣淡淡暈開
-      const P = (pts) => pts.map(([a, b]) => [bx + rx * a, by + ry * b]);
-      const soft = (w) => { ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = m;
-        ctx.globalAlpha = 0.15; ctx.lineWidth = w * 1.8; ctx.stroke(); ctx.globalAlpha = 0.85; ctx.lineWidth = w; ctx.stroke(); ctx.restore(); };
-      const open = (pts) => { // 不封口的平滑曲線
-        ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]);
-        for (let i = 1; i < pts.length - 1; i++) ctx.quadraticCurveTo(pts[i][0], pts[i][1], (pts[i][0] + pts[i + 1][0]) / 2, (pts[i][1] + pts[i + 1][1]) / 2);
-        ctx.lineTo(pts[pts.length - 1][0], pts[pts.length - 1][1]);
-      };
-      ctx.beginPath(); ctx.moveTo(bx - rx, by - ry * 0.62); ctx.quadraticCurveTo(bx - rx * 0.1, by - ry * 1.2, bx + rx * 0.95, by - ry * 0.72); soft(3.4);
-      open(P([[0.3, -0.75], [-0.15, -0.62], [-0.5, -0.25], [-0.42, 0.28], [-0.05, 0.48], [0.28, 0.22], [0.16, -0.1], [-0.06, 0.02]])); soft(3);
-      open(P([[0.62, -0.8], [0.8, -0.3], [0.68, 0.25]])); soft(1.8);
+      // 身體側邊一大圈漩渦（像靶心），背上一條深色的背線
+      C.blob(ctx, bx - rx * 0.12, by + ry * 0.05, rx * 0.42, ry * 0.5, r, 0.08, 14); C.stroke(ctx, r, 2.8, m);
+      C.blob(ctx, bx - rx * 0.12, by + ry * 0.05, rx * 0.15, ry * 0.2, r, 0.12, 10); ctx.fillStyle = m; ctx.fill();
+      ctx.beginPath(); ctx.moveTo(bx - rx, by - ry * 0.75); ctx.quadraticCurveTo(bx, by - ry * 1.3, bx + rx, by - ry * 0.75); C.stroke(ctx, r, 3.4, m);
+      [-0.55, 0.45, 0.7].forEach(k => stripe(ctx, C, r, bx + rx * k, by - ry, bx + rx * k - 1, by - ry * 0.1, 2, m));
     } else if (p.pattern === 'spots') {
       [[-0.5, -0.3], [0, -0.5], [0.4, -0.1], [-0.2, 0.2], [0.55, -0.55]].forEach(([a, b]) => dot(ctx, bx + rx * a, by + ry * b, 2.4, 1.9, m));
     } else if (p.pattern === 'calico') {

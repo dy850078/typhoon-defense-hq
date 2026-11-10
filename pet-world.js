@@ -13,17 +13,19 @@ module.exports = function createPetWorld(ctx) {
   const ACT = { walk: 0, sit: 1, sleep: 2 };
   // 散步的範圍：總部和門口的草地（圍欄以北），不會走到野區
   const HOME = { x1: 0, y1: 0, x2: MAP.MW - 1, y2: 29 };
-  const HOTEL_DOOR = { x: 36.5 * T, y: 19 * T }; // 可愛生物休息區門口進去那一格
+  const HOTEL_DOOR = { x: 37 * T, y: 19 * T }; // 可愛生物休息區門口進去那一格
   const keyOf = (p) => (p.account ? p.account.username.toLowerCase() : null);
 
   // ---------------- 小窩 ----------------
   const BED_FILE = path.join(DATA_DIR, 'petbeds.json');
-  const beds = new Map(); // 第幾個位置 -> { key, ownerName, pet }
+  // 小窩可以放在可愛生物休息區裡任何地方（x, y 是寵物睡的那一點），每個帳號一個
+  const beds = new Map(); // 編號 -> { key, ownerName, pet, x, y }
+  let bedSeq = 0;
   try {
     const saved = JSON.parse(fs.readFileSync(BED_FILE, 'utf8'));
-    Object.entries(saved).forEach(([i, b]) => {
+    Object.values(saved).forEach((b) => {
       const pet = PETS.sanitize(b && b.pet);
-      if (MAP.BEDS[i] && pet && b.key) beds.set(Number(i), { key: String(b.key), ownerName: String(b.ownerName || ''), pet });
+      if (pet && b.key && MAP.inPetRoom(b.x, b.y)) beds.set(++bedSeq, { key: String(b.key), ownerName: String(b.ownerName || ''), pet, x: Math.round(b.x), y: Math.round(b.y) });
     });
   } catch (e) { /* 第一次啟動還沒有檔案 */ }
   let saveTimer = null;
@@ -39,9 +41,9 @@ module.exports = function createPetWorld(ctx) {
   const bedOf = (key) => { for (const [i, b] of beds) if (b.key === key) return i; return -1; };
   // 主人在線上的話是主人的 socket id（寵物跟著主人，小窩空著）
   const ownerOn = (key) => { for (const pt of live.values()) if (pt.key === key) return pt.owner; return null; };
-  const bedList = () => [...beds.entries()].map(([i, b]) => { const pid = ownerOn(b.key); return { i, ownerName: b.ownerName, pet: b.pet, on: !!pid, pid }; });
+  const bedList = () => [...beds.entries()].map(([i, b]) => { const pid = ownerOn(b.key); return { i, x: b.x, y: b.y, ownerName: b.ownerName, pet: b.pet, on: !!pid, pid }; });
   const emitBeds = () => send('petBeds', bedList());
-  const bedSpot = (i) => ({ x: (MAP.BEDS[i].x + 0.5) * T, y: (MAP.BEDS[i].y + 0.5) * T + 4 });
+  const bedSpot = (i) => ({ x: beds.get(i).x, y: beds.get(i).y });
 
   // ---------------- 找路（只在散步時用）：總部範圍的格子做 BFS ----------------
   const walkable = (tx, ty) => tx >= HOME.x1 && tx <= HOME.x2 && ty >= HOME.y1 && ty <= HOME.y2 &&
@@ -159,8 +161,8 @@ module.exports = function createPetWorld(ctx) {
     pt.atBed = false;
     const bi = bedOf(pt.key), r = Math.random();
     if (bi >= 0 && r < 0.3) {
-      const b = MAP.BEDS[bi];
-      const rt = route(pt.x, pt.y, b, 80);
+      const b = beds.get(bi);
+      const rt = route(pt.x, pt.y, { x: Math.floor(b.x / T), y: Math.floor(b.y / T) }, 80);
       if (rt) { const s = bedSpot(bi); rt.push(s); pt.route = rt; pt.toBed = true; return; }
     }
     if (r < 0.5) { pt.act = 'sit'; pt.until = now + 5000 + Math.random() * 8000; return; }
@@ -213,19 +215,18 @@ module.exports = function createPetWorld(ctx) {
     return { ok: true, pet };
   }
 
-  // 在可愛生物休息區放小窩（每個人一個；已經有的話搬過來）、收回小窩
-  function placeBed(p, i) {
+  // 在可愛生物休息區放小窩：放在自己站的位置（每個人一個；已經有的話搬過來）、收回小窩
+  function placeBed(p) {
     if (!allowed(p)) return { ok: false };
-    i = Math.floor(Number(i));
-    if (!MAP.BEDS[i]) return { ok: false };
     if (!p.pet) return { ok: false, error: '先到「寵物」那裡領養一隻，再來放小窩' };
     const k = keyOf(p);
     if (!k) return { ok: false, error: '要登入帳號才能放小窩' };
-    if (!MAP.nearBed(i, p.x, p.y)) return { ok: false, error: '再走近一點' };
-    if (beds.has(i)) return { ok: false, error: beds.get(i).key === k ? '這是你的小窩' : '這個位置已經有別人的小窩了' };
+    const x = Math.round(p.x), y = Math.round(p.y + 8);
+    if (!MAP.inPetRoom(x, y) || MAP.isBlocked(x, y)) return { ok: false, error: '小窩要放在房間裡面' };
     const old = bedOf(k);
+    for (const [i, b] of beds) if (i !== old && dist(b.x, b.y, x, y) < 30) return { ok: false, error: '這裡已經有別人的小窩了，往旁邊一點' };
     if (old >= 0) beds.delete(old);
-    beds.set(i, { key: k, ownerName: p.name, pet: p.pet });
+    beds.set(++bedSeq, { key: k, ownerName: p.name, pet: p.pet, x, y });
     saveBeds(); emitBeds();
     return { ok: true, moved: old >= 0 };
   }
@@ -248,8 +249,8 @@ module.exports = function createPetWorld(ctx) {
       return { ok: true };
     }
     const i = Math.floor(Number(m && m.bed));
-    const b = MAP.BEDS[i];
-    if (!beds.has(i) || dist(p.x, p.y, (b.x + 0.5) * T, (b.y + 0.5) * T) > 2.2 * T) return { ok: false };
+    const b = beds.get(i);
+    if (!b || dist(p.x, p.y, b.x, b.y) > 2.2 * T) return { ok: false };
     send('petPat', { bed: i, by: p.name });
     return { ok: true };
   }

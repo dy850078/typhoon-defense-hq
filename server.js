@@ -2685,7 +2685,7 @@ io.on('connection', (socket) => {
     ack(fn(p, data));
   };
   socket.on('petSave', petCall((p, data) => PETW.save(p, data)));
-  socket.on('petBed', petCall((p, i) => PETW.placeBed(p, i)));
+  socket.on('petBed', petCall((p) => PETW.placeBed(p)));
   socket.on('petBedTake', petCall((p, i) => PETW.takeBed(p, i)));
   socket.on('petPat', petCall((p, m) => PETW.pat(p, m)));
 

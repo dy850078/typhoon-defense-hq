@@ -1080,3 +1080,17 @@ button.inv-item:hover { border-color: var(--accent); }
   .gacha-pool .gear-item .gear-ic { width: 48px; height: 48px; }
   .gacha-pool .gear-name { font-size: 12px; }
 }
+
+/* 寵物：領養、捏外觀 */
+.pet-create { margin-top: 10px; }
+.pet-preview { background: var(--silver); border-radius: 50%; flex-shrink: 0; width: 140px; height: 140px; object-fit: contain;
+  border: 3px solid var(--paper); box-shadow: 0 0 0 2px var(--accent); position: sticky; top: 0; }
+.pet-ed .fields .label { margin: 12px 0 6px; }
+.pet-ed .chips button { font-size: 13px; padding: 5px 12px; }
+.pet-bed-hint { margin-top: 14px; }
+.pet-save { display: block; margin: 18px auto 4px; padding: 10px 40px; }
+@media (max-width: 600px) {
+  .pet-create { flex-direction: column; align-items: center; gap: 10px; }
+  .pet-preview { position: static; width: 120px; height: 120px; }
+  .pet-ed .fields { width: 100%; }
+}

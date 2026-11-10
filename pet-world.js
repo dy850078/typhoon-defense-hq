@@ -1,0 +1,254 @@
+// 寵物：每個帳號一隻，跟著主人上線、下線
+// 三種模式：跟在身邊（主人停下來會坐下、待久了趴著睡）、自由散步（在總部和門口的草地閒晃，
+// 主人在寵物旅館放了小窩的話，會走回去睡午覺）、一起打怪（在野區和副本打主人附近的怪，不會被打倒）
+// 小窩存在 data/petbeds.json；主人不在線上的時候，畫面上牠就睡在自己的小窩裡
+// 外觀、選項、畫法在 shared/pets.js；server.js 把要用到的東西傳進來
+module.exports = function createPetWorld(ctx) {
+  const { io, players, MAP, PETS, DG, fs, path, DATA_DIR, dist, clamp, inField, mobs, monster, damageFoe, snapshot } = ctx;
+  const T = MAP.TILE;
+  const live = new Map(); // 主人的 socket id -> 寵物
+  let seq = 0;
+  const ACT = { walk: 0, sit: 1, sleep: 2 };
+  // 散步的範圍：總部和門口的草地（圍欄以北），不會走到野區
+  const HOME = { x1: 0, y1: 0, x2: MAP.MW - 1, y2: 29 };
+  const HOTEL_DOOR = { x: 31.5 * T, y: 27.5 * T };
+  const keyOf = (p) => (p.account ? p.account.username.toLowerCase() : null);
+
+  // ---------------- 小窩 ----------------
+  const BED_FILE = path.join(DATA_DIR, 'petbeds.json');
+  const beds = new Map(); // 第幾個位置 -> { key, ownerName, pet }
+  try {
+    const saved = JSON.parse(fs.readFileSync(BED_FILE, 'utf8'));
+    Object.entries(saved).forEach(([i, b]) => {
+      const pet = PETS.sanitize(b && b.pet);
+      if (MAP.BEDS[i] && pet && b.key) beds.set(Number(i), { key: String(b.key), ownerName: String(b.ownerName || ''), pet });
+    });
+  } catch (e) { /* 第一次啟動還沒有檔案 */ }
+  let saveTimer = null;
+  function saveBeds() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+      try {
+        fs.mkdirSync(DATA_DIR, { recursive: true });
+        fs.writeFileSync(BED_FILE, JSON.stringify(Object.fromEntries(beds)));
+      } catch (e) { console.error('小窩存檔失敗', e.message); }
+    }, 1500);
+  }
+  const bedOf = (key) => { for (const [i, b] of beds) if (b.key === key) return i; return -1; };
+  // 主人在線上的話是主人的 socket id（寵物跟著主人，小窩空著）
+  const ownerOn = (key) => { for (const pt of live.values()) if (pt.key === key) return pt.owner; return null; };
+  const bedList = () => [...beds.entries()].map(([i, b]) => { const pid = ownerOn(b.key); return { i, ownerName: b.ownerName, pet: b.pet, on: !!pid, pid }; });
+  const emitBeds = () => io.emit('petBeds', bedList());
+  const bedSpot = (i) => ({ x: (MAP.BEDS[i].x + 0.5) * T, y: (MAP.BEDS[i].y + 0.5) * T + 4 });
+
+  // ---------------- 找路（只在散步時用）：總部範圍的格子做 BFS ----------------
+  const walkable = (tx, ty) => tx >= HOME.x1 && tx <= HOME.x2 && ty >= HOME.y1 && ty <= HOME.y2 &&
+    !MAP.BLOCKING.has(MAP.tiles[ty][tx]) && !MAP.dyn.has(tx + ',' + ty);
+  function route(x, y, goal, maxLen) {
+    const sx = Math.floor(x / T), sy = Math.floor(y / T);
+    if (!walkable(sx, sy)) return null;
+    const W = HOME.x2 + 1, prev = new Map([[sy * W + sx, -1]]), q = [[sx, sy, 0]];
+    let end = null;
+    const cands = [];
+    while (q.length) {
+      const [cx, cy, d] = q.shift();
+      if (goal ? cx === goal.x && cy === goal.y : d >= 3) { if (goal) { end = [cx, cy]; break; } cands.push([cx, cy]); }
+      if (d >= maxLen) continue;
+      [[1, 0], [-1, 0], [0, 1], [0, -1]].forEach(([dx, dy]) => {
+        const nx = cx + dx, ny = cy + dy, k = ny * W + nx;
+        if (prev.has(k) || !walkable(nx, ny)) return;
+        prev.set(k, cy * W + cx); q.push([nx, ny, d + 1]);
+      });
+    }
+    if (!goal) end = cands.length ? cands[Math.floor(Math.random() * cands.length)] : null;
+    if (!end) return null;
+    const pts = [];
+    for (let k = end[1] * W + end[0]; k !== -1 && k !== sy * W + sx; k = prev.get(k)) {
+      pts.unshift({ x: (k % W + 0.3 + Math.random() * 0.4) * T, y: (Math.floor(k / W) + 0.35 + Math.random() * 0.4) * T });
+    }
+    return pts;
+  }
+
+  // ---------------- 寵物本體 ----------------
+  const state = (pt) => ({ id: pt.id, owner: pt.owner, ownerName: pt.ownerName, pet: pt.pet, x: Math.round(pt.x), y: Math.round(pt.y), act: pt.act });
+  function spawn(p) {
+    if (!p.pet || live.has(p.id)) return;
+    const pt = { id: 'pt' + (++seq), owner: p.id, ownerName: p.name, key: keyOf(p), pet: p.pet, x: p.x - 40, y: p.y + 6, act: 'walk',
+      until: 0, route: null, nextHit: 0, lx: p.x, ly: p.y, still: Date.now(), atBed: false, patUntil: 0 };
+    if (p.pet.mode === 'wander') placeHome(pt, p);
+    live.set(p.id, pt);
+    const bi = pt.key ? bedOf(pt.key) : -1;
+    if (bi >= 0) { Object.assign(beds.get(bi), { ownerName: p.name, pet: p.pet }); saveBeds(); }
+    io.emit('pet', state(pt));
+    emitBeds();
+  }
+  function despawn(id) {
+    const pt = live.get(id);
+    if (!pt) return;
+    live.delete(id);
+    io.emit('petGone', { id: pt.id });
+    emitBeds();
+  }
+  // 散步模式的起點：主人在總部附近就從主人旁邊出發，不然從自己的小窩（或旅館門口）
+  function placeHome(pt, p) {
+    const inHome = walkable(Math.floor(p.x / T), Math.floor(p.y / T));
+    const bi = bedOf(pt.key);
+    const at = inHome ? { x: p.x - 30, y: p.y + 6 } : bi >= 0 ? bedSpot(bi) : HOTEL_DOOR;
+    pt.x = at.x; pt.y = at.y; pt.route = null; pt.act = 'sit'; pt.until = Date.now() + 2000;
+  }
+  function stepTo(pt, tx, ty, speed, stop) {
+    const d = dist(pt.x, pt.y, tx, ty);
+    if (d <= stop) return true;
+    const s = Math.min(d - stop, speed * ctx.TICK / 1000);
+    pt.x += (tx - pt.x) / d * s; pt.y += (ty - pt.y) / d * s;
+    return d - s <= stop + 0.5;
+  }
+
+  // 跟在主人身邊：主人走就跟，停下來幾秒就坐下，待很久就趴著睡
+  function follow(pt, p, now) {
+    if (MAP.areaOf(p.x) !== MAP.areaOf(pt.x) || dist(pt.x, pt.y, p.x, p.y) > 520) { pt.x = p.x - (p.dir || 1) * 58; pt.y = p.y - 2; } // 主人傳送走了
+    // 站在主人背後那一側，不要擋到名牌
+    const tx = p.x - (p.dir || 1) * 58, ty = p.y - 2;
+    const d = dist(pt.x, pt.y, tx, ty);
+    if (d > 26) {
+      pt.act = 'walk';
+      stepTo(pt, tx, ty, d > 160 ? 330 : 240, 14);
+    } else if (now - pt.still > 45000) pt.act = 'sleep';
+    else if (now - pt.still > 4000) pt.act = 'sit';
+  }
+
+  // 一起打怪：主人在野區或副本裡就去打主人附近的怪（跟召喚物一樣，主人拿經驗），沒有怪就跟著
+  function fight(pt, p, now) {
+    const box = DG.boxAt(p.x, p.y);
+    if (!box && !inField(p)) return follow(pt, p, now);
+    let foe = null, isBoss = false, fd = 420;
+    (box ? DG.foes().filter(m => m.x >= box.x1 && m.x < box.x2 && m.y >= box.y1 && m.y < box.y2) : mobs).forEach(m => {
+      if (!m.alive) return; const d = dist(m.x, m.y, p.x, p.y); if (d < fd) { fd = d; foe = m; isBoss = false; }
+    });
+    const M = monster();
+    if (M.alive && !box) { const d = dist(M.x, M.y, p.x, p.y); if (d < fd) { fd = d; foe = M; isBoss = true; } }
+    if (!foe) return follow(pt, p, now);
+    if (MAP.areaOf(p.x) !== MAP.areaOf(pt.x) || dist(pt.x, pt.y, p.x, p.y) > 520) { pt.x = p.x - 40; pt.y = p.y + 6; }
+    pt.act = 'walk';
+    const stop = isBoss ? 100 : 46;
+    const near = stepTo(pt, foe.x + (pt.x < foe.x ? -stop : stop), foe.y + 6, 260, 8);
+    if ((near || dist(pt.x, pt.y, foe.x, foe.y) < stop + 30) && now >= pt.nextHit) {
+      pt.nextHit = now + 1500;
+      const crit = Math.random() < 0.1;
+      const dmg = Math.round((6 + (p.level || 1) * 0.45) * (0.8 + Math.random() * 0.4) * (crit ? 2 : 1));
+      damageFoe(p, foe, isBoss, dmg, crit, 'pet', pt.id);
+    }
+  }
+
+  // 自由散步：慢慢走、坐下來理毛、偶爾原地睡一下；有小窩的話常常走回去睡午覺
+  function wander(pt, now) {
+    if (pt.route && pt.route.length) {
+      const w = pt.route[0];
+      pt.act = 'walk';
+      if (stepTo(pt, w.x, w.y, 70, 2)) pt.route.shift();
+      if (!pt.route.length) {
+        pt.route = null;
+        if (pt.toBed) { pt.toBed = false; pt.atBed = true; pt.act = 'sleep'; pt.until = now + 45000 + Math.random() * 75000; }
+        else { pt.act = 'sit'; pt.until = now + 1500 + Math.random() * 2500; }
+      }
+      return;
+    }
+    if (now < pt.until) return;
+    pt.atBed = false;
+    const bi = bedOf(pt.key), r = Math.random();
+    if (bi >= 0 && r < 0.3) {
+      const b = MAP.BEDS[bi];
+      const rt = route(pt.x, pt.y, b, 80);
+      if (rt) { const s = bedSpot(bi); rt.push(s); pt.route = rt; pt.toBed = true; return; }
+    }
+    if (r < 0.5) { pt.act = 'sit'; pt.until = now + 5000 + Math.random() * 8000; return; }
+    if (r < 0.58) { pt.act = 'sleep'; pt.until = now + 20000 + Math.random() * 25000; return; }
+    const rt = route(pt.x, pt.y, null, 7);
+    if (rt) pt.route = rt;
+    else { // 卡在走不出去的地方（例如主人帶進來的牆邊）：回旅館門口
+      pt.x = HOTEL_DOOR.x; pt.y = HOTEL_DOOR.y; pt.act = 'sit'; pt.until = now + 3000;
+    }
+  }
+
+  function tick(now) {
+    live.forEach((pt, id) => {
+      const p = players.get(id);
+      if (!p) return despawn(id);
+      if (dist(pt.lx, pt.ly, p.x, p.y) > 2) { pt.still = now; pt.lx = p.x; pt.ly = p.y; }
+      if (pt.patUntil > now && pt.act !== 'sleep') { pt.act = 'sit'; return; }
+      const mode = pt.pet.mode;
+      if (mode === 'wander') wander(pt, now);
+      else if (mode === 'fight' && !p.dead) fight(pt, p, now);
+      else follow(pt, p, now);
+    });
+  }
+  const world = () => [...live.values()].map(pt => [pt.id, Math.round(pt.x), Math.round(pt.y), ACT[pt.act] || 0]);
+
+  // 換外觀、取名字、換模式
+  function save(p, data) {
+    const pet = PETS.sanitize(data);
+    if (!pet) return { ok: false, error: '寵物的資料不對' };
+    const was = p.pet;
+    p.pet = pet;
+    snapshot(p);
+    const k = keyOf(p), bi = k ? bedOf(k) : -1;
+    if (bi >= 0) { beds.get(bi).pet = pet; beds.get(bi).ownerName = p.name; saveBeds(); }
+    const pt = live.get(p.id);
+    if (!pt) spawn(p);
+    else {
+      pt.pet = pet;
+      if (pet.mode === 'wander' && (!was || was.mode !== 'wander')) placeHome(pt, p);
+      if (pet.mode !== 'wander') { pt.route = null; pt.toBed = false; pt.atBed = false; }
+      io.emit('pet', state(pt));
+      if (bi >= 0) emitBeds();
+    }
+    return { ok: true, pet };
+  }
+
+  // 在寵物旅館放小窩（每個人一個；已經有的話搬過來）、收回小窩
+  function placeBed(p, i) {
+    i = Math.floor(Number(i));
+    if (!MAP.BEDS[i]) return { ok: false };
+    if (!p.pet) return { ok: false, error: '先到「寵物」那裡領養一隻，再來放小窩' };
+    const k = keyOf(p);
+    if (!k) return { ok: false, error: '要登入帳號才能放小窩' };
+    if (!MAP.nearBed(i, p.x, p.y)) return { ok: false, error: '再走近一點' };
+    if (beds.has(i)) return { ok: false, error: beds.get(i).key === k ? '這是你的小窩' : '這個位置已經有別人的小窩了' };
+    const old = bedOf(k);
+    if (old >= 0) beds.delete(old);
+    beds.set(i, { key: k, ownerName: p.name, pet: p.pet });
+    saveBeds(); emitBeds();
+    return { ok: true, moved: old >= 0 };
+  }
+  function takeBed(p, i) {
+    i = Math.floor(Number(i));
+    const b = beds.get(i), k = keyOf(p);
+    if (!b || b.key !== k) return { ok: false, error: '這不是你的小窩' };
+    beds.delete(i);
+    saveBeds(); emitBeds();
+    return { ok: true };
+  }
+  // 摸摸：線上的寵物（id）或睡在小窩裡的（bed）
+  function pat(p, m) {
+    if (m && typeof m.id === 'string') {
+      const pt = [...live.values()].find(q => q.id === m.id);
+      if (!pt || dist(pt.x, pt.y, p.x, p.y) > 2.2 * T) return { ok: false };
+      if (pt.act !== 'sleep') pt.patUntil = Date.now() + 2500;
+      io.emit('petPat', { id: pt.id, by: p.name });
+      return { ok: true };
+    }
+    const i = Math.floor(Number(m && m.bed));
+    const b = MAP.BEDS[i];
+    if (!beds.has(i) || dist(p.x, p.y, (b.x + 0.5) * T, (b.y + 0.5) * T) > 2.2 * T) return { ok: false };
+    io.emit('petPat', { bed: i, by: p.name });
+    return { ok: true };
+  }
+  const list = () => [...live.values()].map(state);
+  // 管理員改了帳號名稱：小窩跟著新帳號
+  function renameKey(from, to) {
+    beds.forEach(b => { if (b.key === from) b.key = to; });
+    saveBeds();
+  }
+
+  return { spawn, despawn, tick, world, list, bedList, save, placeBed, takeBed, pat, renameKey };
+};

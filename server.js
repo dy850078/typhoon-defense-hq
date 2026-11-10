@@ -9,6 +9,7 @@ const AVATAR = require('./shared/avatar');
 const STATS = require('./shared/stats');
 const GEAR = require('./shared/gear');
 const DECOR = require('./shared/decor');
+const PETS = require('./shared/pets');
 const BAG = require('./shared/bag');
 const GACHA = require('./shared/gacha');
 const ACCOUNTS = require('./accounts');
@@ -18,6 +19,7 @@ const GARDEN = require('./garden');
 const G = require('./shared/garden');
 const createDungeons = require('./dungeon');
 const createLoot = require('./loot');
+const createPetWorld = require('./pet-world');
 const createFieldBoss = require('./field-boss');
 
 const PORT = Number(process.env.PORT) || 3000;
@@ -506,6 +508,7 @@ app.post('/api/admin/rename', (req, res) => {
   if (r.error) return res.status(400).json({ ok: false, error: r.error });
   wishes.rename(r.from, r.to);
   garden.rename('u:' + r.from.toLowerCase(), 'u:' + r.to.toLowerCase());
+  PETW.renameKey(r.from.toLowerCase(), r.to.toLowerCase());
   console.log(`🪪 管理員把帳號「${r.from}」改成「${r.to}」`);
   res.json({ ok: true, from: r.from, to: r.to });
 });
@@ -868,6 +871,7 @@ setInterval(() => {
   const now = Date.now();
   mobs.forEach(m => tickMob(m, now));
   summons.slice().forEach(sm => tickSummon(sm, now));
+  PETW.tick(now);
   tickMonster(now);
   DG.tick(now);
   LOOT.tick(now);
@@ -877,6 +881,7 @@ setInterval(() => {
   io.volatile.emit('world', {
     mobs: mobs.concat(DG.foes()).filter(m => m.alive).map(m => [m.id, Math.round(m.x), Math.round(m.y)]),
     summons: summons.map(sm => [sm.id, Math.round(sm.x), Math.round(sm.y)]),
+    pets: PETW.world(),
     boss: monster.alive ? [Math.round(monster.x), Math.round(monster.y)] : null,
     storms: storms.map(s => [s.id, ...s.twisters.flatMap(t => [Math.round(t.x), Math.round(t.y)])]),
   });
@@ -1324,6 +1329,8 @@ const DG = createDungeons({
   ticketRolls: (damage) => ticketRolls(damage),
 });
 // 地上的掉落物（loot.js）
+// 寵物（pet-world.js）：跟著主人、在總部散步、一起打怪；寵物旅館的小窩
+const PETW = createPetWorld({ io, players, MAP, PETS, DG, fs, path, DATA_DIR, dist, clamp, inField, mobs, monster: () => monster, damageFoe, snapshot, TICK });
 const LOOT = createLoot({ io, players, MAP, STATS, GEAR, DECOR, BAG, pushChat: (m) => pushChat(m), dgOf: (p) => DG.dgOf(p) });
 
 // ---------------- 室內設計：家具 ----------------
@@ -1370,7 +1377,7 @@ const decorList = () => [...decor.entries()].map(([key, d]) => ({ key, k: d.k, b
 // 這格能不能擺家具：要在室內、不能是牆或門、不能擋到東西
 function canDecorate(tx, ty) {
   const room = MAP.roomAt((tx + 0.5) * T, (ty + 0.5) * T);
-  if (!room || room.field || room.dungeon || room.lobby) return false;
+  if (!room || room.field || room.dungeon || room.lobby || room.outdoor) return false;
   const ch = MAP.tiles[ty] && MAP.tiles[ty][tx];
   return !!ch && !MAP.BLOCKING.has(ch) && ch !== '=' && ch !== ',';
 }
@@ -1440,6 +1447,8 @@ function sanitizeSave(data) {
     inv: Object.fromEntries(Object.keys(MAP.ITEMS).map(k => [k, clamp(Math.floor(Number(data.inv && data.inv[k])) || 0, 0, INV_MAX)])),
     // 扭蛋機：距離上一次扭到 SSR 已經扭了幾次（保底用）
     gachaPity: clamp(Math.floor(Number(data.gachaPity)) || 0, 0, GACHA.PITY - 1),
+    // 領養的寵物（外觀、名字、模式），沒有是 null
+    pet: PETS.sanitize(data.pet),
   };
 }
 // 有登入的話，進度以帳號和瀏覽器比較高的那邊為準，舊分頁或別台裝置帶來的舊資料不會把等級拉低
@@ -1459,13 +1468,14 @@ function keepProgress(d, account) {
   else Object.keys(d.furn).forEach(k => { d.furn[k] = Math.max(d.furn[k], a.furn[k]); });
   if (account.save.inv) d.inv = a.inv;
   if (account.save.gachaPity != null) d.gachaPity = a.gachaPity;
+  d.pet = a.pet; // 寵物只存在帳號裡
 }
 // 把總部裡的角色狀態存回帳號
 function snapshot(p) {
   if (!p.account) return;
   accounts.update(p.account, { name: p.name, hair: p.hair, skin: p.skin, hairColor: p.hairColor, outfit: p.outfit, glasses: p.glasses, face: p.face,
     cls: p.cls, level: p.level, exp: p.exp, owned: p.owned, gear: p.gear, seen: p.seen, equip: p.equip, furn: p.furn, inv: p.inv, vip: p.vip,
-    gachaPity: p.gachaPity });
+    gachaPity: p.gachaPity, pet: p.pet });
 }
 setInterval(() => players.forEach(snapshot), 20000);
 
@@ -1655,9 +1665,10 @@ io.on('connection', (socket) => {
     growMonster();
     ack({ ok: true, you: Object.assign(publicPlayer(p), { owned: p.owned, gear: p.gear, seen: p.seen, furn: p.furn, inv: p.inv, gachaPity: p.gachaPity }), loot: LOOT.list(), players: [...players.values()].map(publicPlayer), history,
       monster: monsterState(), mobs: mobs.map(mobState).concat(DG.allFoes().map(mobState)), emptyCrates: emptyCrates(), dungeon: DG.state(),
-      summons: summons.map(summonState), decor: decorList(), garden: garden.state(),
+      summons: summons.map(summonState), decor: decorList(), garden: garden.state(), pets: PETW.list(), petBeds: PETW.bedList(),
       walls: walls.map(w => ({ id: w.id, kind: w.kind, pts: w.pts, ms: w.until - Date.now() })), storms: storms.map(stormState), music: musicState() });
     socket.broadcast.emit('playerJoined', publicPlayer(p));
+    PETW.spawn(p);
     pushChat({ system: true, text: `${p.name} 進入了防衛總部`, t: Date.now() });
   });
 
@@ -2651,6 +2662,21 @@ io.on('connection', (socket) => {
     io.emit('emote', { id: p.id, face });
   });
 
+  // 寵物：領養／換外觀／換模式、在寵物旅館放小窩、收回小窩、摸摸
+  let lastPet = 0;
+  const petCall = (fn) => (data, ack) => {
+    const p = players.get(socket.id);
+    if (!p || typeof ack !== 'function') return;
+    const now = Date.now();
+    if (now - lastPet < 400) return ack({ ok: false });
+    lastPet = now;
+    ack(fn(p, data));
+  };
+  socket.on('petSave', petCall((p, data) => PETW.save(p, data)));
+  socket.on('petBed', petCall((p, i) => PETW.placeBed(p, i)));
+  socket.on('petBedTake', petCall((p, i) => PETW.takeBed(p, i)));
+  socket.on('petPat', petCall((p, m) => PETW.pat(p, m)));
+
   socket.on('disconnect', (reason) => {
     if (process.env.DEBUG) console.log('disconnect', socket.id, reason);
     const p = players.get(socket.id);
@@ -2705,6 +2731,7 @@ function removePlayer(id) {
   const hadVideo = !!p.video;
   const hadTree = leaveTree(p);
   players.delete(id);
+  PETW.despawn(id);
   if (hadVideo) io.emit('videoRooms', videoList());
   if (hadTree) emitTrees();
   io.emit('playerLeft', id);

@@ -5,6 +5,7 @@
   const ST = HQ_STATS;
   const GR = HQ_GEAR;
   const DC = HQ_DECOR;
+  const PT = HQ_PETS;
   const BAG = HQ_BAG;
   const GD = HQ_GARDEN;
   // iOS 不理 viewport 的 user-scalable，手指捏合會放大，這裡擋掉；連點兩下靠 CSS 的 touch-action
@@ -34,6 +35,7 @@
   const AV_ORIGIN_Y = (FRAME.oy + 76) / FRAME.h;
   const T = MAP.TILE;
   const SPEED = 220;
+  const PET_SCALE = 0.42; // 寵物貼圖（64x56 畫成兩倍）在地圖上的大小
   const FONT = '"Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif';
   // 場景裡的文字框統一用米白紙條：Phaser 的 Text 只會畫方方正正的底色，
   // 所以底色設成 PAPER 的文字改成先畫字、再在字的後面補一張蠟筆描邊的紙條
@@ -406,6 +408,7 @@
     if (!scene) return;
     scene.moveMobs(w.mobs);
     if (w.summons.length) scene.moveSummons(w.summons);
+    if (w.pets && w.pets.length) scene.movePets(w.pets);
     if (w.boss) scene.moveMonster({ x: w.boss[0], y: w.boss[1] });
     if (w.storms) scene.moveStorms(w.storms);
   });
@@ -458,6 +461,10 @@
   socket.on('summon', (sm) => scene && scene.onSummon(sm));
   socket.on('summonHurt', (h) => scene && scene.onSummonHurt(h));
   socket.on('summonGone', (g) => scene && scene.onSummonGone(g));
+  socket.on('pet', (pt) => scene && scene.onPet(pt));
+  socket.on('petGone', (g) => scene && scene.onPetGone(g));
+  socket.on('petBeds', (list) => { if (scene) scene.setPetBeds(list); });
+  socket.on('petPat', (m) => scene && scene.onPetPat(m));
   socket.on('decor', (d) => scene && scene.setDecor(d));
   socket.on('garden', (st) => { if (scene) scene.setGarden(st); if (modalKind === 'plot') GARDEN_UI.refresh(); });
   socket.on('gardenFx', (f) => scene && scene.gardenFx(f));
@@ -1312,6 +1319,10 @@
     furn.append(icon('btn-furn', '🪑'), ' 家具');
     furn.onclick = openFurn;
     box.appendChild(furn);
+    const pet = el('button', 'inv-item bag-btn');
+    pet.append(icon('btn-pet', ''), ' 寵物');
+    pet.onclick = () => openPet();
+    box.appendChild(pet);
     const song = el('button', 'inv-item bag-btn');
     song.append(icon('btn-song', '🎵'), ' 點歌');
     song.onclick = () => MUSIC.open();
@@ -2603,6 +2614,88 @@
     $('modal').classList.add('wide');
   }
 
+  // ---------------- 寵物：領養、捏外觀、取名字、換模式 ----------------
+  const PET_MODE_DESC = {
+    follow: '跟在你旁邊走，你停下來牠會坐下，待久了就趴著睡。',
+    wander: '在總部和門口的草地自己慢慢晃。在寵物旅館放了小窩的話，牠會走回去睡午覺。',
+    fight: '在野區和副本裡幫你打附近的怪（不會被打倒），其他時候跟在你身邊。',
+  };
+  function openPet() {
+    if (!me) return;
+    const draft = Object.assign({}, PT.DEFAULT, me.pet || {});
+    const box = el('div', 'pet-ed');
+    box.appendChild(el('p', 'modal-hint', me.pet ? '想換個樣子、換名字或換模式都可以，改完按儲存。'
+      : '每個人可以領養一隻寵物。捏好牠的樣子、取個名字，牠就會一直陪著你。'));
+    const wrap = el('div', 'create pet-create');
+    const cv = el('canvas', 'pet-preview'); cv.width = 192; cv.height = 168;
+    const draw = () => { const ctx = cv.getContext('2d'); ctx.clearRect(0, 0, cv.width, cv.height); ctx.save(); ctx.translate(-20, -14); ctx.scale(3.5, 3.5); PT.drawPet(ctx, draft, 'sit'); ctx.restore(); };
+    wrap.appendChild(cv);
+    const fields = el('div', 'fields');
+    const nameL = el('label', null, '名字');
+    const nameI = el('input'); nameI.maxLength = PT.NAME_MAX; nameI.placeholder = '幫牠取個名字'; nameI.autocomplete = 'off'; nameI.value = me.pet ? me.pet.name : '';
+    nameL.appendChild(nameI); fields.appendChild(nameL);
+    // 一排選項：chips（文字）或 swatches（顏色）
+    const row = (label, key, items, kind) => {
+      fields.appendChild(el('div', 'label', label));
+      const list = el('div', kind === 'color' ? 'swatches' : 'chips');
+      items.forEach(([v, l]) => {
+        const b = el('button'); b.type = 'button'; b.title = l; b.setAttribute('aria-label', l);
+        if (kind === 'color') b.style.background = v === 'odd' ? 'linear-gradient(90deg, #79b3e3 50%, #e3b23c 50%)' : v;
+        else b.textContent = l;
+        if (draft[key] === v) b.classList.add('on');
+        b.onclick = () => { draft[key] = v; [...list.children].forEach(x => x.classList.toggle('on', x === b)); draw(); };
+        list.appendChild(b);
+      });
+      fields.appendChild(list);
+    };
+    const zip = (vals, names) => vals.map((v, i) => [v, names[i]]);
+    row('耳朵', 'ears', Object.entries(PT.EARS));
+    row('毛色', 'fur', zip(PT.FURS, PT.FUR_NAMES), 'color');
+    row('花紋', 'pattern', Object.entries(PT.PATTERNS));
+    row('花紋顏色', 'mark', zip(PT.MARKS, PT.MARK_NAMES), 'color');
+    row('白毛', 'white', Object.entries(PT.WHITES));
+    row('眼睛', 'eyes', zip(PT.EYES, PT.EYE_NAMES), 'color');
+    row('鼻子', 'nose', zip(PT.NOSES, PT.NOSE_NAMES), 'color');
+    row('尾巴', 'tail', Object.entries(PT.TAILS));
+    wrap.appendChild(fields);
+    box.appendChild(wrap);
+    // 模式
+    box.appendChild(el('h3', 'gear-h', '平常做什麼'));
+    const modes = el('div', 'chips');
+    const desc = el('p', 'modal-hint', PET_MODE_DESC[draft.mode]);
+    Object.entries(PT.MODES).forEach(([v, l]) => {
+      const b = el('button', draft.mode === v ? 'on' : null, l); b.type = 'button';
+      b.onclick = () => { draft.mode = v; [...modes.children].forEach(x => x.classList.toggle('on', x === b)); desc.textContent = PET_MODE_DESC[v]; };
+      modes.appendChild(b);
+    });
+    box.appendChild(modes); box.appendChild(desc);
+    // 小窩
+    const bed = scene ? scene.myBed() : -1;
+    box.appendChild(el('p', 'modal-hint pet-bed-hint', bed >= 0
+      ? '牠在寵物旅館有一個小窩。你不在的時候，牠會在那裡睡覺。'
+      : '總部門口右手邊有一間寵物旅館，走到空位上按空白鍵（手機點一下）就能幫牠放一個小窩。'));
+    if (bed >= 0) {
+      const take = el('button', 'hud-btn tiny', '收回小窩'); take.type = 'button';
+      take.onclick = () => socket.emit('petBedTake', bed, (res) => { if (res && res.ok) openPet(); else if (res && res.error) toast(res.error); });
+      box.appendChild(take);
+    }
+    const save = el('button', 'primary pet-save', me.pet ? '儲存' : '領養'); save.type = 'button';
+    save.onclick = () => {
+      draft.name = nameI.value.trim();
+      if (!draft.name) { toast('幫牠取個名字吧'); nameI.focus(); return; }
+      const first = !me.pet;
+      socket.emit('petSave', draft, (res) => {
+        if (!res || !res.ok) { if (res && res.error) toast(res.error); return; }
+        me.pet = res.pet;
+        closeModal();
+        toast(first ? `${res.pet.name}來到你身邊了` : `${res.pet.name}的樣子存好了`, 'btn-pet');
+      });
+    };
+    box.appendChild(save);
+    draw();
+    openModal('pet', '寵物', box);
+  }
+
   // ---------------- 冰箱（隱藏的蛋糕） ----------------
   function openFridge() {
     const box = el('form', 'fw-form');
@@ -3593,6 +3686,7 @@
     loot: ['', '撿起來'], guard: ['act-guard', '前往花蓮'], elevator: ['act-elevator', '前往 101'], portal: ['act-portal', '進入副本大廳'], hubExit: ['act-home', '回總部'], dj: ['btn-song', '點歌'], tv: ['act-tv', '視訊／遊戲'], well: ['wish-coin', '許個願'], greek: ['act-greek', '說話'],
     gplant: ['act-plant', '種下'], gwater: ['act-water', '澆水'], gharvest: ['act-harvest', '收成'], gpull: ['item-twig', '拔掉'],
     glook: ['act-plant', '看看'], seedbox: ['act-seedbox', '領種子'], gacha: ['act-gacha', '扭蛋'],
+    pat: ['act-pat', '摸摸'], bed: ['act-bed', '放小窩'],
   };
   // tail：尖角朝哪邊（down＝紙條在東西上面；left／right＝紙條在旁邊，上面被介面擋住的時候用）
   // 地上的東西（loot）名字每次不一樣：圖示和字放在 act 裡，鍵帽是 Z
@@ -4292,7 +4386,7 @@
         const z = MAP.FIELD.filter(f => y >= f.y1 - 1).pop();
         return { walk: 'paver', office: 'office', temple: 'brick' }[z.id];
       }
-      if (',T~BFOLI圃箱'.includes(ch)) return 'grass';
+      if (',T~BFOLI圃箱柵旅窩'.includes(ch)) return 'grass';
       if (ch === '#') return 'wall';
       if (inKitchen(x, y)) return 'tile';
       return inVideo(x, y) ? 'carpet' : 'wood';
@@ -4570,6 +4664,32 @@
           if (at(x - 1, y) !== '圃') wood(px + 2, py + 2, px + 2, py + T - 2);
           if (at(x + 1, y) !== '圃') wood(px + T - 2, py + 2, px + T - 2, py + T - 2);
           else CR.line(ctx, px + T, py + 6, px + T, py + T - 6, r, 1.2, 'rgba(110,76,44,0.5)', 0.6);
+        } else if (ch === '柵') {
+          // 寵物旅館的矮木柵欄：橫的兩條木條，左右兩邊那排是直的
+          const wood = (x1, y1, x2, y2, w) => { CR.line(ctx, x1, y1, x2, y2, r, w + 2, '#2b2a33', 0.6); CR.line(ctx, x1, y1, x2, y2, r, w, '#d6a46a', 0.6); };
+          const hz = at(x - 1, y) === '柵' || at(x + 1, y) === '柵' || at(x - 1, y) === '旅' || at(x + 1, y) === '旅';
+          if (hz) {
+            wood(px - 1, py + 22, px + T + 1, py + 22, 3); wood(px - 1, py + 32, px + T + 1, py + 32, 3);
+            if (at(x - 1, y) !== '柵') wood(px + 6, py + 14, px + 6, py + 40, 5);
+            wood(px + T - 6, py + 14, px + T - 6, py + 40, 5);
+          } else {
+            wood(px + 20, py - 1, px + 20, py + T + 1, 3); wood(px + 28, py - 1, px + 28, py + T + 1, 3);
+            wood(px + 24, py + 10, px + 24, py + 30, 5);
+          }
+        } else if (ch === '旅') {
+          // 寵物旅館的招牌：木頭立牌，旁邊畫一個小腳印
+          ctx.fillStyle = 'rgba(19,26,40,0.16)'; ctx.beginPath(); ctx.ellipse(px + 24, py + 42, 14, 4, 0, 0, Math.PI * 2); ctx.fill();
+          CR.rect(ctx, px + 21, py + 2, 6, 40, r, 0.5); CR.fill(ctx, '#9a6b46', r, null); CR.stroke(ctx, r, 2);
+          CR.rect(ctx, px - 16, py - 20, T + 32, 26, r, 1); CR.fill(ctx, '#e8c48e', r, [px - 16, py - 20, T + 32, 26]); CR.stroke(ctx, r, 2.2);
+          ctx.font = '900 13px ' + FONT; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#4a3020';
+          ctx.fillText('寵物旅館', px + 28, py - 7);
+          const paw = (cx, cy) => { [[0, 2.2, 2.6], [-2.8, -1.4, 1.2], [-0.9, -2.8, 1.2], [0.9, -2.8, 1.2], [2.8, -1.4, 1.2]].forEach(([dx, dy, s2]) => { ctx.beginPath(); ctx.ellipse(cx + dx, cy + dy, s2, s2 * 0.9, 0, 0, Math.PI * 2); ctx.fillStyle = '#b5623f'; ctx.fill(); }); };
+          paw(px - 6, py - 7);
+        } else if (ch === '窩') {
+          // 放小窩的位置：草地上一圈淡淡的虛線
+          ctx.save(); ctx.setLineDash([3, 5]);
+          CR.blob(ctx, px + 24, py + 30, 17, 8, r, 0.05, 16); CR.stroke(ctx, r, 1.6, 'rgba(110,86,50,0.45)');
+          ctx.restore();
         } else if (ch === '扭') {
           // 扭蛋機：一格寬，往上畫到牆上，像是靠牆放著
           ctx.fillStyle = 'rgba(19,26,40,0.18)'; ctx.beginPath(); ctx.ellipse(px + 24, py + 44, 20, 4, 0, 0, Math.PI * 2); ctx.fill();
@@ -4934,6 +5054,8 @@
         this.textures.addCanvas('dc-' + k, c);
       });
       this.summons = new Map();
+      this.pets = new Map(); // 寵物 id -> container
+      this.petBeds = new Map(); // 小窩位置 -> { st, img, sleeper }
       this.decor = new Map();
       this.loot = new Map(); // 地上的掉落物 id -> container
       // 大閃電（落雷用）
@@ -5642,6 +5764,10 @@
       this.summons.forEach(sm => sm.destroy());
       this.summons.clear();
       (res.summons || []).forEach(sm => this.onSummon(sm));
+      this.pets.forEach(c => c.destroy());
+      this.pets.clear();
+      (res.pets || []).forEach(pt => this.onPet(pt));
+      this.setPetBeds(res.petBeds || []);
       this.decor.forEach(d => d.destroy());
       this.decor.clear();
       (res.decor || []).forEach(d => this.setDecor(d));
@@ -5874,7 +6000,7 @@
     }
 
     // 出手的是玩家還是召喚物
-    actorOf(id) { return (me && id === me.id ? this.me : this.remotes.get(id)) || this.summons.get(id) || null; }
+    actorOf(id) { return (me && id === me.id ? this.me : this.remotes.get(id)) || this.summons.get(id) || this.pets.get(id) || null; }
 
     onMonsterHit(m) {
       // 弓箭、槓鈴、溜冰要等特效打到才跳數字
@@ -6763,6 +6889,16 @@
       if (MAP.tiles[ty] && MAP.tiles[ty][tx] === '箱' && MAP.nearSeedBox(this.me.x, this.me.y)) return { type: 'seedbox', tx, ty };
       // 扭蛋機畫得比一格高，點上面那半也算
       if (Math.hypot(x - MAP.gacha.x, y - (MAP.gacha.y - 20)) < 44 && MAP.nearGacha(this.me.x, this.me.y)) return { type: 'gacha' };
+      // 點寵物摸摸、點寵物旅館的空位放小窩
+      for (const [id, c] of this.pets) {
+        if (Math.hypot(x - c.x, y - (c.y - 14)) < 26 && Math.hypot(this.me.x - c.x, this.me.y - c.y) < 100) return { type: 'pat', id, label: '摸摸' + c.state.pet.name };
+      }
+      const pb = MAP.bedAt(tx, ty);
+      if (pb >= 0) {
+        const b = this.petBeds.get(pb);
+        if (b && b.sleeper && Math.hypot(this.me.x - (tx + 0.5) * T, this.me.y - (ty + 0.5) * T) < 100) return { type: 'pat', bed: pb, tx, ty, label: '摸摸' + b.st.pet.name };
+        if (!b && me && me.pet && MAP.nearBed(pb, this.me.x, this.me.y)) return { type: 'bed', i: pb, tx, ty };
+      }
       return null;
     }
 
@@ -6792,6 +6928,8 @@
       if (act.type === 'greek') { const ny = MAP.greek.y + 18; return { x: MAP.greek.x, top: ny - 110, y: ny - 38, half: 30 }; }
       if (act.type === 'well') return { x: MAP.well.x, top: MAP.well.y - 60, y: MAP.well.y, half: 44 };
       if (act.type === 'gacha') return { x: MAP.gacha.x, top: MAP.gacha.y - 56, y: MAP.gacha.y - 10, half: 22 };
+      if (act.type === 'pat' && act.id) { const c = this.pets.get(act.id); if (c) return { x: c.x, top: c.y - 34, y: c.y - 14, half: 18 }; }
+      if (act.type === 'pat' || act.type === 'bed') return { x: (act.tx + 0.5) * T, top: (act.ty + 0.5) * T - 18, y: (act.ty + 0.5) * T + 2, half: 22 };
       let tx = act.tx, ty = act.ty;
       if (act.type === 'cook') {
         const cx = Math.floor(this.me.x / T), cy = Math.floor(this.me.y / T);
@@ -6850,7 +6988,9 @@
       const z = 0.5 / this.cameras.main.zoom, k = Math.min(1, (time - this.hintBorn) / 160);
       const pl = this.hintPlace, wob = Math.sin(time / 320) * 3;
       this.hint.setScale(z * (0.6 + 0.4 * Phaser.Math.Easing.Back.Out(k)));
-      if (pl.tail === 'down') this.hint.setPosition(pl.x, pl.y - 3 - wob);
+      const pc = act.type === 'pat' && act.id && this.pets.get(act.id); // 寵物會走動，紙條跟著牠
+      if (pc && pl.tail === 'down') this.hint.setPosition(pc.x, pc.y - 34 - 3 - wob);
+      else if (pl.tail === 'down') this.hint.setPosition(pl.x, pl.y - 3 - wob);
       else this.hint.setPosition(pl.x + (pl.tail === 'left' ? 4 + wob : -4 - wob), pl.y);
     }
 
@@ -6891,6 +7031,7 @@
       if (!best && MAP.nearTv(this.me.x, this.me.y)) return { type: 'tv' };
       if (!best && MAP.nearGreek(this.me.x, this.me.y)) return { type: 'greek' };
       if (!best && MAP.nearWell(this.me.x, this.me.y)) return { type: 'well' };
+      if (!best) best = this.nearBedSpot() || this.nearPet();
       return best;
     }
 
@@ -6932,6 +7073,13 @@
         WISH.open();
       } else if (act.type[0] === 'g' && act.i != null) {
         GARDEN_UI.act(act);
+      } else if (act.type === 'pat') {
+        socket.emit('petPat', act.id ? { id: act.id } : { bed: act.bed }, () => {});
+      } else if (act.type === 'bed') {
+        socket.emit('petBed', act.i, (res) => {
+          if (!res || !res.ok) { if (res && res.error) toast(res.error); return; }
+          toast(res.moved ? `把${me.pet.name}的小窩搬過來了` : `幫${me.pet.name}放好小窩了，散步累了牠會回來睡`, 'act-bed');
+        });
       } else if (act.type === 'gacha') {
         GACHA_UI.open();
       } else if (act.type === 'seedbox') {
@@ -7332,6 +7480,129 @@
       if (fxOff()) { c.destroy(); return; }
       this.tweens.add({ targets: c, alpha: 0, angle: g.dead ? 90 : 0, y: c.y - 20, duration: 500, onComplete: () => c.destroy() });
       if (g.dead) this.burst(c.x, c.y - 20, 8, 0x9aa3b5, 50);
+    }
+
+    // ---------- 寵物 ----------
+    // 外觀＋姿勢的貼圖，第一次用到才畫（同樣外觀的寵物共用）
+    petTex(pet, pose) {
+      const key = 'pet-' + PT.lookKey(pet) + '-' + pose;
+      if (!this.textures.exists(key)) {
+        const c = document.createElement('canvas');
+        c.width = PT.WIDTH * 2; c.height = PT.HEIGHT * 2;
+        const ctx = c.getContext('2d'); ctx.scale(2, 2); PT.drawPet(ctx, pet, pose);
+        this.textures.addCanvas(key, c);
+      }
+      return key;
+    }
+    onPet(st) {
+      let c = this.pets.get(st.id);
+      if (!c) {
+        const body = this.add.image(0, 0, this.petTex(st.pet, 'stand')).setScale(PET_SCALE).setOrigin(0.5, 52 / 56);
+        c = this.add.container(st.x, st.y, [body]);
+        c.body_ = body; c.pet_ = true; c.tx = st.x; c.ty = st.y; c.dir = 1; c.act = -1;
+        this.pets.set(st.id, c);
+      }
+      c.state = st;
+      c.setPetAct = (a) => {
+        c.act = a;
+        c.body_.setTexture(this.petTex(c.state.pet, ['stand', 'sit', 'sleep'][a] || 'stand'));
+        c.body_.setScale(PET_SCALE).setAngle(0);
+      };
+      c.setPetAct(st.act === 'sleep' ? 2 : st.act === 'sit' ? 1 : 0);
+    }
+    movePets(list) {
+      list.forEach(([id, x, y, a]) => {
+        const c = this.pets.get(id);
+        if (!c) return;
+        if (Math.abs(x - c.tx) > 1) { c.dir = x > c.tx ? 1 : -1; c.body_.setFlipX(c.dir === -1); }
+        c.tx = x; c.ty = y;
+        if (a !== c.act) c.setPetAct(a);
+        if (Math.hypot(x - c.x, y - c.y) > 300) { c.x = x; c.y = y; } // 跟著主人傳送：直接出現
+      });
+    }
+    onPetGone(g) {
+      const c = this.pets.get(g.id);
+      if (!c) return;
+      this.pets.delete(g.id);
+      c.destroy();
+    }
+    // 寵物旅館的小窩：主人不在線上，就畫牠睡在小窩裡
+    setPetBeds(list) {
+      const seen = new Set();
+      list.forEach(b => {
+        seen.add(b.i);
+        const at = MAP.BEDS[b.i];
+        if (!at) return;
+        const x = (at.x + 0.5) * T, y = (at.y + 0.5) * T + 6; // 和 pet-world.js 的 bedSpot 一樣
+        let d = this.petBeds.get(b.i);
+        if (!d) {
+          d = { img: this.add.image(x, y + 1, this.bedTex()).setOrigin(0.5, 28 / 40).setScale(0.6).setDepth(y - 2) };
+          this.petBeds.set(b.i, d);
+        }
+        d.st = b;
+        if (d.sleeper) { d.sleeper.destroy(); d.sleeper = null; }
+        if (!b.on) {
+          d.sleeper = this.add.image(x + 1, y - 2, this.petTex(b.pet, 'sleep')).setOrigin(0.5, 52 / 56).setScale(PET_SCALE).setDepth(y - 1);
+          d.sleeper.setFlipX(b.i % 2 === 1);
+        }
+      });
+      this.petBeds.forEach((d, i) => {
+        if (seen.has(i)) return;
+        d.img.destroy(); if (d.sleeper) d.sleeper.destroy();
+        this.petBeds.delete(i);
+      });
+    }
+    bedTex() {
+      if (!this.textures.exists('pet-bed')) {
+        const c = document.createElement('canvas'); c.width = 96; c.height = 80;
+        const ctx = c.getContext('2d'); ctx.scale(2, 2); PT.drawBed(ctx);
+        this.textures.addCanvas('pet-bed', c);
+      }
+      return 'pet-bed';
+    }
+    // 自己的小窩在第幾個位置，沒有是 -1
+    myBed() {
+      if (!me) return -1;
+      for (const [i, d] of this.petBeds) if (d.st.pid === me.id) return i;
+      return -1;
+    }
+    onPetPat(m) {
+      let x, y;
+      if (m.id) { const c = this.pets.get(m.id); if (!c) return; x = c.x; y = c.y - 34; }
+      else { const at = MAP.BEDS[m.bed]; if (!at) return; x = (at.x + 0.5) * T; y = (at.y + 0.5) * T - 22; }
+      if (fxOff()) return;
+      // 小愛心從牠頭上冒出來（蓋在提示紙條上面，才不會被擋住）
+      const tex = this.iconTexture('pet-heart');
+      if (tex) {
+        const h = this.add.image(x + 12, y + 4, tex).setDisplaySize(22, 22).setDepth(1e6 + 1);
+        const k = h.scaleX;
+        h.setScale(k * 0.3);
+        this.tweens.add({ targets: h, scale: k, duration: 220, ease: 'Back.out' });
+        this.tweens.add({ targets: h, y: y - 30, x: x + 20, alpha: 0, delay: 250, duration: 900, onComplete: () => h.destroy() });
+      }
+      const target = m.id ? this.pets.get(m.id).body_ : this.petBeds.get(m.bed) && this.petBeds.get(m.bed).sleeper;
+      if (target) this.tweens.add({ targets: target, scaleY: PET_SCALE * 0.9, scaleX: PET_SCALE * 1.06, duration: 120, yoyo: true });
+    }
+    // 身邊可以摸的寵物（線上的、睡在小窩裡的）
+    nearPet() {
+      let best = null, bd = 80;
+      this.pets.forEach((c, id) => {
+        if (c.state.owner === me.id) return; // 自己的寵物一直在旁邊，不要一直跳紙條（點牠一樣可以摸）
+        const d = Math.hypot(this.me.x - c.x, this.me.y - c.y);
+        if (d < bd) { bd = d; best = { type: 'pat', id, label: '摸摸' + c.state.pet.name }; }
+      });
+      this.petBeds.forEach((b, i) => {
+        if (!b.sleeper) return;
+        const at = MAP.BEDS[i], d = Math.hypot(this.me.x - (at.x + 0.5) * T, this.me.y - (at.y + 0.5) * T - 8);
+        if (d < bd) { bd = d; best = { type: 'pat', bed: i, tx: at.x, ty: at.y, label: '摸摸' + b.st.pet.name }; }
+      });
+      return best;
+    }
+    // 寵物旅館裡空著的小窩位置
+    nearBedSpot() {
+      if (!me || !me.pet || this.myBed() >= 0) return null; // 已經有小窩：要搬家的話直接點空位
+      const i = MAP.BEDS.findIndex((b, k) => !this.petBeds.has(k) && MAP.nearBed(k, this.me.x, this.me.y));
+      return i >= 0 ? { type: 'bed', i, tx: MAP.BEDS[i].x, ty: MAP.BEDS[i].y } : null;
     }
 
     // ---------- 家具 ----------
@@ -8212,6 +8483,16 @@
         if (shock) m.body_.x = (Math.random() - 0.5) * 6; else if (m.wasShockX) m.body_.x = 0;
         m.wasShockX = shock;
         m.setDepth(m.y);
+      });
+
+      // 寵物：平滑移動，走路時輕輕一跳一跳，睡覺時肚子一起一伏
+      this.pets.forEach(c => {
+        c.x += (c.tx - c.x) * Math.min(1, dt * 7);
+        c.y += (c.ty - c.y) * Math.min(1, dt * 7);
+        const moving = Math.abs(c.tx - c.x) + Math.abs(c.ty - c.y) > 1.5;
+        c.body_.y = c.act === 0 && moving ? -Math.abs(Math.sin(time / 95)) * 2.2 : 0;
+        if (c.act === 2) c.body_.scaleY = PET_SCALE * (1 + Math.sin(time / 650) * 0.025);
+        c.setDepth(c.y);
       });
 
       // 召喚物：平滑移動、一跳一跳

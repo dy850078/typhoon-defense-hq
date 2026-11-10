@@ -1573,7 +1573,7 @@
 
   // ---------------- 許願池：大家想要的功能、遇到的 Bug 登記在這裡 ----------------
   // 第一層是一橫條一則的清單（可以搜尋主題、篩類別、排序、分頁），點進去看內文、按讚；作者可以修改或收回
-  // 有帳號才能許願；處理狀態由管理員在管理頁改
+  // 有帳號才能許願；處理狀態由管理員在管理頁或詳細頁改
   const WISH = (() => {
     // 沒登入的人按讚用這台裝置的代號
     let wid = saved('hq-wid');
@@ -1712,13 +1712,37 @@
           del.onclick = () => { if (confirm('要把這個願望收回來嗎？')) send('wishWithdraw', { id }, () => { toast('願望收回來了'); backToList(); }); };
           acts.append(edit, del);
         }
-        box.append(back, paper, acts, commentBox(w, r));
+        box.append(back, paper, acts);
+        if (r.admin) box.appendChild(statusPicker(w));
+        box.appendChild(commentBox(w, r));
         show(box);
         if (draft.id === id && draft.focus) {
           const ta = box.querySelector('.wish-cmt-form textarea');
           if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
         }
       });
+    }
+    // 管理員才看得到：一排狀態小紙條，點了直接改；只有改成「已完成」會先確認（會廣播到聊天室）
+    function statusPicker(w) {
+      const sec = el('div', 'wish-admin-st');
+      sec.appendChild(el('div', 'label', '狀態（管理員）'));
+      const row = el('div', 'wish-st-pick');
+      Object.keys(STATUS).forEach((s) => {
+        const b = el('button', 'wish-st s-' + s + (w.status === s ? ' on' : ''), STATUS[s]); b.type = 'button';
+        b.disabled = w.status === s;
+        b.onclick = () => {
+          if (s === 'done' && !confirm('改成「已完成」會在聊天室廣播，確定嗎？')) return;
+          row.querySelectorAll('button').forEach(x => { x.disabled = true; });
+          socket.emit('wishStatus', { wid, id: w.id, status: s }, (res) => {
+            if (!res || !res.ok) toast((res && res.error) || '沒成功，再試一次');
+            else toast(`改成${STATUS[s]}了`);
+            openDetail(w.id);
+          });
+        };
+        row.appendChild(b);
+      });
+      sec.appendChild(row);
+      return sec;
     }
     // 留言區：照時間排，名字旁邊貼小紙條標「管理員」「許願者」
     function commentBox(w, r) {

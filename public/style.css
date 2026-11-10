@@ -745,6 +745,13 @@ button.inv-item:hover { border-color: var(--accent); }
 .wish-st.s-review { color: #6b4f00; background: #ffefb8; border-color: #f0d27a; }
 .wish-st.s-doing { color: #2c5596; background: #dfeafc; border-color: #a9c3ea; }
 .wish-st.s-done { color: #1e6b35; background: #dcf3e2; border-color: #9fd6ae; }
+/* 管理員在詳細頁改狀態的那排小紙條：目前的狀態亮著，其他淡一點 */
+.wish-admin-st { margin: 10px 0 4px; }
+.wish-st-pick { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.wish-st-pick .wish-st { font-size: 12px; padding: 4px 12px; cursor: pointer; opacity: .55; box-shadow: none; min-height: 0; width: auto; }
+.wish-st-pick .wish-st:hover:not(:disabled) { opacity: .9; }
+.wish-st-pick .wish-st.on { opacity: 1; cursor: default; outline: 2px solid currentColor; outline-offset: 1px; }
+.wish-st-pick .wish-st:disabled:not(.on) { cursor: wait; }
 .wish-likes { display: inline-flex; align-items: center; gap: 2px; font: 700 12px var(--mono); color: var(--muted); flex-shrink: 0; min-width: 36px; }
 .wish-likes .hq-icon { width: 16px; height: 16px; vertical-align: 0; }
 .wish-likes.on { color: #c22a3a; }

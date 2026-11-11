@@ -8585,13 +8585,12 @@
       const cam = this.cameras.main, vw = cam.width / cam.zoom, vh = cam.height / cam.zoom;
       // 有兩欄的副本（花蓮）：鏡頭只看自己在的那一欄
       const col = inD && zd.cols > 1 && this.me.x >= (zd.dx + 22) * T ? 1 : 0;
-      // 野區比總部窄：人在野區時鏡頭不要看到右邊多出來的樹林和空地
-      const south = zone === 'hq' && this.me.y > 30.5 * T;
-      const camKey = MAP.areaOf(this.me.x) + col + (south ? 's' : '') + '|' + Math.round(vw) + 'x' + Math.round(vh);
+      // 野區比總部窄，但鏡頭範圍不跟著縮：走過圍欄時突然換範圍，畫面會整個跳一下；野區右邊的樹林和空地就讓大家看到
+      const camKey = MAP.areaOf(this.me.x) + col + '|' + Math.round(vw) + 'x' + Math.round(vh);
       if (camKey !== this.camKey) {
         this.camKey = camKey;
         const [x1, x2, y1, y2] = zone === 'dungeon' ? [zd.dx + col * 22, zd.dx + col * 22 + 22, 0, MAP.H]
-          : zone === 'lobby' ? [zd.lx, zd.lx + 12, 0, 18] : zone === 'hub' ? [MAP.HX, MAP.HX + 16, 0, 18] : [0, south ? MAP.FW : MAP.MW, 0, MAP.H];
+          : zone === 'lobby' ? [zd.lx, zd.lx + 12, 0, 18] : zone === 'hub' ? [MAP.HX, MAP.HX + 16, 0, 18] : [0, MAP.MW, 0, MAP.H];
         const w = (x2 - x1) * T, h = (y2 - y1) * T;
         const bw = Math.max(w, vw), bh = Math.max(h, vh), bx = x1 * T - (bw - w) / 2, by = y1 * T - (bh - h) / 2;
         cam.setBounds(bx, by, bw, bh);

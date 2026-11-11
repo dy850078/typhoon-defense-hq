@@ -182,7 +182,7 @@ module.exports = function createPetWorld(ctx) {
       if (pt.patUntil > now && pt.act !== 'sleep') { pt.act = 'sit'; return; }
       const mode = pt.pet.mode;
       if (mode === 'wander') wander(pt, now);
-      else if (mode === 'fight' && !p.dead) fight(pt, p, now);
+      else if (!p.dead) fight(pt, p, now); // 跟在身邊：主人在野區或副本就一起打怪，不然就跟著
       else follow(pt, p, now);
     });
   }

@@ -3,7 +3,8 @@
 // 畫在 64x56 的框裡，腳底在 (32, 52)；三種姿勢：stand（側身走路）、sit（正面坐著）、sleep（捲成一團睡覺）
 (function (root) {
   const KINDS = { cat: '貓咪' };
-  const MODES = { follow: '跟在身邊', wander: '自由散步', fight: '一起打怪' };
+  // 跟在身邊：主人走到野區或副本，牠會一起打怪（以前另外有一個「一起打怪」，合併進來了）
+  const MODES = { follow: '跟在身邊', wander: '自由散步' };
   const EARS = { up: '立耳', fold: '折耳' };
   // 毛色：底色
   const FURS = ['#d6d4cf', '#f7f4ee', '#f1dcb2', '#f0a456', '#a7aebb', '#a97850', '#3d3a3e'];
@@ -44,7 +45,7 @@
       nose: pick(p.nose, NOSES, DEFAULT.nose),
       tail: has(TAILS, p.tail) ? p.tail : DEFAULT.tail,
       face: has(FACES, p.face) ? p.face : DEFAULT.face,
-      mode: has(MODES, p.mode) ? p.mode : DEFAULT.mode,
+      mode: has(MODES, p.mode) ? p.mode : DEFAULT.mode, // 舊的 fight 會變回 follow
     };
   }
   // 外觀相同就共用同一張貼圖
@@ -246,16 +247,18 @@
 
   const POSES = {
     // 側身站著（面向右邊，往左走的時候整張左右翻）
-    stand(ctx, C, r, p) {
+    // step：走路的另一格（四隻腳換位置、尾巴擺一下），跟站姿輪流播就是走路
+    stand(ctx, C, r, p, step) {
       ctx.fillStyle = 'rgba(19,26,40,0.18)'; ctx.beginPath(); ctx.ellipse(31, 52.5, 19, 3.4, 0, 0, Math.PI * 2); ctx.fill();
-      tail(ctx, C, r, p, [17, 38], [5, 36], [9, 20]);
-      leg(ctx, C, r, p, 23, 40, 51, 5.2, true); leg(ctx, C, r, p, 39, 40, 51, 5.2, true);
+      tail(ctx, C, r, p, [17, 38], step ? [3, 33] : [5, 36], step ? [11, 21] : [9, 20]);
+      leg(ctx, C, r, p, step ? 19.5 : 23, 40, 51, 5.2, true); leg(ctx, C, r, p, step ? 42 : 39, 40, 51, 5.2, true);
       const bx = 30, by = 38.5, rx = 15.5, ry = 10;
       const bfn = (q) => C.blob(ctx, bx, by, rx, ry, q, 0.04, 18);
       furShape(ctx, C, r, 301, bfn, mainOf(p), [bx - rx, by - ry, rx * 2, ry * 2], p, () => sideMarks(ctx, C, r, p, bx, by, rx, ry));
-      leg(ctx, C, r, p, 19.5, 42, 52.8, 6.2); leg(ctx, C, r, p, 35, 42, 52.8, 6.2);
-      head(ctx, C, r, p, 43, 24.5, 1, false);
+      leg(ctx, C, r, p, step ? 23.5 : 19.5, 42, 52.8, 6.2); leg(ctx, C, r, p, step ? 31.5 : 35, 42, 52.8, 6.2);
+      head(ctx, C, r, p, 43, step ? 25.2 : 24.5, 1, false);
     },
+    walk(ctx, C, r, p) { POSES.stand(ctx, C, r, p, true); },
     // 正面坐著
     sit(ctx, C, r, p) {
       ctx.fillStyle = 'rgba(19,26,40,0.18)'; ctx.beginPath(); ctx.ellipse(33, 52.5, 17, 3.4, 0, 0, Math.PI * 2); ctx.fill();

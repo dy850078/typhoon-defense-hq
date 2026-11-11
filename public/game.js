@@ -33,6 +33,8 @@
   // 角色貼圖的框：人物 64x80，上面留 32（帽子、翅膀），左右各留 32（背著的魔杖、戰錘會伸出去）
   const FRAME = { w: 128, h: 112, ox: 32, oy: 32 };
   const AV_ORIGIN_Y = (FRAME.oy + 76) / FRAME.h;
+  const WING_RES = 1.5; // XR 翅膀影格的解析度（人物貼圖是 2 倍；翅膀影格多，用 1.5 倍省記憶體）
+  const WING_MS = 100; // 翅膀每格停多久（20 格 = 拍兩下 = 2 秒）
   const T = MAP.TILE;
   const SPEED = 220;
   const PET_SCALE = 0.42; // 寵物貼圖（64x56 畫成兩倍）在地圖上的大小
@@ -1900,7 +1902,7 @@
       invOf('gem').forEach(k => out.push({ kind: 'food', k, n: myInv[k], gem: true }));
     }
     if (tab === 'gear') {
-      const order = ['SSR', 'SR', 'R'];
+      const order = GR.RARITY_ORDER.slice().reverse();
       Object.keys(myGear).filter(id => GR.GEAR[id] && myGear[id] > 0)
         .sort((a, b) => order.indexOf(GR.GEAR[a].rarity) - order.indexOf(GR.GEAR[b].rarity))
         .forEach(id => out.push({ kind: 'gear', k: id, n: myGear[id], on: Object.values(myEquip).includes(id), free: !BAG.inBag({ gear: myGear, equip: myEquip }, id) }));
@@ -2048,7 +2050,7 @@
       else if (c.kind === 'decor') desc = '站在總部室內的地板上，點兩下擺在腳下。';
       else {
         const g = GR.GEAR[c.k], n = myGear[c.k];
-        desc = `${GR.SLOTS[g.slot]}・${(GR.SERIES[g.series] || {}).name || ''}${n > 1 ? `・有 ${n} 件` : ''}。` + (myEquip[g.slot] === c.k ? '穿著中，點兩下脫下。' : '點兩下穿上。') + (c.free ? '身上這件不佔背包格子。' : '');
+        desc = `${GR.SLOTS[g.slot]}・${(GR.SERIES[g.series] || {}).name || ''}${n > 1 ? `・有 ${n} 件` : ''}。` + (myEquip[g.slot] === c.k ? '穿著中，點兩下脫下。' : '點兩下穿上。') + (c.free ? '身上這件不佔背包格子。' : '') + (g.power ? `能力：${g.power.desc}。` : '');
       }
       info.appendChild(el('p', null, desc));
       const row = el('div', 'bag-acts');
@@ -2412,9 +2414,9 @@
   function gearPortraitFit(equip, w, h, pad, maxZ) {
     // 先畫在比角色框大一圈的畫布上，翅膀和戰錘才不會被切掉
     const S = 4, src = document.createElement('canvas');
-    src.width = 160 * S; src.height = 150 * S;
+    src.width = 200 * S; src.height = 150 * S;
     const sx = src.getContext('2d');
-    sx.scale(S, S); sx.translate(48, 50);
+    sx.scale(S, S); sx.translate(68, 50);
     AV.drawAvatar(sx, Object.assign({}, profile, { cls: myCls(), equip }));
     const d = src.getContext('2d').getImageData(0, 0, src.width, src.height).data;
     let l = src.width, t = src.height, r = -1, b = -1;
@@ -2454,6 +2456,7 @@
     if (o.showSeries && GR.SERIES[g.series]) cell.appendChild(el('span', 'gear-part', GR.SERIES[g.series].name));
     cell.appendChild(icon('gear-' + id, '', 'gear-ic'));
     cell.appendChild(el('span', 'gear-name', known ? g.name : '？？？'));
+    if (known && g.power) cell.title = g.power.desc;
     if (gone) cell.appendChild(el('span', 'gear-act', '已經不在身上'));
     if (o.have && o.onClick) {
       cell.appendChild(el('span', 'gear-act', o.on ? '穿著中' : '點一下穿上'));
@@ -2482,6 +2485,8 @@
     box.appendChild(top);
     // 套裝狀態和收集說明放在人物圖和欄位下面，人物圖才能跟四個欄位上下對齊
     if (setId) box.appendChild(el('p', 'gear-set-on', `套裝效果發動中：${GR.SERIES[setId].name}`));
+    Object.values(myEquip).map(id => GR.GEAR[id]).filter(g => g && g.power)
+      .forEach(g => box.appendChild(el('p', 'gear-power', `${g.name}：${g.power.desc}`)));
     // 上面只留一行簡單說明，怎麼拿裝備收在 i 圖示裡，點了才展開
     const intro = box.appendChild(el('div', 'gear-intro'));
     intro.appendChild(el('span', null, `圖鑑 ${mySeen.filter(id => GR.GEAR[id]).length} / ${Object.keys(GR.GEAR).length} 件　同系列的頭飾、服裝、披風穿齊會發動套裝特效`));
@@ -2556,10 +2561,9 @@
   }
   // 身上最稀有的裝備等級（決定光芒）
   function topRarity(equip) {
-    const order = ['R', 'SR', 'SSR'];
     let best = -1;
-    Object.values(equip || {}).forEach(id => { const g = GR.GEAR[id]; if (g) best = Math.max(best, order.indexOf(g.rarity)); });
-    return best >= 1 ? order[best] : null;
+    Object.values(equip || {}).forEach(id => { const g = GR.GEAR[id]; if (g) best = Math.max(best, GR.rank(g.rarity)); });
+    return best >= 1 ? GR.RARITY_ORDER[best] : null;
   }
 
   // ---------------- 家具（室內設計） ----------------
@@ -5413,7 +5417,10 @@
       if (!this.textures.exists(key)) {
         const c = document.createElement('canvas');
         c.width = FRAME.w * 2; c.height = FRAME.h * 2;
-        const ctx = c.getContext('2d'); ctx.scale(2, 2); ctx.translate(FRAME.ox, FRAME.oy); AV.drawAvatar(ctx, p);
+        // 會拍動的翅膀另外疊（applyWings），人物貼圖裡不畫
+        const flap = GR.GEAR[eq.cape] && GR.GEAR[eq.cape].flap;
+        const look = flap ? Object.assign({}, p, { equip: Object.assign({}, eq, { cape: null }) }) : p;
+        const ctx = c.getContext('2d'); ctx.scale(2, 2); ctx.translate(FRAME.ox, FRAME.oy); AV.drawAvatar(ctx, look);
         this.textures.addCanvas(key, c);
       }
       return key;
@@ -5461,6 +5468,7 @@
       this.applyPrada(c);
       this.applySet(c);
       this.applyWand(c);
+      this.applyWings(c);
       const img = c.body_;
       if (c.glowTween) { c.glowTween.stop(); c.glowTween = null; }
       c.glowFx = null;
@@ -5470,17 +5478,18 @@
       if (!rar) return;
       // 光一亮一暗慢慢呼吸，最亮的時候也只是淡淡一圈，不會刺眼
       img.preFX.setPadding(8);
-      const glow = img.preFX.addGlow(rar === 'SSR' ? 0xffd6f4 : 0xffdf80, 0.2, 0, false, 0.1, 8);
-      c.glowTween = this.tweens.add({ targets: glow, outerStrength: rar === 'SSR' ? 1.5 : 1.3, duration: rar === 'SSR' ? 1800 : 1300,
+      const top = rar === 'SSR' || rar === 'XR'; // XR 跟 SSR 一樣有流轉的光和反光，光是冰藍色；翅膀自己的光在影格裡
+      const glow = img.preFX.addGlow(rar === 'XR' ? 0xc8f0ff : rar === 'SSR' ? 0xffd6f4 : 0xffdf80, 0.2, 0, false, 0.1, 8);
+      c.glowTween = this.tweens.add({ targets: glow, outerStrength: top ? 1.5 : 1.3, duration: top ? 1800 : 1300,
         yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-      if (rar === 'SSR') { c.glowFx = glow; img.preFX.addShine(0.18, 0.18, 6); }
+      if (top) { c.glowFx = glow; img.preFX.addShine(0.18, 0.18, 6); }
     }
 
     // 全身 SSR（三格都穿 SSR）：腳下金色光暈、幾顆星星繞著飄、名字變金色
     // 星星只有 4 顆、只用一個 tween 算位置，平板也跑得動
     applyPrada(c) {
       const eq = c.look.equip || {};
-      const on = GR.LOOK_SLOTS.every(s => GR.GEAR[eq[s]] && GR.GEAR[eq[s]].rarity === 'SSR');
+      const on = GR.LOOK_SLOTS.every(s => GR.GEAR[eq[s]] && GR.rank(GR.GEAR[eq[s]].rarity) >= GR.rank('SSR'));
       if (on === !!c.prada) return;
       c.prada = on;
       c.tag.setColor(on ? '#b07d10' : INK); // 全身 SSR：名牌字變金色（光芒另外畫）
@@ -5549,6 +5558,30 @@
       const on = c.look.equip && c.look.equip.cape === 'wzWand';
       if (on && !c.orb) { c.orb = this.add.image(0, 0, 'wand-orb-0').setScale(0.5); c.add(c.orb); }
       else if (!on && c.orb) { c.orb.destroy(); c.orb = null; }
+    }
+    // XR 傳說翅膀：人物貼圖裡不畫翅膀，另外疊一張會拍動的翅膀在人物後面（每格換一張貼圖，位置在 update 裡跟著人物跳）
+    // 影格第一次有人穿才畫，畫一次全部的人共用
+    applyWings(c) {
+      const g = GR.GEAR[c.look.equip && c.look.equip.cape], kind = g && g.flap;
+      if (c.wings && c.wings.kind !== kind) { c.wings.destroy(); c.wings = null; }
+      if (!kind || c.wings) return;
+      this.wingFrames(kind);
+      const B = GR.DRAGON.BOX;
+      c.wings = this.add.image(0, 0, `wing-${kind}-0`).setScale(1 / WING_RES);
+      c.wings.kind = kind;
+      // 影格中心在人物框裡的位置，換算成人物容器裡的座標（人物貼圖原點在腳底）
+      c.wings.ox = B.x + B.w / 2 + FRAME.ox - FRAME.w / 2;
+      c.wings.oy = B.y + B.h / 2 + FRAME.oy - AV_ORIGIN_Y * FRAME.h;
+      c.addAt(c.wings, 0);
+    }
+    wingFrames(kind) {
+      if (this.textures.exists(`wing-${kind}-0`)) return;
+      const B = GR.DRAGON.BOX;
+      for (let i = 0; i < GR.DRAGON.FRAMES; i++) {
+        const cv = document.createElement('canvas'); cv.width = B.w * WING_RES; cv.height = B.h * WING_RES;
+        const x = cv.getContext('2d'); x.scale(WING_RES, WING_RES); x.translate(-B.x, -B.y); GR.DRAGON.frame(x, CR, kind, i);
+        this.textures.addCanvas(`wing-${kind}-${i}`, cv);
+      }
     }
     // 一個會發光的小東西：後面墊一圈柔光（一明一暗），前面是圖，兩個一起移動、一起淡掉
     setGlowItem(x, y, tex, scale, tint, glowTint, glowScale) {
@@ -6163,6 +6196,7 @@
       if (!m.phase || m.phase === this.monster.phase) this.mState.hp = Math.min(this.mState.hp, m.hp);
       this.drawMonsterBar();
       if (fxOff()) return;
+      if (m.skill === 'dragonBurn') { this.burst(this.monster.x, this.monster.y - 90, 5, 0xff8a3c, 40); this.damageNumber(m.dmg, false); return; }
       const who = this.actorOf(m.id);
       if (who && (MELEE.includes(m.skill) || m.skill === 'pet')) this.lunge(who, this.monster.x);
       if (m.skill === 'power' || m.skill === 'barbell') this.cameras.main.shake(200, m.skill === 'barbell' ? 0.012 : 0.006);
@@ -6918,11 +6952,11 @@
       c.add(shadow);
       // SR 橘光、SSR 粉紅光加白圈，一直閃
       if (rar && rar !== 'R') {
-        const col = rar === 'SSR' ? 0xe46bd6 : 0xffb020;
+        const top = rar === 'SSR' || rar === 'XR', col = rar === 'XR' ? 0x3fb6e8 : rar === 'SSR' ? 0xe46bd6 : 0xffb020;
         const glow = this.add.ellipse(0, -14, 50, 42, col, 0.35);
         c.add(glow);
-        this.tweens.add({ targets: glow, scale: { from: 0.8, to: 1.2 }, alpha: { from: 0.45, to: 0.15 }, duration: rar === 'SSR' ? 600 : 1000, yoyo: true, repeat: -1 });
-        if (rar === 'SSR') {
+        this.tweens.add({ targets: glow, scale: { from: 0.8, to: 1.2 }, alpha: { from: 0.45, to: 0.15 }, duration: top ? 600 : 1000, yoyo: true, repeat: -1 });
+        if (top) {
           const ring = this.add.ellipse(0, 0, 40, 13).setStrokeStyle(2.5, 0xffffff, 0.9);
           c.add(ring);
           this.tweens.add({ targets: ring, scale: { from: 0.6, to: 1.5 }, alpha: { from: 1, to: 0 }, duration: 900, repeat: -1 });
@@ -7541,6 +7575,8 @@
         m.state.hp = Math.min(m.state.hp, h.hp);
         this.drawMobBar(m);
         if (fxOff()) return;
+        // 火龍之翼的燒傷：不閃白、不晃，只冒幾顆火星
+        if (h.skill === 'dragonBurn') { this.burst(m.x, m.y - 50, 4, 0xff8a3c, 24); this.damageNumber(h.dmg, false, { x: m.x, y: m.y - 100 }); return; }
         const who = this.actorOf(h.id);
         if (who && (MELEE.includes(h.skill) || h.skill === 'pet')) this.lunge(who, m.x);
         m.body_.setTintFill(0xffffff);
@@ -8805,6 +8841,13 @@
           c.orb.setVisible(!c.body_.angle).setFlipX(fl).setTexture('wand-orb-' + (Math.floor(time / 70) % WAND_FRAMES));
           c.orb.x = c.body_.x + (fl ? -1 : 1) * (GR.WAND.at[0] - 32);
           c.orb.y = c.body_.y + GR.WAND.at[1] + FRAME.oy - AV_ORIGIN_Y * FRAME.h;
+        }
+        if (c.wings) {
+          // 翅膀一秒拍一下左右；每個人錯開一點，大家不會同步拍
+          const n = GR.DRAGON.FRAMES, i = Math.floor(time / WING_MS + (c.pid ? c.pid.charCodeAt(c.pid.length - 1) : 0)) % n;
+          c.wings.setVisible(!c.body_.angle).setTexture(`wing-${c.wings.kind}-${i}`);
+          c.wings.x = c.body_.x + c.wings.ox;
+          c.wings.y = c.body_.y + c.wings.oy;
         }
         if (c.hat) c.hat.y = -60 + c.body_.y;
         if (c.cake) c.cake.y = -6 + c.body_.y;

@@ -88,6 +88,45 @@
     C.rect(x, 15, 4, 18, 5, r, 0.4); C.fill(x, '#ffd23f', r, null); C.stroke(x, r, 1.6);
   }
   // 一對翅膀：bat 蝙蝠、feather 羽毛、fire 火焰
+  // XR 龍翼 icon：右半邊畫好再鏡像。S 肩膀、P 頂點、T 翅尖；指骨尾端 E1～E3
+  function dragonIcon(x, r, kind) {
+    const ice = kind === 'ice';
+    const mem = ice ? ['#f2fbff', '#a6dff8'] : ['#ffd86a', '#f0603a'], bone = ice ? '#f4fcff' : '#c2462c', claw = ice ? '#e8fbff' : '#3a1a16';
+    // 右半邊：中間留一點空隙（像背在背上），四周留邊，跟其他翅膀 icon 差不多大
+    const S = [25.5, 30], P = [30, 11], T = [46, 26], E = [[30.5, 36], [39.5, 35]];
+    const top = () => { x.moveTo(...S); x.quadraticCurveTo(29.5, 25, P[0], P[1]); x.quadraticCurveTo(41, 7, T[0], T[1]); };
+    const path = () => {
+      x.beginPath(); top();
+      const ends = [T, E[1], E[0], [25, 33]];
+      for (let i = 1; i < ends.length; i++) {
+        const [a, b] = ends[i - 1], [c, d] = ends[i], mx = (a + c) / 2, my = (b + d) / 2, k = [0.42, 0.34, 0.26][i - 1];
+        x.quadraticCurveTo(mx + (P[0] - mx) * k, my + (P[1] - my) * k, c, d);
+      }
+      x.closePath();
+    };
+    [1, -1].forEach(sd => {
+      x.save(); if (sd < 0) { x.translate(48, 0); x.scale(-1, 1); }
+      path();
+      const g = x.createLinearGradient(26, 16, 46, 36); g.addColorStop(0, mem[0]); g.addColorStop(1, mem[1]);
+      C.fill(x, g, r, [25, 8, 22, 29]);
+      x.save(); path(); x.clip(); x.beginPath();
+      for (let a = 0; a < Math.PI * 3; a += 0.25) { const k = 3 * (1 - a / (Math.PI * 3.4)); x.lineTo(39 + Math.cos(a) * k, 25 + Math.sin(a) * k); }
+      x.lineWidth = 1.2; x.lineCap = 'round'; x.strokeStyle = ice ? '#ffffff' : 'rgba(110,20,20,.65)'; x.stroke(); x.restore();
+      // 指骨：一條墨線就好
+      [[[29.4, 19], E[0]], [P, E[1]]].forEach(([a, b]) => C.line(x, a[0], a[1], b[0], b[1], r, 1.8, '#2b2a33', 0.3));
+      path(); C.stroke(x, r, 2.2);
+      // 主骨：粗、有顏色
+      x.beginPath(); top(); C.stroke(x, r, 4); C.stroke(x, r, 2, bone);
+      // 頂點的角、翅尖的爪
+      poly(x, [[28.6, 11], [30.2, 4.5], [32.2, 11.5]]); C.fill(x, claw, r, null); C.stroke(x, r, 1.4);
+      poly(x, [[44.2, 25], [45.6, 31], [47, 25.5]]); C.fill(x, claw, r, null); C.stroke(x, r, 1.3);
+      x.restore();
+    });
+    // 外圍的冰氣／熱氣
+    if (ice) { flake(x, r, 7, 8, 2.8, '#5fb8e6', 1.4); flake(x, r, 41.5, 8, 2.4, '#5fb8e6', 1.2); }
+    else { flame(x, r, 7, 12, 4.6, 7.5, '#ff8a3d', '#ffd23f'); flame(x, r, 41.5, 11, 4, 6.5, '#ff8a3d', '#ffd23f'); }
+    [[17, 5]].forEach(([a, b]) => dot(x, a, b, 1.2, ice ? '#9fdcf7' : '#ffb020'));
+  }
   function wings(x, r, col, kind) {
     [-1, 1].forEach(sd => {
       x.save(); x.translate(24, 24); x.scale(sd, 1);
@@ -566,6 +605,9 @@
       poly(x, [[22, 35], [26, 35], [24, 38]]); C.fill(x, '#ff8fab', r, null); C.stroke(x, r, 1);
       shine(x, r, 14, 12, 2.4, 3.4);
     },
+    // XR 傳說翅膀：跟穿在身上的同一個造型（S 形粗主骨、內短外長的指骨、深凹翼膜），簡化成粗線條才看得清楚
+    'gear-iceDragon'(x, r) { dragonIcon(x, r, 'ice'); },
+    'gear-fireDragon'(x, r) { dragonIcon(x, r, 'fire'); },
     'gear-angel'(x, r) {
       // 跟穿在身上的一樣（shared/gear.js 的 angelWingPath），縮小放進 48x48
       const path = () => {

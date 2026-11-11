@@ -499,7 +499,8 @@ app.post('/api/admin/gift', (req, res) => {
     });
     sent++;
   });
-  if (sent) pushChat({ system: true, text: `管理員送出了【${g.rarity}】${g.name}${all ? '給大家' : `給 ${users[0].save.name || users[0].username}`}！`, t: Date.now() });
+  const to = all ? '給大家' : `給 ${users[0].save.name || users[0].username}`;
+  if (sent) pushChat({ system: true, text: g.rarity === 'XR' ? `傳說中的【XR】${g.name}現世了！管理員把它交${to}。` : `管理員送出了【${g.rarity}】${g.name}${to}！`, t: Date.now() });
   res.json({ ok: true, sent, had });
 });
 app.post('/api/admin/role', (req, res) => {
@@ -878,6 +879,7 @@ setInterval(() => {
   const now = Date.now();
   mobs.forEach(m => tickMob(m, now));
   summons.slice().forEach(sm => tickSummon(sm, now));
+  tickBurns(now);
   PETW.tick(now);
   tickMonster(now);
   DG.tick(now);
@@ -949,7 +951,10 @@ function defOf(p) {
 }
 // 攻擊力 = 職業的攻擊 × 靈魂之歌的加成
 const atkBuffMs = (p) => p.atkBuff ? Math.max(0, p.atkBuff.until - Date.now()) : 0;
-const atkOf = (p) => p.atk * (atkBuffMs(p) > 0 ? 1 + p.atkBuff.mul : 1);
+// 身上裝備的能力（目前只有 XR 傳說翅膀有）：增傷比例加總、打中怪物的效果
+const gearPowers = (p) => Object.values(p.equip || {}).map(id => GEAR.GEAR[id] && GEAR.GEAR[id].power).filter(Boolean);
+const gearDmg = (p) => gearPowers(p).reduce((s, w) => s + (w.dmg || 0), 0);
+const atkOf = (p) => p.atk * (atkBuffMs(p) > 0 ? 1 + p.atkBuff.mul : 1) * (1 + gearDmg(p));
 function publicStats(p) {
   const now = Date.now();
   const buff = Math.max(0, ...Object.values(p.buffs).map(b => b.until - now));
@@ -1205,6 +1210,8 @@ function ticketRolls(damage) {
 }
 // p 是拿到傷害和經驗的玩家，hitBy 是實際出手的人或召喚物（給畫面用）
 function damageFoe(p, foe, isBoss, dmg, crit, skillId, hitBy) {
+  // 自己出手打中的才算（召喚物、寵物、燒傷本身不會再觸發翅膀的效果）
+  if (skillId !== 'dragonBurn' && (!hitBy || hitBy === p.id)) gearOnHit(p, foe, isBoss);
   if (foe.dg) return DG.damage(p, foe, dmg, crit, skillId, hitBy);
   const now = Date.now();
   if (isBoss && now < monster.transformUntil) return; // 變身中打不動
@@ -1241,6 +1248,37 @@ function damageFoe(p, foe, isBoss, dmg, crit, skillId, hitBy) {
   const mins = Math.round(RESPAWN_MS / 60000);
   const rank = top.length ? ' 輸出排行：' + top.map(([n, d], i) => `${i + 1}. ${n} ${d}`).join('、') : '';
   pushChat({ system: true, text: `${p.name} 打出最後一擊，${STATS.MONSTER2.name}被擊退了！${mins} 分鐘後會再生成。${rank}`, t: now });
+}
+
+// ---------------- XR 翅膀打中怪物的效果 ----------------
+// 冰龍：20% 機率凍住 1.5 秒，同一隻 8 秒內最多凍一次（頭目不會被一直凍住）
+// 火龍：燒傷 3 秒，每秒多扣攻擊力 10%；重複打中只重新計時、不疊加（同一隻怪同時只算一個人的燒傷）
+const DRAGON_FX = { freeze: { chance: 0.2, ms: 1500, cd: 8000 }, burn: { ms: 3000, every: 1000, mul: 0.1 } };
+const burns = new Map(); // 怪 → { p, isBoss, until, next }
+function gearOnHit(p, foe, isBoss) {
+  const now = Date.now();
+  if (!foe.alive || (isBoss && now < monster.transformUntil)) return;
+  gearPowers(p).forEach(w => {
+    if (w.onHit === 'freeze') {
+      const F = DRAGON_FX.freeze;
+      if (now < (foe.iceCdUntil || 0) || Math.random() >= F.chance) return;
+      foe.iceCdUntil = now + F.cd;
+      foe.frozenUntil = Math.max(foe.frozenUntil || 0, now + F.ms);
+      io.emit(isBoss ? 'monster' : 'mob', isBoss ? monsterState() : mobState(foe));
+    } else if (w.onHit === 'burn') {
+      const B = DRAGON_FX.burn, b = burns.get(foe);
+      if (b) Object.assign(b, { p, isBoss, until: now + B.ms });
+      else burns.set(foe, { p, isBoss, until: now + B.ms, next: now + B.every });
+    }
+  });
+}
+function tickBurns(now) {
+  burns.forEach((b, foe) => {
+    if (!foe.alive || !players.has(b.p.id) || now > b.until + 50) { burns.delete(foe); return; }
+    if (now < b.next) return;
+    b.next += DRAGON_FX.burn.every;
+    damageFoe(b.p, foe, b.isBoss, Math.max(1, Math.round(atkOf(b.p) * DRAGON_FX.burn.mul * (0.8 + Math.random() * 0.4))), false, 'dragonBurn');
+  });
 }
 
 // 第一次被打倒：原地變身成第二階段，血量重新補滿（而且更多），變身的幾秒內打不動也不出招
@@ -2196,6 +2234,7 @@ io.on('connection', (socket) => {
     else if (p.owned.includes(id) && GEAR.GEAR[id].slot === slot) p.equip[slot] = id;
     else return typeof ack === 'function' && ack({ ok: false });
     io.emit('playerGear', { id: p.id, equip: p.equip });
+    sendStats(p); // 有能力的裝備（XR 翅膀）會改變攻擊力
     if (typeof ack === 'function') ack({ ok: true, equip: p.equip });
   });
 

@@ -357,7 +357,7 @@ td.wish button.x { flex-shrink: 0; width: 22px; height: 22px; min-height: 0; pad
   (function () {
     var G = window.HQ_GEAR, sel = $('g-item');
     if (!G) return;
-    var order = { SSR: 0, SR: 1, R: 2 };
+    var order = { XR: -1, SSR: 0, SR: 1, R: 2 };
     Object.keys(G.SLOTS).forEach(function (slot) {
       var grp = document.createElement('optgroup'); grp.label = G.SLOTS[slot];
       Object.keys(G.GEAR).filter(function (id) { return G.GEAR[id].slot === slot; })

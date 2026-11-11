@@ -4415,7 +4415,6 @@
         : ch === 'a' ? 'gorge' : 'msv'.includes(ch) ? 'trail' : 'cave';
       // 野區：看是哪一區的地板（樹、路燈這些東西底下也鋪那一區的地板）
       if (y > 30) {
-        if (x >= MAP.FW) return 'grass'; // 野區右邊多出來的那片樹林
         if (ch === '人' || ch === '毯' || ch === '磚') return { 人: y === 38 || y === 39 ? 'road' : 'paver', 毯: 'office', 磚: 'brick' }[ch];
         const z = MAP.FIELD.filter(f => y >= f.y1 - 1).pop();
         return { walk: 'paver', office: 'office', temple: 'brick' }[z.id];

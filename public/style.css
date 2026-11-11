@@ -441,6 +441,18 @@ button.inv-item:hover { border-color: var(--accent); }
 .gear-item.r-SSR:not(.locked) { border-color: #f2c4ff; animation: rainbow 4s linear infinite; }
 .gear-slot.r-SR { border-color: #ffd27a; }
 .gear-slot.r-SSR { border-color: #f2c4ff; }
+/* XR：只存在於傳說的裝備。冰藍到金色的漸層，外圈的光在冰藍和金色之間慢慢流轉 */
+.r-XR .gear-rar { background: linear-gradient(90deg, #6fd3ff, #c8f0ff 40%, #ffe9a8 70%, #ffc23a); color: #17324a; letter-spacing: .5px; box-shadow: 0 0 6px rgba(111,211,255,.8); }
+.gear-item.r-XR:not(.locked) { border-color: #9fe0ff; background: linear-gradient(180deg, #f2fbff, var(--paper) 60%); animation: legend 3s ease-in-out infinite; }
+.gear-item.r-XR:not(.locked) .gear-name { background: linear-gradient(90deg, #2a8fc4, #c98a12); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.gear-slot.r-XR { border-color: #9fe0ff; box-shadow: 0 0 8px rgba(111,211,255,.5); }
+.gear-me.r-XR { animation: legend 3s ease-in-out infinite; }
+.bag-cell.r-XR { border-color: #3fb6e8; box-shadow: inset 0 0 0 1px #ffe9a8, 0 0 8px rgba(63,182,232,.55); }
+.gear-power { margin: 0 0 6px; font-weight: 900; font-size: 13px; color: #2a8fc4; }
+@keyframes legend {
+  0%, 100% { box-shadow: 0 0 0 3px #9fe0ff, 0 0 18px rgba(111,211,255,.7); }
+  50% { box-shadow: 0 0 0 3px #ffe9a8, 0 0 22px rgba(255,194,58,.65); }
+}
 /* SSR：外圈的光慢慢換顏色（只動外框，不改插畫本身的顏色） */
 @keyframes rainbow {
   0%, 100% { box-shadow: 0 0 0 3px #ffc4e6, 0 0 16px rgba(255,154,213,.6); }

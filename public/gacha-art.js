@@ -130,6 +130,9 @@
     'gear-wzHat'(x) { gearIcon(x, 'wzHat', 'head', [4, -26, 56, 44]); },
     'gear-wzRobe'(x) { gearIcon(x, 'wzRobe', 'front', [6, 40, 52, 38]); },
     'gear-wzWand'(x) { gearIcon(x, 'wzWand', 'cape', [0, 2, 80, 78]); },
+    // XR 傳說翅膀（翅膀很寬，框大一點）
+    'gear-iceDragon'(x) { gearIcon(x, 'iceDragon', 'cape', [-44, -18, 152, 100]); },
+    'gear-fireDragon'(x) { gearIcon(x, 'fireDragon', 'cape', [-44, -18, 152, 100]); },
   });
 
   root.HQ_GACHA_ART = { machine, ticket, capsule, fx, RAR };

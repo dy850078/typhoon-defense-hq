@@ -251,7 +251,7 @@
       say: ['乖乖睡喔', '吃糖糖', '虎姑婆婆來囉', '誰還沒睡？', '糖給你一顆'], drops: { n: [1, 3], food: 20, decor: 20, gear: 35, rare: true } },
   });
   // 野區每一種怪要生成幾隻
-  const FIELD_MOBS = { sticky: 3, seen: 3, wok: 3, fart: 1, octo: 3, clock: 3, boss: 1, lamp: 3, lion: 3, imp: 3, tiger: 1 };
+  const FIELD_MOBS = { sticky: 4, seen: 4, wok: 4, fart: 1, octo: 4, clock: 4, boss: 1, lamp: 4, lion: 4, imp: 4, tiger: 1 }; // 野區加寬到 54 格後每種小怪各多一隻
   const MOB_RESPAWN_MS = 45000;
   // 打倒怪會在地上噴出掉落物：每隻怪可以寫自己的 drops，沒寫的用這裡的預設
   // n：一次噴幾個（最少、最多）；food / decor / gear：每一個抽到補品、家具、裝備的權重，加起來不到 100 的部分算沒掉

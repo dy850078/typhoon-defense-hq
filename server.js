@@ -942,6 +942,21 @@ function wishReplyMail(wish, comment, socket) {
     { name: comment.name, when, text: comment.text }, base + '/hq.html')
     .then(m => { if (!m.ok) console.error(`✉️ 給「${u.username}」的願望回覆通知沒寄出去`); });
 }
+// 有人許新願望 → 寄信到總部信箱通知管理員；一小時最多寄 10 封，避免被洗版
+const WISH_NOTIFY_TO = process.env.WISH_NOTIFY_TO || MAILER.from;
+let newWishMails = [];
+function newWishMail(wish, socket) {
+  const now = Date.now();
+  newWishMails = newWishMails.filter(t => t > now - 3600000);
+  if (newWishMails.length >= 10) return;
+  newWishMails.push(now);
+  const h = socket.handshake.headers;
+  const base = (process.env.PUBLIC_URL || `${h['x-forwarded-proto'] || 'http'}://${h['x-forwarded-host'] || h.host}`).replace(/\/+$/, '');
+  const when = new Date(wish.at + 8 * 3600000).toISOString().replace(/^\d{4}-(\d\d)-(\d\d)T(\d\d:\d\d).*$/, '$1/$2 $3');
+  MAILER.newWish(WISH_NOTIFY_TO, { title: wish.title, cat: wish.cat, catName: WISH_CAT[wish.cat] || '其他', body: wish.body,
+    name: wish.name, username: wish.by, when }, base + '/hq.html')
+    .then(m => { if (!m.ok) console.error(`✉️ 新願望「${wish.title}」的通知信沒寄出去`); });
+}
 
 // ---------------- 角色數值 ----------------
 // 防禦力 = 職業的防禦 + 還沒過期的增益
@@ -2669,6 +2684,7 @@ io.on('connection', (socket) => {
     const r = wishes.add(userOf(p), p.name, m);
     if (r.error) return r;
     pushChat({ system: true, text: `${p.name} 在許願池許了一個願：【${WISH_CAT[r.wish.cat]}】${r.wish.title}`, t: Date.now() });
+    newWishMail(r.wish, socket);
     io.emit('wishes', { coin: p.id });
     return { id: r.wish.id };
   });

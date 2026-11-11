@@ -118,13 +118,16 @@
     const main = mainOf(p), white = whiteOf(p);
     const earCol = p.pattern === 'points' ? p.mark : main;
     const hrx = 14 * s, hry = 12.4 * s;
-    // 立耳：畫在頭後面
+    // 立耳：從頭頂兩邊長出來，跟頭連成一片（耳根沒有線），耳尖圓圓的
+    const earOf = (k) => (p.pattern === 'calico' ? (k < 0 ? ORANGE : p.mark) : earCol);
+    const earPath = (k, d) => { // d：往裡面縮多少（蓋掉頭的輪廓線用）
+      ctx.beginPath(); ctx.moveTo(cx + k * (12.9 - d) * s, cy + (-3.6 + d * 0.4) * s);
+      ctx.quadraticCurveTo(cx + k * (13.4 - d) * s, cy - (13.5 - d) * s, cx + k * (10.6 - d * 0.3) * s, cy - (17 - d * 1.2) * s);
+      ctx.quadraticCurveTo(cx + k * (8.4 + d * 0.2) * s, cy - (16.8 - d * 1.2) * s, cx + k * (2.6 + d) * s, cy - (11.2 - d * 0.3) * s);
+    };
     if (p.ears === 'up') [-1, 1].forEach(k => {
-      const ex = cx + k * 8.6 * s, ey = cy - 7.5 * s;
-      ctx.beginPath(); ctx.moveTo(ex - k * 6 * s, ey + 1 * s); ctx.lineTo(ex + k * 3.2 * s, ey - 10.5 * s); ctx.lineTo(ex + k * 6.4 * s, ey + 3 * s); ctx.closePath();
-      C.fill(ctx, p.pattern === 'calico' ? (k < 0 ? ORANGE : p.mark) : earCol, r, null); C.stroke(ctx, r, W);
-      ctx.beginPath(); ctx.moveTo(ex - k * 2.4 * s, ey + 0.5 * s); ctx.lineTo(ex + k * 2.9 * s, ey - 6.5 * s); ctx.lineTo(ex + k * 4 * s, ey + 1.5 * s); ctx.closePath();
-      C.fill(ctx, '#f2b8b8', r, null);
+      earPath(k, 0); ctx.lineTo(cx + k * 6 * s, cy - 4 * s); ctx.closePath(); C.fill(ctx, earOf(k), r, null);
+      earPath(k, 0); C.stroke(ctx, r, W);
     });
     const hfn = (q) => C.blob(ctx, cx, cy, hrx, hry, q, 0.035, 20);
     furShape(ctx, C, r, 501, hfn, main, [cx - hrx, cy - hry, hrx * 2, hry * 2], p, () => {
@@ -147,6 +150,13 @@
         C.blob(ctx, cx, cy + 5.5 * s, 7.2 * s, 5.2 * s, r, 0.08, 14); ctx.fillStyle = WHITE; ctx.fill();
         if (p.pattern === 'tuxedo') { ctx.beginPath(); ctx.moveTo(cx - 4.5 * s, cy + 3 * s); ctx.lineTo(cx, cy - 6 * s); ctx.lineTo(cx + 4.5 * s, cy + 3 * s); ctx.closePath(); ctx.fill(); }
       }
+    });
+    if (p.ears === 'up') [-1, 1].forEach(k => {
+      // 把耳根那段頭的輪廓線蓋掉，再畫粉紅色的耳朵裡面
+      earPath(k, 1.5); ctx.lineTo(cx + k * 6.5 * s, cy - 7 * s); ctx.closePath(); ctx.fillStyle = earOf(k); ctx.fill();
+      if (tabby(p)) stripe(ctx, C, r, cx + k * 7.5 * s, cy - 11 * s, cx + k * 5.8 * s, cy - 6.5 * s, 1.6 * s, p.mark);
+      ctx.beginPath(); ctx.moveTo(cx + k * 11.2 * s, cy - 8.4 * s); ctx.quadraticCurveTo(cx + k * 11.4 * s, cy - 12.6 * s, cx + k * 10.2 * s, cy - 14.4 * s);
+      ctx.quadraticCurveTo(cx + k * 8.4 * s, cy - 13 * s, cx + k * 6.4 * s, cy - 10.4 * s); ctx.closePath(); ctx.fillStyle = '#eeb4b8'; ctx.fill();
     });
     // 折耳：小小的、往前往下折，像兩片小帽簷貼在頭頂兩邊
     if (p.ears === 'fold') [-1, 1].forEach(k => {
@@ -256,8 +266,28 @@
         }
         if (whiteOf(p) !== 'none' || p.pattern === 'calico') { C.blob(ctx, bx, by + 1, rx * 0.5, ry * 0.75, r, 0.1, 14); ctx.fillStyle = WHITE; ctx.fill(); }
       });
-      // 兩隻前腳
-      leg(ctx, C, r, p, 28, 42, 52.5, 5.4); leg(ctx, C, r, p, 36, 42, 52.5, 5.4);
+      // 後腳掌從身體兩邊露出一點
+      const legCol = p.pattern === 'points' ? p.mark : mainOf(p), pawCol = whiteOf(p) === 'socks' ? WHITE : legCol;
+      [-1, 1].forEach(k => {
+        const hfn2 = (q) => C.blob(ctx, bx + k * rx * 0.78, 51.6, 4.6, 2.5, q, 0.06, 10);
+        furShape(ctx, C, r, 310 + k, hfn2, pawCol, null, p, null);
+      });
+      // 兩隻前腳：從胸口長下來，上面跟身體連在一起（只描兩側和腳掌），不是兩根分開的棍子
+      [-1, 1].forEach(k => {
+        const x = bx + k * 3.5, w = 7, y1 = 46, y2 = 53.2, xo = x + k * w / 2, xi = x - k * w / 2;
+        const fillPath = () => { ctx.beginPath(); ctx.moveTo(xo + k * 0.8, y1 - 2); ctx.lineTo(xo + k * 0.3, y2 - 3);
+          ctx.quadraticCurveTo(xo + k * 0.6, y2, x, y2); ctx.quadraticCurveTo(xi - k * 0.2, y2, xi, y2 - 3); ctx.lineTo(xi, y1 - 2); ctx.closePath(); };
+        fillPath(); ctx.fillStyle = legCol; ctx.fill();
+        ctx.save(); fillPath(); ctx.clip();
+        if (tabby(p)) [46.2, 49].forEach(y => stripe(ctx, C, r, x - w, y, x + w, y + 0.5, 1.8, p.mark));
+        if (whiteOf(p) === 'socks') dot(ctx, x, y2 - 1, w, 3.6, WHITE);
+        ctx.restore();
+        // 外側：從肩膀順著身體下來；腳掌圓圓的；內側只畫下半段（兩腳中間一條短短的線）
+        ctx.beginPath(); ctx.moveTo(xo + k * 2.2, 40.5); ctx.quadraticCurveTo(xo + k * 0.9, 45, xo + k * 0.3, y2 - 3);
+        ctx.quadraticCurveTo(xo + k * 0.6, y2, x, y2); ctx.quadraticCurveTo(xi - k * 0.2, y2, xi, y2 - 3); ctx.lineTo(xi, y1 + 1.5);
+        C.stroke(ctx, r, W);
+        [-1.4, 1.4].forEach(d => C.line(ctx, x + d, y2 - 0.6, x + d, y2 - 2.6, r, 0.9, 'rgba(43,42,51,0.55)', 0.2));
+      });
       head(ctx, C, r, p, 32, 22.5, 1.05, false);
     },
     // 捲成一團睡覺（尾巴繞到前面）

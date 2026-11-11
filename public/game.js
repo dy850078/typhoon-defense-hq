@@ -2637,7 +2637,7 @@
     if (!me) return;
     const draft = Object.assign({}, PT.DEFAULT, me.pet || {});
     const box = el('div', 'pet-ed');
-    box.appendChild(el('p', 'modal-hint', me.pet ? '想換個樣子、換名字或換模式都可以，改完按儲存。'
+    box.appendChild(el('p', 'modal-hint', me.pet ? '想換個樣子或換名字都可以，改完按儲存。'
       : '每個人可以領養一隻寵物。捏好牠的樣子、取個名字，牠就會一直陪著你。'));
     const wrap = el('div', 'create pet-create');
     const cv = el('canvas', 'pet-preview'); cv.width = 192; cv.height = 168;
@@ -2687,26 +2687,7 @@
     row('表情', 'face', Object.entries(PT.FACES));
     wrap.appendChild(fields);
     box.appendChild(wrap);
-    // 模式
-    box.appendChild(el('h3', 'gear-h', '平常做什麼'));
-    const modes = el('div', 'chips');
-    const desc = el('p', 'modal-hint', PET_MODE_DESC[draft.mode]);
-    Object.entries(PT.MODES).forEach(([v, l]) => {
-      const b = el('button', draft.mode === v ? 'on' : null, l); b.type = 'button';
-      b.onclick = () => { draft.mode = v; [...modes.children].forEach(x => x.classList.toggle('on', x === b)); desc.textContent = PET_MODE_DESC[v]; };
-      modes.appendChild(b);
-    });
-    box.appendChild(modes); box.appendChild(desc);
-    // 小窩
-    const bed = scene ? scene.myBed() : -1;
-    box.appendChild(el('p', 'modal-hint pet-bed-hint', bed >= 0
-      ? '牠有一個小窩了。你不在的時候，牠會在那裡睡覺。想換位置的話，先收回再重新放。'
-      : '休息區（沙發那間）右邊的房間可以幫牠放一個小窩：走到喜歡的位置，按空白鍵（手機點頭上的紙條）。'));
-    if (bed >= 0) {
-      const take = el('button', 'hud-btn tiny', '收回小窩'); take.type = 'button';
-      take.onclick = () => socket.emit('petBedTake', bed, (res) => { if (res && res.ok) openPet(); else if (res && res.error) toast(res.error); });
-      box.appendChild(take);
-    }
+    box.appendChild(el('p', 'modal-hint pet-bed-hint', '對著牠按右鍵（手機長按），可以選牠平常做什麼：跟在身邊、自由散步、一起打怪。'));
     const save = el('button', 'primary pet-save', me.pet ? '儲存' : '領養'); save.type = 'button';
     save.onclick = () => {
       draft.name = nameI.value.trim();
@@ -3412,6 +3393,48 @@
     m.hidden = false;
     m.style.left = Math.min(cx, window.innerWidth - 170) + 'px';
     m.style.top = Math.min(cy, window.innerHeight - 90) + 'px';
+  }
+  function placeMenu(m, cx, cy) {
+    m.hidden = false;
+    m.style.left = Math.max(6, Math.min(cx, window.innerWidth - m.offsetWidth - 6)) + 'px';
+    m.style.top = Math.max(6, Math.min(cy, window.innerHeight - m.offsetHeight - 6)) + 'px';
+  }
+  // 對自己的寵物按右鍵（手機長按）：選牠平常做什麼
+  function showPetMenu(cx, cy) {
+    if (!me || !me.pet) return;
+    const m = $('ctx-menu');
+    m.innerHTML = '';
+    m.appendChild(el('div', 'ctx-name', me.pet.name + '平常做什麼'));
+    Object.entries(PT.MODES).forEach(([v, l]) => {
+      const b = el('button', me.pet.mode === v ? 'on' : null, l); b.title = PET_MODE_DESC[v];
+      b.onclick = () => {
+        hideMenu();
+        if (me.pet.mode === v) return;
+        socket.emit('petSave', Object.assign({}, me.pet, { mode: v }), (res) => {
+          if (!res || !res.ok) { if (res && res.error) toast(res.error); return; }
+          me.pet = res.pet;
+          toast(`${res.pet.name}：${PET_MODE_DESC[v]}`, 'btn-pet');
+        });
+      };
+      m.appendChild(b);
+    });
+    const ed = el('button', null, '換個樣子');
+    ed.onclick = () => { hideMenu(); openPet(); };
+    m.appendChild(ed);
+    placeMenu(m, cx, cy);
+  }
+  // 對自己的小窩按右鍵（手機長按）：收回
+  function showBedMenu(bed, cx, cy) {
+    const m = $('ctx-menu');
+    m.innerHTML = '';
+    m.appendChild(el('div', 'ctx-name', (me.pet ? me.pet.name : '') + '的小窩'));
+    const b = el('button', null, '收回小窩');
+    b.onclick = () => {
+      hideMenu();
+      socket.emit('petBedTake', bed, (res) => { if (res && res.ok) toast('小窩收起來了，想放的時候再回來這個房間放', 'act-bed'); else if (res && res.error) toast(res.error); });
+    };
+    m.appendChild(b);
+    placeMenu(m, cx, cy);
   }
   function hideMenu() { $('ctx-menu').hidden = true; }
   window.addEventListener('pointerdown', (e) => { if (!$('ctx-menu').contains(e.target) && e.target.tagName !== 'CANVAS') hideMenu(); });
@@ -4394,7 +4417,8 @@
     // 可愛生物休息區的門：平常的地圖畫成牆，只有疊上去的那張才畫出來
     const at = (x, y) => {
       const ch = x < 0 || y < 0 || x >= MAP.W || y >= MAP.H ? ' ' : MAP.tiles[y][x];
-      return !hotel && MAP.HOTEL_TILES.has(ch) ? '#' : ch;
+      if (hotel) return ch;
+      return MAP.HOTEL_TILES.has(ch) ? '#' : MAP.HOTEL_DECOR.has(ch) ? '.' : ch;
     };
     const inVideo = (x, y) => y >= 4 && y <= 13 && x >= 21 && x <= 34;
     const kitchen = MAP.ROOMS.find(rm => rm.id === 'kitchen');
@@ -4615,7 +4639,7 @@
     for (let y = ys(3)[0]; y < ys(3)[1]; y++) {
       for (let x = xs(3)[0]; x < xs(3)[1]; x++) {
         const ch = at(x, y), px = x * T, py = y * T;
-        if (!!hotel !== MAP.HOTEL_TILES.has(ch)) continue;
+        if (!!hotel !== (MAP.HOTEL_TILES.has(ch) || MAP.HOTEL_DECOR.has(ch))) continue;
         const r = CR.rng(x * 15485863 + y * 32452843 + 7);
         if (ch === '#') {
           ctx.fillStyle = '#c3c9d3'; ctx.fillRect(px, py, T, T);
@@ -4728,6 +4752,65 @@
           CR.rect(ctx, px + 10, py + 4, T - 20, T - 8, r, 1.5); CR.fill(ctx, '#e8b9a0', r, [px + 10, py + 4, T - 20, T - 8]);
           CR.dots(ctx, px + 12, py + 6, T - 24, T - 12, 5, 'rgba(255,255,255,0.6)', r, 1.6);
           CR.rect(ctx, px + 10, py + 4, T - 20, T - 8, r, 1.5); CR.stroke(ctx, r, 2.2);
+        } else if (ch === '塔') {
+          // 貓跳台：麻繩柱子撐著兩層木板，最上面一個透明的圓碗，底下一個有貓頭洞的小木屋
+          const rope = (cx, y1, y2) => { CR.rect(ctx, cx - 4, y1, 8, y2 - y1, r, 0.5); CR.fill(ctx, '#d9b77e', r, null); CR.stroke(ctx, r, 2);
+            for (let yy = y1 + 4; yy < y2 - 1; yy += 4) CR.line(ctx, cx - 4, yy, cx + 4, yy - 1.5, r, 1, 'rgba(120,84,48,0.6)', 0.3); };
+          const board = (x1, yy, w) => { CR.rect(ctx, x1, yy, w, 6, r, 0.6); CR.fill(ctx, '#c98f5a', r, null); CR.stroke(ctx, r, 2);
+            ctx.fillStyle = 'rgba(245,236,217,0.9)'; ctx.fillRect(x1 + 3, yy - 1.5, w - 6, 2.5); };
+          ctx.fillStyle = 'rgba(19,26,40,0.16)'; ctx.beginPath(); ctx.ellipse(px + 24, py + 44, 24, 4.5, 0, 0, Math.PI * 2); ctx.fill();
+          rope(px + 8, py - 30, py + 22); rope(px + 40, py - 44, py + 42);
+          // 小木屋
+          CR.rect(ctx, px + 1, py + 18, 30, 25, r, 0.8); CR.fill(ctx, '#c98f5a', r, [px + 1, py + 18, 30, 25]); CR.stroke(ctx, r, 2.2);
+          ctx.beginPath(); ctx.moveTo(px + 8, py + 41); ctx.lineTo(px + 8, py + 30); ctx.lineTo(px + 10, py + 25); ctx.lineTo(px + 13, py + 29);
+          ctx.lineTo(px + 19, py + 29); ctx.lineTo(px + 22, py + 25); ctx.lineTo(px + 24, py + 30); ctx.lineTo(px + 24, py + 41); ctx.closePath();
+          ctx.fillStyle = '#6e4a30'; ctx.fill(); CR.stroke(ctx, r, 1.4);
+          board(px - 2, py + 12, 34); board(px + 14, py - 8, 34); board(px - 4, py - 34, 40); board(px + 4, py - 50, 44);
+          // 透明圓碗
+          ctx.beginPath(); ctx.arc(px + 26, py - 44, 13, 0, Math.PI); ctx.closePath();
+          ctx.fillStyle = 'rgba(215,235,245,0.55)'; ctx.fill(); CR.stroke(ctx, r, 1.8);
+          CR.line(ctx, px + 18, py - 41, px + 21, py - 36, r, 1.4, 'rgba(255,255,255,0.9)', 0.3);
+        } else if (ch === '抓') {
+          // 貓抓柱：圓底座、麻繩柱、上面垂一顆小毛球
+          ctx.fillStyle = 'rgba(19,26,40,0.16)'; ctx.beginPath(); ctx.ellipse(px + 24, py + 43, 18, 4, 0, 0, Math.PI * 2); ctx.fill();
+          CR.blob(ctx, px + 24, py + 39, 17, 5.5, r, 0.05, 14); CR.fill(ctx, '#e8d6ae', r, null); CR.stroke(ctx, r, 2);
+          CR.rect(ctx, px + 19, py - 8, 10, 46, r, 0.5); CR.fill(ctx, '#d9b77e', r, null); CR.stroke(ctx, r, 2);
+          for (let yy = py - 4; yy < py + 36; yy += 4) CR.line(ctx, px + 19, yy, px + 29, yy - 1.5, r, 1, 'rgba(120,84,48,0.6)', 0.3);
+          CR.blob(ctx, px + 24, py - 10, 8, 4, r, 0.06, 12); CR.fill(ctx, '#e8d6ae', r, null); CR.stroke(ctx, r, 2);
+          CR.line(ctx, px + 31, py - 9, px + 36, py + 2, r, 1.2, '#2b2a33', 0.5);
+          CR.blob(ctx, px + 36, py + 5, 4, 4, r, 0.1, 10); CR.fill(ctx, '#e89aa8', r, null); CR.stroke(ctx, r, 1.5);
+        } else if (ch === '碗') {
+          // 餐墊上兩個碗：一碗飼料、一碗水
+          CR.rect(ctx, px + 3, py + 20, T - 6, 22, r, 1.2); CR.fill(ctx, '#cfe0b4', r, [px + 3, py + 20, T - 6, 22]); CR.stroke(ctx, r, 1.8);
+          [[14, '#b5623f', '#8a5a3a'], [34, '#7fb2e5', '#bfe0f5']].forEach(([dx, rim, inside]) => {
+            CR.blob(ctx, px + dx, py + 31, 8.5, 6, r, 0.05, 12); CR.fill(ctx, rim, r, null); CR.stroke(ctx, r, 1.8);
+            CR.blob(ctx, px + dx, py + 30, 5.6, 3.4, r, 0.06, 10); ctx.fillStyle = inside; ctx.fill();
+          });
+          CR.dots(ctx, px + 10, py + 28, 8, 4, 4, '#5e3c26', r, 1.3);
+        } else if (ch === '泉') {
+          // 寵物飲水機：白色圓盆，中間一朵小花出水口
+          ctx.fillStyle = 'rgba(19,26,40,0.16)'; ctx.beginPath(); ctx.ellipse(px + 24, py + 42, 16, 4, 0, 0, Math.PI * 2); ctx.fill();
+          CR.blob(ctx, px + 24, py + 32, 15, 10, r, 0.04, 16); CR.fill(ctx, '#f6f3ec', r, null); CR.stroke(ctx, r, 2);
+          CR.blob(ctx, px + 24, py + 29, 11, 6, r, 0.05, 14); ctx.fillStyle = '#a9d5f0'; ctx.fill(); CR.stroke(ctx, r, 1.2, 'rgba(43,42,51,0.5)');
+          [0, 1, 2, 3, 4].forEach(i => { const a = i / 5 * Math.PI * 2; ctx.beginPath(); ctx.arc(px + 24 + Math.cos(a) * 3, py + 27 + Math.sin(a) * 2.2, 2.2, 0, Math.PI * 2); ctx.fillStyle = '#f2c94c'; ctx.fill(); });
+          CR.line(ctx, px + 24, py + 25, px + 24, py + 20, r, 1.4, 'rgba(255,255,255,0.9)', 0.3);
+        } else if (ch === '籃') {
+          // 玩具籃：藤編的籃子，裡面露出毛線球、小魚和逗貓棒
+          ctx.fillStyle = 'rgba(19,26,40,0.16)'; ctx.beginPath(); ctx.ellipse(px + 24, py + 43, 19, 4, 0, 0, Math.PI * 2); ctx.fill();
+          CR.line(ctx, px + 30, py + 22, px + 40, py + 2, r, 1.6, '#2b2a33', 0.5);
+          CR.blob(ctx, px + 41, py, 3.5, 5, r, 0.1, 10); CR.fill(ctx, '#f2c94c', r, null); CR.stroke(ctx, r, 1.4);
+          CR.blob(ctx, px + 17, py + 20, 7, 7, r, 0.06, 12); CR.fill(ctx, '#e89aa8', r, null); CR.stroke(ctx, r, 1.6);
+          CR.line(ctx, px + 12, py + 18, px + 22, py + 22, r, 1, 'rgba(255,255,255,0.7)', 0.4);
+          CR.blob(ctx, px + 29, py + 21, 6, 3.5, r, 0.08, 10); CR.fill(ctx, '#7fb2e5', r, null); CR.stroke(ctx, r, 1.4);
+          CR.rect(ctx, px + 7, py + 23, 34, 19, r, 1.5); CR.fill(ctx, '#d9a86a', r, [px + 7, py + 23, 34, 19]); CR.stroke(ctx, r, 2.2);
+          [29, 35].forEach(dy => CR.line(ctx, px + 8, py + dy, px + 40, py + dy, r, 1, 'rgba(110,76,44,0.55)', 0.6));
+          [15, 24, 33].forEach(dx => CR.line(ctx, px + dx, py + 24, px + dx, py + 41, r, 1, 'rgba(110,76,44,0.4)', 0.6));
+        } else if (ch === '球') {
+          // 地上滾著一顆毛線球，拖著一小段線
+          ctx.beginPath(); ctx.moveTo(px + 28, py + 34); ctx.quadraticCurveTo(px + 38, py + 40, px + 42, py + 32); CR.stroke(ctx, r, 1.4, (x + y) % 2 ? '#7fb2e5' : '#e89aa8');
+          CR.blob(ctx, px + 22, py + 30, 7, 7, r, 0.06, 12); CR.fill(ctx, (x + y) % 2 ? '#7fb2e5' : '#e89aa8', r, null); CR.stroke(ctx, r, 1.6);
+          CR.line(ctx, px + 17, py + 28, px + 27, py + 32, r, 1, 'rgba(255,255,255,0.7)', 0.4);
+          CR.line(ctx, px + 20, py + 25, px + 24, py + 35, r, 1, 'rgba(255,255,255,0.7)', 0.4);
         } else if (ch === '扭') {
           // 扭蛋機：一格寬，往上畫到牆上，像是靠牆放著
           ctx.fillStyle = 'rgba(19,26,40,0.18)'; ctx.beginPath(); ctx.ellipse(px + 24, py + 44, 20, 4, 0, 0, Math.PI * 2); ctx.fill();
@@ -5023,10 +5106,13 @@
         if (this.drawing && !p.rightButtonDown()) { chatInput.blur(); this.target = null; this.drawing.pts = [[p.worldX, p.worldY]]; this.drawing.len = 0; this.drawPreview(); return; }
         chatInput.blur();
         hideMenu();
-        const who = this.playerAt(p.worldX, p.worldY);
-        if (p.rightButtonDown()) { if (who) showMenu(who, p.event.clientX, p.event.clientY); return; }
-        if (who && p.wasTouch) {
-          this.pressTimer = this.time.delayedCall(550, () => { this.target = null; showMenu(who, p.event.clientX || p.x, p.event.clientY || p.y); });
+        // 自己的寵物、自己的小窩：右鍵（手機長按）出選單
+        const mine = this.myPetThingAt(p.worldX, p.worldY);
+        const who = mine ? null : this.playerAt(p.worldX, p.worldY);
+        const menu = (cx, cy) => { if (mine && mine.pet) showPetMenu(cx, cy); else if (mine) showBedMenu(mine.bed, cx, cy); else showMenu(who, cx, cy); };
+        if (p.rightButtonDown()) { if (who || mine) menu(p.event.clientX, p.event.clientY); return; }
+        if ((who || mine) && p.wasTouch) {
+          this.pressTimer = this.time.delayedCall(550, () => { this.target = null; menu(p.event.clientX || p.x, p.event.clientY || p.y); });
         }
         // 點到頭上的提示紙條就直接互動（手機上的主要用法，範圍放大一點比較好按）
         if (this.hint && this.hintAct) {
@@ -5806,8 +5892,8 @@
       // 寵物功能有開放給自己才看得到可愛生物休息區（門疊在地圖上面）
       MAP.setHotel(!!res.you.petsOn);
       if (res.you.petsOn && !this.hotelImg) {
-        const x0 = 34, y0 = 17;
-        this.textures.addCanvas('map-hotel', drawMap(x0, y0, 37, 21, true));
+        const x0 = 34, y0 = 12;
+        this.textures.addCanvas('map-hotel', drawMap(x0, y0, 51, 25, true));
         this.hotelImg = this.add.image(x0 * T, y0 * T, 'map-hotel').setOrigin(0).setDepth(-9);
       }
       this.pets.forEach(c => c.destroy());
@@ -7603,6 +7689,14 @@
         this.textures.addCanvas('pet-bed', c);
       }
       return 'pet-bed';
+    }
+    // (x, y) 點到的是不是自己的寵物或自己的小窩
+    myPetThingAt(x, y) {
+      if (!me || !me.pet) return null;
+      for (const c of this.pets.values()) if (c.state.owner === me.id && Math.hypot(x - c.x, y - (c.y - 14)) < 24) return { pet: true };
+      const bi = this.myBed();
+      if (bi >= 0) { const st = this.petBeds.get(bi).st; if (Math.hypot(x - st.x, y - (st.y - 4)) < 26) return { bed: bi }; }
+      return null;
     }
     // 自己的小窩在第幾個位置，沒有是 -1
     myBed() {

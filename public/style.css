@@ -367,6 +367,7 @@ button.inv-item:hover { border-color: var(--accent); }
 #ctx-menu button { display: block; width: 100%; text-align: left; font: 700 15px var(--display); background: none; border: 0;
   padding: 8px 10px; border-radius: 8px; cursor: pointer; color: var(--ink); }
 #ctx-menu button:hover { background: var(--silver); }
+#ctx-menu button.on { background: var(--ink); color: var(--ground); }
 .stat-bar .exp { background: #ffd23f; }
 .stat-bar.thin { height: 6px; }
 @media (max-width: 640px) {

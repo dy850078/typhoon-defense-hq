@@ -2618,9 +2618,8 @@
 
   // ---------------- 寵物：領養、捏外觀、取名字、換模式 ----------------
   const PET_MODE_DESC = {
-    follow: '跟在你旁邊走，你停下來牠會坐下，待久了就趴著睡。',
+    follow: '跟在你旁邊走，你停下來牠會坐下，待久了就趴著睡。到了野區和副本會幫你打附近的怪（不會被打倒）。',
     wander: '在總部和門口的草地自己慢慢晃。幫牠放了小窩的話，牠會走回去睡午覺。',
-    fight: '在野區和副本裡幫你打附近的怪（不會被打倒），其他時候跟在你身邊。',
   };
   const hexToHsl = (hex) => {
     const n = parseInt(hex.slice(1), 16), r = (n >> 16) / 255, g = ((n >> 8) & 255) / 255, b = (n & 255) / 255;
@@ -2647,47 +2646,66 @@
     const nameL = el('label', null, '名字');
     const nameI = el('input'); nameI.maxLength = PT.NAME_MAX; nameI.placeholder = '幫牠取個名字'; nameI.autocomplete = 'off'; nameI.value = me.pet ? me.pet.name : '';
     nameL.appendChild(nameI); fields.appendChild(nameL);
-    // 一排選項：chips（文字）或 swatches（顏色）
-    const row = (label, key, items, kind) => {
-      fields.appendChild(el('div', 'label', label));
-      const list = el('div', kind === 'color' ? 'swatches' : 'chips');
-      items.forEach(([v, l]) => {
-        const b = el('button'); b.type = 'button'; b.title = l; b.setAttribute('aria-label', l);
-        if (kind === 'color') b.style.background = v === 'odd' ? 'linear-gradient(90deg, #79b3e3 50%, #e3b23c 50%)' : v;
-        else b.textContent = l;
-        if (draft[key] === v) b.classList.add('on');
-        b.onclick = () => { draft[key] = v; [...list.children].forEach(x => x.classList.toggle('on', x === b)); draw(); };
-        list.appendChild(b);
-      });
-      fields.appendChild(list);
-      if (kind !== 'color') return;
-      // 色相拉桿：深淺跟著上面選的顏色，拉桿只換色相（灰色、黑色拉了會帶一點顏色）
-      const hue = el('input', 'pet-hue'); hue.type = 'range'; hue.min = 0; hue.max = 360; hue.step = 1;
-      hue.setAttribute('aria-label', label + '的色相');
-      const cur = () => hexToHsl(/^#/.test(draft[key]) ? draft[key] : '#e3b23c');
-      hue.value = Math.round(cur()[0]);
-      list.addEventListener('click', () => { hue.value = Math.round(cur()[0]); });
-      hue.oninput = () => {
-        const [, sat, lit] = cur();
-        draft[key] = hslToHex(Number(hue.value) % 360, Math.max(sat, 0.3), Math.min(0.88, Math.max(0.2, lit)));
-        [...list.children].forEach(x => x.classList.remove('on'));
-        draw();
-      };
-      fields.appendChild(hue);
-    };
-    const zip = (vals, names) => vals.map((v, i) => [v, names[i]]);
-    row('耳朵', 'ears', Object.entries(PT.EARS));
-    row('毛色', 'fur', zip(PT.FURS, PT.FUR_NAMES), 'color');
-    row('花紋', 'pattern', Object.entries(PT.PATTERNS));
-    row('花紋顏色', 'mark', zip(PT.MARKS, PT.MARK_NAMES), 'color');
-    row('白毛', 'white', Object.entries(PT.WHITES));
-    row('眼睛', 'eyes', zip(PT.EYES, PT.EYE_NAMES), 'color');
-    row('鼻子', 'nose', zip(PT.NOSES, PT.NOSE_NAMES), 'color');
-    row('尾巴', 'tail', Object.entries(PT.TAILS));
-    row('表情', 'face', Object.entries(PT.FACES));
     wrap.appendChild(fields);
     box.appendChild(wrap);
-    box.appendChild(el('p', 'modal-hint pet-bed-hint', '對著牠按右鍵（手機長按），可以選牠平常做什麼：跟在身邊、自由散步、一起打怪。'));
+    // 上半：選項（一列一種，標籤在左邊對齊）；下半：顏色（每種顏色一張小卡，裡面三條拉桿）
+    box.appendChild(el('h3', 'gear-h', '樣子'));
+    const opts = el('div', 'pet-opts');
+    const row = (label, items, get, set) => {
+      opts.appendChild(el('div', 'label', label));
+      const list = el('div', 'chips');
+      items.forEach(([v, l]) => {
+        const b = el('button', get() === v ? 'on' : null, l); b.type = 'button';
+        b.onclick = () => { set(v); [...list.children].forEach(x => x.classList.toggle('on', x === b)); draw(); };
+        list.appendChild(b);
+      });
+      opts.appendChild(list);
+    };
+    const opt = (label, key, items) => row(label, items, () => draft[key], (v) => { draft[key] = v; });
+    let eyeCol = /^#/.test(draft.eyes) ? draft.eyes : PT.DEFAULT.eyes; // 異色瞳的時候先記著原本的顏色
+    let eyeCard = null;
+    opt('耳朵', 'ears', Object.entries(PT.EARS));
+    opt('花紋', 'pattern', Object.entries(PT.PATTERNS));
+    opt('白毛', 'white', Object.entries(PT.WHITES));
+    row('眼睛', [['same', '兩眼同色'], ['odd', '異色瞳']], () => (draft.eyes === 'odd' ? 'odd' : 'same'),
+      (v) => { draft.eyes = v === 'odd' ? 'odd' : eyeCol; if (eyeCard) eyeCard.classList.toggle('off', v === 'odd'); });
+    opt('尾巴', 'tail', Object.entries(PT.TAILS));
+    opt('表情', 'face', Object.entries(PT.FACES));
+    box.appendChild(opts);
+    box.appendChild(el('h3', 'gear-h', '顏色'));
+    const cols = el('div', 'pet-colors');
+    const colorCard = (label, get, set) => {
+      const card = el('div', 'pet-color');
+      const head = el('div', 'pet-color-h'); const dot = el('span', 'pet-dot'); head.appendChild(dot); head.appendChild(el('span', null, label));
+      card.appendChild(head);
+      let [h, sat, lit] = hexToHsl(get());
+      const sl = {};
+      const paint = () => {
+        dot.style.background = get();
+        sl.s.style.background = `linear-gradient(90deg, ${hslToHex(h, 0, lit)}, ${hslToHex(h, 1, Math.min(0.75, Math.max(0.3, lit)))})`;
+        sl.l.style.background = `linear-gradient(90deg, ${hslToHex(h, sat, 0.12)}, ${hslToHex(h, sat, 0.5)}, ${hslToHex(h, sat, 0.95)})`;
+      };
+      [['h', '色相', 360, h], ['s', '鮮豔', 100, sat * 100], ['l', '深淺', 100, lit * 100]].forEach(([k, name, max, val]) => {
+        const line = el('label', 'pet-slider'); line.appendChild(el('span', null, name));
+        const inp = el('input', 'pet-hue' + (k === 'h' ? ' hue' : '')); inp.type = 'range'; inp.min = k === 'l' ? 12 : 0; inp.max = k === 'l' ? 95 : max; inp.step = 1; inp.value = Math.round(val);
+        inp.setAttribute('aria-label', label + name);
+        inp.oninput = () => {
+          if (k === 'h') h = Number(inp.value) % 360; else if (k === 's') sat = inp.value / 100; else lit = inp.value / 100;
+          set(hslToHex(h, sat, lit)); paint(); draw();
+        };
+        sl[k] = inp; line.appendChild(inp); card.appendChild(line);
+      });
+      paint();
+      cols.appendChild(card);
+      return card;
+    };
+    colorCard('毛色', () => draft.fur, (v) => { draft.fur = v; });
+    colorCard('花紋', () => draft.mark, (v) => { draft.mark = v; });
+    eyeCard = colorCard('眼睛', () => eyeCol, (v) => { eyeCol = v; if (draft.eyes !== 'odd') draft.eyes = v; });
+    if (draft.eyes === 'odd') eyeCard.classList.add('off');
+    colorCard('鼻子', () => draft.nose, (v) => { draft.nose = v; });
+    box.appendChild(cols);
+    box.appendChild(el('p', 'modal-hint pet-bed-hint', '對著牠按右鍵（手機長按），可以選牠平常做什麼：跟在身邊（到野區會一起打怪）或自由散步。'));
     const save = el('button', 'primary pet-save', me.pet ? '儲存' : '領養'); save.type = 'button';
     save.onclick = () => {
       draft.name = nameI.value.trim();
@@ -7637,6 +7655,7 @@
         c.act = a;
         c.body_.setTexture(this.petTex(c.state.pet, ['stand', 'sit', 'sleep'][a] || 'stand'));
         c.body_.setScale(PET_SCALE).setAngle(0);
+        c.frame_ = 'stand';
       };
       c.setPetAct(st.act === 'sleep' ? 2 : st.act === 'sit' ? 1 : 0);
     }
@@ -7664,11 +7683,12 @@
         const x = b.x, y = b.y + 2; // b.x, b.y 是牠睡的那一點
         let d = this.petBeds.get(b.i);
         if (!d) {
-          d = { img: this.add.image(x, y + 1, this.bedTex()).setOrigin(0.5, 28 / 40).setScale(0.6).setDepth(y - 2) };
+          d = { img: this.add.image(x, y + 1, this.bedTex()).setOrigin(0.5, 28 / 40).setScale(0.6) };
           this.petBeds.set(b.i, d);
         }
         d.st = b;
-        d.img.setPosition(x, y + 1).setDepth(y - 2);
+        // 小窩是鋪在地上的墊子：深度往上提一截，走回來睡的寵物和站在旁邊的人都畫在它上面
+        d.img.setPosition(x, y + 1).setDepth(y - 30);
         if (d.sleeper) { d.sleeper.destroy(); d.sleeper = null; }
         if (!b.on) {
           d.sleeper = this.add.image(x + 1, y - 2, this.petTex(b.pet, 'sleep')).setOrigin(0.5, 52 / 56).setScale(PET_SCALE).setDepth(y - 1);
@@ -8621,12 +8641,16 @@
         m.setDepth(m.y);
       });
 
-      // 寵物：平滑移動，走路時輕輕一跳一跳，睡覺時肚子一起一伏
+      // 寵物：平滑移動，走路時換腳，睡覺時肚子一起一伏
       this.pets.forEach(c => {
         c.x += (c.tx - c.x) * Math.min(1, dt * 7);
         c.y += (c.ty - c.y) * Math.min(1, dt * 7);
         const moving = Math.abs(c.tx - c.x) + Math.abs(c.ty - c.y) > 1.5;
-        c.body_.y = c.act === 0 && moving ? -Math.abs(Math.sin(time / 95)) * 2.2 : 0;
+        // 走路：站姿和跨步兩格輪流換（不往上跳，影子跟著貼圖一起跳看起來會像在飛）
+        if (c.act === 0) {
+          const f = moving && Math.floor(time / 170) % 2 ? 'walk' : 'stand';
+          if (f !== c.frame_) { c.frame_ = f; c.body_.setTexture(this.petTex(c.state.pet, f)); }
+        }
         if (c.act === 2) c.body_.scaleY = PET_SCALE * (1 + Math.sin(time / 650) * 0.025);
         c.setDepth(c.y);
       });

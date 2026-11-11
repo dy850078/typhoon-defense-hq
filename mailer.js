@@ -68,5 +68,14 @@ module.exports = {
   wishReply: (to, username, w, c, link) => send(to, `管理員回覆了你的願望「${w.title}」`,
     [`嗨 ${username}，管理員回覆了你的願望。`, wishCard(w), replyBlock(c), '想回應的話，到總部的許願池點開這個願望就能留言。'],
     '到總部看看', link, '不想收到這種通知的話，到首頁的「帳號設定」把「願望有管理員回覆時寄信通知我」關掉。'),
+  // 有人許了新願望：寄到總部信箱（WISH_NOTIFY_TO，沒設就寄到 MAIL_FROM），讓管理員知道
+  // w：{ title, catName, body, name, username, when }
+  newWish: (to, w, link) => send(to, `新願望：【${w.catName}】${w.title}`,
+    [`${w.name}（帳號 ${w.username}）在許願池許了一個新願望。`,
+      { text: `【${w.catName}】${w.title}${w.body ? '\n' + w.body : ''}\n${w.when}`,
+        html: `<div style="border:1px solid #E5E7EB;border-radius:12px;padding:14px 16px;margin:0 0 14px">
+<p style="margin:0 0 6px;font-size:12px;color:#6B7280"><span style="color:${CAT_COLOR[w.cat] || CAT_COLOR.other};font-weight:700">${esc(w.catName)}</span>・${esc(w.when)}</p>
+<p style="margin:0${w.body ? ' 0 8px' : ''};font-size:17px;font-weight:700;line-height:1.5">${esc(w.title)}</p>${w.body ? `<p style="margin:0;line-height:1.7">${multi(w.body)}</p>` : ''}</div>` }],
+    '到總部看看', link, '這是寄給總部管理員的通知信。'),
   reset: (to, username, link) => send(to, '重設你的密碼', [`嗨，你的帳號是「${username}」。`, '有人（希望是你）申請重設密碼，點下面的按鈕設定新密碼。', '連結 30 分鐘內有效，只能用一次。'], '設定新密碼', link),
 };

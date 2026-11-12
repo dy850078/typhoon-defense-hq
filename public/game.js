@@ -34,7 +34,7 @@
   const FRAME = { w: 128, h: 112, ox: 32, oy: 32 };
   const AV_ORIGIN_Y = (FRAME.oy + 76) / FRAME.h;
   const WING_RES = 1.5; // XR 翅膀影格的解析度（人物貼圖是 2 倍；翅膀影格多，用 1.5 倍省記憶體）
-  const WING_MS = 100; // 翅膀每格停多久（20 格 = 拍兩下 = 2 秒）
+  const WING_MS = 85; // 翅膀每格停多久（36 格 = 慢慢拍一下 ≈ 3 秒）
   const T = MAP.TILE;
   const SPEED = 220;
   const PET_SCALE = 0.42; // 寵物貼圖（64x56 畫成兩倍）在地圖上的大小

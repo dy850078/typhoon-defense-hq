@@ -1139,8 +1139,8 @@
     }
     // ---------- 繪師畫的翅膀圖：有圖就用圖，還沒有圖（或圖載入失敗）就用上面程式畫的 ----------
     // 圖只有右翅，左翅鏡像。x, y：圖左上角相對肩膀（翅根軸心）的位置，單位是人物框座標；px：圖上每一單位幾個像素
-    // 圖從繪師的 PSD（人物框 10 倍大）裁出右翅再縮小，軸心就是 PSD 上的 (980, 910)
-    const ART_FILES = { fire: { src: '/art/wing-fire.png', x: -2.9, y: -39.5, px: 4 } };
+    // 圖從繪師的 PSD（人物框 10 倍大）裁出右翅、外面加一圈粗黑邊（跟遊戲其他東西的外框一樣粗）再縮小，軸心就是 PSD 上的 (980, 910)
+    const ART_FILES = { fire: { src: '/art/wing-fire.png', x: -4.5, y: -41.1, px: 4 } };
     const ART = {};
     const api = { onArt: null };
     function prepArt(kind, img) {

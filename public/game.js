@@ -5620,14 +5620,6 @@
       c.wings.ox = B.x + B.w / 2 + FRAME.ox - FRAME.w / 2;
       c.wings.oy = B.y + B.h / 2 + FRAME.oy - AV_ORIGIN_Y * FRAME.h;
       c.addAt(c.wings, 0);
-      // 跟穿 SSR 的人物一樣的閃色：外圍一圈慢慢呼吸的光（顏色在粉紅和銀白之間流轉，見 update）＋一道玻璃般的反光掃過
-      if (c.wings.preFX) {
-        c.wings.preFX.setPadding(10);
-        const glow = c.wings.glow = c.wings.preFX.addGlow(0xffd6f4, 1, 0, false, 0.1, 10);
-        const tw = this.tweens.add({ targets: glow, outerStrength: 3, duration: 1800, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-        c.wings.once('destroy', () => tw.stop());
-        c.wings.preFX.addShine(0.18, 0.18, 6);
-      }
     }
     wingFrames(kind) {
       if (this.textures.exists(`wing-${kind}-0`)) return;
@@ -8898,16 +8890,11 @@
           c.orb.y = c.body_.y + GR.WAND.at[1] + FRAME.oy - AV_ORIGIN_Y * FRAME.h;
         }
         if (c.wings) {
-          // 翅膀慢慢拍（約 3 秒一下）；每個人錯開一點，大家不會同步拍
+          // 翅膀一秒拍一下左右；每個人錯開一點，大家不會同步拍
           const n = GR.DRAGON.FRAMES, i = Math.floor(time / WING_MS + (c.pid ? c.pid.charCodeAt(c.pid.length - 1) : 0)) % n;
           c.wings.setVisible(!c.body_.angle).setTexture(`wing-${c.wings.kind}-${i}`);
           c.wings.x = c.body_.x + c.wings.ox;
           c.wings.y = c.body_.y + c.wings.oy;
-          if (c.wings.glow) {
-            // 粉紅 (255,170,225) 和銀白 (230,236,245) 之間慢慢來回
-            const k = 0.5 + 0.5 * Math.sin(time / 2200);
-            c.wings.glow.color = Phaser.Display.Color.GetColor(255 - 25 * k, 170 + 66 * k, 225 + 20 * k);
-          }
         }
         if (c.hat) c.hat.y = -60 + c.body_.y;
         if (c.cake) c.cake.y = -6 + c.body_.y;

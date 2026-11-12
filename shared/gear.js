@@ -1137,14 +1137,119 @@
       ctx.moveTo(x, y - sz * 2); ctx.quadraticCurveTo(x, y, x + sz * 2, y); ctx.quadraticCurveTo(x, y, x, y + sz * 2); ctx.quadraticCurveTo(x, y, x - sz * 2, y); ctx.quadraticCurveTo(x, y, x, y - sz * 2);
       ctx.fill(); ctx.restore();
     }
+    // ---------- 繪師畫的翅膀圖：有圖就用圖，還沒有圖（或圖載入失敗）就用上面程式畫的 ----------
+    // 圖只有右翅，左翅鏡像。x, y：圖左上角相對肩膀（翅根軸心）的位置，單位是人物框座標；px：圖上每一單位幾個像素
+    // 圖從繪師的 PSD（人物框 10 倍大）裁出右翅再縮小，軸心就是 PSD 上的 (980, 910)
+    const ART_FILES = { fire: { src: '/art/wing-fire.png', x: -2.9, y: -39.5, px: 4 } };
+    const ART = {};
+    const api = { onArt: null };
+    function prepArt(kind, img) {
+      const f = ART_FILES[kind], w = img.width, h = img.height, u = f.px;
+      // 背後的光暈：把翅膀剪影塗成光的顏色，往四周錯開疊幾圈，做成一張暈開的光（只做一次）
+      const sil = document.createElement('canvas'); sil.width = w; sil.height = h;
+      const sx = sil.getContext('2d'); sx.drawImage(img, 0, 0);
+      sx.globalCompositeOperation = 'source-in'; sx.fillStyle = kind === 'ice' ? 'rgb(170,230,255)' : 'rgb(255,170,60)'; sx.fillRect(0, 0, w, h);
+      const pad = 10 * u, glow = document.createElement('canvas'); glow.width = w + pad * 2; glow.height = h + pad * 2;
+      const gx = glow.getContext('2d');
+      [[7, 0.06], [4.5, 0.09], [2.5, 0.12]].forEach(([rr, al]) => {
+        gx.globalAlpha = al;
+        for (let i = 0; i < 16; i++) { const an = i / 16 * Math.PI * 2; gx.drawImage(sil, pad + Math.cos(an) * rr * u, pad + Math.sin(an) * rr * u); }
+      });
+      // 翅膀外緣的點：火星、雪花從這裡冒出來（離翅根太近的不要，點跟點至少隔 7 單位）
+      const data = sx.getImageData(0, 0, w, h).data; // 剪影的 alpha 跟原圖一樣
+      const op = (x, y) => x >= 0 && y >= 0 && x < w && y < h && data[(y * w + x) * 4 + 3] > 128;
+      const pts = [], d = 3 * u;
+      for (let y = 0; y < h; y += 2) for (let x = 0; x < w; x += 2) {
+        if (!op(x, y) || (op(x - d, y) && op(x + d, y) && op(x, y - d) && op(x, y + d))) continue;
+        const px = f.x + x / u, py = f.y + y / u;
+        if (Math.hypot(px, py) < 14 || pts.some(([qx, qy]) => Math.hypot(qx - px, qy - py) < 7)) continue;
+        pts.push([px, py]);
+      }
+      // 往外的方向：從翅膀中心往外
+      const cx = f.x + w / u / 2, cy = f.y + h / u / 2;
+      const tmp = document.createElement('canvas'); tmp.width = w; tmp.height = h;
+      // 往下拍甩火星的位置：翅膀下半部離肩膀最遠的幾個外緣點（彼此隔開一點），一邊翅膀 5 顆就好
+      const burst = [];
+      pts.filter(p => p[1] > cy - 6).slice().sort((p, q) => Math.hypot(q[0], q[1]) - Math.hypot(p[0], p[1])).forEach(p => {
+        if (burst.length < 5 && !burst.some(q => Math.hypot(q[0] - p[0], q[1] - p[1]) < 14)) burst.push(p);
+      });
+      ART[kind] = { img, glow, pad, pts, burst, cx, cy, tmp, f };
+    }
+    if (typeof document !== 'undefined' && typeof Image !== 'undefined') {
+      Object.keys(ART_FILES).forEach(kind => {
+        const img = new Image();
+        img.onload = () => { try { prepArt(kind, img); } catch (e) { return; } if (api.onArt) api.onArt(kind); };
+        img.src = ART_FILES[kind].src;
+      });
+    }
+    // 畫繪師的單邊翅膀（座標已經移到肩膀、轉好拍動的角度）
+    function artWing(ctx, kind, s, side, ft) {
+      const A = ART[kind], f = A.f, u = 1 / f.px, w = A.img.width, h = A.img.height;
+      // 背後光暈，一明一暗
+      ctx.save(); ctx.globalAlpha = 0.6 + 0.3 * Math.sin((s * 2 + side * 0.25) * Math.PI * 2);
+      ctx.drawImage(A.glow, f.x - A.pad * u, f.y - A.pad * u, A.glow.width * u, A.glow.height * u); ctx.restore();
+      // 翅膀本體＋一道從翅根掃到翅尖的光澤（只亮在翅膀上）
+      const t = A.tmp.getContext('2d');
+      t.globalCompositeOperation = 'source-over'; t.globalAlpha = 1; t.clearRect(0, 0, w, h); t.drawImage(A.img, 0, 0);
+      const dx = (-0.3 + s * 1.6) * w, g = t.createLinearGradient(dx - w * 0.12, h, dx + w * 0.12, 0);
+      g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(0.5, kind === 'ice' ? 'rgba(255,255,255,0.9)' : 'rgba(255,245,190,0.9)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+      t.globalCompositeOperation = 'source-atop'; t.globalAlpha = 0.2; t.fillStyle = g; t.fillRect(0, 0, w, h);
+      ctx.drawImage(A.tmp, f.x, f.y, w * u, h * u);
+      // 外緣冒出的火星（往上飄、慢慢變暗）／雪花（往外飄）
+      A.pts.forEach(([x, y], i) => {
+        if (i % (kind === 'fire' ? 4 : 2)) return;
+        let ox = x - A.cx, oy = y - A.cy; const d = Math.hypot(ox, oy) || 1; ox /= d; oy /= d;
+        const fr = (s * 3 + i * 0.29) % 1;
+        ctx.save(); ctx.globalAlpha = Math.sin(fr * Math.PI);
+        if (kind === 'ice') {
+          ctx.strokeStyle = '#8fd3f5'; ctx.lineWidth = 1.3; ctx.lineCap = 'round';
+          ctx.translate(x + ox * (4 + fr * 9), y + oy * (4 + fr * 9) - fr * 3); ctx.rotate(fr * 2);
+          for (let k = 0; k < 3; k++) { ctx.rotate(Math.PI / 3); ctx.beginPath(); ctx.moveTo(-2.2, 0); ctx.lineTo(2.2, 0); ctx.stroke(); }
+        } else {
+          const fx = x + ox * (2 + fr * 4) + Math.sin(fr * 9 + i) * 1.5, fy = y + oy * (2 + fr * 4) - fr * 12;
+          ctx.fillStyle = fr < 0.5 ? '#fff3b0' : '#ffb020';
+          ctx.beginPath(); ctx.moveTo(fx, fy - 2.4); ctx.quadraticCurveTo(fx, fy, fx + 2.4, fy); ctx.quadraticCurveTo(fx, fy, fx, fy + 2.4); ctx.quadraticCurveTo(fx, fy, fx - 2.4, fy); ctx.quadraticCurveTo(fx, fy, fx, fy - 2.4); ctx.fill();
+        }
+        ctx.restore();
+      });
+      // 往下拍的時候，從翅膀下緣和翅尖甩出幾顆火星，順著翅膀拍下去的方向往斜下散、拖一小段尾巴、慢慢熄掉
+      if (kind === 'fire' && ft != null) {
+        const b = ((ft - FLAP_UP + 1) % 1) / 0.55;
+        // 甩出去的方向：翅膀往下拍是繞肩膀順時針轉，那一點的轉動切線（往下）＋一點往外
+        const dirOf = (x, y) => { const d = Math.hypot(x, y) || 1, mx = -y / d * 0.8 + x / d * 0.45, my = x / d * 0.8 + y / d * 0.45, md = Math.hypot(mx, my) || 1; return [mx / md, my / md]; };
+        if (b < 1) A.burst.forEach(([x, y], i) => {
+          const r1 = Math.sin(i * 12.9898 + 3) * 0.5 + 0.5, r2 = Math.sin(i * 78.233 + 1) * 0.5 + 0.5;
+          const [ox, oy] = dirOf(x, y);
+          const go = sp => 1 - Math.pow(1 - Math.min(1, sp), 3), sp = 20 + r1 * 14;
+          const k = go(b), k0 = go(Math.max(0, b - 0.12));
+          const fx = x + ox * k * sp, fy = y + oy * k * sp + b * b * 4, tx = x + ox * k0 * sp, ty = y + oy * k0 * sp + Math.max(0, b - 0.12) ** 2 * 4;
+          const z = (1.8 + r2 * 1.2) * (1 - b * 0.4);
+          ctx.save(); ctx.globalAlpha = b < 0.6 ? 1 : (1 - b) / 0.4;
+          ctx.fillStyle = 'rgba(255,170,60,0.4)'; ctx.beginPath(); ctx.arc(fx, fy, z * 2.4, 0, 7); ctx.fill();
+          ctx.strokeStyle = '#ffb020'; ctx.lineWidth = z * 0.9; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(fx, fy); ctx.stroke();
+          ctx.fillStyle = b < 0.35 ? '#fff3b0' : '#ffd23f';
+          ctx.beginPath(); ctx.moveTo(fx, fy - z * 1.6); ctx.quadraticCurveTo(fx, fy, fx + z * 1.6, fy); ctx.quadraticCurveTo(fx, fy, fx, fy + z * 1.6); ctx.quadraticCurveTo(fx, fy, fx - z * 1.6, fy); ctx.quadraticCurveTo(fx, fy, fx, fy - z * 1.6); ctx.fill();
+          ctx.restore();
+        });
+      }
+    }
+    // 拍一下的姿勢：t 從 0 到 1。往上抬慢慢的、翅膀微微收起；往下拍比較快、完全張開（像大型的龍，莊重不急躁）
+    // 回傳 a：翅膀往上轉的角度；sx：橫向張開多少（1 = 全開）
+    const FLAP_UP = 0.62; // 一圈裡往上抬佔的比例，後面是往下拍
+    function flapPose(t) {
+      const U = FLAP_UP, ease = x => 0.5 - 0.5 * Math.cos(Math.PI * x);
+      if (t < U) { const x = t / U; return { a: (-1 + 2 * ease(x)) * 0.2, sx: 1 - 0.16 * Math.sin(Math.PI * x) }; }
+      const x = (t - U) / (1 - U); return { a: (1 - 2 * ease(x)) * 0.2, sx: 1 };
+    }
     function dragonWings(ctx, C, kind, t, s) {
-      const a = Math.sin(t * Math.PI * 2) * 0.15;
-      const sx = 1 - 0.2 * Math.max(0, -Math.sin(t * Math.PI * 2));
+      const { a, sx } = t == null ? { a: 0, sx: 1 } : flapPose(t); // t 是 null：靜態的一張（衣櫃、圖鑑），翅膀平平張開
       [1, -1].forEach(k => {
         const r = C.rng(kind === 'ice' ? 11 : 23);
         ctx.save();
         if (k < 0) { ctx.translate(64, 0); ctx.scale(-1, 1); }
-        ctx.translate(42, 47); ctx.rotate(-a); ctx.scale(sx * 0.82, 0.82);
+        ctx.translate(42, 47); ctx.rotate(-a);
+        if (ART[kind]) { ctx.scale(sx, 1); artWing(ctx, kind, s, k, t); ctx.restore(); return; }
+        ctx.scale(sx * 0.82, 0.82);
         aura(ctx, C, kind, s, true);
         oneWing(ctx, C, r, kind, s);
         aura(ctx, C, kind, s, false);
@@ -1157,16 +1262,16 @@
         ctx.restore();
       });
     }
-    // 一張影格：i 從 0 到 FRAMES-1；拍兩下是一圈，光澤掃一次也是一圈，最後一格接回第一格
-    const FRAMES = 20;
-    const frame = (ctx, C, kind, i) => dragonWings(ctx, C, kind, ((i * 2) % FRAMES) / FRAMES, i / FRAMES);
+    // 一張影格：i 從 0 到 FRAMES-1；拍一下是一圈，光澤掃一次也是一圈，最後一格接回第一格
+    const FRAMES = 36;
+    const frame = (ctx, C, kind, i) => dragonWings(ctx, C, kind, i / FRAMES, i / FRAMES);
     // 影格範圍（人物框座標）：左右各多 56、上面多 44、下面多 16
     const BOX = { x: -56, y: -44, w: 176, h: 140 };
-    return { FRAMES, BOX, frame, draw: dragonWings };
+    return Object.assign(api, { FRAMES, BOX, frame, draw: dragonWings, hasArt: kind => !!ART[kind] });
   })();
   Object.assign(DRAW, {
-    iceDragon: { cape(ctx, C) { DRAGON.draw(ctx, C, 'ice', 0, 0.3); } },
-    fireDragon: { cape(ctx, C) { DRAGON.draw(ctx, C, 'fire', 0, 0.3); } },
+    iceDragon: { cape(ctx, C) { DRAGON.draw(ctx, C, 'ice', null, 0.3); } },
+    fireDragon: { cape(ctx, C) { DRAGON.draw(ctx, C, 'fire', null, 0.3); } },
   });
 
   // 身上穿齊哪個系列（三格同系列、系列有特效），沒有就是 null

@@ -1168,12 +1168,23 @@
       // 往外的方向：從翅膀中心往外
       const cx = f.x + w / u / 2, cy = f.y + h / u / 2;
       const tmp = document.createElement('canvas'); tmp.width = w; tmp.height = h;
-      // 往下拍甩火星的位置：離肩膀最遠的幾個外緣點（彼此隔開一點），一邊翅膀 5 顆就好
+      // 往下拍甩火星的位置：翅膀下半部離肩膀最遠的幾個外緣點（彼此隔開一點），一邊翅膀 5 顆就好
       const burst = [];
-      pts.slice().sort((p, q) => Math.hypot(q[0], q[1]) - Math.hypot(p[0], p[1])).forEach(p => {
+      pts.filter(p => p[1] > cy - 6).slice().sort((p, q) => Math.hypot(q[0], q[1]) - Math.hypot(p[0], p[1])).forEach(p => {
         if (burst.length < 5 && !burst.some(q => Math.hypot(q[0] - p[0], q[1] - p[1]) < 14)) burst.push(p);
       });
-      ART[kind] = { img, glow, pad, pts, burst, cx, cy, tmp, f };
+      // 往下拍推出去的波紋：沿著翅膀下緣外半段的點，依繞肩膀的角度排好連成一條線
+      // 翼膜下緣有很多凹凸，直接連會變成亂線：把角度分成 7 段，每段只取離肩膀最遠的一點，連起來才是一道平順的弧
+      const low = pts.filter(p => p[1] > cy - 6 && Math.hypot(p[0], p[1]) > 24), ang = p => Math.atan2(p[1], p[0]);
+      const ripple = [];
+      if (low.length) {
+        const a0 = Math.min(...low.map(ang)), a1 = Math.max(...low.map(ang)), N = 7;
+        for (let i = 0; i < N; i++) {
+          const bin = low.filter(p => { const a = ang(p); return a >= a0 + (a1 - a0) * i / N && a <= a0 + (a1 - a0) * (i + 1) / N; });
+          if (bin.length) ripple.push(bin.reduce((m, p) => Math.hypot(p[0], p[1]) > Math.hypot(m[0], m[1]) ? p : m));
+        }
+      }
+      ART[kind] = { img, glow, pad, pts, burst, ripple, cx, cy, tmp, f };
     }
     if (typeof document !== 'undefined' && typeof Image !== 'undefined') {
       Object.keys(ART_FILES).forEach(kind => {
@@ -1212,15 +1223,29 @@
         }
         ctx.restore();
       });
-      // 往下拍的時候，從翅膀外緣甩出幾顆火星，從肩膀往外放射飛出去、拖一小段尾巴、慢慢熄掉
+      // 往下拍的時候，翅膀下緣推出波紋般的熱浪，再甩出幾顆火星，都順著翅膀拍下去的方向往斜下散、慢慢熄掉
       if (kind === 'fire' && ft != null) {
         const b = ((ft - FLAP_UP + 1) % 1) / 0.55;
+        // 甩出去的方向：翅膀往下拍是繞肩膀順時針轉，那一點的轉動切線（往下）＋一點往外
+        const dirOf = (x, y) => { const d = Math.hypot(x, y) || 1, mx = -y / d * 0.8 + x / d * 0.45, my = x / d * 0.8 + y / d * 0.45, md = Math.hypot(mx, my) || 1; return [mx / md, my / md]; };
+        // 波紋：兩道熱浪沿著翅膀下緣的形狀往斜下推出去，越推越淡、越細（第二道晚一點出來）
+        if (A.ripple.length > 2) [0, 0.22].forEach((lag, j) => {
+          const c = (b - lag) / 0.85; if (c <= 0 || c >= 1) return;
+          const k = 1 - Math.pow(1 - c, 2), dist = 4 + k * (18 - j * 4);
+          const P = A.ripple.map(([x, y]) => { const [ox, oy] = dirOf(x, y); return [x + ox * dist, y + oy * dist]; });
+          const line = () => { ctx.beginPath(); ctx.moveTo(...P[0]); for (let i = 1; i < P.length - 1; i++) ctx.quadraticCurveTo(P[i][0], P[i][1], (P[i][0] + P[i + 1][0]) / 2, (P[i][1] + P[i + 1][1]) / 2); ctx.lineTo(...P[P.length - 1]); };
+          ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+          const al = Math.sin(c * Math.PI) * (j ? 0.55 : 0.85);
+          ctx.globalAlpha = al * 0.5; ctx.strokeStyle = '#ff9a3c'; ctx.lineWidth = 5 * (1 - c * 0.6); line(); ctx.stroke();
+          ctx.globalAlpha = al; ctx.strokeStyle = '#ffe08a'; ctx.lineWidth = 1.6 * (1 - c * 0.5); line(); ctx.stroke();
+          ctx.restore();
+        });
         if (b < 1) A.burst.forEach(([x, y], i) => {
           const r1 = Math.sin(i * 12.9898 + 3) * 0.5 + 0.5, r2 = Math.sin(i * 78.233 + 1) * 0.5 + 0.5;
-          const d = Math.hypot(x, y) || 1, ox = x / d, oy = y / d; // 從肩膀往外的方向
+          const [ox, oy] = dirOf(x, y);
           const go = sp => 1 - Math.pow(1 - Math.min(1, sp), 3), sp = 20 + r1 * 14;
           const k = go(b), k0 = go(Math.max(0, b - 0.12));
-          const fx = x + ox * k * sp, fy = y + oy * k * sp - k * 3, tx = x + ox * k0 * sp, ty = y + oy * k0 * sp - k0 * 3;
+          const fx = x + ox * k * sp, fy = y + oy * k * sp + b * b * 4, tx = x + ox * k0 * sp, ty = y + oy * k0 * sp + Math.max(0, b - 0.12) ** 2 * 4;
           const z = (1.8 + r2 * 1.2) * (1 - b * 0.4);
           ctx.save(); ctx.globalAlpha = b < 0.6 ? 1 : (1 - b) / 0.4;
           ctx.fillStyle = 'rgba(255,170,60,0.4)'; ctx.beginPath(); ctx.arc(fx, fy, z * 2.4, 0, 7); ctx.fill();

@@ -5086,6 +5086,17 @@
     constructor() { super('hq'); this.remotes = new Map(); this.told = {}; this.walls = new Map(); this.storms = new Map(); this.drawing = null; }
 
     create() {
+      // 繪師畫的翅膀圖晚一點才載好：已經畫過的拍動影格直接在原本的畫布上重畫成新圖
+      GR.DRAGON.onArt = kind => {
+        if (!this.textures || !this.textures.exists(`wing-${kind}-0`)) return;
+        const B = GR.DRAGON.BOX;
+        for (let i = 0; i < GR.DRAGON.FRAMES; i++) {
+          const tex = this.textures.get(`wing-${kind}-${i}`), cv = tex.getSourceImage(), x = cv.getContext('2d');
+          x.setTransform(1, 0, 0, 1, 0, 0); x.clearRect(0, 0, cv.width, cv.height);
+          x.scale(WING_RES, WING_RES); x.translate(-B.x, -B.y); GR.DRAGON.frame(x, CR, kind, i);
+          if (tex.refresh) tex.refresh();
+        }
+      };
       // 地圖切成幾塊畫：上面是總部和副本區，下面是往南延伸的野區（副本區下面全是虛空，不用畫）
       // 每塊寬度都要在 4096px 以內（很多手機顯示卡一張貼圖的上限）
       [[0, 0, MAP.MW, MAP.DH], [MAP.MW, 0, MAP.LX, MAP.DH], [MAP.LX, 0, MAP.TLX, MAP.DH], [MAP.TLX, 0, MAP.W, MAP.DH], [0, MAP.DH, MAP.MW, MAP.H]].forEach(([x0, y0, x1, y1], i) => {

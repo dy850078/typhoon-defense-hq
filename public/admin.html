@@ -51,6 +51,27 @@ td.wish ul.cmts li { display: flex; align-items: flex-start; gap: 6px; font-size
 td.wish ul.cmts li span { flex: 1; white-space: pre-wrap; word-break: break-word; color: var(--muted); }
 td.wish ul.cmts li b.adm { color: #2c5596; }
 td.wish button.x { flex-shrink: 0; width: 22px; height: 22px; min-height: 0; padding: 0; border-radius: 50%; font-size: 14px; line-height: 1; }
+
+.tabs { position: sticky; top: 0; z-index: 5; display: flex; gap: 6px; overflow-x: auto; margin: 20px -16px 0; padding: 10px 16px; background: var(--ground); border-bottom: 2px solid var(--ink); scrollbar-width: none; }
+.tabs a { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 999px; border: 2px solid var(--line); color: var(--ink); text-decoration: none; font-weight: 700; font-size: 15px; background: var(--paper); }
+.tabs a.on { background: var(--ink); border-color: var(--ink); color: #fff; }
+.badge { min-width: 22px; padding: 0 6px; border-radius: 999px; background: var(--line); color: var(--ink); font-size: 12px; line-height: 20px; text-align: center; }
+.badge.hot { background: var(--accent); color: #fff; }
+.tabs a.on .badge { background: #fff; color: var(--ink); }
+.tab-head { margin-top: 24px; }
+.tab-head h2 { font-size: 24px; margin: 0; }
+.tab-head .note { margin: 2px 0 0; }
+.tab:not(.on) { display: none; }
+label.switch { flex-direction: row; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 0; border-top: 1px solid var(--line); cursor: pointer; }
+label.switch span { display: flex; flex-direction: column; gap: 2px; }
+label.switch b { font-size: 16px; }
+label.switch small { font-weight: 500; color: var(--muted); font-size: 13px; line-height: 1.5; }
+label.switch input { appearance: none; -webkit-appearance: none; flex: 0 0 auto; width: 52px; height: 30px; min-height: 0; padding: 0; margin: 0; border: none; border-radius: 999px; background: var(--line); position: relative; cursor: pointer; transition: background .15s; }
+label.switch input::after { content: ""; position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.25); transition: left .15s; }
+label.switch input:checked { background: #34C759; }
+label.switch input:checked::after { left: 25px; }
+.tab .card:first-of-type { margin-top: 12px; }
+@media (max-width: 480px) { .tabs { gap: 4px; } .tabs a { padding: 6px 10px; font-size: 14px; gap: 4px; } .badge { min-width: 18px; padding: 0 5px; font-size: 11px; line-height: 18px; } }
 </style>
 </head>
 <body>
@@ -69,46 +90,27 @@ td.wish button.x { flex-shrink: 0; width: 22px; height: 22px; min-height: 0; pad
   </form>
 
   <div id="panel" hidden>
-    <form class="card" id="party">
-      <h2>派對時間</h2>
-      <div class="row">
-        <label>日期<input type="date" id="p-date" required></label>
-        <label>時間（台灣時間）<input type="time" id="p-time" required></label>
-        <button type="submit" class="primary">儲存</button>
-      </div>
-      <div class="preview" id="p-preview"></div>
-      <p class="note">報名頁、邀請函、IG 限時動態、總部裡的 VIP Pass 都會換成新的時間。已經存下來的限時動態影片不會變。</p>
-      <p class="msg" id="party-msg"></p>
-    </form>
-
-    <form class="card" id="pets-card">
-      <h2>寵物功能</h2>
-      <div class="row">
-        <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="pets-open" style="width:auto;margin:0"> 開放給所有人</label>
-        <button type="submit" class="primary">儲存</button>
-      </div>
-      <p class="note">沒打開的時候，只有帳號「設為管理員」的人看得到寵物、領養得到，也進得去休息區右邊那個房間（可愛生物休息區）。改完請大家重新整理一次。</p>
-      <p class="msg" id="pets-msg"></p>
-    </form>
-
-    <form class="card" id="announce">
-      <h2>預告更新</h2>
-      <p class="note" style="margin: 0 0 12px">要重啟伺服器（例如 git pull 新版本）之前先預告，大家畫面上方會出現倒數；時間到會先幫大家存好角色，這裡顯示「可以重啟了」再重啟。重啟後大家會自動收到「重新整理」的提醒。</p>
-      <div class="row">
-        <label style="flex: 1 1 260px">公告內容<input id="a-text" maxlength="60" placeholder="總部要更新了，先找個安全的地方"></label>
-        <label>多久後<select id="a-min"><option value="1">1 分鐘</option><option value="3" selected>3 分鐘</option><option value="5">5 分鐘</option></select></label>
-        <button type="submit" class="primary">發布</button>
-        <button type="button" id="a-cancel">取消預告</button>
-      </div>
-      <div class="preview" id="a-state">目前沒有預告</div>
-    </form>
-
+    <nav class="tabs" id="tabs">
+      <a href="#players" data-tab="players">玩家<span class="badge" id="nb-acct">0</span></a>
+      <a href="#wishes" data-tab="wishes">許願池<span class="badge hot" id="nb-wish">0</span></a>
+      <a href="#world" data-tab="world">遊戲設定</a>
+      <a href="#events" data-tab="events">公告與活動</a>
+    </nav>
+    <section class="tab" id="tab-players" data-tab="players">
+      <header class="tab-head"><h2>玩家</h2><p class="note">帳號清單、改密碼、改等級、設管理員，還有送禮物。</p></header>
     <section class="card">
-      <h2>小樹屋語音中繼</h2>
-      <p class="note" style="margin: 0 0 12px">接不通的人會透過中繼伺服器（TURN）通話。這個月用到上限就不再走中繼，只剩直連，不會超過免費額度。</p>
-      <div class="preview" id="t-state">讀取中…</div>
+      <div class="row" style="justify-content: space-between; align-items: center">
+        <h2 style="margin: 0">帳號（<span id="count">0</span>）</h2>
+        <button type="button" class="small" id="reload">重新整理</button>
+      </div>
+      <p class="msg" id="acct-msg"></p>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>帳號</th><th>Email</th><th>角色</th><th>職業</th><th>等級</th><th>邀請函</th><th>最後上線</th><th></th></tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
     </section>
-
     <form class="card" id="gift">
       <h2>送禮物</h2>
       <p class="note" style="margin: 0 0 12px">把一件裝備放進對方的衣櫃（不會自動穿上）。人在總部裡馬上收到，不在的話下次進總部就有。只能送給有帳號的人。</p>
@@ -119,7 +121,9 @@ td.wish button.x { flex-shrink: 0; width: 22px; height: 22px; min-height: 0; pad
       </div>
       <p class="msg" id="gift-msg"></p>
     </form>
-
+    </section>
+    <section class="tab" id="tab-wishes" data-tab="wishes">
+      <header class="tab-head"><h2>許願池</h2><p class="note">大家在門口草地許的願望與 Bug 回報。</p></header>
     <section class="card">
       <div class="row" style="justify-content: space-between; align-items: center">
         <h2 style="margin: 0">許願池（<span id="w-count">0</span>）</h2>
@@ -136,7 +140,14 @@ td.wish button.x { flex-shrink: 0; width: 22px; height: 22px; min-height: 0; pad
         </table>
       </div>
     </section>
-
+    </section>
+    <section class="tab" id="tab-world" data-tab="world">
+      <header class="tab-head"><h2>遊戲設定</h2><p class="note">功能開關、公共花園、小樹屋語音。</p></header>
+    <form class="card" id="pets-card">
+      <h2>功能開關</h2>
+      <label class="switch"><span><b>寵物</b><small>關著的時候只有管理員看得到寵物、領養得到，也進得去可愛生物休息區。改完請大家重新整理一次。</small></span><input type="checkbox" id="pets-open" role="switch"></label>
+      <p class="msg" id="pets-msg"></p>
+    </form>
     <section class="card">
       <h2 style="margin: 0">公共花園</h2>
       <p class="note" style="margin: 4px 0 12px">物資倉庫後門外的 12 格花圃。有人亂種或卡住的時候，可以把那格清空（植物直接消失，不會還種子）。</p>
@@ -148,19 +159,36 @@ td.wish button.x { flex-shrink: 0; width: 22px; height: 22px; min-height: 0; pad
         </table>
       </div>
     </section>
-
     <section class="card">
-      <div class="row" style="justify-content: space-between; align-items: center">
-        <h2 style="margin: 0">帳號（<span id="count">0</span>）</h2>
-        <button type="button" class="small" id="reload">重新整理</button>
+      <h2>小樹屋語音中繼</h2>
+      <p class="note" style="margin: 0 0 12px">接不通的人會透過中繼伺服器（TURN）通話。這個月用到上限就不再走中繼，只剩直連，不會超過免費額度。</p>
+      <div class="preview" id="t-state">讀取中…</div>
+    </section>
+    </section>
+    <section class="tab" id="tab-events" data-tab="events">
+      <header class="tab-head"><h2>公告與活動</h2><p class="note">重啟前的倒數預告，和派對時間。</p></header>
+    <form class="card" id="announce">
+      <h2>預告更新</h2>
+      <p class="note" style="margin: 0 0 12px">要重啟伺服器（例如 git pull 新版本）之前先預告，大家畫面上方會出現倒數；時間到會先幫大家存好角色，這裡顯示「可以重啟了」再重啟。重啟後大家會自動收到「重新整理」的提醒。</p>
+      <div class="row">
+        <label style="flex: 1 1 260px">公告內容<input id="a-text" maxlength="60" placeholder="總部要更新了，先找個安全的地方"></label>
+        <label>多久後<select id="a-min"><option value="1">1 分鐘</option><option value="3" selected>3 分鐘</option><option value="5">5 分鐘</option></select></label>
+        <button type="submit" class="primary">發布</button>
+        <button type="button" id="a-cancel">取消預告</button>
       </div>
-      <p class="msg" id="acct-msg"></p>
-      <div class="scroll">
-        <table>
-          <thead><tr><th>帳號</th><th>Email</th><th>角色</th><th>職業</th><th>等級</th><th>邀請函</th><th>最後上線</th><th></th></tr></thead>
-          <tbody id="rows"></tbody>
-        </table>
+      <div class="preview" id="a-state">目前沒有預告</div>
+    </form>
+    <form class="card" id="party">
+      <h2>派對時間</h2>
+      <div class="row">
+        <label>日期<input type="date" id="p-date" required></label>
+        <label>時間（台灣時間）<input type="time" id="p-time" required></label>
+        <button type="submit" class="primary">儲存</button>
       </div>
+      <div class="preview" id="p-preview"></div>
+      <p class="note">報名頁、邀請函、IG 限時動態、總部裡的 VIP Pass 都會換成新的時間。已經存下來的限時動態影片不會變。</p>
+      <p class="msg" id="party-msg"></p>
+    </form>
     </section>
   </div>
 </main>
@@ -204,6 +232,7 @@ td.wish button.x { flex-shrink: 0; width: 22px; height: 22px; min-height: 0; pad
   function render(list) {
     var tb = $('rows'); tb.textContent = '';
     $('count').textContent = list.length;
+    $('nb-acct').textContent = list.length;
     if (!list.length) { var r0 = tb.insertRow(); var c0 = td('還沒有人建立帳號'); c0.colSpan = 8; c0.className = 'empty'; r0.appendChild(c0); return; }
     list.sort(function (a, b) { return (b.seen || 0) - (a.seen || 0); }).forEach(function (a) {
       var tr = document.createElement('tr');
@@ -308,12 +337,16 @@ td.wish button.x { flex-shrink: 0; width: 22px; height: 22px; min-height: 0; pad
       $('pets-open').checked = !!r.petsOpen;
     });
   }
-  $('pets-card').addEventListener('submit', function (e) {
-    e.preventDefault();
-    api('/api/admin/pets', { open: $('pets-open').checked }).then(function (r) {
+  // 功能開關：一切就存，失敗就切回去
+  $('pets-card').addEventListener('submit', function (e) { e.preventDefault(); });
+  $('pets-open').addEventListener('change', function () {
+    var box = $('pets-open'), want = box.checked;
+    box.disabled = true;
+    api('/api/admin/pets', { open: want }).then(function (r) {
+      box.disabled = false;
       if (r.ok) say('pets-msg', r.open ? '已開放給所有人（大家重新整理後生效）' : '只開放給管理員', true);
-      else say('pets-msg', r.error || '儲存失敗');
-    });
+      else { box.checked = !want; say('pets-msg', r.error || '儲存失敗'); }
+    }).catch(function () { box.disabled = false; box.checked = !want; say('pets-msg', '儲存失敗'); });
   });
   $('login').addEventListener('submit', function (e) {
     e.preventDefault();
@@ -402,6 +435,8 @@ td.wish button.x { flex-shrink: 0; width: 22px; height: 22px; min-height: 0; pad
     wishList = list;
     var tb = $('w-rows'), f = $('w-filter').value, fc = $('w-cat').value; tb.textContent = '';
     $('w-count').textContent = list.length;
+    var fresh = list.filter(function (w) { return w.status === 'new'; }).length;
+    $('nb-wish').textContent = fresh; $('nb-wish').hidden = !fresh;
     var rows = list.filter(function (w) { return (!f || w.status === f) && (!fc || w.cat === fc); })
       .sort(function (a, b) { return (b.updated || b.at) - (a.updated || a.at); });
     if (!rows.length) { var r0 = tb.insertRow(); var c0 = td(list.length ? '沒有符合的願望' : '還沒有人許願'); c0.colSpan = 8; c0.className = 'empty'; r0.appendChild(c0); return; }
@@ -493,6 +528,10 @@ td.wish button.x { flex-shrink: 0; width: 22px; height: 22px; min-height: 0; pad
   $('w-cat').addEventListener('change', function () { renderWishes(wishList); });
   if (token) load();
 })();
+</script>
+<script>
+(function(){var tabs=document.querySelectorAll('#tabs a');function show(k){if(!document.getElementById('tab-'+k))k='players';tabs.forEach(function(a){a.classList.toggle('on',a.dataset.tab===k)});document.querySelectorAll('.tab').forEach(function(t){t.classList.toggle('on',t.dataset.tab===k)});}
+window.addEventListener('hashchange',function(){show(location.hash.slice(1))});show(location.hash.slice(1));})();
 </script>
 </body>
 </html>

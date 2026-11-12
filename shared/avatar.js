@@ -1,7 +1,10 @@
 // 角色外觀：前後端共用的選項清單 + 瀏覽器端的 Canvas 繪圖
 // 畫風：蠟筆質感、粗抖的深色外框、大耳朵、圓眼鏡、紅鼻子紅臉頰
 (function (root) {
-  const HAIRS = { short: '短髮', bob: '鮑伯頭', long: '長髮', bun: '包包頭', curly: '捲髮', buzz: '平頭', bald: '光頭', hat: '尖帽' };
+  const HAIRS = { short: '短髮', bob: '鮑伯頭', long: '長髮', airy: '空氣瀏海', hime: '公主切', bun: '包包頭', buns: '雙丸子頭', buzz: '平頭', bald: '光頭' };
+  // 有自己畫法的新髮型（drawHairBack / drawHairFront）；遮耳朵的另外看 HIDE_EARS
+  const NEW_HAIR = { airy: 1, hime: 1, buns: 1 };
+  const HIDE_EARS = { bob: 1, long: 1, airy: 1, hime: 1 };
   // 每個職業的衣服：body 是衣服顏色（防颱職員用自己選的雨衣色）
   const COSTUMES = {
     staff: {},
@@ -53,6 +56,7 @@
     ctx.beginPath(); ctx.ellipse(32, 77, 17, 3.5, 0, 0, Math.PI * 2); ctx.fill();
 
     gear('cape', 'cape');
+    if (NEW_HAIR[hair]) drawHairBack(ctx, C, r, hair, hairColor, W);
     if (hair === 'long') {
       // 長髮的後半：畫在身體後面，從肩膀兩側露出來，不會蓋住衣服
       ctx.beginPath();
@@ -111,7 +115,7 @@
     gear('cape', 'clasp');
 
     // 大耳朵（鮑伯頭、長髮會把耳朵蓋住）
-    if (hair !== 'bob' && hair !== 'long') [[13.5, -1], [50.5, 1]].forEach(([x]) => {
+    if (!HIDE_EARS[hair]) [[13.5, -1], [50.5, 1]].forEach(([x]) => {
       C.blob(ctx, x, 29, 6.5, 7.5, r, 0.08); C.fill(ctx, skin, r, null); C.stroke(ctx, r, W);
       C.blob(ctx, x, 29.5, 3.2, 4, r, 0.12); C.fill(ctx, '#f4a3a0', r, null);
     });
@@ -124,7 +128,7 @@
     C.blob(ctx, 32, 28, 17.5, 18, r, 0.05); C.fill(ctx, skin, r, [14, 10, 36, 36], 0.5); C.stroke(ctx, r, W);
 
     // 頭髮前半
-    if (hair === 'short' || hair === 'bun' || (hair === 'hat' && hatted)) {
+    if (hair === 'short' || hair === 'bun') {
       ctx.beginPath();
       ctx.moveTo(15, 25); ctx.quadraticCurveTo(15, 9, 32, 9.5); ctx.quadraticCurveTo(49, 9, 49, 25);
       ctx.lineTo(45, 20); ctx.lineTo(41, 23); ctx.lineTo(37, 18.5); ctx.lineTo(32, 22); ctx.lineTo(27, 18); ctx.lineTo(22, 22.5); ctx.lineTo(19, 19);
@@ -178,24 +182,8 @@
       ctx.beginPath(); ctx.ellipse(38, 15.5, 5, 2.4, -0.35, 0, Math.PI * 2); ctx.fillStyle = '#ffffff'; ctx.fill();
       ctx.beginPath(); ctx.arc(30.5, 13.5, 1.3, 0, Math.PI * 2); ctx.fill();
       ctx.restore();
-    } else if (hair === 'curly') {
-      [[18, 17], [24, 12], [31, 10], [38, 11], [45, 16], [21, 21], [43, 21]].forEach(([x, y]) => {
-        C.blob(ctx, x, y, 5.5, 5, r, 0.15, 12); C.fill(ctx, hairColor, r, null); C.stroke(ctx, r, 2);
-      });
-    } else if (hair === 'hat' && !hatted) {
-      // 像插畫裡那頂綠色尖帽，這裡用雨衣同色
-      C.blob(ctx, 32, 15, 22, 5, r, 0.08); C.fill(ctx, outfit, r, [10, 10, 44, 10]); C.stroke(ctx, r, W);
-      ctx.beginPath();
-      ctx.moveTo(18, 14); ctx.quadraticCurveTo(22, 2, 36, 3); ctx.quadraticCurveTo(46, 4, 52, 4 + r());
-      ctx.quadraticCurveTo(48, 8, 46, 14); ctx.closePath();
-      C.fill(ctx, outfit, r, [18, 0, 36, 14]); C.stroke(ctx, r, W);
-      // 帽尖的小星星
-      ctx.save(); ctx.translate(52, 4.5); ctx.fillStyle = '#ffffff'; ctx.beginPath();
-      for (let i = 0; i < 10; i++) {
-        const a = -Math.PI / 2 + (i * Math.PI) / 5, rr = i % 2 ? 1.6 : 4;
-        ctx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr);
-      }
-      ctx.closePath(); ctx.fill(); C.stroke(ctx, r, 1.2); ctx.restore();
+    } else if (NEW_HAIR[hair]) {
+      drawHairFront(ctx, C, r, hair, hairColor, W);
     }
 
     if (!hatted && !(dressed && (cos === 'archer' || cos === 'prophet'))) drawHeadwear(ctx, C, r, cos, W);
@@ -268,6 +256,63 @@
     gear('weapon', 'hand'); // 武器拿在右手，畫在最上面
 
     ctx.restore();
+  }
+
+  // 新髮型：back 畫在身體後面（布偶裝的帽兜會蓋住它），front 畫在臉上
+  function shine(ctx, C, r) {
+    ctx.save(); ctx.globalAlpha = 0.45;
+    ctx.beginPath(); ctx.moveTo(37, 10); ctx.quadraticCurveTo(46, 12, 49, 20);
+    C.stroke(ctx, r, 2, '#ffffff'); ctx.restore();
+  }
+  function drawHairBack(ctx, C, r, hair, col, W) {
+    if (hair === 'airy' || hair === 'hime') {
+      // 長直髮的後半，從肩膀兩側露出來
+      ctx.beginPath();
+      ctx.moveTo(11.5, 28); ctx.quadraticCurveTo(11, 6.5, 32, 6.5); ctx.quadraticCurveTo(53, 6.5, 52.5, 28);
+      ctx.lineTo(53.5, 56); ctx.quadraticCurveTo(32, 59, 10.5, 56); ctx.closePath();
+      C.fill(ctx, col, r, [10, 6, 44, 50]); C.stroke(ctx, r, W);
+    }
+    if (hair === 'buns') {
+      // 中國娃娃頭頂兩顆丸子
+      [[17.5, 10], [46.5, 10]].forEach(([x, y]) => {
+        C.blob(ctx, x, y, 6.5, 6, r, 0.1); C.fill(ctx, col, r, [x - 7, y - 7, 14, 14]); C.stroke(ctx, r, W);
+        ctx.save(); ctx.globalAlpha = 0.5; ctx.beginPath(); ctx.arc(x, y, 3.5, Math.PI * 1.1, Math.PI * 1.8); C.stroke(ctx, r, 1.4, '#ffffff'); ctx.restore();
+      });
+    }
+  }
+  function drawHairFront(ctx, C, r, hair, col, W) {
+    if (hair === 'airy') {
+      // 空氣瀏海：頭頂帽殼＋兩側垂到肩膀，額頭前面是一絲一絲稀稀的瀏海
+      ctx.beginPath();
+      ctx.moveTo(16.5, 44); ctx.quadraticCurveTo(13.5, 47, 11, 44);
+      ctx.quadraticCurveTo(11, 6.5, 32, 6.5); ctx.quadraticCurveTo(53, 6.5, 53, 44);
+      ctx.quadraticCurveTo(50.5, 47, 47.5, 44); ctx.lineTo(47.5, 23);
+      ctx.quadraticCurveTo(46, 17, 41, 16); ctx.quadraticCurveTo(32, 15, 23, 16); ctx.quadraticCurveTo(18, 17, 16.5, 23);
+      ctx.closePath();
+      C.fill(ctx, col, r, [11, 6, 42, 38]); C.stroke(ctx, r, W);
+      [[20, 21.5], [24.5, 22.5], [29, 22], [33.5, 22.5], [38, 22], [42.5, 22.5]].forEach(([x, y]) => {
+        ctx.beginPath(); ctx.moveTo(x - 1, 16); ctx.quadraticCurveTo(x + 1.2, 18.5, x + 0.4, y);
+        C.stroke(ctx, r, 3.2, C.INK); C.stroke(ctx, r, 1.6, col);
+      });
+      shine(ctx, C, r);
+    } else if (hair === 'hime') {
+      // 公主切：齊瀏海＋蓋到臉頰、一刀剪齊的鬢髮
+      ctx.beginPath();
+      ctx.moveTo(19.5, 40); ctx.lineTo(11, 40);
+      ctx.quadraticCurveTo(11, 6.5, 32, 6.5); ctx.quadraticCurveTo(53, 6.5, 53, 40);
+      ctx.lineTo(44.5, 40); ctx.lineTo(44.5, 21.8);
+      ctx.quadraticCurveTo(32, 23.5, 19.5, 21.8); ctx.closePath();
+      C.fill(ctx, col, r, [11, 6, 42, 34]); C.stroke(ctx, r, W);
+      shine(ctx, C, r);
+    } else if (hair === 'buns') {
+      // 中國娃娃：齊瀏海、兩側剪到耳朵上面（露出耳朵）、丸子綁紅繩
+      ctx.beginPath();
+      ctx.moveTo(14.5, 24); ctx.quadraticCurveTo(13.5, 7.5, 32, 7.5); ctx.quadraticCurveTo(50.5, 7.5, 49.5, 24);
+      ctx.lineTo(47, 22); ctx.quadraticCurveTo(32, 23.5, 17, 22); ctx.closePath();
+      C.fill(ctx, col, r, [14, 7, 36, 17]); C.stroke(ctx, r, W);
+      shine(ctx, C, r);
+      [[21.5, 13], [42.5, 13]].forEach(([x, y], i) => C.line(ctx, x - 2.5, y + (i ? -2 : 2), x + 2.5, y + (i ? 2 : -2), r, 2.6, '#d93a4a', 0.2));
+    }
   }
 
   // 副本頭目花蓮王：往旁邊梳的黑色短髮、圓臉大笑、黑色盔甲；舉拳（p.fist）是衝鋒前的預告

@@ -67,7 +67,33 @@ input[type=range] { height: 28px; padding: 0; border: 0; border-radius: 0; backg
   border-radius: 999px; padding: 10px 24px; cursor: pointer; }
 .primary:hover { background: var(--accent-ink); border-color: var(--accent-ink); }
 .primary:active { transform: translateY(1px); }
-#join-form .primary { display: block; margin: 20px auto 0; font-size: 18px; padding: 12px 44px; }
+/* 卡片比螢幕高的時候從上面開始排、可以往下捲（置中會把上面那截推到畫面外面） */
+#join { align-items: flex-start; }
+#join-form { margin: auto; }
+#join-form.mode-edit { max-width: 760px; }
+.join-btns { display: flex; flex-direction: column; align-items: center; gap: 10px; margin-top: 8px; }
+#join-go { font-size: 18px; padding: 12px 44px; }
+.ghost { font: 700 15px var(--display); background: var(--paper); color: var(--ink); border: 2px solid var(--line);
+  border-radius: 999px; padding: 9px 26px; cursor: pointer; }
+.ghost:hover { border-color: var(--accent); }
+.edit-btns { display: flex; gap: 12px; }
+.edit-btns .primary { font-size: 17px; padding: 11px 40px; }
+/* 報到處 */
+.entry { text-align: center; }
+#entry-pv { width: 150px; height: 150px; display: block; margin: 0 auto 12px; border-radius: 50%; background: var(--silver);
+  border: 3px solid var(--paper); box-shadow: 0 0 0 2px var(--accent); }
+.entry-name { font-weight: 900; font-size: 22px; }
+.entry-lv { color: var(--muted); font-size: 14px; margin: 4px 0 0; }
+#join-form.mode-entry h1, #join-form.mode-entry .eyebrow, #join-form.mode-entry .sub { text-align: center; }
+/* 三種狀態：報到處、換造型、第一次來（只有換造型＋進入總部） */
+#join-form.mode-entry .create, #join-form.mode-entry .edit-btns { display: none; }
+#join-form.mode-edit #join-edit, #join-form.mode-edit #entry { display: none; }
+#join-form.mode-edit:not(.first) #join-go { display: none; }
+#join-form.mode-edit.first .edit-btns { display: none; }
+/* 換造型在電腦上排成兩欄，筆電一個畫面放得下 */
+#join-form.mode-edit .fields { display: grid; grid-template-columns: 1fr 1fr; column-gap: 22px; }
+.fields .span { grid-column: 1 / -1; }
+#join-form.mode-edit .label { margin: 12px 0 7px; }
 .error { color: #C0391B; text-align: center; min-height: 1.2em; margin: 10px 0 0; font-size: 14px; }
 
 /* 遊戲中介面 */
@@ -578,6 +604,7 @@ button.inv-item:hover { border-color: var(--accent); }
   .gear-set-col .gear-item .gear-ic { margin-top: 4px; }
   .gear-set-col .gear-item, .gear-set-none { height: 104px; }
   .create { flex-direction: column; align-items: center; }
+  #join-form.mode-edit .fields { grid-template-columns: 1fr; }
   #messages { height: 90px; font-size: 13px; }
   #help { display: none; }
   #banner { font-size: 12px; gap: 8px; top: 146px; left: 12px; transform: none; padding: 5px 12px; }
@@ -632,7 +659,7 @@ button.inv-item:hover { border-color: var(--accent); }
 .acct-note { text-align: center; font-size: 13px; color: var(--muted, #6E6E73); margin: 12px 0 0; }
 .acct-note a { color: var(--accent, #FF6A13); }
 /* 沒登入：入口只留一句說明和登入連結 */
-#join-form.need-login .create, #join-form.need-login button[type=submit] { display: none; }
+#join-form.need-login .create, #join-form.need-login .entry, #join-form.need-login .join-btns { display: none; }
 #join-form.need-login #join-acct { font-size: 15px; margin: 22px 0 6px; }
 
 /* 點唱機的迷你播放器：一台 DJ 唱盤（左上角數值面板下面） */

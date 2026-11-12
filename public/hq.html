@@ -21,30 +21,38 @@
   <!-- 角色創建 -->
   <div id="join" class="overlay">
     <form id="join-form" class="card">
-      <p class="eyebrow">TYPHOON DAY · DEFENSE HQ</p>
-      <h1>颱風天防衛總部</h1>
-      <p class="sub">外面風雨交加，大家快進總部集合！</p>
+      <p class="eyebrow">THIS IS NOT A DEFENSE HQ</p>
+      <h1>這不是一個防衛總部</h1>
+      <p id="join-sub" class="sub">外面風雨交加，大家快進總部集合！</p>
+      <!-- 報到處：已經有角色的人先看到自己，按「進入總部」直接進去，要改外觀再按「換造型」 -->
+      <div id="entry" class="entry" hidden>
+        <canvas id="entry-pv" width="160" height="160"></canvas>
+        <div id="entry-name" class="entry-name"></div>
+        <p id="entry-lv" class="entry-lv"></p>
+      </div>
+      <!-- 換造型 -->
       <div class="create">
         <canvas id="preview" width="128" height="160"></canvas>
         <div class="fields">
-          <label>名字<input id="name" maxlength="12" placeholder="你的名字" autocomplete="off" required></label>
-          <div class="label">髮型</div>
-          <div id="hairs" class="chips"></div>
-          <div class="label">髮色</div>
-          <div id="hair-colors" class="swatches"></div>
-          <div class="label">膚色</div>
-          <div id="skins" class="swatches"></div>
-          <div class="label">雨衣</div>
-          <div id="outfits" class="swatches"></div>
-          <div class="label">眼鏡</div>
-          <div id="glasses" class="chips"></div>
-          <div class="label">表情</div>
-          <div id="faces" class="chips"></div>
+          <label class="span">名字<input id="name" maxlength="12" placeholder="你的名字" autocomplete="off"></label>
+          <div class="span"><div class="label">髮型</div><div id="hairs" class="chips"></div></div>
+          <div><div class="label">髮色</div><div id="hair-colors" class="swatches"></div></div>
+          <div><div class="label">膚色</div><div id="skins" class="swatches"></div></div>
+          <div><div class="label">雨衣</div><div id="outfits" class="swatches"></div></div>
+          <div><div class="label">眼鏡</div><div id="glasses" class="chips"></div></div>
+          <div class="span"><div class="label">表情</div><div id="faces" class="chips"></div></div>
         </div>
       </div>
       <p id="join-acct" class="acct-note"></p>
       <p id="join-error" class="error"></p>
-      <button type="submit" class="primary">進入總部</button>
+      <div class="join-btns">
+        <button id="join-go" type="submit" class="primary">進入總部</button>
+        <button id="join-edit" type="button" class="ghost">換造型</button>
+        <div class="edit-btns">
+          <button id="edit-cancel" type="button" class="ghost">取消</button>
+          <button id="edit-save" type="button" class="primary">存好了</button>
+        </div>
+      </div>
       <p class="acct-note"><button id="release-link" class="link-btn" type="button" hidden></button></p>
     </form>
   </div>

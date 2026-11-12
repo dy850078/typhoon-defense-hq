@@ -133,6 +133,41 @@
   }
   buildCreate();
 
+  // ---------------- 報到處 ----------------
+  // 已經有角色（有名字）的人：先看到自己，按「進入總部」直接進去；要改外觀才打開「換造型」
+  // 第一次來的人：直接打開換造型，按「進入總部」就進去
+  const SUBS = { entry: '報到處：確認一下今天的你', edit: '換造型：改好按「存好了」', first: '第一次來，先捏一個自己吧' };
+  function setJoinMode(mode) {
+    const f = $('join-form'), first = mode === 'edit' && !profile.name;
+    f.classList.toggle('mode-entry', mode === 'entry');
+    f.classList.toggle('mode-edit', mode === 'edit');
+    f.classList.toggle('first', first);
+    $('entry').hidden = mode !== 'entry';
+    $('join-sub').textContent = SUBS[first ? 'first' : mode];
+    $('join-error').textContent = '';
+    if (mode === 'entry') renderEntry();
+  }
+  function renderEntry() {
+    const c = $('entry-pv'), ctx = c.getContext('2d');
+    ctx.clearRect(0, 0, c.width, c.height);
+    // 角色畫布是 64x80，放大兩倍、左右置中放進正方形，不會被壓扁；身上的裝備也畫出來
+    const equip = (() => { try { return JSON.parse(localStorage.getItem('hq-equip') || '{}') || {}; } catch (e) { return {}; } })();
+    ctx.save(); ctx.translate(16, 0); ctx.scale(2, 2); AV.drawAvatar(ctx, Object.assign({}, profile, { equip })); ctx.restore();
+    $('entry-name').textContent = profile.name;
+    const lv = Number(localStorage.getItem('hq-level')) || 1, cls = ST.CLASSES[profile.cls] || ST.CLASSES.staff;
+    $('entry-lv').textContent = `Lv ${lv}・${cls.name}`;
+  }
+  $('join-edit').onclick = () => setJoinMode('edit');
+  $('edit-cancel').onclick = () => { readProfile(); buildCreate(); setJoinMode('entry'); };
+  $('edit-save').onclick = () => {
+    const name = $('name').value.trim();
+    if (!name) { $('join-error').textContent = '請輸入名字'; return; }
+    profile.name = name;
+    Object.entries(profile).forEach(([k, v]) => { try { localStorage.setItem('hq-' + k, v); } catch (e) { /* 無痕模式 */ } });
+    setJoinMode('entry');
+  };
+  setJoinMode(profile.name ? 'entry' : 'edit');
+
   // ---------------- 連線 ----------------
   const socket = io();
   // 這個分頁的代號（重新整理也一樣）：斷線太久重新加入時，伺服器用它找到留著的舊角色
@@ -202,6 +237,7 @@
     if (!r || joined) return;
     readProfile(); buildCreate();
     loadBag();
+    setJoinMode(profile.name ? 'entry' : 'edit');
   }).catch(() => {});
   function doJoin() {
     const vip = savedJson('hq-vip', null);

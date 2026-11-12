@@ -1022,20 +1022,21 @@
     }
     const THEME = {
       ice: { mem: ['#f2fcff', '#bfe9fb', '#6cc3ee'], bone: '#eefaff', bone2: '#a9dcf5', sheen: 'rgba(255,255,255,0.95)', glint: '#ffffff', glow: 'rgba(170,230,255,0.55)', mark: 'rgba(255,255,255,0.9)' },
-      fire: { mem: ['#ffe27a', '#ff8a3c', '#d9302a'], bone: '#5a1d18', bone2: '#8e2d1c', sheen: 'rgba(255,248,200,0.95)', glint: '#fff3b0', glow: 'rgba(255,170,60,0.55)', mark: 'rgba(110,20,20,0.75)' },
+      fire: { mem: ['#ffe27a', '#ff8a3c', '#d9302a'], bone: '#b4442c', bone2: '#7a2618', sheen: 'rgba(255,248,200,0.95)', glint: '#fff3b0', glow: 'rgba(255,170,60,0.55)', mark: 'rgba(110,20,20,0.75)' },
     };
     function swirl(ctx, x, y, rr, color) {
       ctx.beginPath();
       for (let a = 0; a < Math.PI * 3.4; a += 0.2) { const k = rr * (1 - a / (Math.PI * 3.8)); ctx.lineTo(x + Math.cos(a) * k, y + Math.sin(a) * k); }
-      ctx.lineWidth = 1.4; ctx.lineCap = 'round'; ctx.strokeStyle = color; ctx.stroke();
+      ctx.lineWidth = 2; ctx.lineCap = 'round'; ctx.strokeStyle = color; ctx.stroke();
     }
     function oneWing(ctx, C, r, kind, s) {
       const T = THEME[kind];
-      ctx.save(); wingPath(ctx); ctx.shadowColor = T.glow; ctx.shadowBlur = 8; ctx.fillStyle = T.glow; ctx.fill(); ctx.restore();
-      const g = ctx.createRadialGradient(0, 0, 4, 0, 0, 70);
-      g.addColorStop(0, T.mem[0]); g.addColorStop(0.45, T.mem[1]); g.addColorStop(1, T.mem[2]);
-      wingPath(ctx); C.fill(ctx, g, r, [0, -40, 80, 76]);
+      // 蠟筆上色：先塗一層翅尖的深色，再用一塊塊抖動的色塊往翅根疊淺色（不用平滑漸層，才像手畫）
+      wingPath(ctx); C.fill(ctx, T.mem[2], r, [0, -40, 80, 76], 1.6);
       ctx.save(); wingPath(ctx); ctx.clip();
+      C.blob(ctx, 22, 4, 34, 30, r, 0.12); ctx.fillStyle = T.mem[1]; ctx.fill();
+      C.blob(ctx, 10, 6, 17, 16, r, 0.14); ctx.fillStyle = T.mem[0]; ctx.fill();
+      C.dots(ctx, 0, -40, 80, 76, 60, 'rgba(255,255,255,0.22)', r, 1.1);
       // 翼面上的漩渦紋（在最大的那片翼膜上）
       swirl(ctx, 54, 4, 5.5, T.mark);
       swirl(ctx, 37, 6, 4, T.mark);
@@ -1043,28 +1044,29 @@
       const d = -20 + s * 110;
       const sg = ctx.createLinearGradient(d - 12, d * 0.3 + 10, d + 12, d * 0.3 - 10);
       sg.addColorStop(0, 'rgba(255,255,255,0)'); sg.addColorStop(0.5, T.sheen); sg.addColorStop(1, 'rgba(255,255,255,0)');
-      ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.75; ctx.fillStyle = sg; ctx.fillRect(-10, -40, 90, 80);
+      ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.45; ctx.fillStyle = sg; ctx.fillRect(-10, -40, 90, 80);
       ctx.restore();
-      wingPath(ctx); C.stroke(ctx, r, 2.2);
+      const k = kind === 'fire' ? 0.8 : 1; // 火龍骨架顏色深，線條細一點看起來才不會太粗
+      wingPath(ctx); C.stroke(ctx, r, 4 * k);
       // 指骨：細、由內往外越來越長
-      FING.forEach(([a, b], i) => { ctx.beginPath(); ctx.moveTo(...a); ctx.lineTo(...b); C.stroke(ctx, r, 3.2 + i * 0.4, C.INK); C.stroke(ctx, r, 1.4 + i * 0.4, T.bone2); });
+      FING.forEach(([a, b], i) => { ctx.beginPath(); ctx.moveTo(...a); ctx.lineTo(...b); C.stroke(ctx, r, (5.4 + i * 0.4) * k, C.INK); C.stroke(ctx, r, (2 + i * 0.4) * k, T.bone2); });
       // 指骨末端伸出翼膜一小截，像小爪
       FING.forEach(([a, b]) => {
         const dx = b[0] - a[0], dy = b[1] - a[1], d = Math.hypot(dx, dy), ux = dx / d, uy = dy / d;
         ctx.beginPath(); ctx.moveTo(b[0] - uy * 1.8, b[1] + ux * 1.8); ctx.lineTo(b[0] + ux * 6, b[1] + uy * 6); ctx.lineTo(b[0] + uy * 1.8, b[1] - ux * 1.8); ctx.closePath();
-        C.fill(ctx, kind === 'ice' ? '#e8fbff' : '#2f1414', r, null); C.stroke(ctx, r, 1.2);
+        C.fill(ctx, kind === 'ice' ? '#e8fbff' : '#2f1414', r, null); C.stroke(ctx, r, 2);
       });
       // 主骨：特別粗
-      ctx.beginPath(); edgeTop(ctx); C.stroke(ctx, r, 8.5, C.INK); C.stroke(ctx, r, 5.5, T.bone);
-      ctx.beginPath(); edgeTop(ctx); ctx.save(); ctx.translate(0.6, 1.4); C.stroke(ctx, r, 1.6, T.bone2); ctx.restore();
-      if (kind === 'fire') { C.blob(ctx, P[0], P[1], 4.6, 4, r, 0.05, 12); C.fill(ctx, T.bone, r, null); C.stroke(ctx, r, 1.6); }
-      else { C.blob(ctx, P[0], P[1], 3.6, 3.2, r, 0.05, 12); C.fill(ctx, T.bone, r, null); ctx.beginPath(); ctx.arc(P[0], P[1], 3.4, 0.3, 2.4); C.stroke(ctx, r, 1.1, T.bone2); }
+      // 一條乾淨的粗骨：黑邊＋骨頭顏色各畫一次，不疊錯開的筆觸、不加亮線
+      const bone = (w, col) => { ctx.save(); ctx.beginPath(); edgeTop(ctx); ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.lineWidth = w; ctx.strokeStyle = col; ctx.stroke(); ctx.restore(); };
+      bone(11 * k, C.INK); bone(6 * k + (1 - k) * 4, T.bone);
+      if (kind === 'ice') { C.blob(ctx, P[0], P[1], 3.6, 3.2, r, 0.05, 12); C.fill(ctx, T.bone, r, null); ctx.beginPath(); ctx.arc(P[0], P[1], 3.4, 0.3, 2.4); C.stroke(ctx, r, 1.1, T.bone2); }
       // 尖刺：只有頂點一根大角、中段一根小刺
       const spike = (x, y, a, h, w) => {
         ctx.save(); ctx.translate(x, y); ctx.rotate(a);
         ctx.beginPath(); ctx.moveTo(-w, 0); ctx.quadraticCurveTo(-w * 0.4, -h * 0.6, 0, -h); ctx.quadraticCurveTo(w * 0.5, -h * 0.5, w, 0); ctx.closePath();
-        if (kind === 'ice') { C.fill(ctx, '#e8fbff', r, null); C.stroke(ctx, r, 1.3); ctx.beginPath(); ctx.moveTo(0, -h + 2); ctx.lineTo(0, -1); ctx.lineWidth = 0.9; ctx.strokeStyle = 'rgba(108,195,238,0.9)'; ctx.stroke(); }
-        else { C.fill(ctx, '#2f1414', r, null); C.stroke(ctx, r, 1.3); }
+        if (kind === 'ice') { C.fill(ctx, '#e8fbff', r, null); C.stroke(ctx, r, 2.2); ctx.beginPath(); ctx.moveTo(0, -h + 2); ctx.lineTo(0, -1); ctx.lineWidth = 0.9; ctx.strokeStyle = 'rgba(108,195,238,0.9)'; ctx.stroke(); }
+        else { C.fill(ctx, '#2f1414', r, null); C.stroke(ctx, r, 2.2); }
         ctx.restore();
       };
       spike(P[0] + 1, P[1] - 3, 0.1, 12, 3.4); // 頂點的大角
@@ -1072,13 +1074,13 @@
       // 翅尖的大爪
       ctx.save(); ctx.translate(...TIP); ctx.rotate(0.35);
       ctx.beginPath(); ctx.moveTo(-3.5, -2); ctx.quadraticCurveTo(2, 2, 2, 11); ctx.quadraticCurveTo(5, 4, 3.5, -3); ctx.closePath();
-      C.fill(ctx, kind === 'ice' ? '#e8fbff' : '#2f1414', r, null); C.stroke(ctx, r, 1.3); ctx.restore();
+      C.fill(ctx, kind === 'ice' ? '#e8fbff' : '#2f1414', r, null); C.stroke(ctx, r, 2.2); ctx.restore();
       if (kind === 'fire') {
         // 頂點和翅尖冒出的小火焰
         [[TIP[0] + 4, TIP[1] + 9, 2.7, 9], [P[0] + 7, P[1] - 4, 0.6, 7]].forEach(([x, y, a, h]) => {
           ctx.save(); ctx.translate(x, y); ctx.rotate(a);
           ctx.beginPath(); ctx.moveTo(-3.5, 1); ctx.quadraticCurveTo(-4, -h * 0.6, 1, -h); ctx.quadraticCurveTo(0, -h * 0.4, 3.5, 1); ctx.closePath();
-          C.fill(ctx, '#ffb020', r, null); C.stroke(ctx, r, 1.2);
+          C.fill(ctx, '#ffb020', r, null); C.stroke(ctx, r, 2);
           ctx.beginPath(); ctx.moveTo(-1.5, 0.5); ctx.quadraticCurveTo(-1.5, -h * 0.4, 0.5, -h * 0.6); ctx.quadraticCurveTo(0.5, -h * 0.2, 1.5, 0.5); ctx.closePath();
           ctx.fillStyle = '#fff3b0'; ctx.fill(); ctx.restore();
         });

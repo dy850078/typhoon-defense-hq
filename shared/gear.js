@@ -1173,18 +1173,7 @@
       pts.filter(p => p[1] > cy - 6).slice().sort((p, q) => Math.hypot(q[0], q[1]) - Math.hypot(p[0], p[1])).forEach(p => {
         if (burst.length < 5 && !burst.some(q => Math.hypot(q[0] - p[0], q[1] - p[1]) < 14)) burst.push(p);
       });
-      // 往下拍推出去的波紋：沿著翅膀下緣外半段的點，依繞肩膀的角度排好連成一條線
-      // 翼膜下緣有很多凹凸，直接連會變成亂線：把角度分成 7 段，每段只取離肩膀最遠的一點，連起來才是一道平順的弧
-      const low = pts.filter(p => p[1] > cy - 6 && Math.hypot(p[0], p[1]) > 24), ang = p => Math.atan2(p[1], p[0]);
-      const ripple = [];
-      if (low.length) {
-        const a0 = Math.min(...low.map(ang)), a1 = Math.max(...low.map(ang)), N = 7;
-        for (let i = 0; i < N; i++) {
-          const bin = low.filter(p => { const a = ang(p); return a >= a0 + (a1 - a0) * i / N && a <= a0 + (a1 - a0) * (i + 1) / N; });
-          if (bin.length) ripple.push(bin.reduce((m, p) => Math.hypot(p[0], p[1]) > Math.hypot(m[0], m[1]) ? p : m));
-        }
-      }
-      ART[kind] = { img, glow, pad, pts, burst, ripple, cx, cy, tmp, f };
+      ART[kind] = { img, glow, pad, pts, burst, cx, cy, tmp, f };
     }
     if (typeof document !== 'undefined' && typeof Image !== 'undefined') {
       Object.keys(ART_FILES).forEach(kind => {
@@ -1223,23 +1212,11 @@
         }
         ctx.restore();
       });
-      // 往下拍的時候，翅膀下緣推出波紋般的熱浪，再甩出幾顆火星，都順著翅膀拍下去的方向往斜下散、慢慢熄掉
+      // 往下拍的時候，從翅膀下緣和翅尖甩出幾顆火星，順著翅膀拍下去的方向往斜下散、拖一小段尾巴、慢慢熄掉
       if (kind === 'fire' && ft != null) {
         const b = ((ft - FLAP_UP + 1) % 1) / 0.55;
         // 甩出去的方向：翅膀往下拍是繞肩膀順時針轉，那一點的轉動切線（往下）＋一點往外
         const dirOf = (x, y) => { const d = Math.hypot(x, y) || 1, mx = -y / d * 0.8 + x / d * 0.45, my = x / d * 0.8 + y / d * 0.45, md = Math.hypot(mx, my) || 1; return [mx / md, my / md]; };
-        // 波紋：兩道熱浪沿著翅膀下緣的形狀往斜下推出去，越推越淡、越細（第二道晚一點出來）
-        if (A.ripple.length > 2) [0, 0.22].forEach((lag, j) => {
-          const c = (b - lag) / 0.85; if (c <= 0 || c >= 1) return;
-          const k = 1 - Math.pow(1 - c, 2), dist = 4 + k * (18 - j * 4);
-          const P = A.ripple.map(([x, y]) => { const [ox, oy] = dirOf(x, y); return [x + ox * dist, y + oy * dist]; });
-          const line = () => { ctx.beginPath(); ctx.moveTo(...P[0]); for (let i = 1; i < P.length - 1; i++) ctx.quadraticCurveTo(P[i][0], P[i][1], (P[i][0] + P[i + 1][0]) / 2, (P[i][1] + P[i + 1][1]) / 2); ctx.lineTo(...P[P.length - 1]); };
-          ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-          const al = Math.sin(c * Math.PI) * (j ? 0.55 : 0.85);
-          ctx.globalAlpha = al * 0.5; ctx.strokeStyle = '#ff9a3c'; ctx.lineWidth = 5 * (1 - c * 0.6); line(); ctx.stroke();
-          ctx.globalAlpha = al; ctx.strokeStyle = '#ffe08a'; ctx.lineWidth = 1.6 * (1 - c * 0.5); line(); ctx.stroke();
-          ctx.restore();
-        });
         if (b < 1) A.burst.forEach(([x, y], i) => {
           const r1 = Math.sin(i * 12.9898 + 3) * 0.5 + 0.5, r2 = Math.sin(i * 78.233 + 1) * 0.5 + 0.5;
           const [ox, oy] = dirOf(x, y);

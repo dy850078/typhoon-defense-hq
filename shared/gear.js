@@ -1168,7 +1168,12 @@
       // 往外的方向：從翅膀中心往外
       const cx = f.x + w / u / 2, cy = f.y + h / u / 2;
       const tmp = document.createElement('canvas'); tmp.width = w; tmp.height = h;
-      ART[kind] = { img, glow, pad, pts, cx, cy, tmp, f };
+      // 往下拍甩火星的位置：離肩膀最遠的幾個外緣點（彼此隔開一點），一邊翅膀 5 顆就好
+      const burst = [];
+      pts.slice().sort((p, q) => Math.hypot(q[0], q[1]) - Math.hypot(p[0], p[1])).forEach(p => {
+        if (burst.length < 5 && !burst.some(q => Math.hypot(q[0] - p[0], q[1] - p[1]) < 14)) burst.push(p);
+      });
+      ART[kind] = { img, glow, pad, pts, burst, cx, cy, tmp, f };
     }
     if (typeof document !== 'undefined' && typeof Image !== 'undefined') {
       Object.keys(ART_FILES).forEach(kind => {
@@ -1192,7 +1197,7 @@
       ctx.drawImage(A.tmp, f.x, f.y, w * u, h * u);
       // 外緣冒出的火星（往上飄、慢慢變暗）／雪花（往外飄）
       A.pts.forEach(([x, y], i) => {
-        if (i % 2) return;
+        if (i % (kind === 'fire' ? 4 : 2)) return;
         let ox = x - A.cx, oy = y - A.cy; const d = Math.hypot(ox, oy) || 1; ox /= d; oy /= d;
         const fr = (s * 3 + i * 0.29) % 1;
         ctx.save(); ctx.globalAlpha = Math.sin(fr * Math.PI);
@@ -1207,19 +1212,20 @@
         }
         ctx.restore();
       });
-      // 往下拍的時候，翅膀下緣和翅尖甩出一陣火星，往下往外散開再慢慢熄掉
+      // 往下拍的時候，從翅膀外緣甩出幾顆火星，從肩膀往外放射飛出去、拖一小段尾巴、慢慢熄掉
       if (kind === 'fire' && ft != null) {
-        const b = ((ft - FLAP_UP + 1) % 1) / 0.5;
-        if (b < 1) A.pts.forEach(([x, y], i) => {
-          if (y < A.cy - 8) return;
-          const r1 = Math.sin(i * 12.9898) * 0.5 + 0.5, r2 = Math.sin(i * 78.233) * 0.5 + 0.5;
-          let ox = x - A.cx, oy = y - A.cy; const d = Math.hypot(ox, oy) || 1; ox /= d; oy /= d;
-          const k = 1 - Math.pow(1 - b, 2), sp = 10 + r1 * 14;
-          const fx = x + ox * k * sp + (r2 - 0.5) * 6 * k, fy = y + (0.5 + oy * 0.5) * k * sp + k * k * 4 - Math.sin(b * Math.PI) * 3;
-          const z = (2 + r2 * 2.2) * (1 - b * 0.5);
-          ctx.save(); ctx.globalAlpha = Math.min(1, (1 - b) * 1.6);
-          ctx.fillStyle = 'rgba(255,170,60,0.45)'; ctx.beginPath(); ctx.arc(fx, fy, z * 2.2, 0, 7); ctx.fill();
-          ctx.fillStyle = b < 0.4 ? '#fff3b0' : r1 > 0.5 ? '#ffb020' : '#ff7a2a';
+        const b = ((ft - FLAP_UP + 1) % 1) / 0.55;
+        if (b < 1) A.burst.forEach(([x, y], i) => {
+          const r1 = Math.sin(i * 12.9898 + 3) * 0.5 + 0.5, r2 = Math.sin(i * 78.233 + 1) * 0.5 + 0.5;
+          const d = Math.hypot(x, y) || 1, ox = x / d, oy = y / d; // 從肩膀往外的方向
+          const go = sp => 1 - Math.pow(1 - Math.min(1, sp), 3), sp = 20 + r1 * 14;
+          const k = go(b), k0 = go(Math.max(0, b - 0.12));
+          const fx = x + ox * k * sp, fy = y + oy * k * sp - k * 3, tx = x + ox * k0 * sp, ty = y + oy * k0 * sp - k0 * 3;
+          const z = (1.8 + r2 * 1.2) * (1 - b * 0.4);
+          ctx.save(); ctx.globalAlpha = b < 0.6 ? 1 : (1 - b) / 0.4;
+          ctx.fillStyle = 'rgba(255,170,60,0.4)'; ctx.beginPath(); ctx.arc(fx, fy, z * 2.4, 0, 7); ctx.fill();
+          ctx.strokeStyle = '#ffb020'; ctx.lineWidth = z * 0.9; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(fx, fy); ctx.stroke();
+          ctx.fillStyle = b < 0.35 ? '#fff3b0' : '#ffd23f';
           ctx.beginPath(); ctx.moveTo(fx, fy - z * 1.6); ctx.quadraticCurveTo(fx, fy, fx + z * 1.6, fy); ctx.quadraticCurveTo(fx, fy, fx, fy + z * 1.6); ctx.quadraticCurveTo(fx, fy, fx - z * 1.6, fy); ctx.quadraticCurveTo(fx, fy, fx, fy - z * 1.6); ctx.fill();
           ctx.restore();
         });

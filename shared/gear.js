@@ -1168,12 +1168,23 @@
       // 往外的方向：從翅膀中心往外
       const cx = f.x + w / u / 2, cy = f.y + h / u / 2;
       const tmp = document.createElement('canvas'); tmp.width = w; tmp.height = h;
+      // 翼膜的範圍（翅膀上不是黑線的地方）：光澤只掃在翼膜上，不會把黑色外框、骨幹洗成灰色
+      const mem = document.createElement('canvas'); mem.width = w; mem.height = h;
+      const mx = mem.getContext('2d'); mx.drawImage(img, 0, 0);
+      const md = mx.getImageData(0, 0, w, h), mp = md.data;
+      for (let i = 0; i < mp.length; i += 4) {
+        const lum = 0.3 * mp[i] + 0.59 * mp[i + 1] + 0.11 * mp[i + 2];
+        const k = mp[i + 3] < 128 ? 0 : Math.max(0, Math.min(1, (lum - 70) / 50));
+        mp[i] = mp[i + 1] = mp[i + 2] = 255; mp[i + 3] = k * 255;
+      }
+      mx.putImageData(md, 0, 0);
+      const band = document.createElement('canvas'); band.width = w; band.height = h;
       // 往下拍甩火星的位置：翅膀下半部離肩膀最遠的幾個外緣點（彼此隔開一點），一邊翅膀 5 顆就好
       const burst = [];
       pts.filter(p => p[1] > cy - 6).slice().sort((p, q) => Math.hypot(q[0], q[1]) - Math.hypot(p[0], p[1])).forEach(p => {
         if (burst.length < 5 && !burst.some(q => Math.hypot(q[0] - p[0], q[1] - p[1]) < 14)) burst.push(p);
       });
-      ART[kind] = { img, glow, pad, pts, burst, cx, cy, tmp, f };
+      ART[kind] = { img, glow, pad, pts, burst, cx, cy, tmp, mem, band, f };
     }
     if (typeof document !== 'undefined' && typeof Image !== 'undefined') {
       Object.keys(ART_FILES).forEach(kind => {
@@ -1191,9 +1202,14 @@
       // 翅膀本體＋一道從翅根掃到翅尖的光澤（只亮在翅膀上）
       const t = A.tmp.getContext('2d');
       t.globalCompositeOperation = 'source-over'; t.globalAlpha = 1; t.clearRect(0, 0, w, h); t.drawImage(A.img, 0, 0);
-      const dx = (-0.3 + s * 1.6) * w, g = t.createLinearGradient(dx - w * 0.12, h, dx + w * 0.12, 0);
-      g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(0.5, kind === 'ice' ? 'rgba(255,255,255,0.9)' : 'rgba(255,245,190,0.9)'); g.addColorStop(1, 'rgba(255,255,255,0)');
-      t.globalCompositeOperation = 'source-atop'; t.globalAlpha = 0.2; t.fillStyle = g; t.fillRect(0, 0, w, h);
+      // 光澤：一道斜斜的亮光從翅根掃到翅尖（跟之前程式畫的翅膀一樣用「加亮」疊上去），只亮在翼膜上
+      const bx = A.band.getContext('2d'), dx = (-0.25 + s * 1.5) * w;
+      bx.globalCompositeOperation = 'source-over'; bx.clearRect(0, 0, w, h);
+      const g = bx.createLinearGradient(dx - w * 0.09, h * 0.6, dx + w * 0.09, h * 0.4);
+      g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(0.5, kind === 'ice' ? 'rgba(255,255,255,0.95)' : 'rgba(255,248,200,0.95)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+      bx.fillStyle = g; bx.fillRect(0, 0, w, h);
+      bx.globalCompositeOperation = 'destination-in'; bx.drawImage(A.mem, 0, 0);
+      t.globalCompositeOperation = 'lighter'; t.globalAlpha = 0.45; t.drawImage(A.band, 0, 0);
       ctx.drawImage(A.tmp, f.x, f.y, w * u, h * u);
       // 外緣冒出的火星（往上飄、慢慢變暗）／雪花（往外飄）
       A.pts.forEach(([x, y], i) => {

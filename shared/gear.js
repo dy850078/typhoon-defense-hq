@@ -1210,6 +1210,19 @@
       bx.fillStyle = g; bx.fillRect(0, 0, w, h);
       bx.globalCompositeOperation = 'destination-in'; bx.drawImage(A.mem, 0, 0);
       t.globalCompositeOperation = 'lighter'; t.globalAlpha = 0.45; t.drawImage(A.band, 0, 0);
+      // 異色閃光：每拍一下，翼膜上短暫閃過一道粉紅→銀白→粉紅的金屬光（從翅尖往翅根掃，跟上面的金色光澤反方向）
+      const fl = (s - 0.08) / 0.3; // 只在一圈裡的這一小段出現
+      if (fl > 0 && fl < 1) {
+        const ex = (1.2 - fl * 1.5) * w, env = Math.sin(fl * Math.PI);
+        bx.globalCompositeOperation = 'source-over'; bx.clearRect(0, 0, w, h);
+        const hg = bx.createLinearGradient(ex - w * 0.22, h * 0.7, ex + w * 0.22, h * 0.3);
+        hg.addColorStop(0, 'rgba(255,150,215,0)'); hg.addColorStop(0.25, 'rgba(255,150,215,0.9)');
+        hg.addColorStop(0.5, 'rgba(236,242,255,1)'); hg.addColorStop(0.75, 'rgba(255,170,225,0.9)'); hg.addColorStop(1, 'rgba(255,170,225,0)');
+        bx.fillStyle = hg; bx.fillRect(0, 0, w, h);
+        bx.globalCompositeOperation = 'destination-in'; bx.drawImage(A.mem, 0, 0);
+        // screen：像金屬反光一樣把顏色提亮染色，不會整片變白
+        t.globalCompositeOperation = 'screen'; t.globalAlpha = 0.85 * env; t.drawImage(A.band, 0, 0);
+      }
       ctx.drawImage(A.tmp, f.x, f.y, w * u, h * u);
       // 外緣冒出的火星（往上飄、慢慢變暗）／雪花（往外飄）
       A.pts.forEach(([x, y], i) => {

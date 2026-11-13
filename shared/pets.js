@@ -320,16 +320,16 @@
     });
     // 垂耳：畫在頭後面，捲捲的掛在臉的兩邊
     if (p.ears !== 'perk') [-1, 1].forEach(k => {
-      const ex = cx + k * 13.8 * s, ey = cy + 1 * s;
+      const ex = cx + k * 14.4 * s, ey = cy + 1.4 * s;
       const efn = (q) => (cur ? curl(ctx, ex, ey, 5.6 * s, 9 * s, q, 9, 0.2) : C.blob(ctx, ex, ey, 5.4 * s, 9 * s, q, 0.05, 14));
       furShape(ctx, C, r, 520 + k, efn, p.earc, null, p, () => {
         [0, 1].forEach(i => { ctx.beginPath(); ctx.moveTo(ex + k * (1 + i * 2) * s, ey - (3 - i) * s); ctx.quadraticCurveTo(ex + k * (2.6 + i * 1.6) * s, ey + 2 * s, ex + k * (1.2 + i * 1.6) * s, ey + (6 - i) * s); C.stroke(ctx, r, 0.9, mix(p.earc, -0.14)); });
       });
     });
     // 頭頂那一大球毛的輪廓（先畫在頭後面，等一下再把顏色蓋到額頭上）
-    const ax = cx, ay = cy - 11.6 * s, arx = 15.4 * s, ary = 9.8 * s;
+    const ax = cx, ay = cy - 12.2 * s, arx = 15.6 * s, ary = 11 * s;
     if (!hidden) {
-      const afn = (q) => (cur ? curl(ctx, ax, ay, arx, ary, q, 13, 0.2) : C.blob(ctx, ax, ay, arx * 0.94, ary * 0.9, q, 0.04, 16));
+      const afn = (q) => (cur ? curl(ctx, ax, ay, arx, ary, q, 12, 0.2) : C.blob(ctx, ax, ay, arx * 0.94, ary * 0.9, q, 0.04, 16));
       furShape(ctx, C, r, 505, afn, p.mark, null, p, null);
     }
     const hfn = (q) => (cur ? curl(ctx, cx, cy + 0.6 * s, hrx, hry * 1.06, q, 13, 0.16) : C.blob(ctx, cx, cy + 0.6 * s, hrx * 1.04, hry * 1.08, q, 0.035, 20));
@@ -339,13 +339,14 @@
     });
     // 頭頂的毛蓋到額頭上：上面是頭毛的顏色，到眉毛的高度慢慢變回臉的顏色（中間沒有線）
     if (!hidden) {
-      const top = ay - ary * 0.1, bot = ay + 0.9 * s + ary * 0.88;
-      const g2 = ctx.createLinearGradient(0, top, 0, bot);
-      const n = parseInt(p.mark.slice(1), 16);
-      g2.addColorStop(0, p.mark); g2.addColorStop(0.55, p.mark); g2.addColorStop(1, `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},0)`);
-      C.blob(ctx, ax, ay + 0.9 * s, arx * 0.9, ary * 0.88, r, 0.04, 16); ctx.fillStyle = g2; ctx.fill();
+      C.blob(ctx, ax, ay + 0.9 * s, arx * 0.9, ary * 0.9, r, 0.04, 16); ctx.fillStyle = p.mark; ctx.fill();
+      clipDo(ctx, C, 511, hfn, () => {
+        const y1 = cy - 9.5 * s, y2 = ay + 1.4 * s + ary * 0.9, g = ctx.createLinearGradient(0, y1, 0, y2);
+        g.addColorStop(0, p.mark); g.addColorStop(0.25, p.mark); g.addColorStop(0.85, p.fur); g.addColorStop(1, p.fur);
+        ctx.fillStyle = g; ctx.fillRect(cx - 20 * s, y1, 40 * s, y2 - y1);
+      });
       // 幾撮捲捲的毛，還有額頭上一小撮瀏海
-      if (cur) curls(ctx, C, r, [[ax - 6.5 * s, ay - 1.6 * s], [ax + 1 * s, ay - 4.6 * s], [ax + 7 * s, ay - 0.6 * s]], mix(p.mark, -0.08), s * 1.2);
+      if (cur) curls(ctx, C, r, [[ax - 6.5 * s, ay - 2.6 * s], [ax + 1 * s, ay - 6 * s], [ax + 7 * s, ay - 2 * s], [ax - 1 * s, ay + 0.6 * s]], mix(p.mark, -0.08), s * 1.2);
       [-1, 1].forEach(k => { ctx.beginPath(); ctx.moveTo(cx + k * 0.4 * s, cy - 3.6 * s); ctx.quadraticCurveTo(cx + k * 2.4 * s, cy - 5.6 * s, cx + k * 4.2 * s, cy - 4 * s); C.stroke(ctx, r, 0.9, mix(p.fur, -0.2)); });
     }
     // 腮紅
@@ -388,34 +389,35 @@
   // 尾巴：蓬蓬的往上翹，或細細的長尾巴
   function dogTail(ctx, C, r, p, a, b, c) {
     if (p.tail === 'long') { tail(ctx, C, r, p, a, b, c); return; }
-    // 短短胖胖的一截，尾端圓圓的
-    const m = qpt(a, b, c, 0.62), b2 = qpt(a, b, c, 0.3);
-    const path = () => { ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.quadraticCurveTo(b2[0], b2[1], m[0], m[1]); };
-    path(); C.stroke(ctx, r, 7 + W * 2, C.INK);
-    ctx.save(); path(); ctx.lineCap = 'round'; ctx.lineWidth = 7; ctx.strokeStyle = p.fur; ctx.stroke(); ctx.restore();
+    // 蓬蓬的一截：從屁股往上翹，胖胖圓圓的
+    const m = qpt(a, b, c, 0.5), ang = Math.atan2(c[1] - a[1], c[0] - a[0]) - Math.PI / 2, len = Math.hypot(c[0] - a[0], c[1] - a[1]) * 0.36;
+    ctx.save(); ctx.translate((a[0] + m[0]) / 2, (a[1] + m[1]) / 2); ctx.rotate(ang);
+    const fn = (q) => (curly(p) ? curl(ctx, 0, 0, 3.9, len, q, 8, 0.24) : C.blob(ctx, 0, 0, 3.6, len, q, 0.05, 12));
+    furShape(ctx, C, r, 530, fn, p.fur, null, p, null);
+    ctx.restore();
   }
   const shadow = (ctx, x, w) => { ctx.fillStyle = 'rgba(19,26,40,0.18)'; ctx.beginPath(); ctx.ellipse(x, 52.5, w, 3.4, 0, 0, Math.PI * 2); ctx.fill(); };
   const DOG_POSES = {
     stand(ctx, C, r, p, step) {
       shadow(ctx, 30, 18.5);
-      dogTail(ctx, C, r, p, [17, 37], step ? [5, 35] : [7, 36], step ? [10, 23] : [12, 22]);
+      dogTail(ctx, C, r, p, [17, 37], step ? [9, 36] : [11, 37], step ? [7, 20] : [9, 19]);
       leg(ctx, C, r, p, step ? 19.5 : 22.5, 40, 51, 5.4, true); leg(ctx, C, r, p, step ? 40 : 37.5, 40, 51, 5.4, true);
       dogBody(ctx, C, r, p, 321, 28.5, 39, 14, 9, 15);
       leg(ctx, C, r, p, step ? 23 : 19.5, 42, 52.8, 6.4); leg(ctx, C, r, p, step ? 30.5 : 34, 42, 52.8, 6.4);
-      head(ctx, C, r, p, 40.5, step ? 27.6 : 26.9, 0.9, false);
+      head(ctx, C, r, p, 40.5, step ? 28 : 27.3, 0.9, false);
     },
     walk(ctx, C, r, p) { DOG_POSES.stand(ctx, C, r, p, true); },
     sit(ctx, C, r, p) {
       shadow(ctx, 33, 17);
-      dogTail(ctx, C, r, p, [41, 49], [56, 53], [53, 37]);
+      dogTail(ctx, C, r, p, [42, 50], [53, 52], [52, 37]);
       const bx = 32, by = 41.5, rx = 12.4, ry = 10.6, cur = curly(p);
       const bfn = (q) => (cur ? curl(ctx, bx, by, rx, ry, q, 14, 0.2) : C.blob(ctx, bx, by, rx * 1.05, ry * 1.05, q, 0.04, 18));
       furShape(ctx, C, r, 322, bfn, p.fur, [bx - rx * 1.2, by - ry * 1.2, rx * 2.4, ry * 2.4], p, () => {
-        C.blob(ctx, bx, by, rx * 0.52, ry * 0.7, r, 0.1, 14); ctx.fillStyle = mix(p.fur, 0.2); ctx.fill();
+        C.blob(ctx, bx, by - 2.5, rx * 0.5, ry * 0.42, r, 0.1, 14); ctx.fillStyle = mix(p.fur, 0.14); ctx.fill();
         if (cur) curls(ctx, C, r, [[bx - 8.5, by - 1], [bx + 8.5, by + 2]], mix(p.fur, -0.12));
       });
       sitPaws(ctx, C, r, p, bx, rx);
-      head(ctx, C, r, p, 32, 26, 0.92, false);
+      head(ctx, C, r, p, 32, 27, 0.9, false);
     },
     sleep(ctx, C, r, p) {
       shadow(ctx, 31, 22);
@@ -424,7 +426,7 @@
       if (p.tail === 'long') tail(ctx, C, r, p, [10, 46], [16, 57], [40, 53]);
       const pfn = (q) => C.blob(ctx, 39.5, 50, 4.6, 3, q, 0.08, 10);
       furShape(ctx, C, r, 324, pfn, p.fur, null, p, null);
-      ctx.save(); ctx.translate(43.5, 42); ctx.rotate(0.2); head(ctx, C, r, p, 0, 0, 0.8, true); ctx.restore();
+      ctx.save(); ctx.translate(43.5, 43); ctx.rotate(0.2); head(ctx, C, r, p, 0, 0, 0.78, true); ctx.restore();
     },
   };
 

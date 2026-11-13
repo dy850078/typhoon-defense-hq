@@ -327,7 +327,7 @@
   }
   // 狗狗的頭：圓圓的臉，頭頂戴著一頂捲捲的毛（邊緣一朵一朵的），兩邊是捲毛的垂耳，小黑眼睛、腮紅、小鼻子
   function dogHead(ctx, C, r, p, cx, cy, s, closed) {
-    const cur = curly(p), hrx = 12.6 * s, hry = 10.8 * s, hy = cy + 1 * s;
+    const cur = curly(p), hrx = 13.9 * s, hry = 11.2 * s, hy = cy + 1.5 * s;
     const hidden = HAT_HIDES[p.hat];
     // 小立耳：頭頂兩邊的小三角，耳尖圓圓的
     if (p.ears === 'perk' && !hidden) [-1, 1].forEach(k => {
@@ -337,24 +337,40 @@
     });
     // 垂耳：在臉的後面，從頭的兩側垂到下巴，邊緣一朵一朵的
     if (p.ears !== 'perk') [-1, 1].forEach(k => {
-      const ex = cx + k * 12.6 * s, ey = cy + 1.6 * s;
-      const efn = (q) => (cur ? curl(ctx, ex, ey, 5 * s, 7.4 * s, q, 8, 0.22) : C.blob(ctx, ex, ey, 5 * s, 7.8 * s, q, 0.05, 14));
+      const ex = cx + k * 13.8 * s, ey = cy + 2 * s;
+      const efn = (q) => (cur ? curl(ctx, ex, ey, 4.8 * s, 7.4 * s, q, 8, 0.22) : C.blob(ctx, ex, ey, 5 * s, 7.8 * s, q, 0.05, 14));
       furShape(ctx, C, r, 520 + k, efn, p.earc, null, p, cur ? () => swirls(ctx, C, r, [[ex + k * 2.2 * s, ey - 2 * s, k > 0], [ex + k * 2.6 * s, ey + 2.8 * s, k < 0]], mix(p.earc, -0.24), s * 0.8) : null);
     });
-    const hfn = (q) => C.blob(ctx, cx, hy, hrx, hry, q, 0.03, 20);
+    const hpts = (q) => [[0, -1], [0.62, -0.86], [0.96, -0.3], [1.03, 0.3], [0.8, 0.82], [0.3, 1.02], [-0.3, 1.02], [-0.8, 0.82], [-1.03, 0.3], [-0.96, -0.3], [-0.62, -0.86]]
+      .map(([a, b]) => [cx + a * hrx + (q() - 0.5) * 0.5, hy + b * hry + (q() - 0.5) * 0.5]);
+    const hfn = (q) => C.smooth(ctx, hpts(q));
+    const hfnAdd = () => { // 同一個臉的形狀，接在目前的路徑後面（挖洞用）
+      const pts = hpts(C.rng(511)), n = pts.length, mid = (a, b) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+      let m = mid(pts[n - 1], pts[0]); ctx.moveTo(m[0], m[1]);
+      for (let i = 0; i < n; i++) { m = mid(pts[i], pts[(i + 1) % n]); ctx.quadraticCurveTo(pts[i][0], pts[i][1], m[0], m[1]); }
+      ctx.closePath();
+    };
+    const ax = cx, ay = cy - 8 * s;
+    const afn = (q) => (cur ? curl(ctx, ax, ay, 11.6 * s, 6.8 * s, q, 11, 0.24) : C.blob(ctx, ax, ay + 1.6 * s, 8 * s, 4.4 * s, q, 0.05, 14));
+    // 頭毛的輪廓先畫在臉的後面：這樣只有露在臉外面的那一圈有黑線
+    if (!hidden) furShape(ctx, C, r, 505, afn, p.mark, null, p, null);
     furShape(ctx, C, r, 511, hfn, p.fur, [cx - hrx, hy - hry, hrx * 2, hry * 2], p, null);
-    // 頭頂的毛：像一頂捲捲的小帽子蓋在額頭上
+    // 頭頂的毛蓋到額頭上：只上色不描邊，跟臉的交界就沒有黑線（像一頂軟軟的捲毛帽）
     if (!hidden) {
-      const ax = cx, ay = cy - 8.2 * s;
-      const afn = (q) => (cur ? curl(ctx, ax, ay, 10.8 * s, 6.6 * s, q, 11, 0.24) : C.blob(ctx, ax, ay + 1.6 * s, 8 * s, 4.4 * s, q, 0.05, 14));
-      furShape(ctx, C, r, 505, afn, p.mark, null, p, cur ? () => swirls(ctx, C, r, [[ax - 5.6 * s, ay - 0.6 * s, false], [ax + 0.4 * s, ay - 2.6 * s, true], [ax + 6 * s, ay + 0.2 * s, false], [ax - 0.6 * s, ay + 2.6 * s, true]], mix(p.mark, -0.22), s) : null);
+      shape(ctx, C, 505, afn); ctx.fillStyle = p.mark; ctx.fill();
+      if (cur) swirls(ctx, C, r, [[ax - 6 * s, ay - 0.6 * s, false], [ax + 0.4 * s, ay - 2.8 * s, true], [ax + 6.4 * s, ay + 0.2 * s, false], [ax - 0.6 * s, ay + 2.8 * s, true]], mix(p.mark, -0.22), s);
+      // 交界那一圈用深一點的毛色輕輕帶過，看得出一朵一朵的邊
+      clipDo(ctx, C, 511, hfn, () => { shape(ctx, C, 505, afn); C.stroke(ctx, r, 0.9, mix(p.mark, -0.2)); });
+      // 露在臉外面的那一圈黑線補回來（剛剛被上色蓋掉內側一半）
+      ctx.save(); ctx.beginPath(); ctx.rect(cx - 30 * s, cy - 40 * s, 60 * s, 60 * s); hfnAdd(); ctx.clip('evenodd');
+      shape(ctx, C, 505, afn); C.stroke(ctx, r, W); ctx.restore();
     }
     // 腮紅
-    [-1, 1].forEach(k => dot(ctx, cx + k * 8 * s, cy + 5 * s, 2.3 * s, 1.5 * s, 'rgba(246,140,150,0.8)'));
+    [-1, 1].forEach(k => dot(ctx, cx + k * 9 * s, cy + 5.4 * s, 2.5 * s, 1.6 * s, 'rgba(246,140,150,0.8)'));
     // 眼睛：小小圓圓全黑、有一點亮光；瞇眼笑是兩道彎彎的線
     const ey = cy + 1.8 * s;
     [-1, 1].forEach(k => {
-      const ex = cx + k * 5 * s;
+      const ex = cx + k * 5.5 * s;
       if (closed) { ctx.beginPath(); ctx.moveTo(ex - 2.2 * s, ey); ctx.quadraticCurveTo(ex, ey + 2 * s, ex + 2.2 * s, ey); C.stroke(ctx, r, 1.3); return; }
       if (p.face === 'squint') { ctx.beginPath(); ctx.moveTo(ex - 2.3 * s, ey + 0.8 * s); ctx.quadraticCurveTo(ex, ey - 2.2 * s, ex + 2.3 * s, ey + 0.8 * s); C.stroke(ctx, r, 1.5); return; }
       dot(ctx, ex, ey, 1.9 * s, 2 * s, p.eyes);

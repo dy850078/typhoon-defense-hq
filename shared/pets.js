@@ -338,9 +338,9 @@
     });
     // 垂耳：在臉的後面，從頭的兩側垂到下巴，邊緣一朵一朵的
     const ear = (k, front) => {
-      const ex = cx + k * (front ? 12.6 : 13.8) * s, ey = cy + (front ? 3.6 : 2) * s;
+      const ex = cx + k * (front ? 16.6 : 13.8) * s, ey = cy + (front ? 3.2 : 2) * s;
       const efn = (q) => (cur ? curl(ctx, ex, ey, 4.8 * s, 7.4 * s, q, 8, 0.22) : C.blob(ctx, ex, ey, 5 * s, 7.8 * s, q, 0.05, 14));
-      furShape(ctx, C, r, 520 + k, efn, p.earc, null, p, cur ? () => swirls(ctx, C, r, [[ex + k * (front ? 0.4 : 2.2) * s, ey - 2 * s, k > 0], [ex + k * (front ? 0.8 : 2.6) * s, ey + 2.8 * s, k < 0]], mix(p.earc, -0.24), s * 0.8) : null);
+      furShape(ctx, C, r, 520 + k, efn, p.earc, null, p, cur ? () => swirls(ctx, C, r, [[ex + k * (front ? 0.6 : 2.2) * s, ey - 2 * s, k > 0], [ex + k * (front ? 1 : 2.6) * s, ey + 2.8 * s, k < 0]], mix(p.earc, -0.24), s * 0.8) : null);
     };
     if (p.ears !== 'perk') [-1, 1].forEach(k => { if (!(side && k < 0)) ear(k, false); });
     const hpts = (q) => [[0, -1], [0.62, -0.86], [0.96, -0.3], [1.03, 0.3], [0.8, 0.82], [0.3, 1.02], [-0.3, 1.02], [-0.8, 0.82], [-1.03, 0.3], [-0.96, -0.3], [-0.62, -0.86]]

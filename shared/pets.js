@@ -32,8 +32,8 @@
 
   const DEFAULT = { kind: 'cat', name: '', ears: 'up', fur: FURS[3], pattern: 'mackerel', mark: MARKS[4], white: 'muzzle',
     eyes: '#e3b23c', nose: NOSES[1], tail: 'long', face: 'smile', hat: 'none', earc: '#f0a456', mode: 'follow' };
-  const DOG_DEFAULT = { kind: 'dog', name: '', ears: 'drop', fur: '#c58556', pattern: 'curly', mark: '#f2ddc0', white: 'none',
-    eyes: '#2b2a33', nose: '#4a2c28', tail: 'pom', face: 'smile', hat: 'none', earc: '#bb7a4c', mode: 'follow' };
+  const DOG_DEFAULT = { kind: 'dog', name: '', ears: 'drop', fur: '#d09a70', pattern: 'curly', mark: '#f2ddc0', white: 'none',
+    eyes: '#2b2a33', nose: '#4a2c28', tail: 'pom', face: 'smile', hat: 'none', earc: '#c68d62', mode: 'follow' };
   const DEFAULTS = { cat: DEFAULT, dog: DOG_DEFAULT };
   // 每一種寵物各自有哪些選項
   const OPTS = {
@@ -328,7 +328,7 @@
   // 狗狗的頭：圓圓的臉，頭頂戴著一頂捲捲的毛（邊緣一朵一朵的），兩邊是捲毛的垂耳，小黑眼睛、腮紅、小鼻子
   // side：側身的時候，靠身體那一邊的耳朵垂在臉的前面，蓋住一點臉頰
   function dogHead(ctx, C, r, p, cx, cy, s, closed, side) {
-    const cur = curly(p), hrx = 13.1 * s, hry = 11.1 * s, hy = cy + 1.4 * s;
+    const cur = curly(p), hrx = 12.4 * s, hry = 11.1 * s, hy = cy + 1.4 * s;
     const hidden = HAT_HIDES[p.hat];
     // 小立耳：頭頂兩邊的小三角，耳尖圓圓的
     if (p.ears === 'perk' && !hidden) [-1, 1].forEach(k => {
@@ -338,7 +338,7 @@
     });
     // 垂耳：在臉的後面，從頭的兩側垂到下巴，邊緣一朵一朵的
     const ear = (k, front) => {
-      const ex = cx + k * (front ? 16 : 13.1) * s, ey = cy + (front ? 3.2 : 2) * s;
+      const ex = cx + k * (front ? 16 : 12.5) * s, ey = cy + (front ? 3.2 : 2) * s;
       const efn = (q) => (cur ? curl(ctx, ex, ey, 4.8 * s, 7.4 * s, q, 8, 0.22) : C.blob(ctx, ex, ey, 5 * s, 7.8 * s, q, 0.05, 14));
       furShape(ctx, C, r, 520 + k, efn, p.earc, null, p, cur ? () => swirls(ctx, C, r, [[ex + k * (front ? 0.6 : 2.2) * s, ey - 2 * s, k > 0], [ex + k * (front ? 1 : 2.6) * s, ey + 2.8 * s, k < 0]], mix(p.earc, -0.24), s * 0.8) : null);
     };
@@ -358,7 +358,7 @@
     if (!hidden) furShape(ctx, C, r, 505, afn, p.mark, null, p, null);
     furShape(ctx, C, r, 511, hfn, p.fur, [cx - hrx, hy - hry, hrx * 2, hry * 2], p, null);
     // 腮紅
-    [-1, 1].forEach(k => dot(ctx, cx + k * 8.6 * s, cy + 5.4 * s, 2.4 * s, 1.6 * s, 'rgba(246,140,150,0.8)'));
+    [-1, 1].forEach(k => dot(ctx, cx + k * 8.1 * s, cy + 5.4 * s, 2.3 * s, 1.6 * s, 'rgba(246,140,150,0.8)'));
     if (side && p.ears !== 'perk') ear(-1, true);
     // 頭頂的毛蓋到額頭上：只上色不描邊，跟臉的交界就沒有黑線（像一頂軟軟的捲毛帽）
     if (!hidden) {

@@ -204,6 +204,8 @@ module.exports = function createPetWorld(ctx) {
     const pet = PETS.sanitize(data);
     if (!pet) return { ok: false, error: '寵物的資料不對' };
     const was = p.pet;
+    // 個性是天生的：有了就不變，客戶端改不了
+    if (was && was.temper) pet.temper = was.temper; else pet.temper = PETS.rollTemper(pet.kind);
     p.pet = pet;
     snapshot(p);
     const k = keyOf(p), bi = k ? bedOf(k) : -1;

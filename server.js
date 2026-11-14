@@ -1511,7 +1511,7 @@ function sanitizeSave(data) {
     // 扭蛋機：距離上一次扭到 SSR 已經扭了幾次（保底用）
     gachaPity: clamp(Math.floor(Number(data.gachaPity)) || 0, 0, GACHA.PITY - 1),
     // 領養的寵物（外觀、名字、模式），沒有是 null
-    pet: PETS.sanitize(data.pet),
+    pet: PETS.withTemper(PETS.sanitize(data.pet)),
   };
 }
 // 有登入的話，進度以帳號和瀏覽器比較高的那邊為準，舊分頁或別台裝置帶來的舊資料不會把等級拉低

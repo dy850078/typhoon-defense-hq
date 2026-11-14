@@ -5,6 +5,17 @@
   const KINDS = { cat: '貓咪', dog: '狗狗' };
   // 跟在身邊：主人走到野區或副本，牠會一起打怪（以前另外有一個「一起打怪」，合併進來了）
   const MODES = { follow: '跟在身邊', wander: '自由散步' };
+  // 個性：領養的時候隨機決定，之後不會變（貓比較常高冷，狗比較常熱情）。決定牠對主人講話的口氣
+  const TEMPERS = { cool: '高冷', warm: '熱情', clingy: '撒嬌' };
+  const TEMPER_ODDS = { cat: { cool: 55, warm: 15, clingy: 30 }, dog: { cool: 10, warm: 60, clingy: 30 } };
+  function rollTemper(kind, rnd) {
+    const odds = TEMPER_ODDS[kind] || TEMPER_ODDS.cat;
+    let x = (rnd || Math.random)() * 100;
+    for (const k of Object.keys(odds)) { x -= odds[k]; if (x < 0) return k; }
+    return 'warm';
+  }
+  // 還沒有個性的寵物補一個
+  const withTemper = (pet) => { if (pet && !pet.temper) pet.temper = rollTemper(pet.kind); return pet; };
   const EARS = { up: '立耳', fold: '折耳' };
   // 毛色：底色
   const FURS = ['#d6d4cf', '#f7f4ee', '#f1dcb2', '#f0a456', '#a7aebb', '#a97850', '#3d3a3e'];
@@ -65,6 +76,7 @@
       hat: has(HATS, p.hat) ? p.hat : 'none',
       earc: pick(p.earc, [], D.earc),
       mode: has(MODES, p.mode) ? p.mode : D.mode, // 舊的 fight 會變回 follow
+      ...(has(TEMPERS, p.temper) ? { temper: p.temper } : {}),
     };
   }
   // 外觀相同就共用同一張貼圖
@@ -649,7 +661,7 @@
     });
   }
 
-  const pets = { KINDS, MODES, EARS, FACES, FURS, FUR_NAMES, PATTERNS, MARKS, MARK_NAMES, WHITES, EYES, EYE_NAMES, NOSES, NOSE_NAMES, TAILS, NAME_MAX,
+  const pets = { KINDS, MODES, TEMPERS, rollTemper, withTemper, EARS, FACES, FURS, FUR_NAMES, PATTERNS, MARKS, MARK_NAMES, WHITES, EYES, EYE_NAMES, NOSES, NOSE_NAMES, TAILS, NAME_MAX,
     DOG_EARS, DOG_COATS, DOG_TAILS, DOG_FACES, HATS, OPTS, DEFAULTS,
     DEFAULT, sanitize, lookKey, drawPet, drawHead, drawBed, WIDTH: 64, HEIGHT: 56 };
   if (typeof module !== 'undefined' && module.exports) module.exports = pets;

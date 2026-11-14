@@ -503,6 +503,12 @@
   socket.on('petBeds', (list) => { if (scene) scene.setPetBeds(list); });
   socket.on('petPat', (m) => scene && scene.onPetPat(m));
   socket.on('petsWorld', (list) => scene && scene.movePets(list));
+  // 自己和寵物的感情變多了（只有主人收得到）
+  socket.on('petBond', (b) => {
+    if (!me || !me.pet) return;
+    me.pet.bond = b.bond;
+    if (b.up) toast(`你和${me.pet.name}變得更親近了：${PT.BOND_LEVELS[b.level].name}`, 'pet-heart', 5000);
+  });
   socket.on('decor', (d) => scene && scene.setDecor(d));
   socket.on('garden', (st) => { if (scene) scene.setGarden(st); if (modalKind === 'plot') GARDEN_UI.refresh(); });
   socket.on('gardenFx', (f) => scene && scene.gardenFx(f));
@@ -2681,6 +2687,16 @@
     const box = el('div', 'pet-ed');
     box.appendChild(el('p', 'modal-hint', me.pet ? '想換個樣子或換名字都可以，改完按儲存。'
       : '每個人可以領養一隻寵物。捏好牠的樣子、取個名字，牠就會一直陪著你。'));
+    if (me.pet) { // 感情：等級名稱和到下一級的進度
+      const lv = PT.bondLevel(me.pet.bond), L = PT.BOND_LEVELS, cur = L[lv], next = L[lv + 1], n = me.pet.bond || 0;
+      const row = el('div', 'pet-bond');
+      row.append(icon('pet-heart', ''), el('b', null, `感情：${cur.name}`));
+      const bar = el('div', 'pet-bond-bar'), fill = el('i');
+      fill.style.width = (next ? Math.round((n - cur.at) / (next.at - cur.at) * 100) : 100) + '%';
+      bar.appendChild(fill); row.appendChild(bar);
+      row.title = '摸摸牠、餵點心、一起走走、一起打怪，感情會慢慢變好；不會因為沒上線變少';
+      box.appendChild(row);
+    }
     if (me.pet && PT.TEMPERS[me.pet.temper]) box.appendChild(el('p', 'modal-hint', `${me.pet.name}的個性：${PT.TEMPERS[me.pet.temper]}（天生的，偶爾會用這個口氣跟你說悄悄話，只有你看得到）`));
     const wrap = el('div', 'create pet-create');
     const cv = el('canvas', 'pet-preview'); cv.width = 192; cv.height = 168;
@@ -3479,7 +3495,7 @@
     if (!me || !me.pet) return;
     const m = $('ctx-menu');
     m.innerHTML = '';
-    m.appendChild(el('div', 'ctx-name', me.pet.name + '平常做什麼'));
+    m.appendChild(el('div', 'ctx-name', `${me.pet.name}（${PT.BOND_LEVELS[PT.bondLevel(me.pet.bond)].name}）`));
     Object.entries(PT.MODES).forEach(([v, l]) => {
       const b = el('button', me.pet.mode === v ? 'on' : null, l); b.title = PET_MODE_DESC[v];
       b.onclick = () => {
@@ -3493,6 +3509,9 @@
       };
       m.appendChild(b);
     });
+    const fd = el('button', null, '餵點心');
+    fd.onclick = () => showFeedMenu(cx, cy);
+    m.appendChild(fd);
     const ed = el('button', null, '換個樣子');
     ed.onclick = () => { hideMenu(); openPet(); };
     m.appendChild(ed);
@@ -3505,6 +3524,29 @@
       toast(quiet ? `${me.pet.name}又可以跟你說悄悄話了` : `${me.pet.name}先安靜，不會跟你說話了`, 'btn-pet');
     };
     m.appendChild(tk);
+    placeMenu(m, cx, cy);
+  }
+  // 餵點心：列出背包裡牠能吃的東西，點一個就餵（一天三次，水果加最多感情）
+  function showFeedMenu(cx, cy) {
+    const have = Object.keys(PT.FEED).filter(k => myInv[k] > 0);
+    if (!have.length) { hideMenu(); toast(`背包裡沒有${me.pet.name}能吃的東西（花園的水果、雞排、礦泉水）`, 'btn-pet'); return; }
+    const m = $('ctx-menu');
+    m.innerHTML = '';
+    m.appendChild(el('div', 'ctx-name', '餵' + me.pet.name + '吃什麼'));
+    have.forEach(k => {
+      const b = el('button', 'feed-item');
+      b.append(icon('item-' + k, ''), ` ${MAP.ITEMS[k].name} × ${myInv[k]}`);
+      b.onclick = () => {
+        hideMenu();
+        socket.emit('petFeed', k, (res) => {
+          if (!res || !res.ok) { if (res && res.error) toast(res.error, 'btn-pet'); return; }
+          renderInventory(res.inv);
+          toast(`${me.pet.name}吃了${MAP.ITEMS[k].name}` + (res.left > 0 ? `，今天還可以再餵 ${res.left} 次` : '，今天吃飽了'), 'item-' + k);
+          if (scene) scene.petFeedTalk();
+        });
+      };
+      m.appendChild(b);
+    });
     placeMenu(m, cx, cy);
   }
   // 對自己的小窩按右鍵（手機長按）：收回
@@ -3877,6 +3919,13 @@
       if (ctx.measureText(cur + ch).width > MAXW && cur && !'，。！？…、'.includes(ch)) { lines.push(cur); cur = ch; } else cur += ch;
     }
     if (cur) lines.push(cur);
+    // 兩行的時候，盡量在最靠近中間的標點後面換行，比較好讀
+    if (lines.length === 2) {
+      const cut = [...text].map((ch, i) => ('，。！？…、'.includes(ch) && i < text.length - 1 ? i + 1 : 0)).filter(Boolean)
+        .filter(i => ctx.measureText(text.slice(0, i)).width <= MAXW && ctx.measureText(text.slice(i)).width <= MAXW)
+        .sort((a, b) => Math.abs(a - text.length / 2) - Math.abs(b - text.length / 2))[0];
+      if (cut) { lines[0] = text.slice(0, cut); lines[1] = text.slice(cut); }
+    }
     const tw = Math.max(...lines.map(l => ctx.measureText(l).width));
     const bw = Math.ceil(tw + PAD * 2), PH = lines.length * LH + 10;
     const ox = 2, oy = 1.5, w = bw + 5, h = PH + 4 + TL;
@@ -7838,6 +7887,13 @@
       this.talkPatAt = time + 45000; this.talkPatLast = text;
       this.time.delayedCall(350, () => { const p = this.myPet(); if (p) this.petSay(p, text, this.time.now); });
     }
+    // 餵完點心牠說一句
+    petFeedTalk() {
+      const c = this.myPet();
+      if (!c || petQuiet()) return;
+      const text = HQ_PET_TALK.pick(me.pet.temper, 'feed', {}, null);
+      if (text) this.time.delayedCall(1900, () => { const p = this.myPet(); if (p) this.petSay(p, text, this.time.now); });
+    }
     // 每秒看一次要不要講話。平常的話一天 3 到 5 句，看情況的話一天最多 2 句，兩句之間至少隔 4 分鐘
     petTalkTick(time) {
       if (!me || !me.pet || !this.me) return;
@@ -7858,7 +7914,7 @@
       const c = this.myPet();
       if (petQuiet() || !c || c.act === 2 || document.hidden || !this.cameras.main.worldView.contains(c.x, c.y)) return;
       if (this.talk || time - this.talkLast < 240000) return;
-      const log = petTalkLog(), ctx = { quiet: !now.song, hq: !now.field };
+      const log = petTalkLog(), ctx = { quiet: !now.song, hq: !now.field, level: PT.bondLevel(me.pet.bond) };
       let kind = ev.find(k => !log.s.includes(k));
       if (kind && (log.s.length >= 2 || Math.random() > 0.5)) kind = null;
       if (!kind && time >= this.talkNext && log.n < log.q) kind = 'daily';
@@ -7942,15 +7998,46 @@
       if (fxOff()) return;
       // 小愛心從牠頭上冒出來（蓋在提示紙條上面，才不會被擋住）
       const tex = this.iconTexture('pet-heart');
-      if (tex) {
-        const h = this.add.image(x + 12, y + 4, tex).setDisplaySize(22, 22).setDepth(1e6 + 1);
+      // 自己的寵物：感情越好愛心越多；餵點心也多一顆
+      const mine = m.id && me && me.pet && this.pets.get(m.id).state.owner === me.id, lv = mine ? PT.bondLevel(me.pet.bond) : 0;
+      const n = 1 + (lv >= 2 ? 1 : 0) + (lv >= 4 ? 1 : 0) + (m.feed ? 1 : 0);
+      // 餵點心：點心放在牠面前，牠低頭咬三口，每咬一口點心小一圈、掉一點屑屑，吃完才冒愛心
+      const pc = m.feed && m.id ? this.pets.get(m.id) : null, EAT = pc ? 1750 : 0;
+      if (pc) {
+        const ft = this.iconTexture('item-' + m.feed);
+        const food = ft ? this.add.image(0, 3, ft).setDisplaySize(24, 24).setOrigin(0.5, 1) : null;
+        if (food) {
+          pc.add(food); // 跟著寵物的容器，畫在牠前面
+          const fk = food.scaleX;
+          food.setScale(fk * 0.2);
+          this.tweens.add({ targets: food, scale: fk, duration: 200, ease: 'Back.out' });
+          [0.68, 0.38, 0].forEach((left, i) => this.time.delayedCall(420 + i * 420, () => {
+            if (!pc.active) return;
+            // 低頭咬一口，再嚼兩下
+            this.tweens.add({ targets: pc.body_, y: 4, scaleY: PET_SCALE * 0.88, scaleX: PET_SCALE * 1.05, duration: 110, yoyo: true,
+              onComplete: () => { if (pc.active) this.tweens.add({ targets: pc.body_, scaleY: PET_SCALE * 0.95, duration: 70, yoyo: true, repeat: 1 }); } });
+            this.time.delayedCall(110, () => {
+              if (!food.active) return;
+              if (left) food.setScale(fk * left); else food.destroy();
+              [-1, 1].forEach(sd => { // 屑屑
+                const cr = this.add.circle(pc.x + sd * 4, pc.y - 4, 1.6, 0xe8c58a).setDepth(pc.y + 2);
+                this.tweens.add({ targets: cr, x: pc.x + sd * (10 + Math.random() * 6), y: pc.y + 1, alpha: 0, duration: 380, onComplete: () => cr.destroy() });
+              });
+            });
+          }));
+        }
+      }
+      for (let i = 0; tex && i < n; i++) {
+        const dx = (i % 2 ? -1 : 1) * Math.ceil(i / 2) * 11;
+        const h = this.add.image(x + 12 + dx, y + 4, tex).setDisplaySize(22, 22).setDepth(1e6 + 1);
         const k = h.scaleX;
         h.setScale(k * 0.3);
-        this.tweens.add({ targets: h, scale: k, duration: 220, ease: 'Back.out' });
-        this.tweens.add({ targets: h, y: y - 30, x: x + 20, alpha: 0, delay: 250, duration: 900, onComplete: () => h.destroy() });
+        h.setVisible(false);
+        this.tweens.add({ targets: h, scale: k, delay: EAT + i * 130, duration: 220, ease: 'Back.out', onStart: () => h.setVisible(true) });
+        this.tweens.add({ targets: h, y: y - 30, x: x + 20 + dx * 1.4, alpha: 0, delay: EAT + 250 + i * 130, duration: 900, onComplete: () => h.destroy() });
       }
       const target = m.id ? this.pets.get(m.id).body_ : this.petBeds.get(m.bed) && this.petBeds.get(m.bed).sleeper;
-      if (target) this.tweens.add({ targets: target, scaleY: PET_SCALE * 0.9, scaleX: PET_SCALE * 1.06, duration: 120, yoyo: true });
+      if (target && !pc) this.tweens.add({ targets: target, scaleY: PET_SCALE * 0.9, scaleX: PET_SCALE * 1.06, duration: 120, yoyo: true });
     }
     // 身邊可以摸的寵物（線上的、睡在小窩裡的）
     nearPet() {

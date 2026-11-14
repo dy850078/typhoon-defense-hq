@@ -2743,6 +2743,7 @@ io.on('connection', (socket) => {
   socket.on('petBed', petCall((p) => PETW.placeBed(p)));
   socket.on('petBedTake', petCall((p, i) => PETW.takeBed(p, i)));
   socket.on('petPat', petCall((p, m) => PETW.pat(p, m)));
+  socket.on('petFeed', petCall((p, item) => PETW.feed(p, item)));
 
   socket.on('disconnect', (reason) => {
     if (process.env.DEBUG) console.log('disconnect', socket.id, reason);

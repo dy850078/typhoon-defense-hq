@@ -251,22 +251,22 @@
       shape(ctx, C, 600 + k, efn); C.fill(ctx, col, r, null);
       clipDo(ctx, C, 600 + k, efn, () => {
         dot(ctx, ex + 0.6 * s, ey + 0.9 * s, 2 * s, 2 * s, 'rgba(255,255,255,0.28)');
-        dot(ctx, ex + k * 0.15 * s, ey + 0.2 * s, (stare ? 1.05 : 1.6) * s, (stare ? 2.4 : 2.1) * s, '#1d1c24');
+        dot(ctx, ex + k * 0.15 * s, ey + 0.2 * s, (stare ? 1.4 : 1.6) * s, 2.1 * s, '#1d1c24');
         // 淡定：上眼皮稍微壓下來一點
         if (p.face === 'calm') { ctx.fillStyle = mainOf(p); ctx.fillRect(ex - 4 * s, ey - 4 * s, 8 * s, 1.6 * s); }
-        // 淡定眼神：上眼皮蓋下來快一半，靠鼻子那邊壓得更低，眼皮邊緣一條深色的線
+        // 淡定眼神：上眼皮平平地蓋下來三分之一，兩邊一樣高（斜向鼻子會變成生氣），眼皮邊緣一條深色的線
         if (stare) {
-          const ox = ex + k * 4 * s, ix = ex - k * 4 * s, oy = ey - 1.9 * s, iy = ey - 0.5 * s;
-          ctx.beginPath(); ctx.moveTo(ox, ey - 5 * s); ctx.lineTo(ox, oy); ctx.quadraticCurveTo(ex, oy + 0.2 * s, ix, iy); ctx.lineTo(ix, ey - 5 * s); ctx.closePath();
+          const lx = ex - 4 * s, rx = ex + 4 * s, ly = ey - 1.1 * s;
+          ctx.beginPath(); ctx.moveTo(lx, ey - 5 * s); ctx.lineTo(lx, ly); ctx.quadraticCurveTo(ex, ly - 0.7 * s, rx, ly); ctx.lineTo(rx, ey - 5 * s); ctx.closePath();
           ctx.fillStyle = mainOf(p); ctx.fill();
-          ctx.beginPath(); ctx.moveTo(ox, oy); ctx.quadraticCurveTo(ex, oy + 0.2 * s, ix, iy); C.stroke(ctx, r, 1.6);
+          ctx.beginPath(); ctx.moveTo(lx, ly); ctx.quadraticCurveTo(ex, ly - 0.7 * s, rx, ly); C.stroke(ctx, r, 1.5);
         }
       });
       shape(ctx, C, 600 + k, efn); C.stroke(ctx, r, 1.7);
-      dot(ctx, ex - 1.1 * s, ey + (stare ? 0.5 : p.face === 'calm' ? -0.6 : -1.2) * s, (stare ? 0.7 : 0.85) * s, (stare ? 0.7 : 0.85) * s, '#ffffff');
+      dot(ctx, ex - 1.1 * s, ey + (stare ? 0.2 : p.face === 'calm' ? -0.6 : -1.2) * s, 0.85 * s, 0.85 * s, '#ffffff');
     });
     // 腮紅
-    [-1, 1].forEach(k => dot(ctx, cx + k * 9.6 * s, cy + 4.2 * s, 2.2 * s, 1.4 * s, p.face === 'calm' || stare ? 'rgba(246,140,150,0.4)' : 'rgba(246,140,150,0.6)'));
+    [-1, 1].forEach(k => dot(ctx, cx + k * 9.6 * s, cy + 4.2 * s, 2.2 * s, 1.4 * s, p.face === 'calm' ? 'rgba(246,140,150,0.4)' : 'rgba(246,140,150,0.6)'));
     // 鼻子、嘴巴
     const ny = cy + 3.6 * s;
     ctx.beginPath(); ctx.moveTo(cx - 1.9 * s, ny); ctx.lineTo(cx + 1.9 * s, ny); ctx.lineTo(cx, ny + 2.1 * s); ctx.closePath();

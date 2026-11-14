@@ -2695,7 +2695,7 @@
     const body = el('div'); box.appendChild(body);
     const build = () => {
     const box = body; body.innerHTML = '';
-    const dog = draft.kind === 'dog', O = PT.OPTS[draft.kind];
+    const dog = draft.kind === 'dog', horse = draft.kind === 'horse', O = PT.OPTS[draft.kind];
     // 上半：選項（一列一種，標籤在左邊對齊）；下半：顏色（每種顏色一張小卡，裡面三條拉桿）
     box.appendChild(el('h3', 'gear-h', '樣子'));
     const opts = el('div', 'pet-opts');
@@ -2713,9 +2713,9 @@
     let eyeCol = /^#/.test(draft.eyes) ? draft.eyes : PT.DEFAULTS[draft.kind].eyes; // 異色瞳的時候先記著原本的顏色
     let eyeCard = null;
     row('種類', Object.entries(PT.KINDS), () => draft.kind, (v) => { if (v !== draft.kind) { draft = drafts[v]; setTimeout(build, 0); } });
-    opt('耳朵', 'ears', Object.entries(O.ears));
+    if (Object.keys(O.ears).length > 1) opt('耳朵', 'ears', Object.entries(O.ears));
     if (dog) row('毛型', Object.entries(O.pattern), () => draft.pattern, (v) => { if (v !== draft.pattern) { draft.pattern = v; setTimeout(build, 0); } }); // 換毛型，顏色卡會不一樣
-    else opt('花紋', 'pattern', Object.entries(O.pattern));
+    else opt(horse ? '鬃毛' : '花紋', 'pattern', Object.entries(O.pattern));
     opt(dog ? '白毛花紋' : '白毛', 'white', Object.entries(O.white));
     {
       row('眼睛', [['same', '兩眼同色'], ['odd', '異色瞳']], () => (draft.eyes === 'odd' ? 'odd' : 'same'),
@@ -2752,12 +2752,12 @@
       cols.appendChild(card);
       return card;
     };
-    colorCard(dog ? '身體' : '毛色', () => draft.fur, (v) => { draft.fur = v; });
-    if (!dog || draft.pattern !== 'short') colorCard(dog ? '頭頂的毛' : '花紋', () => draft.mark, (v) => { draft.mark = v; }); // 短毛狗狗頭頂沒有另一球毛，不用選顏色
+    colorCard(dog || horse ? '身體' : '毛色', () => draft.fur, (v) => { draft.fur = v; });
+    if (!dog || draft.pattern !== 'short') colorCard(dog ? '頭頂的毛' : horse ? '鬃毛和尾巴' : '花紋', () => draft.mark, (v) => { draft.mark = v; }); // 短毛狗狗頭頂沒有另一球毛，不用選顏色
     if (dog) colorCard('耳朵', () => draft.earc, (v) => { draft.earc = v; });
     eyeCard = colorCard('眼睛', () => eyeCol, (v) => { eyeCol = v; if (draft.eyes !== 'odd') draft.eyes = v; });
     if (draft.eyes === 'odd') eyeCard.classList.add('off');
-    colorCard('鼻子', () => draft.nose, (v) => { draft.nose = v; });
+    colorCard(horse ? '嘴邊' : '鼻子', () => draft.nose, (v) => { draft.nose = v; });
     box.appendChild(cols);
     draw();
     };

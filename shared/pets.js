@@ -2,12 +2,12 @@
 // 每個帳號可以領養一隻（貓咪或狗狗），自己捏外觀、取名字、戴頭套，切換「跟在身邊／自由散步」
 // 畫在 64x56 的框裡，腳底在 (32, 52)；三種姿勢：stand（側身走路）、sit（正面坐著）、sleep（捲成一團睡覺）
 (function (root) {
-  const KINDS = { cat: '貓咪', dog: '狗狗' };
+  const KINDS = { cat: '貓咪', dog: '狗狗', horse: '小馬' };
   // 跟在身邊：主人走到野區或副本，牠會一起打怪（以前另外有一個「一起打怪」，合併進來了）
   const MODES = { follow: '跟在身邊', wander: '自由散步' };
   // 個性：領養的時候隨機決定，之後不會變（貓比較常高冷，狗比較常熱情）。決定牠對主人講話的口氣
   const TEMPERS = { cool: '高冷', warm: '熱情', clingy: '撒嬌' };
-  const TEMPER_ODDS = { cat: { cool: 55, warm: 15, clingy: 30 }, dog: { cool: 10, warm: 60, clingy: 30 } };
+  const TEMPER_ODDS = { cat: { cool: 55, warm: 15, clingy: 30 }, dog: { cool: 10, warm: 60, clingy: 30 }, horse: { cool: 30, warm: 40, clingy: 30 } };
   function rollTemper(kind, rnd) {
     const odds = TEMPER_ODDS[kind] || TEMPER_ODDS.cat;
     let x = (rnd || Math.random)() * 100;
@@ -39,6 +39,12 @@
   // 狗狗的白毛花紋（存在 white 欄位）：白底＝臉頰、嘴邊、胸口、肚子是白的，眉毛上兩個小白點；面罩＝額頭深色往下一個尖，眼睛周圍到嘴邊、胸口、四隻腳是白的
   const DOG_WHITES = { none: '沒有', muzzle: '白底', socks: '面罩' };
   const DOG_FACES = { smile: '微笑', squint: '瞇眼笑', tongue: '吐舌頭' };
+  // 小馬的選項：pattern 放鬃毛的樣子、mark 放鬃毛和尾巴的顏色、nose 放嘴邊的顏色
+  const HORSE_EARS = { up: '立耳' };
+  const HORSE_MANES = { flow: '長鬃毛', short: '短鬃毛' };
+  const HORSE_WHITES = { none: '沒有', muzzle: '白鼻梁', socks: '白鼻梁加白襪' };
+  const HORSE_TAILS = { long: '長尾巴', short: '短尾巴' };
+  const HORSE_FACES = { smile: '微笑', squint: '瞇眼笑', calm: '淡定' };
   // 頭套：貓狗都能戴
   const HATS = { none: '不戴', frog: '青蛙帽', bear: '小熊帽', bunny: '兔耳帽', berry: '草莓帽', egg: '荷包蛋', duck: '小黃鴨帽' };
   const NAME_MAX = 8;
@@ -47,11 +53,14 @@
     eyes: '#e3b23c', nose: NOSES[1], tail: 'long', face: 'smile', hat: 'none', earc: '#f0a456', mode: 'follow' };
   const DOG_DEFAULT = { kind: 'dog', name: '', ears: 'drop', fur: '#d09a70', pattern: 'curly', mark: '#f2ddc0', white: 'none',
     eyes: '#2b2a33', nose: '#4a2c28', tail: 'pom', face: 'smile', hat: 'none', earc: '#c68d62', mode: 'follow' };
-  const DEFAULTS = { cat: DEFAULT, dog: DOG_DEFAULT };
+  const HORSE_DEFAULT = { kind: 'horse', name: '', ears: 'up', fur: '#b8763f', pattern: 'flow', mark: '#5a3826', white: 'muzzle',
+    eyes: '#2b2a33', nose: '#ecd0ad', tail: 'long', face: 'smile', hat: 'none', earc: '#b8763f', mode: 'follow' };
+  const DEFAULTS = { cat: DEFAULT, dog: DOG_DEFAULT, horse: HORSE_DEFAULT };
   // 每一種寵物各自有哪些選項
   const OPTS = {
     cat: { ears: EARS, pattern: PATTERNS, white: WHITES, tail: TAILS, face: FACES },
     dog: { ears: DOG_EARS, pattern: DOG_COATS, white: DOG_WHITES, tail: DOG_TAILS, face: DOG_FACES },
+    horse: { ears: HORSE_EARS, pattern: HORSE_MANES, white: HORSE_WHITES, tail: HORSE_TAILS, face: HORSE_FACES },
   };
 
   // 顏色：選單裡的，或自己拉色相調出來的（#rrggbb）
@@ -525,6 +534,112 @@
     },
   };
 
+  // ---------------- 小馬 ----------------
+  // 頭：比貓狗長一點的圓臉，下面一大塊淺色的嘴邊和兩個鼻孔，頭頂兩隻小尖耳，額頭一撮瀏海，鬃毛垂在頭的左邊
+  function horseHead(ctx, C, r, p, cx, cy, s, closed) {
+    const hrx = 10.8 * s, hry = 12 * s, hy = cy + 0.6 * s, hidden = HAT_HIDES[p.hat], flow = p.pattern !== 'short';
+    // 鬃毛：在頭的後面，長的垂到下巴，短的只到耳朵下面
+    const mfn = (q) => (flow ? curl(ctx, cx - 9.6 * s, cy + 2.4 * s, 4.6 * s, 10 * s, q, 7, 0.2) : curl(ctx, cx - 9 * s, cy - 3.4 * s, 3.6 * s, 5.4 * s, q, 5, 0.2));
+    furShape(ctx, C, r, 701, mfn, p.mark, null, p, null);
+    if (!hidden) [-1, 1].forEach(k => {
+      const path = () => { ctx.beginPath(); ctx.moveTo(cx + k * 9.6 * s, cy - 6 * s); ctx.quadraticCurveTo(cx + k * 11.4 * s, cy - 13.6 * s, cx + k * 8.6 * s, cy - 17 * s);
+        ctx.quadraticCurveTo(cx + k * 4.6 * s, cy - 14.4 * s, cx + k * 3.6 * s, cy - 9.6 * s); ctx.closePath(); };
+      path(); C.fill(ctx, p.fur, r, null); path(); C.stroke(ctx, r, W);
+      ctx.beginPath(); ctx.moveTo(cx + k * 8.6 * s, cy - 9.6 * s); ctx.quadraticCurveTo(cx + k * 9.6 * s, cy - 13 * s, cx + k * 8.4 * s, cy - 14.8 * s);
+      ctx.quadraticCurveTo(cx + k * 6.4 * s, cy - 13 * s, cx + k * 5.8 * s, cy - 10.4 * s); ctx.closePath(); ctx.fillStyle = mix(p.fur, 0.4); ctx.fill();
+    });
+    const hfn = (q) => C.smooth(ctx, [[0, -1], [0.66, -0.84], [0.98, -0.28], [1, 0.34], [0.84, 0.84], [0.34, 1.02], [-0.34, 1.02], [-0.84, 0.84], [-1, 0.34], [-0.98, -0.28], [-0.66, -0.84]]
+      .map(([a, b]) => [cx + a * hrx + (q() - 0.5) * 0.5, hy + b * hry + (q() - 0.5) * 0.5]));
+    furShape(ctx, C, r, 711, hfn, p.fur, [cx - hrx, hy - hry, hrx * 2, hry * 2], p, () => {
+      // 白鼻梁：額頭往下一條白的，接到嘴邊
+      if (p.white !== 'none') { C.blob(ctx, cx, cy - 2 * s, 2.5 * s, 10.5 * s, C.rng(712), 0.05, 14); ctx.fillStyle = WHITE; ctx.fill(); }
+      // 嘴邊：下面一大塊淺色
+      C.blob(ctx, cx, cy + 10 * s, 10.6 * s, 6 * s, C.rng(713), 0.04, 16); ctx.fillStyle = p.nose; ctx.fill();
+    });
+    [-1, 1].forEach(k => dot(ctx, cx + k * 8.3 * s, cy + 3 * s, 2.1 * s, 1.4 * s, 'rgba(246,140,150,0.75)'));
+    // 瀏海：額頭上一撮往旁邊撥的毛
+    if (!hidden) {
+      const ffn = () => { ctx.beginPath(); ctx.moveTo(cx - 5.4 * s, cy - 9.6 * s); ctx.quadraticCurveTo(cx - 3 * s, cy - 14.6 * s, cx + 2 * s, cy - 13.6 * s);
+        ctx.quadraticCurveTo(cx + 6 * s, cy - 12.4 * s, cx + 6.2 * s, cy - 8.8 * s); ctx.quadraticCurveTo(cx + 3.6 * s, cy - 9.6 * s, cx + 2.6 * s, cy - 4.4 * s);
+        ctx.quadraticCurveTo(cx + 0.4 * s, cy - 7.4 * s, cx - 1.4 * s, cy - 5.6 * s); ctx.quadraticCurveTo(cx - 2.6 * s, cy - 8.4 * s, cx - 5.4 * s, cy - 9.6 * s); ctx.closePath(); };
+      ffn(); C.fill(ctx, p.mark, r, null); ffn(); C.stroke(ctx, r, W);
+    }
+    // 眼睛
+    const ey = cy + 0.4 * s;
+    [-1, 1].forEach(k => {
+      const ex = cx + k * 5.6 * s;
+      if (closed) { ctx.beginPath(); ctx.moveTo(ex - 2.2 * s, ey); ctx.quadraticCurveTo(ex, ey + 2 * s, ex + 2.2 * s, ey); C.stroke(ctx, r, 1.3); return; }
+      if (p.face === 'squint') { ctx.beginPath(); ctx.moveTo(ex - 2.3 * s, ey + 0.8 * s); ctx.quadraticCurveTo(ex, ey - 2.2 * s, ex + 2.3 * s, ey + 0.8 * s); C.stroke(ctx, r, 1.5); return; }
+      const col = p.eyes === 'odd' ? (k < 0 ? '#79b3e3' : '#8a5a34') : p.eyes;
+      const n = parseInt(col.slice(1), 16), light = ((n >> 16) * 0.3 + ((n >> 8) & 255) * 0.59 + (n & 255) * 0.11) > 95;
+      if (light) { dot(ctx, ex, ey, 2.25 * s, 2.45 * s, C.INK); dot(ctx, ex, ey, 1.65 * s, 1.85 * s, col); dot(ctx, ex, ey + 0.1 * s, 0.85 * s, 0.95 * s, C.INK); }
+      else dot(ctx, ex, ey, 1.9 * s, 2.1 * s, col);
+      dot(ctx, ex + 0.5 * s, ey - 0.7 * s, 0.7 * s, 0.7 * s, '#ffffff');
+      if (p.face === 'calm') { ctx.beginPath(); ctx.moveTo(ex - 2.6 * s, ey - 1.5 * s); ctx.lineTo(ex + 2.6 * s, ey - 1.5 * s); C.stroke(ctx, r, 1.2); }
+    });
+    // 鼻孔和嘴巴
+    const dark = mix(p.nose, -0.55);
+    [-1, 1].forEach(k => dot(ctx, cx + k * 2.7 * s, cy + 8 * s, 0.95 * s, 1.25 * s, dark));
+    ctx.beginPath();
+    if (p.face === 'calm') { ctx.moveTo(cx - 2.2 * s, cy + 10.8 * s); ctx.lineTo(cx + 2.2 * s, cy + 10.8 * s); }
+    else { ctx.moveTo(cx - 3 * s, cy + 10.2 * s); ctx.quadraticCurveTo(cx, cy + 12.2 * s, cx + 3 * s, cy + 10.2 * s); }
+    C.stroke(ctx, r, 1.1);
+  }
+  // 馬尾巴：一束長長的毛，鬃毛的顏色
+  function horseTail(ctx, C, r, p, a, b, c) {
+    if (p.tail === 'short') { const m = qpt(a, b, c, 0.5); c = m; b = [(a[0] + m[0]) / 2 + (b[0] - a[0]) * 0.25, (a[1] + m[1]) / 2 + (b[1] - a[1]) * 0.25]; }
+    const path = () => { ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.quadraticCurveTo(b[0], b[1], c[0], c[1]); };
+    path(); C.stroke(ctx, r, 6.4 + W * 2, C.INK);
+    ctx.save(); path(); ctx.lineCap = 'round'; ctx.lineWidth = 6.4; ctx.strokeStyle = p.mark; ctx.stroke(); ctx.restore();
+    const m1 = qpt(a, b, c, 0.45), m2 = qpt(a, b, c, 0.95);
+    C.line(ctx, m1[0], m1[1], m2[0], m2[1], r, 0.9, mix(p.mark, -0.3), 0.3);
+  }
+  // 蹄：腳底一小段深色
+  function hoof(ctx, C, r, p, x, y, w) {
+    const fn = (q) => C.rect(ctx, x - w / 2, y - 2.7, w, 2.9, q, 0.3);
+    shape(ctx, C, 760 + Math.round(x), fn); ctx.fillStyle = mix(p.fur, -0.62); ctx.fill(); shape(ctx, C, 760 + Math.round(x), fn); C.stroke(ctx, r, 1.1);
+  }
+  const HORSE_POSES = {
+    stand(ctx, C, r, p, step) {
+      shadow(ctx, 30, 18.5);
+      horseTail(ctx, C, r, p, [15.5, 34], step ? [6, 36] : [7.5, 35], step ? [8.5, 48.5] : [10.5, 49]);
+      const far = mix(p.fur, -0.14);
+      [[step ? 20 : 23.5], [step ? 40 : 37]].forEach(([x]) => {
+        const fn = (q) => C.rect(ctx, x - 2.7, 40, 5.4, 12, q, 0.5);
+        shape(ctx, C, 731 + Math.round(x), fn); ctx.fillStyle = far; ctx.fill(); shape(ctx, C, 731 + Math.round(x), fn); C.stroke(ctx, r, W);
+        hoof(ctx, C, r, p, x, 52.3, 5.4);
+      });
+      const bx = 28.5, by = 38, rx = 13.6, ry = 8;
+      const bfn = (q) => C.blob(ctx, bx, by, rx, ry, q, 0.035, 18);
+      furShape(ctx, C, r, 721, bfn, p.fur, [bx - rx, by - ry, rx * 2, ry * 2], p, null);
+      [step ? 23.5 : 20, step ? 31 : 34.5].forEach(x => { leg(ctx, C, r, p, x, 41, 52.8, 6); hoof(ctx, C, r, p, x, 53, 6); });
+      head(ctx, C, r, p, 41.5, step ? 23.2 : 22.5, 0.94, false);
+    },
+    walk(ctx, C, r, p) { HORSE_POSES.stand(ctx, C, r, p, true); },
+    sit(ctx, C, r, p) {
+      shadow(ctx, 33, 17);
+      horseTail(ctx, C, r, p, [41, 46], [51, 44], [52, 51]);
+      const bx = 32, by = 41, rx = 12, ry = 11;
+      const bfn = (q) => C.smooth(ctx, [[bx - rx * 0.62, by - ry], [bx + rx * 0.62, by - ry], [bx + rx, by + ry * 0.25], [bx + rx * 1.04, by + ry * 0.92], [bx, by + ry * 1.06], [bx - rx * 1.04, by + ry * 0.92], [bx - rx, by + ry * 0.25]]
+        .map(([a, b]) => [a + (q() - 0.5) * 0.7, b + (q() - 0.5) * 0.7]));
+      furShape(ctx, C, r, 722, bfn, p.fur, [bx - rx, by - ry, rx * 2, ry * 2], p, null);
+      sitPaws(ctx, C, r, p, bx, rx);
+      [-1, 1].forEach(k => hoof(ctx, C, r, p, bx + k * 3.5, 53.3, 6.6));
+      head(ctx, C, r, p, 32, 21.6, 1, false);
+    },
+    sleep(ctx, C, r, p) {
+      shadow(ctx, 31, 22);
+      horseTail(ctx, C, r, p, [11, 44], [4, 50], [16, 53.5]);
+      const bx = 28, by = 43.5, rx = 18.5, ry = 9;
+      const bfn = (q) => C.blob(ctx, bx, by, rx, ry, q, 0.035, 20);
+      furShape(ctx, C, r, 723, bfn, p.fur, [bx - rx, by - ry, rx * 2, ry * 2], p, null);
+      ctx.beginPath(); ctx.moveTo(15, 46); ctx.quadraticCurveTo(22, 41.5, 29, 47.5); C.stroke(ctx, r, 1.2);
+      const pfn = (q) => C.blob(ctx, 31, 49.6, 4.2, 2.7, q, 0.08, 10);
+      furShape(ctx, C, r, 724, pfn, mix(p.fur, -0.62), null, p, null);
+      ctx.save(); ctx.translate(45, 40.5); ctx.rotate(0.2); head(ctx, C, r, p, 0, 0, 0.8, true); ctx.restore();
+    },
+  };
+
   // ---------------- 頭套（貓狗共用，畫在頭上面） ----------------
   // 整頂罩住的帽子會把立著的耳朵收進去；荷包蛋只是放在頭頂，耳朵照樣露出來
   const HAT_HIDES = { frog: 1, bear: 1, bunny: 1, berry: 1, duck: 1 };
@@ -588,7 +703,7 @@
     }
   }
   function head(ctx, C, r, p, cx, cy, s, closed, side) {
-    (p.kind === 'dog' ? dogHead : catHead)(ctx, C, r, p, cx, cy, s, closed, side);
+    (p.kind === 'dog' ? dogHead : p.kind === 'horse' ? horseHead : catHead)(ctx, C, r, p, cx, cy, s, closed, side);
     hat(ctx, C, r, p, cx, cy, s);
   }
 
@@ -649,7 +764,7 @@
     const C = root.HQ_CRAYON;
     p = sanitize(p) || sanitize(DEFAULT);
     ctx.save();
-    const set = p.kind === 'dog' ? DOG_POSES : POSES;
+    const set = p.kind === 'dog' ? DOG_POSES : p.kind === 'horse' ? HORSE_POSES : POSES;
     (set[pose] || set.stand)(ctx, C, C.rng(lookKey(p).length * 131 + 7), p);
     ctx.restore();
   }

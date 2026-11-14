@@ -33,9 +33,11 @@
   const FACES = { smile: '微笑', calm: '淡定' };
   const TAILS = { long: '長尾巴', short: '短尾巴', fluffy: '蓬蓬尾' };
   // 狗狗的選項：存在跟貓咪一樣的欄位裡（pattern 放毛型、mark 放頭頂的毛色、earc 放耳朵的毛色）
-  const DOG_EARS = { drop: '捲毛垂耳', perk: '小立耳' };
+  const DOG_EARS = { drop: '捲毛垂耳', perk: '立耳' };
   const DOG_COATS = { curly: '捲毛', short: '短毛' };
-  const DOG_TAILS = { pom: '蓬蓬尾', long: '長尾巴' };
+  const DOG_TAILS = { pom: '蓬蓬尾', long: '長尾巴', fluffy: '蓬長尾', curl: '捲尾巴' };
+  // 狗狗的白毛花紋（存在 white 欄位）：白底＝臉頰、嘴邊、胸口、肚子是白的，眉毛上兩個小白點；面罩＝額頭深色往下一個尖，眼睛周圍到嘴邊、胸口、四隻腳是白的
+  const DOG_WHITES = { none: '沒有', muzzle: '白底', socks: '面罩' };
   const DOG_FACES = { smile: '微笑', squint: '瞇眼笑', tongue: '吐舌頭' };
   // 頭套：貓狗都能戴
   const HATS = { none: '不戴', frog: '青蛙帽', bear: '小熊帽', bunny: '兔耳帽', berry: '草莓帽', egg: '荷包蛋', duck: '小黃鴨帽' };
@@ -49,7 +51,7 @@
   // 每一種寵物各自有哪些選項
   const OPTS = {
     cat: { ears: EARS, pattern: PATTERNS, white: WHITES, tail: TAILS, face: FACES },
-    dog: { ears: DOG_EARS, pattern: DOG_COATS, white: { none: '' }, tail: DOG_TAILS, face: DOG_FACES },
+    dog: { ears: DOG_EARS, pattern: DOG_COATS, white: DOG_WHITES, tail: DOG_TAILS, face: DOG_FACES },
   };
 
   // 顏色：選單裡的，或自己拉色相調出來的（#rrggbb）
@@ -69,7 +71,7 @@
       pattern: has(O.pattern, p.pattern) ? p.pattern : D.pattern,
       mark: pick(p.mark, MARKS, D.mark),
       white: has(O.white, p.white) ? p.white : D.white,
-      eyes: p.kind === 'dog' && eyes === 'odd' ? D.eyes : eyes,
+      eyes,
       nose: pick(p.nose, NOSES, D.nose),
       tail: has(O.tail, p.tail) ? p.tail : D.tail,
       face: has(O.face, p.face) ? p.face : D.face,
@@ -127,7 +129,10 @@
       ctx.save(); ctx.beginPath(); const m = qpt(a, b, c, 0.9); ctx.moveTo(m[0], m[1]); ctx.lineTo(c[0], c[1]);
       ctx.lineCap = 'round'; ctx.lineWidth = w; ctx.strokeStyle = p.mark; ctx.stroke(); ctx.restore();
     }
-    if (p.tail === 'fluffy') { // 蓬蓬的毛邊
+    if (p.kind === 'dog') { // 狗狗有白毛花紋的時候，尾巴尖是白的
+      if (p.white !== 'none') { ctx.save(); ctx.beginPath(); const m = qpt(a, b, c, 0.8); ctx.moveTo(m[0], m[1]); ctx.lineTo(c[0], c[1]);
+        ctx.lineCap = 'round'; ctx.lineWidth = w; ctx.strokeStyle = WHITE; ctx.stroke(); ctx.restore(); }
+    } else if (p.tail === 'fluffy') { // 蓬蓬的毛邊
       [0.35, 0.6, 0.85].forEach(t => { const [x, y] = qpt(a, b, c, t); C.dots(ctx, x - 3, y - 3, 6, 6, 3, 'rgba(255,255,255,0.35)', r, 1.4); });
     }
   }
@@ -344,9 +349,12 @@
     const hidden = HAT_HIDES[p.hat], noTop = hidden || !cur;
     // 小立耳：頭頂兩邊的小三角，耳尖圓圓的
     if (p.ears === 'perk' && !hidden) [-1, 1].forEach(k => {
-      const path = () => { ctx.beginPath(); ctx.moveTo(cx + k * 12.4 * s, cy - 3 * s); ctx.quadraticCurveTo(cx + k * 14.6 * s, cy - 12.6 * s, cx + k * 11.4 * s, cy - 15.6 * s);
-        ctx.quadraticCurveTo(cx + k * 7 * s, cy - 14.6 * s, cx + k * 3.4 * s, cy - 8.6 * s); ctx.closePath(); };
+      const path = () => { ctx.beginPath(); ctx.moveTo(cx + k * 12.6 * s, cy - 2.6 * s); ctx.quadraticCurveTo(cx + k * 14.8 * s, cy - 13 * s, cx + k * 12 * s, cy - 17.6 * s);
+        ctx.quadraticCurveTo(cx + k * 6.6 * s, cy - 15 * s, cx + k * 2.6 * s, cy - 8.4 * s); ctx.closePath(); };
       path(); C.fill(ctx, p.earc, r, null); path(); C.stroke(ctx, r, W);
+      // 耳朵裡面淺一點
+      ctx.beginPath(); ctx.moveTo(cx + k * 11.2 * s, cy - 8 * s); ctx.quadraticCurveTo(cx + k * 12.6 * s, cy - 12.4 * s, cx + k * 11.4 * s, cy - 14.6 * s);
+      ctx.quadraticCurveTo(cx + k * 8.4 * s, cy - 12.6 * s, cx + k * 6.8 * s, cy - 9.4 * s); ctx.closePath(); ctx.fillStyle = mix(p.earc, 0.4); ctx.fill();
     });
     // 垂耳：在臉的後面，從頭的兩側垂到下巴
     // 耳根藏在頭毛底下，由內往外斜斜垂下來，越往下越寬，下緣是幾朵大大的捲毛
@@ -385,7 +393,19 @@
     const afn = (q) => curl(ctx, ax, ay, 11.6 * s, 6.8 * s, q, 11, 0.24);
     // 頭毛的輪廓先畫在臉的後面：這樣只有露在臉外面的那一圈有黑線
     if (!noTop) furShape(ctx, C, r, 505, afn, p.mark, null, p, null);
-    furShape(ctx, C, r, 511, hfn, p.fur, [cx - hrx, hy - hry, hrx * 2, hry * 2], p, null);
+    furShape(ctx, C, r, 511, hfn, p.fur, [cx - hrx, hy - hry, hrx * 2, hry * 2], p, () => {
+      // 白毛花紋（剪在臉的形狀裡）
+      if (p.white === 'muzzle') {
+        C.blob(ctx, cx, cy + 9 * s, 10.4 * s, 6.6 * s, C.rng(541), 0.04, 16); ctx.fillStyle = WHITE; ctx.fill();
+        [-1, 1].forEach(k => dot(ctx, cx + k * 5.3 * s, cy - 2.4 * s, 1.7 * s, 1.15 * s, WHITE));
+      } else if (p.white === 'socks') {
+        [-1, 1].forEach(k => { C.blob(ctx, cx + k * 6 * s, cy + 1.6 * s, 6.4 * s, 6.8 * s, C.rng(542 + k), 0.04, 14); ctx.fillStyle = WHITE; ctx.fill(); });
+        C.blob(ctx, cx, cy + 8.6 * s, 11 * s, 6.6 * s, C.rng(541), 0.04, 16); ctx.fillStyle = WHITE; ctx.fill();
+        // 額頭的深色往下一個尖
+        ctx.beginPath(); ctx.moveTo(cx - 4.2 * s, cy - 11 * s); ctx.quadraticCurveTo(cx - 1.4 * s, cy - 3 * s, cx, cy + 0.6 * s);
+        ctx.quadraticCurveTo(cx + 1.4 * s, cy - 3 * s, cx + 4.2 * s, cy - 11 * s); ctx.closePath(); ctx.fillStyle = p.fur; ctx.fill();
+      }
+    });
     // 腮紅
     [-1, 1].forEach(k => dot(ctx, cx + k * 8.1 * s, cy + 5.4 * s, 2.3 * s, 1.6 * s, 'rgba(246,140,150,0.8)'));
     if (side && p.ears !== 'perk') ear(-1, true);
@@ -405,7 +425,11 @@
       const ex = cx + k * 5.5 * s;
       if (closed) { ctx.beginPath(); ctx.moveTo(ex - 2.2 * s, ey); ctx.quadraticCurveTo(ex, ey + 2 * s, ex + 2.2 * s, ey); C.stroke(ctx, r, 1.3); return; }
       if (p.face === 'squint') { ctx.beginPath(); ctx.moveTo(ex - 2.3 * s, ey + 0.8 * s); ctx.quadraticCurveTo(ex, ey - 2.2 * s, ex + 2.3 * s, ey + 0.8 * s); C.stroke(ctx, r, 1.5); return; }
-      dot(ctx, ex, ey, 1.9 * s, 2 * s, p.eyes);
+      const col = p.eyes === 'odd' ? (k < 0 ? '#79b3e3' : '#8a5a34') : p.eyes;
+      const n = parseInt(col.slice(1), 16), light = ((n >> 16) * 0.3 + ((n >> 8) & 255) * 0.59 + (n & 255) * 0.11) > 95;
+      if (light) { // 淺色的眼睛：外面一圈深色，中間一顆瞳孔
+        dot(ctx, ex, ey, 2.25 * s, 2.35 * s, C.INK); dot(ctx, ex, ey, 1.65 * s, 1.75 * s, col); dot(ctx, ex, ey + 0.1 * s, 0.85 * s, 0.95 * s, C.INK);
+      } else dot(ctx, ex, ey, 1.9 * s, 2 * s, col);
       dot(ctx, ex + 0.5 * s, ey - 0.7 * s, 0.7 * s, 0.7 * s, '#ffffff');
     });
     // 鼻子：小小的倒三角，圓圓的；嘴巴 ω，吐舌頭的時候多一片小舌頭
@@ -424,7 +448,14 @@
   }
   // 尾巴：一朵一朵的蓬蓬尾（a 是屁股、c 是尾巴尖），或細細的長尾巴
   function dogTail(ctx, C, r, p, a, b, c) {
-    if (p.tail === 'long') { tail(ctx, C, r, p, a, b, c); return; }
+    if (p.tail === 'long' || p.tail === 'fluffy') { tail(ctx, C, r, p, a, b, c); return; }
+    if (p.tail === 'curl') { // 捲尾巴：捲成一圈貼在屁股上面
+      const up = c[1] < a[1] - 8, x = up ? a[0] - 0.5 : a[0] + 3.2, y = up ? a[1] - 7.4 : a[1] - 4.6, rr = up ? 5.6 : 4.8, k = up ? 1 : -1;
+      const fn = (q) => C.blob(ctx, x, y, rr, rr, q, 0.04, 14);
+      furShape(ctx, C, r, 531, fn, p.fur, null, p, p.white !== 'none' ? () => dot(ctx, x - k * 2.6, y + 1.4, rr * 0.62, rr * 0.8, WHITE) : null);
+      ctx.beginPath(); ctx.arc(x + k * 0.4, y + 0.4, rr * 0.5, Math.PI * (k > 0 ? 0.15 : 0.85), Math.PI * (k > 0 ? 1.55 : -0.55), k < 0); C.stroke(ctx, r, 1.1);
+      return;
+    }
     const m = [(a[0] + c[0]) / 2, (a[1] + c[1]) / 2], ang = Math.atan2(c[1] - a[1], c[0] - a[0]) - Math.PI / 2, len = Math.hypot(c[0] - a[0], c[1] - a[1]) / 2;
     ctx.save(); ctx.translate(m[0], m[1]); ctx.rotate(ang);
     const fn = (q) => (curly(p) ? curl(ctx, 0, 0, 3.4, len, q, 7, 0.24) : C.blob(ctx, 0, 0, 3.2, len, q, 0.05, 12));
@@ -454,7 +485,11 @@
       });
       const bx = 28.5, by = 39.5, rx = 13.6, ry = 8.4;
       const bfn = (q) => C.blob(ctx, bx, by, rx, ry, q, 0.035, 18);
-      furShape(ctx, C, r, 321, bfn, p.fur, [bx - rx, by - ry, rx * 2, ry * 2], p, null);
+      furShape(ctx, C, r, 321, bfn, p.fur, [bx - rx, by - ry, rx * 2, ry * 2], p, p.white !== 'none' ? () => {
+        // 白肚子和白胸口
+        C.blob(ctx, bx + 2, by + 8.6, rx + 2, 5.6, C.rng(551), 0.04, 16); ctx.fillStyle = WHITE; ctx.fill();
+        C.blob(ctx, bx + rx - 1, by + 1, 5.4, 7.6, C.rng(552), 0.04, 14); ctx.fillStyle = WHITE; ctx.fill();
+      } : null);
       leg(ctx, C, r, p, step ? 23.5 : 20, 42.5, 52.8, 6.2); leg(ctx, C, r, p, step ? 31 : 34.5, 42.5, 52.8, 6.2);
       head(ctx, C, r, p, 41.5, step ? 25.2 : 24.5, 0.98, false);
     },
@@ -466,7 +501,9 @@
       const bx = 32, by = 41, rx = 12, ry = 11;
       const bfn = (q) => C.smooth(ctx, [[bx - rx * 0.62, by - ry], [bx + rx * 0.62, by - ry], [bx + rx, by + ry * 0.25], [bx + rx * 1.04, by + ry * 0.92], [bx, by + ry * 1.06], [bx - rx * 1.04, by + ry * 0.92], [bx - rx, by + ry * 0.25]]
         .map(([a, b]) => [a + (q() - 0.5) * 0.7, b + (q() - 0.5) * 0.7]));
-      furShape(ctx, C, r, 322, bfn, p.fur, [bx - rx, by - ry, rx * 2, ry * 2], p, null);
+      furShape(ctx, C, r, 322, bfn, p.fur, [bx - rx, by - ry, rx * 2, ry * 2], p, p.white !== 'none' ? () => {
+        C.blob(ctx, bx, by + 1.6, rx * 0.62, ry * 1.05, C.rng(553), 0.04, 16); ctx.fillStyle = WHITE; ctx.fill(); // 白胸口到肚子
+      } : null);
       sitPaws(ctx, C, r, p, bx, rx);
       ruff(ctx, C, r, p, bx - 7.6, bx + 7.6, 34.4);
       head(ctx, C, r, p, 32, 22.8, 1.04, false);
@@ -474,10 +511,12 @@
     // 捲成一團睡覺
     sleep(ctx, C, r, p) {
       shadow(ctx, 31, 22);
-      if (p.tail === 'long') tail(ctx, C, r, p, [10, 46], [16, 57], [40, 53]);
+      if (p.tail === 'long' || p.tail === 'fluffy') tail(ctx, C, r, p, [10, 46], [16, 57], [40, 53]);
       const bx = 28, by = 43.5, rx = 18.5, ry = 9;
       const bfn = (q) => C.blob(ctx, bx, by, rx, ry, q, 0.035, 20);
-      furShape(ctx, C, r, 323, bfn, p.fur, [bx - rx, by - ry, rx * 2, ry * 2], p, null);
+      furShape(ctx, C, r, 323, bfn, p.fur, [bx - rx, by - ry, rx * 2, ry * 2], p, p.white !== 'none' ? () => {
+        C.blob(ctx, bx + 6, by + 8, rx * 0.8, 4.6, C.rng(554), 0.04, 16); ctx.fillStyle = WHITE; ctx.fill();
+      } : null);
       // 縮起來的後腳：身體上一道彎彎的線，和一隻小腳掌
       ctx.beginPath(); ctx.moveTo(15, 46); ctx.quadraticCurveTo(22, 41.5, 29, 47.5); C.stroke(ctx, r, 1.2);
       const pfn = (q) => C.blob(ctx, 31, 49.6, 4.2, 2.7, q, 0.08, 10);
@@ -654,7 +693,7 @@
   }
 
   const pets = { KINDS, MODES, TEMPERS, rollTemper, withTemper, EARS, FACES, FURS, FUR_NAMES, PATTERNS, MARKS, MARK_NAMES, WHITES, EYES, EYE_NAMES, NOSES, NOSE_NAMES, TAILS, NAME_MAX,
-    DOG_EARS, DOG_COATS, DOG_TAILS, DOG_FACES, HATS, OPTS, DEFAULTS,
+    DOG_EARS, DOG_COATS, DOG_TAILS, DOG_FACES, DOG_WHITES, HATS, OPTS, DEFAULTS,
     DEFAULT, sanitize, lookKey, drawPet, drawHead, drawBed, WIDTH: 64, HEIGHT: 56 };
   if (typeof module !== 'undefined' && module.exports) module.exports = pets;
   else root.HQ_PETS = pets;

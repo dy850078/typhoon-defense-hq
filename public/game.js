@@ -2714,9 +2714,10 @@
     let eyeCard = null;
     row('種類', Object.entries(PT.KINDS), () => draft.kind, (v) => { if (v !== draft.kind) { draft = drafts[v]; setTimeout(build, 0); } });
     opt('耳朵', 'ears', Object.entries(O.ears));
-    opt(dog ? '毛型' : '花紋', 'pattern', Object.entries(O.pattern));
-    if (!dog) {
-      opt('白毛', 'white', Object.entries(O.white));
+    if (dog) row('毛型', Object.entries(O.pattern), () => draft.pattern, (v) => { if (v !== draft.pattern) { draft.pattern = v; setTimeout(build, 0); } }); // 換毛型，顏色卡會不一樣
+    else opt('花紋', 'pattern', Object.entries(O.pattern));
+    opt(dog ? '白毛花紋' : '白毛', 'white', Object.entries(O.white));
+    {
       row('眼睛', [['same', '兩眼同色'], ['odd', '異色瞳']], () => (draft.eyes === 'odd' ? 'odd' : 'same'),
         (v) => { draft.eyes = v === 'odd' ? 'odd' : eyeCol; if (eyeCard) eyeCard.classList.toggle('off', v === 'odd'); });
     }

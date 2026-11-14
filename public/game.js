@@ -2674,7 +2674,10 @@
   };
   function openPet() {
     if (!me) return;
-    const draft = Object.assign({}, PT.DEFAULT, me.pet || {});
+    // 貓咪和狗狗各留一份草稿，切過去再切回來不會不見
+    const drafts = {};
+    Object.keys(PT.KINDS).forEach(k => { drafts[k] = Object.assign({}, PT.DEFAULTS[k], me.pet && me.pet.kind === k ? me.pet : {}); });
+    let draft = drafts[me.pet ? me.pet.kind : 'cat'];
     const box = el('div', 'pet-ed');
     box.appendChild(el('p', 'modal-hint', me.pet ? '想換個樣子或換名字都可以，改完按儲存。'
       : '每個人可以領養一隻寵物。捏好牠的樣子、取個名字，牠就會一直陪著你。'));
@@ -2688,6 +2691,10 @@
     nameL.appendChild(nameI); fields.appendChild(nameL);
     wrap.appendChild(fields);
     box.appendChild(wrap);
+    const body = el('div'); box.appendChild(body);
+    const build = () => {
+    const box = body; body.innerHTML = '';
+    const dog = draft.kind === 'dog', O = PT.OPTS[draft.kind];
     // 上半：選項（一列一種，標籤在左邊對齊）；下半：顏色（每種顏色一張小卡，裡面三條拉桿）
     box.appendChild(el('h3', 'gear-h', '樣子'));
     const opts = el('div', 'pet-opts');
@@ -2702,15 +2709,19 @@
       opts.appendChild(list);
     };
     const opt = (label, key, items) => row(label, items, () => draft[key], (v) => { draft[key] = v; });
-    let eyeCol = /^#/.test(draft.eyes) ? draft.eyes : PT.DEFAULT.eyes; // 異色瞳的時候先記著原本的顏色
+    let eyeCol = /^#/.test(draft.eyes) ? draft.eyes : PT.DEFAULTS[draft.kind].eyes; // 異色瞳的時候先記著原本的顏色
     let eyeCard = null;
-    opt('耳朵', 'ears', Object.entries(PT.EARS));
-    opt('花紋', 'pattern', Object.entries(PT.PATTERNS));
-    opt('白毛', 'white', Object.entries(PT.WHITES));
-    row('眼睛', [['same', '兩眼同色'], ['odd', '異色瞳']], () => (draft.eyes === 'odd' ? 'odd' : 'same'),
-      (v) => { draft.eyes = v === 'odd' ? 'odd' : eyeCol; if (eyeCard) eyeCard.classList.toggle('off', v === 'odd'); });
-    opt('尾巴', 'tail', Object.entries(PT.TAILS));
-    opt('表情', 'face', Object.entries(PT.FACES));
+    row('種類', Object.entries(PT.KINDS), () => draft.kind, (v) => { if (v !== draft.kind) { draft = drafts[v]; setTimeout(build, 0); } });
+    opt('耳朵', 'ears', Object.entries(O.ears));
+    opt(dog ? '毛型' : '花紋', 'pattern', Object.entries(O.pattern));
+    if (!dog) {
+      opt('白毛', 'white', Object.entries(O.white));
+      row('眼睛', [['same', '兩眼同色'], ['odd', '異色瞳']], () => (draft.eyes === 'odd' ? 'odd' : 'same'),
+        (v) => { draft.eyes = v === 'odd' ? 'odd' : eyeCol; if (eyeCard) eyeCard.classList.toggle('off', v === 'odd'); });
+    }
+    opt('尾巴', 'tail', Object.entries(O.tail));
+    opt('表情', 'face', Object.entries(O.face));
+    opt('頭套', 'hat', Object.entries(PT.HATS));
     box.appendChild(opts);
     box.appendChild(el('h3', 'gear-h', '顏色'));
     const cols = el('div', 'pet-colors');
@@ -2739,12 +2750,16 @@
       cols.appendChild(card);
       return card;
     };
-    colorCard('毛色', () => draft.fur, (v) => { draft.fur = v; });
-    colorCard('花紋', () => draft.mark, (v) => { draft.mark = v; });
+    colorCard(dog ? '身體' : '毛色', () => draft.fur, (v) => { draft.fur = v; });
+    colorCard(dog ? '頭頂的毛' : '花紋', () => draft.mark, (v) => { draft.mark = v; });
+    if (dog) colorCard('耳朵', () => draft.earc, (v) => { draft.earc = v; });
     eyeCard = colorCard('眼睛', () => eyeCol, (v) => { eyeCol = v; if (draft.eyes !== 'odd') draft.eyes = v; });
     if (draft.eyes === 'odd') eyeCard.classList.add('off');
     colorCard('鼻子', () => draft.nose, (v) => { draft.nose = v; });
     box.appendChild(cols);
+    draw();
+    };
+    build();
     box.appendChild(el('p', 'modal-hint pet-bed-hint', '對著牠按右鍵（手機長按），可以選牠平常做什麼：跟在身邊（到野區會一起打怪）或自由散步。'));
     const save = el('button', 'primary pet-save', me.pet ? '儲存' : '領養'); save.type = 'button';
     save.onclick = () => {

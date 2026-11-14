@@ -37,7 +37,7 @@
   const NOSES = ['#cf8a68', '#f2a3b0', '#c56a5a', '#3a3436'];
   const NOSE_NAMES = ['橘棕', '粉紅', '磚紅', '黑'];
   // 表情：微笑（ω 嘴、腮紅）或淡定（嘴巴平平、眼皮稍微壓下來）
-  const FACES = { smile: '微笑', calm: '淡定' };
+  const FACES = { smile: '微笑', calm: '淡定', stare: '淡定眼神' };
   const TAILS = { long: '長尾巴', short: '短尾巴', fluffy: '蓬蓬尾' };
   // 狗狗的選項：存在跟貓咪一樣的欄位裡（pattern 放毛型、mark 放頭頂的毛色、earc 放耳朵的毛色）
   const DOG_EARS = { drop: '捲毛垂耳', perk: '立耳' };
@@ -241,7 +241,7 @@
       ctx.restore();
     });
     // 眼睛
-    const ey = cy + 0.2 * s;
+    const ey = cy + 0.2 * s, stare = p.face === 'stare';
     [-1, 1].forEach(k => {
       const ex = cx + k * 5.6 * s;
       if (closed) { ctx.beginPath(); ctx.moveTo(ex - 2.6 * s, ey); ctx.quadraticCurveTo(ex, ey + 2.4 * s, ex + 2.6 * s, ey); C.stroke(ctx, r, 1.5); return; }
@@ -251,20 +251,27 @@
       shape(ctx, C, 600 + k, efn); C.fill(ctx, col, r, null);
       clipDo(ctx, C, 600 + k, efn, () => {
         dot(ctx, ex + 0.6 * s, ey + 0.9 * s, 2 * s, 2 * s, 'rgba(255,255,255,0.28)');
-        dot(ctx, ex + k * 0.15 * s, ey + 0.2 * s, 1.6 * s, 2.1 * s, '#1d1c24');
+        dot(ctx, ex + k * 0.15 * s, ey + 0.2 * s, (stare ? 1.05 : 1.6) * s, (stare ? 2.4 : 2.1) * s, '#1d1c24');
         // 淡定：上眼皮稍微壓下來一點
         if (p.face === 'calm') { ctx.fillStyle = mainOf(p); ctx.fillRect(ex - 4 * s, ey - 4 * s, 8 * s, 1.6 * s); }
+        // 淡定眼神：上眼皮蓋下來快一半，靠鼻子那邊壓得更低，眼皮邊緣一條深色的線
+        if (stare) {
+          const ox = ex + k * 4 * s, ix = ex - k * 4 * s, oy = ey - 1.9 * s, iy = ey - 0.5 * s;
+          ctx.beginPath(); ctx.moveTo(ox, ey - 5 * s); ctx.lineTo(ox, oy); ctx.quadraticCurveTo(ex, oy + 0.2 * s, ix, iy); ctx.lineTo(ix, ey - 5 * s); ctx.closePath();
+          ctx.fillStyle = mainOf(p); ctx.fill();
+          ctx.beginPath(); ctx.moveTo(ox, oy); ctx.quadraticCurveTo(ex, oy + 0.2 * s, ix, iy); C.stroke(ctx, r, 1.6);
+        }
       });
       shape(ctx, C, 600 + k, efn); C.stroke(ctx, r, 1.7);
-      dot(ctx, ex - 1.1 * s, ey - (p.face === 'calm' ? 0.6 : 1.2) * s, 0.85 * s, 0.85 * s, '#ffffff');
+      dot(ctx, ex - 1.1 * s, ey + (stare ? 0.5 : p.face === 'calm' ? -0.6 : -1.2) * s, (stare ? 0.7 : 0.85) * s, (stare ? 0.7 : 0.85) * s, '#ffffff');
     });
     // 腮紅
-    [-1, 1].forEach(k => dot(ctx, cx + k * 9.6 * s, cy + 4.2 * s, 2.2 * s, 1.4 * s, p.face === 'calm' ? 'rgba(246,140,150,0.4)' : 'rgba(246,140,150,0.6)'));
+    [-1, 1].forEach(k => dot(ctx, cx + k * 9.6 * s, cy + 4.2 * s, 2.2 * s, 1.4 * s, p.face === 'calm' || stare ? 'rgba(246,140,150,0.4)' : 'rgba(246,140,150,0.6)'));
     // 鼻子、嘴巴
     const ny = cy + 3.6 * s;
     ctx.beginPath(); ctx.moveTo(cx - 1.9 * s, ny); ctx.lineTo(cx + 1.9 * s, ny); ctx.lineTo(cx, ny + 2.1 * s); ctx.closePath();
     C.fill(ctx, p.nose, r, null); C.stroke(ctx, r, 1.2);
-    if (p.face === 'calm') {
+    if (p.face === 'calm' || stare) {
       // 淡定的嘴：鼻子下一小段直線，再分成兩邊（像「人」字），不笑
       ctx.beginPath(); ctx.moveTo(cx, ny + 2.1 * s); ctx.lineTo(cx, ny + 3.1 * s);
       ctx.quadraticCurveTo(cx - 0.8 * s, ny + 3.4 * s, cx - 1.9 * s, ny + 4.3 * s);

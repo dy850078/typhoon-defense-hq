@@ -2737,6 +2737,7 @@
       row('眼睛', [['same', '兩眼同色'], ['odd', '異色瞳']], () => (draft.eyes === 'odd' ? 'odd' : 'same'),
         (v) => { draft.eyes = v === 'odd' ? 'odd' : eyeCol; if (eyeCard) eyeCard.classList.toggle('off', v === 'odd'); });
     }
+    if (O.eyeshape) opt('眼型', 'eyeshape', Object.entries(O.eyeshape));
     opt('尾巴', 'tail', Object.entries(O.tail));
     opt('表情', 'face', Object.entries(O.face));
     opt('頭套', 'hat', Object.entries(PT.HATS));

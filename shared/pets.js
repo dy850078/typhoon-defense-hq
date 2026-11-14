@@ -37,7 +37,9 @@
   const NOSES = ['#cf8a68', '#f2a3b0', '#c56a5a', '#3a3436'];
   const NOSE_NAMES = ['橘棕', '粉紅', '磚紅', '黑'];
   // 表情：微笑（ω 嘴、腮紅）或淡定（嘴巴平平、眼皮稍微壓下來）
-  const FACES = { smile: '微笑', calm: '淡定', stare: '淡定眼神' };
+  const FACES = { smile: '微笑', calm: '淡定' };
+  // 貓咪的眼型：半垂眼是上眼皮蓋下來一點，半圓眼是眼睛上面切平
+  const EYE_SHAPES = { round: '圓眼', lid: '半垂眼', half: '半圓眼' };
   const TAILS = { long: '長尾巴', short: '短尾巴', fluffy: '蓬蓬尾' };
   // 狗狗的選項：存在跟貓咪一樣的欄位裡（pattern 放毛型、mark 放頭頂的毛色、earc 放耳朵的毛色）
   const DOG_EARS = { drop: '捲毛垂耳', perk: '立耳' };
@@ -57,7 +59,7 @@
   const NAME_MAX = 8;
 
   const DEFAULT = { kind: 'cat', name: '', ears: 'up', fur: FURS[3], pattern: 'mackerel', mark: MARKS[4], white: 'muzzle',
-    eyes: '#e3b23c', nose: NOSES[1], tail: 'long', face: 'smile', hat: 'none', earc: '#f0a456', mode: 'follow' };
+    eyes: '#e3b23c', nose: NOSES[1], tail: 'long', face: 'smile', eyeshape: 'round', hat: 'none', earc: '#f0a456', mode: 'follow' };
   const DOG_DEFAULT = { kind: 'dog', name: '', ears: 'drop', fur: '#d09a70', pattern: 'curly', mark: '#f2ddc0', white: 'none',
     eyes: '#2b2a33', nose: '#4a2c28', tail: 'pom', face: 'smile', hat: 'none', earc: '#c68d62', mode: 'follow' };
   const HORSE_DEFAULT = { kind: 'horse', name: '', ears: 'up', fur: '#b8763f', pattern: 'flow', mark: '#5a3826', white: 'muzzle',
@@ -65,7 +67,7 @@
   const DEFAULTS = { cat: DEFAULT, dog: DOG_DEFAULT, horse: HORSE_DEFAULT };
   // 每一種寵物各自有哪些選項
   const OPTS = {
-    cat: { ears: EARS, pattern: PATTERNS, white: WHITES, tail: TAILS, face: FACES },
+    cat: { ears: EARS, pattern: PATTERNS, white: WHITES, tail: TAILS, face: FACES, eyeshape: EYE_SHAPES },
     dog: { ears: DOG_EARS, pattern: DOG_COATS, white: DOG_WHITES, tail: DOG_TAILS, face: DOG_FACES },
     horse: { ears: HORSE_EARS, pattern: HORSE_MANES, white: HORSE_WHITES, tail: HORSE_TAILS, face: HORSE_FACES },
   };
@@ -91,6 +93,7 @@
       nose: pick(p.nose, NOSES, D.nose),
       tail: has(O.tail, p.tail) ? p.tail : D.tail,
       face: has(O.face, p.face) ? p.face : D.face,
+      ...(O.eyeshape ? { eyeshape: has(O.eyeshape, p.eyeshape) ? p.eyeshape : 'round' } : {}),
       hat: has(HATS, p.hat) ? p.hat : 'none',
       earc: pick(p.earc, [], D.earc),
       mode: has(MODES, p.mode) ? p.mode : D.mode, // 舊的 fight 會變回 follow
@@ -102,7 +105,7 @@
     };
   }
   // 外觀相同就共用同一張貼圖
-  const lookKey = (p) => [p.kind, p.ears, p.fur, p.pattern, p.mark, p.white, p.eyes, p.nose, p.tail, p.face, p.hat, p.kind === 'dog' ? p.earc : ''].join('|').replace(/#/g, '');
+  const lookKey = (p) => [p.kind, p.ears, p.fur, p.pattern, p.mark, p.white, p.eyes, p.nose, p.tail, p.face, p.eyeshape || '', p.hat, p.kind === 'dog' ? p.earc : ''].join('|').replace(/#/g, '');
 
   // ---------------- 畫法（只在瀏覽器用） ----------------
   const W = 1.7;
@@ -241,25 +244,31 @@
       ctx.restore();
     });
     // 眼睛
-    const ey = cy + 0.2 * s, stare = p.face === 'stare';
+    const ey = cy + 0.2 * s, half = p.eyeshape === 'half', lid = p.eyeshape === 'lid', stare = half || lid;
     [-1, 1].forEach(k => {
       const ex = cx + k * 5.6 * s;
       if (closed) { ctx.beginPath(); ctx.moveTo(ex - 2.6 * s, ey); ctx.quadraticCurveTo(ex, ey + 2.4 * s, ex + 2.6 * s, ey); C.stroke(ctx, r, 1.5); return; }
       const col = p.eyes === 'odd' ? (k < 0 ? '#79b3e3' : '#e3b23c') : p.eyes;
       // 圓圓的眼睛：外圈深色眼線、虹膜中間亮一點、直直的瞳孔
-      // 淡定眼神：眼睛上面切平，變成半圓（不畫眼皮；眼皮斜向鼻子或瞳孔直直的都會變成生氣）
+      // 半圓眼：眼睛上面切平（不畫眼皮）。半垂眼：圓眼上面蓋一片平平的眼皮。兩種的瞳孔都是圓的（眼皮斜向鼻子或瞳孔直直的會變成生氣）
       const cut = Math.asin(1.1 / 3.4);
-      const efn = stare ? () => { ctx.beginPath(); ctx.arc(ex, ey, 3.4 * s, -cut, Math.PI + cut); ctx.closePath(); }
+      const efn = half ? () => { ctx.beginPath(); ctx.arc(ex, ey, 3.4 * s, -cut, Math.PI + cut); ctx.closePath(); }
         : (q) => C.blob(ctx, ex, ey, 3.4 * s, 3.4 * s, q, 0.03, 16);
       shape(ctx, C, 600 + k, efn); C.fill(ctx, col, r, null);
       clipDo(ctx, C, 600 + k, efn, () => {
         dot(ctx, ex + 0.6 * s, ey + 0.9 * s, 2 * s, 2 * s, 'rgba(255,255,255,0.28)');
         dot(ctx, ex + k * 0.15 * s, ey + 0.2 * s, (stare ? 1.85 : 1.6) * s, (stare ? 1.85 : 2.1) * s, '#1d1c24');
         // 淡定：上眼皮稍微壓下來一點
-        if (p.face === 'calm') { ctx.fillStyle = mainOf(p); ctx.fillRect(ex - 4 * s, ey - 4 * s, 8 * s, 1.6 * s); }
+        if (p.face === 'calm' && !stare) { ctx.fillStyle = mainOf(p); ctx.fillRect(ex - 4 * s, ey - 4 * s, 8 * s, 1.6 * s); }
+        if (lid) {
+          const lx = ex - 4 * s, rx = ex + 4 * s, ly = ey - 1.1 * s;
+          ctx.beginPath(); ctx.moveTo(lx, ey - 5 * s); ctx.lineTo(lx, ly); ctx.quadraticCurveTo(ex, ly - 0.7 * s, rx, ly); ctx.lineTo(rx, ey - 5 * s); ctx.closePath();
+          ctx.fillStyle = mainOf(p); ctx.fill();
+          ctx.beginPath(); ctx.moveTo(lx, ly); ctx.quadraticCurveTo(ex, ly - 0.7 * s, rx, ly); C.stroke(ctx, r, 1.2);
+        }
       });
       shape(ctx, C, 600 + k, efn); C.stroke(ctx, r, 1.7);
-      dot(ctx, ex - 1.1 * s, ey + (stare ? 0.4 : p.face === 'calm' ? -0.6 : -1.2) * s, 0.85 * s, 0.85 * s, '#ffffff');
+      dot(ctx, ex - 1.1 * s, ey + (half ? 0.4 : lid ? 0.2 : p.face === 'calm' ? -0.6 : -1.2) * s, 0.85 * s, 0.85 * s, '#ffffff');
     });
     // 腮紅
     [-1, 1].forEach(k => dot(ctx, cx + k * 9.6 * s, cy + 4.2 * s, 2.2 * s, 1.4 * s, p.face === 'calm' ? 'rgba(246,140,150,0.4)' : 'rgba(246,140,150,0.6)'));
@@ -267,7 +276,7 @@
     const ny = cy + 3.6 * s;
     ctx.beginPath(); ctx.moveTo(cx - 1.9 * s, ny); ctx.lineTo(cx + 1.9 * s, ny); ctx.lineTo(cx, ny + 2.1 * s); ctx.closePath();
     C.fill(ctx, p.nose, r, null); C.stroke(ctx, r, 1.2);
-    if (p.face === 'calm' || stare) {
+    if (p.face === 'calm') {
       // 淡定的嘴：鼻子下一小段直線，再分成兩邊（像「人」字），不笑
       ctx.beginPath(); ctx.moveTo(cx, ny + 2.1 * s); ctx.lineTo(cx, ny + 3.1 * s);
       ctx.quadraticCurveTo(cx - 0.8 * s, ny + 3.4 * s, cx - 1.9 * s, ny + 4.3 * s);
@@ -826,7 +835,7 @@
     });
   }
 
-  const pets = { KINDS, MODES, TEMPERS, rollTemper, withTemper, BOND_LEVELS, BOND_CAPS, BOND_MAX, bondLevel, FEED, EARS, FACES, FURS, FUR_NAMES, PATTERNS, MARKS, MARK_NAMES, WHITES, EYES, EYE_NAMES, NOSES, NOSE_NAMES, TAILS, NAME_MAX,
+  const pets = { KINDS, MODES, TEMPERS, rollTemper, withTemper, BOND_LEVELS, BOND_CAPS, BOND_MAX, bondLevel, FEED, EARS, FACES, EYE_SHAPES, FURS, FUR_NAMES, PATTERNS, MARKS, MARK_NAMES, WHITES, EYES, EYE_NAMES, NOSES, NOSE_NAMES, TAILS, NAME_MAX,
     DOG_EARS, DOG_COATS, DOG_TAILS, DOG_FACES, DOG_WHITES, HATS, OPTS, DEFAULTS,
     DEFAULT, sanitize, lookKey, drawPet, drawHead, drawBed, WIDTH: 64, HEIGHT: 56 };
   if (typeof module !== 'undefined' && module.exports) module.exports = pets;

@@ -369,7 +369,16 @@
       ctx.closePath();
     };
     const ax = cx, ay = cy - 8 * s;
-    const afn = (q) => (cur ? curl(ctx, ax, ay, 11.6 * s, 6.8 * s, q, 11, 0.24) : C.blob(ctx, ax, ay + 1.6 * s, 8 * s, 4.4 * s, q, 0.05, 14));
+    // 短毛：頭頂是一小撮往上翹的短毛（三個尖尖的毛束），不是平平的一塊
+    const tuft = (q) => {
+      const j = () => (q() - 0.5) * 0.4, X = (u) => ax + u * s + j(), Y = (v) => cy + v * s + j();
+      ctx.beginPath(); ctx.moveTo(X(-7), Y(-6.6));
+      ctx.quadraticCurveTo(X(-6.6), Y(-10.8), X(-4.4), Y(-12.4)); ctx.quadraticCurveTo(X(-3.4), Y(-11), X(-2.4), Y(-10.6));
+      ctx.quadraticCurveTo(X(-1.2), Y(-13), X(0.6), Y(-14.2)); ctx.quadraticCurveTo(X(1.5), Y(-12), X(2.8), Y(-10.8));
+      ctx.quadraticCurveTo(X(4), Y(-11.8), X(5.4), Y(-12)); ctx.quadraticCurveTo(X(7), Y(-10), X(7), Y(-6.6));
+      ctx.quadraticCurveTo(X(0), Y(-3.8), X(-7), Y(-6.6)); ctx.closePath();
+    };
+    const afn = (q) => (cur ? curl(ctx, ax, ay, 11.6 * s, 6.8 * s, q, 11, 0.24) : tuft(q));
     // 頭毛的輪廓先畫在臉的後面：這樣只有露在臉外面的那一圈有黑線
     if (!hidden) furShape(ctx, C, r, 505, afn, p.mark, null, p, null);
     furShape(ctx, C, r, 511, hfn, p.fur, [cx - hrx, hy - hry, hrx * 2, hry * 2], p, null);

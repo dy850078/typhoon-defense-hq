@@ -251,7 +251,7 @@
       shape(ctx, C, 600 + k, efn); C.fill(ctx, col, r, null);
       clipDo(ctx, C, 600 + k, efn, () => {
         dot(ctx, ex + 0.6 * s, ey + 0.9 * s, 2 * s, 2 * s, 'rgba(255,255,255,0.28)');
-        dot(ctx, ex + k * 0.15 * s, ey + 0.2 * s, (stare ? 1.4 : 1.6) * s, 2.1 * s, '#1d1c24');
+        dot(ctx, ex + k * 0.15 * s, ey + 0.2 * s, (stare ? 1.85 : 1.6) * s, (stare ? 1.85 : 2.1) * s, '#1d1c24');
         // 淡定：上眼皮稍微壓下來一點
         if (p.face === 'calm') { ctx.fillStyle = mainOf(p); ctx.fillRect(ex - 4 * s, ey - 4 * s, 8 * s, 1.6 * s); }
         // 淡定眼神：上眼皮平平地蓋下來三分之一，兩邊一樣高（斜向鼻子會變成生氣），眼皮邊緣一條深色的線
@@ -259,7 +259,7 @@
           const lx = ex - 4 * s, rx = ex + 4 * s, ly = ey - 1.1 * s;
           ctx.beginPath(); ctx.moveTo(lx, ey - 5 * s); ctx.lineTo(lx, ly); ctx.quadraticCurveTo(ex, ly - 0.7 * s, rx, ly); ctx.lineTo(rx, ey - 5 * s); ctx.closePath();
           ctx.fillStyle = mainOf(p); ctx.fill();
-          ctx.beginPath(); ctx.moveTo(lx, ly); ctx.quadraticCurveTo(ex, ly - 0.7 * s, rx, ly); C.stroke(ctx, r, 1.5);
+          ctx.beginPath(); ctx.moveTo(lx, ly); ctx.quadraticCurveTo(ex, ly - 0.7 * s, rx, ly); C.stroke(ctx, r, 1.2);
         }
       });
       shape(ctx, C, 600 + k, efn); C.stroke(ctx, r, 1.7);

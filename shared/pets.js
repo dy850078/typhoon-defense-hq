@@ -341,7 +341,7 @@
   // side：側身的時候，靠身體那一邊的耳朵垂在臉的前面，蓋住一點臉頰
   function dogHead(ctx, C, r, p, cx, cy, s, closed, side) {
     const cur = curly(p), hrx = 12.4 * s, hry = 11.1 * s, hy = cy + 1.4 * s;
-    const hidden = HAT_HIDES[p.hat];
+    const hidden = HAT_HIDES[p.hat], noTop = hidden || !cur;
     // 小立耳：頭頂兩邊的小三角，耳尖圓圓的
     if (p.ears === 'perk' && !hidden) [-1, 1].forEach(k => {
       const path = () => { ctx.beginPath(); ctx.moveTo(cx + k * 12.4 * s, cy - 3 * s); ctx.quadraticCurveTo(cx + k * 14.6 * s, cy - 12.6 * s, cx + k * 11.4 * s, cy - 15.6 * s);
@@ -381,24 +381,16 @@
       ctx.closePath();
     };
     const ax = cx, ay = cy - 8 * s;
-    // 短毛：頭頂是一小撮往上翹的短毛（三個尖尖的毛束），不是平平的一塊
-    const tuft = (q) => {
-      const j = () => (q() - 0.5) * 0.4, X = (u) => ax + u * s + j(), Y = (v) => cy + v * s + j();
-      ctx.beginPath(); ctx.moveTo(X(-7), Y(-6.6));
-      ctx.quadraticCurveTo(X(-6.6), Y(-10.8), X(-4.4), Y(-12.4)); ctx.quadraticCurveTo(X(-3.4), Y(-11), X(-2.4), Y(-10.6));
-      ctx.quadraticCurveTo(X(-1.2), Y(-13), X(0.6), Y(-14.2)); ctx.quadraticCurveTo(X(1.5), Y(-12), X(2.8), Y(-10.8));
-      ctx.quadraticCurveTo(X(4), Y(-11.8), X(5.4), Y(-12)); ctx.quadraticCurveTo(X(7), Y(-10), X(7), Y(-6.6));
-      ctx.quadraticCurveTo(X(0), Y(-3.8), X(-7), Y(-6.6)); ctx.closePath();
-    };
-    const afn = (q) => (cur ? curl(ctx, ax, ay, 11.6 * s, 6.8 * s, q, 11, 0.24) : tuft(q));
+    // 只有捲毛的頭頂有一球毛；短毛的頭頂是平整的，跟臉同一個顏色
+    const afn = (q) => curl(ctx, ax, ay, 11.6 * s, 6.8 * s, q, 11, 0.24);
     // 頭毛的輪廓先畫在臉的後面：這樣只有露在臉外面的那一圈有黑線
-    if (!hidden) furShape(ctx, C, r, 505, afn, p.mark, null, p, null);
+    if (!noTop) furShape(ctx, C, r, 505, afn, p.mark, null, p, null);
     furShape(ctx, C, r, 511, hfn, p.fur, [cx - hrx, hy - hry, hrx * 2, hry * 2], p, null);
     // 腮紅
     [-1, 1].forEach(k => dot(ctx, cx + k * 8.1 * s, cy + 5.4 * s, 2.3 * s, 1.6 * s, 'rgba(246,140,150,0.8)'));
     if (side && p.ears !== 'perk') ear(-1, true);
     // 頭頂的毛蓋到額頭上：只上色不描邊，跟臉的交界就沒有黑線（像一頂軟軟的捲毛帽）
-    if (!hidden) {
+    if (!noTop) {
       shape(ctx, C, 505, afn); ctx.fillStyle = p.mark; ctx.fill();
       if (cur) swirls(ctx, C, r, [[ax - 6 * s, ay - 0.6 * s, false], [ax + 0.4 * s, ay - 2.8 * s, true], [ax + 6.4 * s, ay + 0.2 * s, false], [ax - 0.6 * s, ay + 2.8 * s, true]], mix(p.mark, -0.22), s);
       // 交界那一圈用深一點的毛色輕輕帶過，看得出一朵一朵的邊

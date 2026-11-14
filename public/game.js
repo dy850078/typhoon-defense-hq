@@ -2752,7 +2752,7 @@
       return card;
     };
     colorCard(dog ? '身體' : '毛色', () => draft.fur, (v) => { draft.fur = v; });
-    colorCard(dog ? '頭頂的毛' : '花紋', () => draft.mark, (v) => { draft.mark = v; });
+    if (!dog || draft.pattern !== 'short') colorCard(dog ? '頭頂的毛' : '花紋', () => draft.mark, (v) => { draft.mark = v; }); // 短毛狗狗頭頂沒有另一球毛，不用選顏色
     if (dog) colorCard('耳朵', () => draft.earc, (v) => { draft.earc = v; });
     eyeCard = colorCard('眼睛', () => eyeCol, (v) => { eyeCol = v; if (draft.eyes !== 'odd') draft.eyes = v; });
     if (draft.eyes === 'odd') eyeCard.classList.add('off');

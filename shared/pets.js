@@ -247,23 +247,19 @@
       if (closed) { ctx.beginPath(); ctx.moveTo(ex - 2.6 * s, ey); ctx.quadraticCurveTo(ex, ey + 2.4 * s, ex + 2.6 * s, ey); C.stroke(ctx, r, 1.5); return; }
       const col = p.eyes === 'odd' ? (k < 0 ? '#79b3e3' : '#e3b23c') : p.eyes;
       // 圓圓的眼睛：外圈深色眼線、虹膜中間亮一點、直直的瞳孔
-      const efn = (q) => C.blob(ctx, ex, ey, 3.4 * s, 3.4 * s, q, 0.03, 16);
+      // 淡定眼神：眼睛上面切平，變成半圓（不畫眼皮；眼皮斜向鼻子或瞳孔直直的都會變成生氣）
+      const cut = Math.asin(1.1 / 3.4);
+      const efn = stare ? () => { ctx.beginPath(); ctx.arc(ex, ey, 3.4 * s, -cut, Math.PI + cut); ctx.closePath(); }
+        : (q) => C.blob(ctx, ex, ey, 3.4 * s, 3.4 * s, q, 0.03, 16);
       shape(ctx, C, 600 + k, efn); C.fill(ctx, col, r, null);
       clipDo(ctx, C, 600 + k, efn, () => {
         dot(ctx, ex + 0.6 * s, ey + 0.9 * s, 2 * s, 2 * s, 'rgba(255,255,255,0.28)');
         dot(ctx, ex + k * 0.15 * s, ey + 0.2 * s, (stare ? 1.85 : 1.6) * s, (stare ? 1.85 : 2.1) * s, '#1d1c24');
         // 淡定：上眼皮稍微壓下來一點
         if (p.face === 'calm') { ctx.fillStyle = mainOf(p); ctx.fillRect(ex - 4 * s, ey - 4 * s, 8 * s, 1.6 * s); }
-        // 淡定眼神：上眼皮平平地蓋下來三分之一，兩邊一樣高（斜向鼻子會變成生氣），眼皮邊緣一條深色的線
-        if (stare) {
-          const lx = ex - 4 * s, rx = ex + 4 * s, ly = ey - 1.1 * s;
-          ctx.beginPath(); ctx.moveTo(lx, ey - 5 * s); ctx.lineTo(lx, ly); ctx.quadraticCurveTo(ex, ly - 0.7 * s, rx, ly); ctx.lineTo(rx, ey - 5 * s); ctx.closePath();
-          ctx.fillStyle = mainOf(p); ctx.fill();
-          ctx.beginPath(); ctx.moveTo(lx, ly); ctx.quadraticCurveTo(ex, ly - 0.7 * s, rx, ly); C.stroke(ctx, r, 1.2);
-        }
       });
       shape(ctx, C, 600 + k, efn); C.stroke(ctx, r, 1.7);
-      dot(ctx, ex - 1.1 * s, ey + (stare ? 0.2 : p.face === 'calm' ? -0.6 : -1.2) * s, 0.85 * s, 0.85 * s, '#ffffff');
+      dot(ctx, ex - 1.1 * s, ey + (stare ? 0.4 : p.face === 'calm' ? -0.6 : -1.2) * s, 0.85 * s, 0.85 * s, '#ffffff');
     });
     // 腮紅
     [-1, 1].forEach(k => dot(ctx, cx + k * 9.6 * s, cy + 4.2 * s, 2.2 * s, 1.4 * s, p.face === 'calm' ? 'rgba(246,140,150,0.4)' : 'rgba(246,140,150,0.6)'));

@@ -1153,3 +1153,8 @@ button.inv-item:hover { border-color: var(--accent); }
   .pet-ed .fields { width: 100%; }
   .pet-colors { grid-template-columns: 1fr; }
 }
+/* 寵物感情：一顆愛心、等級名稱、到下一級的進度條 */
+.pet-bond { display: flex; align-items: center; gap: 8px; margin: 2px 0 10px; font-size: 14px; }
+.pet-bond b { white-space: nowrap; }
+.pet-bond-bar { flex: 1; min-width: 60px; max-width: 220px; height: 10px; border: 2px solid var(--ink); border-radius: 999px; background: var(--paper); overflow: hidden; }
+.pet-bond-bar i { display: block; height: 100%; background: #ff7b95; }

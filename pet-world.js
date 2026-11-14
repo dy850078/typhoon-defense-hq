@@ -73,12 +73,29 @@ module.exports = function createPetWorld(ctx) {
     return pts;
   }
 
+  // ---------------- 感情 ----------------
+  // 每種方式（摸、餵、一起走、一起打怪）每天有上限，日期用台灣時間
+  const today = () => new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
+  const dayLog = (pet) => { if (!pet.bd || pet.bd.d !== today()) pet.bd = { d: today(), pat: 0, feed: 0, walk: 0, fight: 0 }; return pet.bd; };
+  function addBond(p, kind, amt) {
+    const pet = p.pet;
+    if (!pet) return 0;
+    const log = dayLog(pet);
+    if (log[kind] >= PETS.BOND_CAPS[kind]) return 0;
+    log[kind]++;
+    const before = PETS.bondLevel(pet.bond);
+    pet.bond = Math.min(PETS.BOND_MAX, (pet.bond || 0) + amt);
+    const level = PETS.bondLevel(pet.bond);
+    io.to(p.id).emit('petBond', { bond: pet.bond, gain: amt, level, up: level > before });
+    return amt;
+  }
+
   // ---------------- 寵物本體 ----------------
   const state = (pt) => ({ id: pt.id, owner: pt.owner, ownerName: pt.ownerName, pet: pt.pet, x: Math.round(pt.x), y: Math.round(pt.y), act: pt.act });
   function spawn(p) {
     if (!p.pet || live.has(p.id) || !allowed(p)) return;
     const pt = { id: 'pt' + (++seq), owner: p.id, ownerName: p.name, key: keyOf(p), pet: p.pet, x: p.x - 40, y: p.y + 6, act: 'walk',
-      until: 0, route: null, nextHit: 0, lx: p.x, ly: p.y, still: Date.now(), atBed: false, patUntil: 0 };
+      until: 0, route: null, nextHit: 0, lx: p.x, ly: p.y, still: Date.now(), atBed: false, patUntil: 0, together: 0, hits: 0 };
     if (p.pet.mode === 'wander') placeHome(pt, p);
     live.set(p.id, pt);
     const bi = pt.key ? bedOf(pt.key) : -1;
@@ -141,6 +158,7 @@ module.exports = function createPetWorld(ctx) {
       const crit = Math.random() < 0.1;
       const dmg = Math.round((6 + (p.level || 1) * 0.45) * (0.8 + Math.random() * 0.4) * (crit ? 2 : 1));
       damageFoe(p, foe, isBoss, dmg, crit, 'pet', pt.id);
+      if (++pt.hits % 10 === 0) addBond(p, 'fight', 1); // 一起打怪：每打中十下加一點
     }
   }
 
@@ -181,6 +199,8 @@ module.exports = function createPetWorld(ctx) {
       if (dist(pt.lx, pt.ly, p.x, p.y) > 2) { pt.still = now; pt.lx = p.x; pt.ly = p.y; }
       if (pt.patUntil > now && pt.act !== 'sleep') { pt.act = 'sit'; return; }
       const mode = pt.pet.mode;
+      // 一起走：跟在身邊、主人在走動的時間，累積滿五分鐘加一點
+      if (mode !== 'wander' && now - pt.still < 4000) { pt.together += ctx.TICK; if (pt.together >= 300000) { pt.together = 0; addBond(p, 'walk', 1); } }
       if (mode === 'wander') wander(pt, now);
       else if (!p.dead) fight(pt, p, now); // 跟在身邊：主人在野區或副本就一起打怪，不然就跟著
       else follow(pt, p, now);
@@ -206,6 +226,9 @@ module.exports = function createPetWorld(ctx) {
     const was = p.pet;
     // 個性是天生的：有了就不變，客戶端改不了
     if (was && was.temper) pet.temper = was.temper; else pet.temper = PETS.rollTemper(pet.kind);
+    // 感情也是伺服器自己記的
+    pet.bond = was ? was.bond || 0 : 0;
+    if (was && was.bd) pet.bd = was.bd; else delete pet.bd;
     p.pet = pet;
     snapshot(p);
     const k = keyOf(p), bi = k ? bedOf(k) : -1;
@@ -253,6 +276,7 @@ module.exports = function createPetWorld(ctx) {
       if (!pt || dist(pt.x, pt.y, p.x, p.y) > 2.2 * T) return { ok: false };
       if (pt.act !== 'sleep') pt.patUntil = Date.now() + 2500;
       send('petPat', { id: pt.id, by: p.name });
+      if (pt.owner === p.id) addBond(p, 'pat', 1);
       return { ok: true };
     }
     const i = Math.floor(Number(m && m.bed));
@@ -261,6 +285,19 @@ module.exports = function createPetWorld(ctx) {
     send('petPat', { bed: i, by: p.name });
     return { ok: true };
   }
+  // 餵點心：從主人的背包拿一個，牠開心地坐下來吃；一天三次
+  function feed(p, item) {
+    if (!allowed(p) || !p.pet) return { ok: false };
+    const pt = live.get(p.id), gain = PETS.FEED[item];
+    if (!pt || !gain) return { ok: false };
+    if (!(p.inv[item] >= 1)) return { ok: false, error: '背包裡沒有這個了' };
+    if (dayLog(p.pet).feed >= PETS.BOND_CAPS.feed) return { ok: false, error: `${p.pet.name}今天吃飽了，明天再餵` };
+    p.inv[item]--;
+    addBond(p, 'feed', gain);
+    if (pt.act !== 'sleep') pt.patUntil = Date.now() + 2500;
+    send('petPat', { id: pt.id, by: p.name, feed: item });
+    return { ok: true, inv: p.inv, left: PETS.BOND_CAPS.feed - p.pet.bd.feed };
+  }
   const list = () => [...live.values()].map(state);
   // 管理員改了帳號名稱：小窩跟著新帳號
   function renameKey(from, to) {
@@ -268,5 +305,5 @@ module.exports = function createPetWorld(ctx) {
     saveBeds();
   }
 
-  return { spawn, despawn, tick, sendWorld, list, bedList, save, placeBed, takeBed, pat, renameKey };
+  return { spawn, despawn, tick, sendWorld, list, bedList, save, placeBed, takeBed, pat, feed, renameKey };
 };

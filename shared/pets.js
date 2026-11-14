@@ -16,6 +16,13 @@
   }
   // 還沒有個性的寵物補一個
   const withTemper = (pet) => { if (pet && !pet.temper) pet.temper = rollTemper(pet.kind); return pet; };
+  // 感情：摸牠、餵點心、一起走、一起打怪會慢慢累積（只增不減，沒上線不會掉）。每種方式每天有上限
+  const BOND_LEVELS = [{ at: 0, name: '剛認識' }, { at: 20, name: '熟悉' }, { at: 60, name: '親近' }, { at: 140, name: '很要好' }, { at: 300, name: '最好的夥伴' }];
+  const BOND_CAPS = { pat: 5, feed: 3, walk: 6, fight: 3 };
+  const BOND_MAX = 9999;
+  const bondLevel = (n) => { let i = 0; BOND_LEVELS.forEach((l, k) => { if ((n || 0) >= l.at) i = k; }); return i; };
+  // 可以餵的點心和加多少感情：花園種出來的水果牠最喜歡
+  const FEED = { tomato: 4, guava: 4, apple: 4, pineapple: 4, chicken: 2, water: 1 };
   const EARS = { up: '立耳', fold: '折耳' };
   // 毛色：底色
   const FURS = ['#d6d4cf', '#f7f4ee', '#f1dcb2', '#f0a456', '#a7aebb', '#a97850', '#3d3a3e'];
@@ -88,6 +95,10 @@
       earc: pick(p.earc, [], D.earc),
       mode: has(MODES, p.mode) ? p.mode : D.mode, // 舊的 fight 會變回 follow
       ...(has(TEMPERS, p.temper) ? { temper: p.temper } : {}),
+      // 感情值和今天各種方式已經加了幾次（伺服器自己記，玩家送來的會被蓋掉）
+      bond: Math.max(0, Math.min(BOND_MAX, Math.floor(Number(p.bond)) || 0)),
+      ...(p.bd && typeof p.bd === 'object' && typeof p.bd.d === 'string' ? { bd: Object.assign({ d: p.bd.d.slice(0, 10) },
+        ...Object.keys(BOND_CAPS).map(k => ({ [k]: Math.max(0, Math.min(99, Math.floor(Number(p.bd[k])) || 0)) }))) } : {}),
     };
   }
   // 外觀相同就共用同一張貼圖
@@ -810,7 +821,7 @@
     });
   }
 
-  const pets = { KINDS, MODES, TEMPERS, rollTemper, withTemper, EARS, FACES, FURS, FUR_NAMES, PATTERNS, MARKS, MARK_NAMES, WHITES, EYES, EYE_NAMES, NOSES, NOSE_NAMES, TAILS, NAME_MAX,
+  const pets = { KINDS, MODES, TEMPERS, rollTemper, withTemper, BOND_LEVELS, BOND_CAPS, BOND_MAX, bondLevel, FEED, EARS, FACES, FURS, FUR_NAMES, PATTERNS, MARKS, MARK_NAMES, WHITES, EYES, EYE_NAMES, NOSES, NOSE_NAMES, TAILS, NAME_MAX,
     DOG_EARS, DOG_COATS, DOG_TAILS, DOG_FACES, DOG_WHITES, HATS, OPTS, DEFAULTS,
     DEFAULT, sanitize, lookKey, drawPet, drawHead, drawBed, WIDTH: 64, HEIGHT: 56 };
   if (typeof module !== 'undefined' && module.exports) module.exports = pets;

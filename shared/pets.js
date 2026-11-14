@@ -699,7 +699,7 @@
       C.line(ctx, cx, cy - 17 * s, cx + 0.8 * s, cy - 19.6 * s, r, 2 * s, '#4c8a3c', 0.1);
     } else if (k === 'egg') {
       // 一片蛋白軟軟地蓋在頭頂，邊邊垂下來一點
-      const kx = p.kind === 'cat' && p.ears === 'up' ? 0.74 : 1;
+      const kx = p.kind === 'cat' && p.ears === 'up' ? 0.74 : p.kind === 'dog' && p.ears === 'perk' && !curly(p) ? 0.8 : 1; // 立耳的時候蛋窄一點，剛好放在兩隻耳朵中間
       if (p.kind === 'dog') cy -= (curly(p) ? 2.4 : 1) * s;
       if (p.kind === 'horse') cy -= 1.8 * s; // 小馬的蛋放在瀏海上面 // 狗狗頭頂有一大球毛，蛋放在毛上面
       const pts = [[-12.6, -8.6], [-10.4, -13.6], [-4, -16.4], [4.4, -16.2], [10.6, -13.4], [12.8, -8.8], [9.6, -6.4], [6.2, -8.6], [2, -6.6], [-2.8, -9], [-7.8, -6.2]].map(([a, b]) => [cx + a * kx * s, cy + b * s]);
@@ -718,6 +718,8 @@
     (p.kind === 'dog' ? dogHead : p.kind === 'horse' ? horseHead : catHead)(ctx, C, r, p, cx, cy, s, closed, side);
     if (p.kind === 'horse') { // 小馬的頭比較窄、比較高：頭套縮窄一點、往上挪一點才合
       ctx.save(); ctx.translate(cx, cy - 1.6 * s); ctx.scale(0.8, 0.92); hat(ctx, C, r, p, 0, 0, s); ctx.restore();
+    } else if (p.kind === 'dog' && p.ears === 'perk' && HAT_HIDES[p.hat]) { // 立耳的狗狗兩邊沒有垂耳撐著：帽子收窄，才不會比頭寬
+      ctx.save(); ctx.translate(cx, cy); ctx.scale(0.87, 1); hat(ctx, C, r, p, 0, 0, s); ctx.restore();
     } else hat(ctx, C, r, p, cx, cy, s);
   }
 

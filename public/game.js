@@ -2681,6 +2681,7 @@
     const box = el('div', 'pet-ed');
     box.appendChild(el('p', 'modal-hint', me.pet ? '想換個樣子或換名字都可以，改完按儲存。'
       : '每個人可以領養一隻寵物。捏好牠的樣子、取個名字，牠就會一直陪著你。'));
+    if (me.pet && PT.TEMPERS[me.pet.temper]) box.appendChild(el('p', 'modal-hint', `${me.pet.name}的個性：${PT.TEMPERS[me.pet.temper]}（天生的，偶爾會用這個口氣跟你說悄悄話，只有你看得到）`));
     const wrap = el('div', 'create pet-create');
     const cv = el('canvas', 'pet-preview'); cv.width = 192; cv.height = 168;
     const draw = () => { const ctx = cv.getContext('2d'); ctx.clearRect(0, 0, cv.width, cv.height); ctx.save(); ctx.translate(-20, -14); ctx.scale(3.5, 3.5); PT.drawPet(ctx, draft, 'sit'); ctx.restore(); };
@@ -3494,6 +3495,15 @@
     const ed = el('button', null, '換個樣子');
     ed.onclick = () => { hideMenu(); openPet(); };
     m.appendChild(ed);
+    const quiet = petQuiet(), tk = el('button', null, quiet ? '悄悄話：關著' : '悄悄話：開著');
+    tk.title = '牠偶爾會跟你說幾句話，只有你看得到';
+    tk.onclick = () => {
+      hideMenu();
+      try { localStorage.setItem('hq-pet-quiet', quiet ? '0' : '1'); } catch (e) {}
+      if (!quiet && scene) scene.petHush();
+      toast(quiet ? `${me.pet.name}又可以跟你說悄悄話了` : `${me.pet.name}先安靜，不會跟你說話了`, 'btn-pet');
+    };
+    m.appendChild(tk);
     placeMenu(m, cx, cy);
   }
   // 對自己的小窩按右鍵（手機長按）：收回
@@ -3852,6 +3862,45 @@
     ctx.font = capFont; ctx.fillStyle = touch ? '#ffffff' : INK; ctx.textAlign = 'center';
     ctx.fillText(cap, cx + cw / 2, cy + 8.5);
     return cv;
+  }
+
+  // 寵物悄悄話的紙條：跟提示紙條同一種紙，字比較小，太長就換行；尖角朝下指著寵物
+  function drawTalk(text) {
+    const RES = 2, TL = 7, PAD = 8, LH = 16, MAXW = 132;
+    const cv = document.createElement('canvas'), ctx = cv.getContext('2d');
+    const font = `bold 12px ${FONT}`;
+    ctx.font = font;
+    const lines = []; let cur = '';
+    for (const ch of text) {
+      // 標點不放在行首
+      if (ctx.measureText(cur + ch).width > MAXW && cur && !'，。！？…、'.includes(ch)) { lines.push(cur); cur = ch; } else cur += ch;
+    }
+    if (cur) lines.push(cur);
+    const tw = Math.max(...lines.map(l => ctx.measureText(l).width));
+    const bw = Math.ceil(tw + PAD * 2), PH = lines.length * LH + 10;
+    const ox = 2, oy = 1.5, w = bw + 5, h = PH + 4 + TL;
+    cv.width = w * RES; cv.height = h * RES;
+    ctx.scale(RES, RES);
+    const CR = window.HQ_CRAYON, r = CR.rng(text.length * 53 + 11);
+    const tri = (dx, dy) => { const m = ox + bw / 2; ctx.beginPath(); ctx.moveTo(m - 6 + dx, oy + PH - 1 + dy); ctx.lineTo(m + dx, oy + PH + TL + dy); ctx.lineTo(m + 6 + dx, oy + PH - 1 + dy); };
+    ctx.fillStyle = 'rgba(43,42,51,0.28)';
+    CR.rect(ctx, ox + 2, oy + 2, bw, PH, r, 0.6); ctx.fill(); tri(2, 2); ctx.closePath(); ctx.fill();
+    CR.rect(ctx, ox, oy, bw, PH, r, 1.1); ctx.fillStyle = PAPER; ctx.fill(); CR.stroke(ctx, r, 1.6, INK);
+    tri(0, 0); ctx.closePath(); ctx.fillStyle = PAPER; ctx.fill();
+    tri(0, 0); CR.stroke(ctx, r, 1.6, INK);
+    ctx.font = font; ctx.fillStyle = INK; ctx.textBaseline = 'middle'; ctx.textAlign = 'center';
+    lines.forEach((l, i) => ctx.fillText(l, ox + bw / 2, oy + 5 + LH * (i + 0.5) + 0.5));
+    return cv;
+  }
+  // 悄悄話的開關和每天講了幾句，都記在自己的瀏覽器
+  const petQuiet = () => { try { return localStorage.getItem('hq-pet-quiet') === '1'; } catch (e) { return false; } };
+  function petTalkLog() {
+    const d = new Date(), day = d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate(), key = 'hq-pet-talk:' + (me ? me.name : '');
+    let log = null;
+    try { log = JSON.parse(localStorage.getItem(key) || 'null'); } catch (e) {}
+    if (!log || log.d !== day) log = { d: day, n: 0, q: 3 + Math.floor(Math.random() * 3), s: [], last: '' }; // 今天的額度：3 到 5 句
+    log.save = () => { try { localStorage.setItem(key, JSON.stringify({ d: log.d, n: log.n, q: log.q, s: log.s, last: log.last })); } catch (e) {} };
+    return log;
   }
 
   function drawBolt() {
@@ -7319,6 +7368,7 @@
         GARDEN_UI.act(act);
       } else if (act.type === 'pat') {
         socket.emit('petPat', act.id ? { id: act.id } : { bed: act.bed }, () => {});
+        if (act.id && this.pets.get(act.id) && this.pets.get(act.id).state.owner === me.id) this.petPatTalk(this.time.now);
       } else if (act.type === 'bed') {
         socket.emit('petBed', null, (res) => {
           if (!res || !res.ok) { if (res && res.error) toast(res.error); return; }
@@ -7766,6 +7816,69 @@
         if (a !== c.act) c.setPetAct(a);
         if (Math.hypot(x - c.x, y - c.y) > 300) { c.x = x; c.y = y; } // 跟著主人傳送：直接出現
       });
+    }
+    // ---- 寵物悄悄話：自己的寵物偶爾在頭上冒一張紙條，只畫在自己的畫面上 ----
+    myPet() { if (!me) return null; for (const c of this.pets.values()) if (c.state.owner === me.id) return c; return null; }
+    petHush() { if (this.talk) { this.talk.img.destroy(); this.talk = null; } }
+    petSay(c, text, time) {
+      this.petHush();
+      const tex = 'talk-' + text;
+      if (!this.textures.exists(tex)) this.textures.addCanvas(tex, drawTalk(text));
+      const img = this.add.image(c.x, c.y - 36, tex).setOrigin(0.5, 1).setDepth(1e6 + 2);
+      this.talk = { img, id: c.state.id, born: time, until: time + 4200 + text.length * 170 };
+      this.talkLast = time;
+    }
+    // 摸自己的寵物：牠有時會回一句（不算在每天的額度裡，但不會每次都回）
+    petPatTalk(time) {
+      const c = this.myPet();
+      if (!c || petQuiet() || time < (this.talkPatAt || 0) || Math.random() > 0.6) return;
+      const text = HQ_PET_TALK.pick(me.pet.temper, 'pat', {}, this.talkPatLast);
+      if (!text) return;
+      this.talkPatAt = time + 45000; this.talkPatLast = text;
+      this.time.delayedCall(350, () => { const p = this.myPet(); if (p) this.petSay(p, text, this.time.now); });
+    }
+    // 每秒看一次要不要講話。平常的話一天 3 到 5 句，看情況的話一天最多 2 句，兩句之間至少隔 4 分鐘
+    petTalkTick(time) {
+      if (!me || !me.pet || !this.me) return;
+      const now = { field: !!this.inFieldRoom, song: MUSIC.playing(), late: (() => { const h = new Date().getHours(); return h >= 23 || h < 5; })() };
+      if (Math.abs(this.me.x - (this.talkMx || 0)) + Math.abs(this.me.y - (this.talkMy || 0)) > 4) { this.talkMx = this.me.x; this.talkMy = this.me.y; this.talkStill = time; this.talkIdleDone = false; }
+      if (!this.talkWas) { // 剛進來：先記住現在的狀況，第一句話過一兩分鐘再說
+        this.talkWas = now; this.talkNext = time + 60000 + Math.random() * 90000; this.talkLast = -1e9; this.talkLateAt = time + 240000;
+        return;
+      }
+      // 這一秒發生了什麼
+      const ev = [];
+      if (now.field && !this.talkWas.field) ev.push('field');
+      if (now.song && !this.talkWas.song && !now.field) ev.push('music');
+      // 發呆：站著不動快 40 秒（再久一點牠就睡著了）
+      if (!this.talkIdleDone && time - (this.talkStill || time) > 38000) { this.talkIdleDone = true; ev.push('idle'); }
+      if (now.late && time > this.talkLateAt) { this.talkLateAt = Infinity; ev.push('late'); }
+      this.talkWas = now;
+      const c = this.myPet();
+      if (petQuiet() || !c || c.act === 2 || document.hidden || !this.cameras.main.worldView.contains(c.x, c.y)) return;
+      if (this.talk || time - this.talkLast < 240000) return;
+      const log = petTalkLog(), ctx = { quiet: !now.song, hq: !now.field };
+      let kind = ev.find(k => !log.s.includes(k));
+      if (kind && (log.s.length >= 2 || Math.random() > 0.5)) kind = null;
+      if (!kind && time >= this.talkNext && log.n < log.q) kind = 'daily';
+      if (!kind) return;
+      const text = HQ_PET_TALK.pick(me.pet.temper, kind, ctx, log.last);
+      if (!text) return;
+      if (kind === 'daily') { log.n++; this.talkNext = time + 600000 + Math.random() * 900000; } else log.s.push(kind);
+      log.last = text; log.save();
+      this.petSay(c, text, time);
+    }
+    petTalkMove(time) {
+      const tk = this.talk;
+      if (!tk) return;
+      const c = this.pets.get(tk.id);
+      if (!c || time > tk.until + 300) { this.petHush(); return; }
+      // 跟著鏡頭縮放維持一樣大；彈出來、輕輕飄、最後淡掉。牠頭上已經有「摸摸」的提示紙條時，疊在更上面
+      const z = 0.5 / this.cameras.main.zoom, k = Math.min(1, (time - tk.born) / 180);
+      const hinted = this.hint && this.hintAct && this.hintAct.type === 'pat' && this.hintAct.id === tk.id;
+      tk.img.setScale(z * (0.6 + 0.4 * Phaser.Math.Easing.Back.Out(k)));
+      tk.img.setPosition(c.x, c.y - 36 - (hinted ? 40 * z + 4 : 0) - Math.sin(time / 380) * 1.5);
+      tk.img.setAlpha(time > tk.until ? Math.max(0, 1 - (time - tk.until) / 300) : 1);
     }
     onPetGone(g) {
       const c = this.pets.get(g.id);
@@ -8752,6 +8865,8 @@
         if (c.act === 2) c.body_.scaleY = PET_SCALE * (1 + Math.sin(time / 650) * 0.025);
         c.setDepth(c.y);
       });
+      if (time - (this.talkTickAt || 0) > 1000) { this.talkTickAt = time; this.petTalkTick(time); }
+      this.petTalkMove(time);
 
       // 召喚物：平滑移動、一跳一跳
       this.summons.forEach(c => {

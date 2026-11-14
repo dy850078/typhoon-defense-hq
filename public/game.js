@@ -7316,7 +7316,8 @@
         this.hintPlace = null;
         this.hintBorn = time;
       }
-      if (!act) { if (this.hint) { this.hint.destroy(); this.hint = null; } return; }
+      // 寵物不跳「摸摸」紙條（會擋畫面）：直接點牠，或靠近按空白鍵，一樣可以摸
+      if (!act || act.type === 'pat') { if (this.hint) { this.hint.destroy(); this.hint = null; } this.hintPlace = null; return; }
       // 鏡頭會動、介面會開關，所以每 0.3 秒重新挑一次位置
       if (!this.hintPlace || time - (this.hintCheck || 0) > 300) {
         this.hintCheck = time;

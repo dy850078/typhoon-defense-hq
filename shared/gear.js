@@ -1140,7 +1140,10 @@
     // ---------- 繪師畫的翅膀圖：有圖就用圖，還沒有圖（或圖載入失敗）就用上面程式畫的 ----------
     // 圖只有右翅，左翅鏡像。x, y：圖左上角相對肩膀（翅根軸心）的位置，單位是人物框座標；px：圖上每一單位幾個像素
     // 圖從繪師的 PSD（人物框 10 倍大）裁出右翅、外面加一圈粗黑邊（跟遊戲其他東西的外框一樣粗）再縮小，軸心就是 PSD 上的 (980, 910)
-    const ART_FILES = { fire: { src: '/art/wing-fire.png', x: -4.5, y: -41.1, px: 4 } };
+    const ART_FILES = {
+      fire: { src: '/art/wing-fire.png', x: -4.5, y: -41.1, px: 4 },
+      ice: { src: '/art/wing-ice.png', x: -4.5, y: -41.1, px: 4 }, // 繪師用同一張底稿畫的，位置跟火龍一樣
+    };
     const ART = {};
     const api = { onArt: null };
     function prepArt(kind, img) {
@@ -1209,19 +1212,20 @@
       g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(0.5, kind === 'ice' ? 'rgba(255,255,255,0.95)' : 'rgba(255,248,200,0.95)'); g.addColorStop(1, 'rgba(255,255,255,0)');
       bx.fillStyle = g; bx.fillRect(0, 0, w, h);
       bx.globalCompositeOperation = 'destination-in'; bx.drawImage(A.mem, 0, 0);
-      t.globalCompositeOperation = 'lighter'; t.globalAlpha = 0.45; t.drawImage(A.band, 0, 0);
-      // 異色閃光：每拍一下，翼膜上短暫閃過一道粉紅→銀白→粉紅的金屬光（從翅尖往翅根掃，跟上面的金色光澤反方向）
+      t.globalCompositeOperation = 'lighter'; t.globalAlpha = kind === 'ice' ? 0.3 : 0.45; t.drawImage(A.band, 0, 0); // 冰龍底色比較淺，亮光太強會整片發白
+      // 異色閃光：每拍一下，翼膜上短暫閃過一道金屬光（從翅尖往翅根掃，跟上面的光澤反方向）：火龍粉紅→銀白→粉紅，冰龍淡紫→銀白→冰藍
       const fl = (s - 0.08) / 0.3; // 只在一圈裡的這一小段出現
       if (fl > 0 && fl < 1) {
         const ex = (1.2 - fl * 1.5) * w, env = Math.sin(fl * Math.PI);
         bx.globalCompositeOperation = 'source-over'; bx.clearRect(0, 0, w, h);
         const hg = bx.createLinearGradient(ex - w * 0.22, h * 0.7, ex + w * 0.22, h * 0.3);
-        hg.addColorStop(0, 'rgba(255,150,215,0)'); hg.addColorStop(0.25, 'rgba(255,150,215,0.9)');
-        hg.addColorStop(0.5, 'rgba(236,242,255,1)'); hg.addColorStop(0.75, 'rgba(255,170,225,0.9)'); hg.addColorStop(1, 'rgba(255,170,225,0)');
+        const [c1, c2] = kind === 'ice' ? ['200,170,255', '150,225,255'] : ['255,150,215', '255,170,225'];
+        hg.addColorStop(0, `rgba(${c1},0)`); hg.addColorStop(0.25, `rgba(${c1},0.9)`);
+        hg.addColorStop(0.5, 'rgba(236,242,255,1)'); hg.addColorStop(0.75, `rgba(${c2},0.9)`); hg.addColorStop(1, `rgba(${c2},0)`);
         bx.fillStyle = hg; bx.fillRect(0, 0, w, h);
         bx.globalCompositeOperation = 'destination-in'; bx.drawImage(A.mem, 0, 0);
         // screen：像金屬反光一樣把顏色提亮染色，不會整片變白
-        t.globalCompositeOperation = 'screen'; t.globalAlpha = 0.85 * env; t.drawImage(A.band, 0, 0);
+        t.globalCompositeOperation = 'screen'; t.globalAlpha = (kind === 'ice' ? 0.55 : 0.85) * env; t.drawImage(A.band, 0, 0);
       }
       ctx.drawImage(A.tmp, f.x, f.y, w * u, h * u);
       // 外緣冒出的火星（往上飄、慢慢變暗）／雪花（往外飄）

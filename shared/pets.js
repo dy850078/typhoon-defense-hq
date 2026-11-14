@@ -336,11 +336,27 @@
         ctx.quadraticCurveTo(cx + k * 7 * s, cy - 14.6 * s, cx + k * 3.4 * s, cy - 8.6 * s); ctx.closePath(); };
       path(); C.fill(ctx, p.earc, r, null); path(); C.stroke(ctx, r, W);
     });
-    // 垂耳：在臉的後面，從頭的兩側垂到下巴，邊緣一朵一朵的
+    // 垂耳：在臉的後面，從頭的兩側垂到下巴
+    // 耳根藏在頭毛底下，由內往外斜斜垂下來，越往下越寬，下緣是幾朵大大的捲毛
     const ear = (k, front) => {
-      const ex = cx + k * (front ? 16 : 12.5) * s, ey = cy + (front ? 3.2 : 2) * s;
-      const efn = (q) => (cur ? curl(ctx, ex, ey, 4.8 * s, 7.4 * s, q, 8, 0.22) : C.blob(ctx, ex, ey, 5 * s, 7.8 * s, q, 0.05, 14));
-      furShape(ctx, C, r, 520 + k, efn, p.earc, null, p, cur ? () => swirls(ctx, C, r, [[ex + k * (front ? 0.6 : 2.2) * s, ey - 2 * s, k > 0], [ex + k * (front ? 1 : 2.6) * s, ey + 2.8 * s, k < 0]], mix(p.earc, -0.24), s * 0.8) : null);
+      const ox = cx + k * (front ? 12 : 10.4) * s, oy = cy - (front ? 3 : 4.6) * s;
+      const P = (u, v) => [ox + k * u * s, oy + v * s];
+      const efn = (q) => {
+        const j = () => (q() - 0.5) * 0.5;
+        if (!cur) { C.smooth(ctx, [[0, -1], [4, 0.6], [7, 4.6], [8, 9.4], [5.6, 13.4], [2, 13.6], [0, 9], [-0.6, 3]].map(([u, v]) => { const pt = P(u, v); return [pt[0] + j(), pt[1] + j()]; })); return; }
+        const an = [[0.2, -1.2], [4.8, 0.6], [8, 4.4], [9, 9.4], [7, 13.6], [3, 15.2], [0, 13]], mc = [3.4, 7.4];
+        const puff = [0.16, 0.3, 0.34, 0.38, 0.4, 0.36];
+        let s0 = P(an[0][0], an[0][1]); ctx.beginPath(); ctx.moveTo(s0[0], s0[1]);
+        for (let i = 0; i < an.length - 1; i++) {
+          const A = an[i], B = an[i + 1], g = puff[i] + (q() - 0.5) * 0.06;
+          const c = (w) => { const u = A[0] + (B[0] - A[0]) * w, v = A[1] + (B[1] - A[1]) * w; return P(u + (u - mc[0]) * g, v + (v - mc[1]) * g); };
+          const c1 = c(0.2), c2 = c(0.8), e = P(B[0], B[1]);
+          ctx.bezierCurveTo(c1[0], c1[1], c2[0], c2[1], e[0], e[1]);
+        }
+        const m = P(-0.8, 5); ctx.quadraticCurveTo(m[0], m[1], s0[0], s0[1]); ctx.closePath();
+      };
+      const sw = [P(5.2, 4.6), P(5, 10)];
+      furShape(ctx, C, r, 520 + k, efn, p.earc, null, p, cur ? () => swirls(ctx, C, r, [[sw[0][0], sw[0][1], k > 0], [sw[1][0], sw[1][1], k < 0]], mix(p.earc, -0.24), s * 0.85) : null);
     };
     if (p.ears !== 'perk') [-1, 1].forEach(k => { if (!(side && k < 0)) ear(k, false); });
     const hpts = (q) => [[0, -1], [0.62, -0.86], [0.96, -0.3], [1.03, 0.3], [0.8, 0.82], [0.3, 1.02], [-0.3, 1.02], [-0.8, 0.82], [-1.03, 0.3], [-0.96, -0.3], [-0.62, -0.86]]

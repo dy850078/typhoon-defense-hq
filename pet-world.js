@@ -294,7 +294,7 @@ module.exports = function createPetWorld(ctx) {
     if (dayLog(p.pet).feed >= PETS.BOND_CAPS.feed) return { ok: false, error: `${p.pet.name}今天吃飽了，明天再餵` };
     p.inv[item]--;
     addBond(p, 'feed', gain);
-    if (pt.act !== 'sleep') pt.patUntil = Date.now() + 2500;
+    pt.act = 'sit'; pt.patUntil = Date.now() + 3200; // 睡著的也會坐起來吃
     send('petPat', { id: pt.id, by: p.name, feed: item });
     return { ok: true, inv: p.inv, left: PETS.BOND_CAPS.feed - p.pet.bd.feed };
   }

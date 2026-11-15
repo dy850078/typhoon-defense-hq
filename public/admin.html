@@ -40,6 +40,10 @@ table { width: 100%; border-collapse: collapse; font-size: 14px; }
 th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); white-space: nowrap; }
 th { color: var(--muted); font-weight: 700; }
 .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #34C759; margin-right: 4px; }
+.pet-cell { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+.pet-cell small { display: block; color: #6b6a75; font-size: 11px; }
+.pet-face { width: 44px; height: 44px; flex: none; }
+.pet-none { color: #9a99a3; white-space: nowrap; }
 .old-name { display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 6px; background: #FFF4D6; color: #8A6100; font-size: 11px; }
 .empty { color: var(--muted); padding: 16px 0; }
 td.wish { white-space: normal; min-width: 200px; max-width: 360px; }
@@ -104,9 +108,10 @@ label.switch input:checked::after { left: 25px; }
         <button type="button" class="small" id="reload">重新整理</button>
       </div>
       <p class="msg" id="acct-msg"></p>
+      <p class="note" id="pet-sum" style="margin: 0 0 10px"></p>
       <div class="scroll">
         <table>
-          <thead><tr><th>帳號</th><th>Email</th><th>角色</th><th>職業</th><th>等級</th><th>邀請函</th><th>最後上線</th><th></th></tr></thead>
+          <thead><tr><th>帳號</th><th>Email</th><th>角色</th><th>職業</th><th>等級</th><th>寵物</th><th>邀請函</th><th>最後上線</th><th></th></tr></thead>
           <tbody id="rows"></tbody>
         </table>
       </div>
@@ -194,6 +199,8 @@ label.switch input:checked::after { left: 25px; }
 </main>
 <script src="/shared/stats.js"></script>
 <script src="/shared/gear.js"></script>
+<script src="/crayon.js"></script>
+<script src="/shared/pets.js"></script>
 <script>
 (function () {
   var $ = function (id) { return document.getElementById(id); };
@@ -229,11 +236,39 @@ label.switch input:checked::after { left: 25px; }
     return Math.round(m / 1440) + ' 天前';
   }
   function td(text) { var c = document.createElement('td'); c.textContent = text; return c; }
+  // 寵物那一格：小頭像＋名字，下面一行是種類・個性・感情
+  function petCell(pet) {
+    var PT = window.HQ_PETS, c = document.createElement('td');
+    var p = PT && pet ? PT.sanitize(pet) : null;
+    if (!p) { c.textContent = PT && !pet ? '還沒領養' : '—'; c.className = 'pet-none'; return c; }
+    var box = document.createElement('div'); box.className = 'pet-cell';
+    try {
+      var cv = document.createElement('canvas'), k = 2; cv.width = 44 * k; cv.height = 44 * k; cv.className = 'pet-face';
+      var x = cv.getContext('2d'); x.scale(k, k); PT.drawHead(x, p, 22, 27, 1.1);
+      box.appendChild(cv);
+    } catch (e) {}
+    var txt = document.createElement('div');
+    var nm = document.createElement('b'); nm.textContent = p.name; txt.appendChild(nm);
+    var lv = PT.BOND_LEVELS[PT.bondLevel(p.bond)];
+    var sub = document.createElement('small');
+    sub.textContent = [PT.KINDS[p.kind], PT.TEMPERS[p.temper] || '', lv ? '感情：' + lv.name : ''].filter(Boolean).join('・');
+    txt.appendChild(sub); box.appendChild(txt); c.appendChild(box);
+    return c;
+  }
+  function petSummary(list) {
+    var PT = window.HQ_PETS, el = $('pet-sum');
+    if (!PT) { el.textContent = ''; return; }
+    var n = {}, total = 0;
+    list.forEach(function (a) { var p = a.pet && PT.sanitize(a.pet); if (p) { total++; n[p.kind] = (n[p.kind] || 0) + 1; } });
+    var parts = Object.keys(PT.KINDS).filter(function (k) { return n[k]; }).map(function (k) { return PT.KINDS[k] + ' ' + n[k]; });
+    el.textContent = total ? '已領養寵物 ' + total + ' 人（' + parts.join('、') + '），還沒領養 ' + (list.length - total) + ' 人' : '還沒有人領養寵物';
+  }
   function render(list) {
+    petSummary(list);
     var tb = $('rows'); tb.textContent = '';
     $('count').textContent = list.length;
     $('nb-acct').textContent = list.length;
-    if (!list.length) { var r0 = tb.insertRow(); var c0 = td('還沒有人建立帳號'); c0.colSpan = 8; c0.className = 'empty'; r0.appendChild(c0); return; }
+    if (!list.length) { var r0 = tb.insertRow(); var c0 = td('還沒有人建立帳號'); c0.colSpan = 9; c0.className = 'empty'; r0.appendChild(c0); return; }
     list.sort(function (a, b) { return (b.seen || 0) - (a.seen || 0); }).forEach(function (a) {
       var tr = document.createElement('tr');
       var first = td(a.username + (a.admin ? '（管理員）' : ''));
@@ -260,6 +295,7 @@ label.switch input:checked::after { left: 25px; }
       var cls = window.HQ_STATS && HQ_STATS.CLASSES[a.cls];
       tr.appendChild(td(cls ? cls.name : a.cls));
       tr.appendChild(td('Lv.' + a.level));
+      tr.appendChild(petCell(a.pet));
       tr.appendChild(td(a.vip ? '有' : '—'));
       tr.appendChild(td(a.online ? '在線上' : ago(a.seen)));
       var act = document.createElement('td');

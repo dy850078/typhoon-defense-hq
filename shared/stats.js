@@ -312,15 +312,20 @@
       painter: '火牆、冰牆最長 1000，持續 14 秒',
     },
     V: { prophetWeak: 1.5, nurseHeal: 1.3, archerFar: 0.3, tankTaken: 0.85, tankAggro: 0.4, summonMax: 4, summonHp: 1.3,
-      singerRushMs: 3000, singerRushCd: 0.5, painterLen: 1000, painterMs: 14000 },
+      singerRushMs: 3000, singerRushCd: 0.5, painterLen: 1000, painterMs: 14000, skillUp: 1.2 },
   };
   // 二轉了沒（有二轉被動的職業才算）
   const awakened = (cls, tier) => tier >= 1 && !!MASTERY.PASSIVE[cls];
   // 小怪挑要追誰：二轉的超能力霸王會被當成比較近（距離打折），其他人照實際距離
+  // 2 階升級 K 招、3 階升級 L 招：傷害、補血、加防加攻、召喚物、火牆冰牆都 +20%，特效也更華麗
+  const skillUp = (cls, skillId, tier) => {
+    const i = (CLASSES[cls] || CLASSES.staff).skills.indexOf(skillId);
+    return (i === 1 && tier >= 2) || (i === 2 && tier >= 3) ? MASTERY.V.skillUp : 1;
+  };
   const aggro = (p) => (p && p.passive === 'tank' ? MASTERY.V.tankAggro : 1);
 
   const stats = { BASE, CLASSES, SKILLS, SUMMONS, SUMMON_MAX, SUMMON_HIT_MS, FOODS, REGEN, MONSTER, MONSTER2, RESPAWN_MS, WEAKEN, LEVEL,
-    MOBS, FIELD_MOBS, FIELD_BOSS, MOB_RESPAWN_MS, DROPS, EAT_CD_MS, statsFor, reduce, boost, bonusDef, foeGap, basicOf, skillsOf, MASTERY, awakened, aggro };
+    MOBS, FIELD_MOBS, FIELD_BOSS, MOB_RESPAWN_MS, DROPS, EAT_CD_MS, statsFor, reduce, boost, bonusDef, foeGap, basicOf, skillsOf, MASTERY, awakened, aggro, skillUp };
   if (typeof module !== 'undefined' && module.exports) module.exports = stats;
   else root.HQ_STATS = stats;
 })(this);

@@ -492,7 +492,7 @@
     // 副本掉的武器，通關畫面會自己說
     if (it && !(it.dungeon && g.from !== 'admin')) toast(`${g.from === 'admin' ? '管理員送你' : '獲得'}【${it.rarity}】${it.name}！`, 'gear-' + g.item);
     if (scene && scene.me) scene.burst(scene.me.x, scene.me.y - 40, 16, 0xffd23f);
-    if (modalKind === 'gear') openGear();
+    if (modalKind === 'char') openChar();
   });
   socket.on('cake', (c) => scene && scene.onCake(c.id, c.ms));
   socket.on('summon', (sm) => scene && scene.onSummon(sm));
@@ -1308,7 +1308,8 @@
     modalKind = kind;
     // 扭蛋的開獎畫面是蓋在整張卡片上的，換內容時要一起拿掉
     $('modal').querySelectorAll('.gacha-stage').forEach(e => e.remove());
-    $('modal').classList.remove('wide');
+    $('modal').classList.remove('wide', 'char-modal');
+    charBody = null; charLive = null;
     $('modal-title').textContent = plain(title);
     const box = $('modal-body');
     box.innerHTML = '';
@@ -1316,7 +1317,7 @@
     $('modal').hidden = false;
     chatInput.blur();
   }
-  function closeModal() { if ($('modal').contains(document.activeElement)) document.activeElement.blur(); $('modal').querySelectorAll('.gacha-stage').forEach(e => e.remove()); $('modal').hidden = true; $('modal').classList.remove('wide'); modalKind = null; }
+  function closeModal() { if ($('modal').contains(document.activeElement)) document.activeElement.blur(); $('modal').querySelectorAll('.gacha-stage').forEach(e => e.remove()); $('modal').hidden = true; $('modal').classList.remove('wide', 'char-modal'); modalKind = null; charBody = null; charLive = null; }
   $('modal-x').addEventListener('click', closeModal);
   $('modal').addEventListener('pointerdown', (e) => { if (e.target === $('modal')) closeModal(); });
 
@@ -1923,7 +1924,7 @@
     if (b.furn) { myFurn = b.furn; store('hq-furn', myFurn); }
     if (b.inv) renderInventory(b.inv);
     else if (modalKind === 'bag') openBag();
-    if (modalKind === 'gear') openGear();
+    if (modalKind === 'char') openChar();
     if (modalKind === 'furn') openFurn();
   }
   const bagIcon = (kind, k) => kind === 'food' ? 'item-' + k : kind === 'decor' ? 'dec-' + k : 'gear-' + k;
@@ -2483,7 +2484,7 @@
         const sk = ST.SKILLS[basic()];
         toast(id ? `普攻變成「${sk.name}」` : `普攻換回「${sk.name}」`, 'sk-' + basic());
       }
-      if (modalKind === 'gear') openGear();
+      if (modalKind === 'char') openChar();
     });
   }
   // 一件裝備的格子：手繪圖示＋名字＋稀有度。裝備圖鑑和背包的裝備頁共用
@@ -2506,12 +2507,10 @@
     } else cell.disabled = true;
     return cell;
   }
-  function openGear() {
+  // 裝備分頁（角色面板裡）：人物大圖在面板左邊，這裡只放四個欄位和圖鑑
+  function buildGear() {
     const box = el('div', 'gear');
     const top = el('div', 'gear-top');
-    const pic = gearPortraitFit(myEquip, 178, 208, 14, 2.1);
-    pic.className = 'gear-me' + (topRarity(myEquip) ? ' r-' + topRarity(myEquip) : '');
-    top.appendChild(pic);
     const slots = el('div', 'gear-slots');
     Object.entries(GR.SLOTS).forEach(([slot, label]) => {
       const id = myEquip[slot], it = GR.GEAR[id];
@@ -2598,9 +2597,9 @@
     box.appendChild(tabs);
     box.appendChild(body);
     show(cur);
-    openModal('gear', '裝備', box);
-    $('modal').classList.add('wide');
+    return box;
   }
+  function openGear() { openChar('gear'); }
   // 身上最稀有的裝備等級（決定光芒）
   function topRarity(equip) {
     let best = -1;
@@ -3271,7 +3270,7 @@
   const special2 = () => ST.CLASSES[myCls()].skills[2];
   const cooldowns = {}; // skillId -> 冷卻結束的時間（performance.now）
   function renderStats(st) {
-    const clsChanged = !myStats || myStats.cls !== st.cls;
+    const clsChanged = !myStats || myStats.cls !== st.cls, lvChanged = !myStats || myStats.level !== st.level;
     myStats = st;
     $('hp-fill').style.width = $('hp-mini').style.width = (100 * st.hp / st.maxHp) + '%';
     $('mp-fill').style.width = $('mp-mini').style.width = (100 * st.mp / st.maxMp) + '%';
@@ -3286,11 +3285,15 @@
     const c = ST.CLASSES[myCls()];
     $('cls-text').replaceChildren(icon('cls-' + myCls(), c.icon), el('span', 'cls-name', ' ' + c.name));
     if (clsChanged) renderSkillbar();
-    if (modalKind === 'skills') openSkills();
+    if (modalKind === 'char') { if (clsChanged || lvChanged) openChar(); else if (charLive) charLive(st); }
   }
   // 角色資料：點一下收成一行（職業圖示、等級、血條、魔力條），手機預設收起
   $('stats').classList.toggle('mini', folded('stats', SMALL()));
-  $('stats').addEventListener('click', () => store('hq-fold-stats', $('stats').classList.toggle('mini') ? '1' : '0'));
+  // 點角色資料打開角色面板；點右上角的小箭頭才是收合／展開
+  $('stats').addEventListener('click', (e) => {
+    if (e.target.closest('.stat-fold')) store('hq-fold-stats', $('stats').classList.toggle('mini') ? '1' : '0');
+    else openChar();
+  });
   // 手機：左邊的面板（角色資料、在線條、預告條、點唱機、副本膠囊）由上往下排，誰收合了下面的就跟著往上補
   function stackLeft() {
     const ids = matchMedia('(max-width: 600px)').matches ? ['stats', 'banner', 'notice-bar', 'music', 'dg-panel']
@@ -3366,18 +3369,10 @@
       b.addEventListener('contextmenu', (e) => e.preventDefault());
     });
   })();
-  function openSkills() {
-    const c = ST.CLASSES[myCls()];
+  // 技能分頁（角色面板裡）
+  function buildSkills() {
     const box = el('div', 'modal-list');
-    const head = el('div', 'modal-row cls-head');
-    head.appendChild(el('div', 'modal-icon')).appendChild(icon('cls-' + myCls(), c.icon));
-    const info = el('div', 'modal-info');
-    info.appendChild(el('b', null, `${c.name}（${c.role}）`));
-    info.appendChild(el('p', null, c.desc));
-    if (myStats) info.appendChild(el('p', 'mono', `HP ${myStats.maxHp} · MP ${myStats.maxMp} · ATK ${myStats.atk} · DEF ${myStats.def}`));
-    head.appendChild(info);
-    box.appendChild(head);
-    c.skills.forEach((id, i) => {
+    skillsOf().forEach((id, i) => {
       const sk = ST.SKILLS[id];
       const row = el('div', 'modal-row');
       row.appendChild(el('div', 'modal-icon')).appendChild(icon('sk-' + id, sk.icon));
@@ -3401,8 +3396,146 @@
       row.appendChild(b);
       box.appendChild(row);
     });
-    box.appendChild(el('p', 'modal-hint', '想換職業？到 指揮中心找 轉職資料沈理員。'));
-    openModal('skills', '技能', box);
+    return box;
+  }
+  function openSkills() { openChar('skills'); }
+  const skillsOf = () => [basic(), special(), special2()];
+
+  // ---------------- 角色面板 ----------------
+  // 人物、數值、職業、技能、裝備收在同一個面板：電腦左邊人物、右邊分頁；手機整個畫面，上面一排小人物和分頁
+  const CHAR_TABS = [['me', '總覽'], ['cls', '職業'], ['skills', '技能'], ['gear', '裝備']];
+  let charTab = (() => { try { return localStorage.getItem('hq-char-tab'); } catch (e) { return null; } })();
+  if (!CHAR_TABS.some(t => t[0] === charTab)) charTab = 'me';
+  let charLive = null; // 總覽頁開著時，血量魔力跟著即時更新
+  let charPick = null; // 職業頁點開來看的職業
+  function charBar(kind, label) {
+    const row = el('div', 'char-bar ' + kind);
+    row.appendChild(el('span', 'char-bar-k', label));
+    const bar = row.appendChild(el('div', 'char-bar-track'));
+    const fill = bar.appendChild(el('i'));
+    const v = row.appendChild(el('span', 'char-bar-v mono'));
+    return { row, set(a, b, txt) { fill.style.width = (b ? 100 * a / b : 0) + '%'; v.textContent = txt || `${a}/${b}`; } };
+  }
+  function buildMe() {
+    const box = el('div', 'char-me');
+    const st = myStats || {};
+    const bars = box.appendChild(el('div', 'char-bars'));
+    const hp = charBar('hp', 'HP'), mp = charBar('mp', 'MP'), xp = charBar('exp', 'EXP');
+    [hp, mp, xp].forEach(b => bars.appendChild(b.row));
+    const nums = box.appendChild(el('div', 'char-nums'));
+    const atk = el('b', 'mono'), def = el('b', 'mono');
+    [['ATK', atk], ['DEF', def]].forEach(([k, v]) => { const c = nums.appendChild(el('div', 'char-num')); c.appendChild(el('span', null, k)); c.appendChild(v); });
+    const live = (s) => {
+      hp.set(s.hp, s.maxHp); mp.set(s.mp, s.maxMp);
+      if (s.level >= ST.LEVEL.max) xp.set(1, 1, 'MAX'); else xp.set(s.exp, s.expNext);
+      atk.textContent = s.atk + (s.atkBuffMs > 0 ? ' ↑' : ''); def.textContent = s.def + (s.buffMs > 0 ? ' ↑' : '');
+    };
+    if (myStats) live(st);
+    charLive = live;
+    // 三張可以點的卡：職業、技能、裝備，點了跳到那一頁
+    const c = ST.CLASSES[myCls()];
+    const card = (tab, title, kids) => {
+      const b = el('button', 'char-card');
+      b.type = 'button';
+      b.appendChild(el('span', 'char-card-k', title));
+      const row = b.appendChild(el('span', 'char-card-icons'));
+      kids.forEach(k => row.appendChild(k));
+      b.appendChild(el('span', 'char-go'));
+      b.onclick = () => showChar(tab);
+      return b;
+    };
+    const clsName = el('span', 'char-card-name', c.name);
+    box.appendChild(card('cls', '職業', [icon('cls-' + myCls(), c.icon), clsName]));
+    box.appendChild(card('skills', '技能', skillsOf().map(id => icon('sk-' + id, ST.SKILLS[id].icon))));
+    const slots = Object.keys(GR.SLOTS).map(slot => {
+      const id = myEquip[slot], it = GR.GEAR[id];
+      const sp = el('span', 'char-slot' + (it ? ' r-' + it.rarity : ' empty'));
+      if (it) sp.appendChild(icon('gear-' + id, ''));
+      sp.title = GR.SLOTS[slot] + (it ? '：' + it.name : '');
+      return sp;
+    });
+    box.appendChild(card('gear', '裝備', slots));
+    return box;
+  }
+  function buildClasses() {
+    const box = el('div', 'char-cls');
+    const grid = box.appendChild(el('div', 'char-cls-grid'));
+    const detail = el('div', 'char-cls-detail');
+    const pick = (k) => {
+      charPick = k;
+      [...grid.children].forEach(b => b.classList.toggle('picked', b.dataset.k === k));
+      const c = ST.CLASSES[k];
+      detail.replaceChildren();
+      const h = detail.appendChild(el('div', 'char-cls-h'));
+      h.appendChild(icon('cls-' + k, c.icon));
+      h.appendChild(el('b', null, c.name));
+      h.appendChild(el('span', 'tag mono', c.role));
+      detail.appendChild(el('p', null, c.desc));
+      const sks = detail.appendChild(el('div', 'char-cls-sks'));
+      c.skills.forEach((id, i) => {
+        const sk = ST.SKILLS[id], s = sks.appendChild(el('div', 'char-cls-sk'));
+        s.appendChild(icon('sk-' + id, sk.icon));
+        s.appendChild(el('small', 'mono', ['空白', 'K', 'L'][i]));
+        s.appendChild(el('span', null, sk.name));
+        s.title = sk.desc;
+      });
+    };
+    Object.entries(ST.CLASSES).forEach(([k, c]) => {
+      const b = el('button', 'char-cls-card' + (k === myCls() ? ' on' : ''));
+      b.type = 'button'; b.dataset.k = k;
+      b.appendChild(icon('cls-' + k, c.icon));
+      b.appendChild(el('b', null, c.name));
+      if (k === myCls()) b.appendChild(el('span', 'char-now', '目前'));
+      b.onclick = () => pick(k);
+      grid.appendChild(b);
+    });
+    box.appendChild(detail);
+    pick(charPick && ST.CLASSES[charPick] ? charPick : myCls());
+    box.appendChild(el('p', 'modal-hint', '到指揮中心找轉職資料沈理員就能換職業'));
+    return box;
+  }
+  function charSide() {
+    const side = el('div', 'char-side');
+    const pic = gearPortraitFit(myEquip, 178, 208, 14, 2.1);
+    pic.className = 'char-pic' + (topRarity(myEquip) ? ' r-' + topRarity(myEquip) : '');
+    side.appendChild(pic);
+    const who = side.appendChild(el('div', 'char-who'));
+    who.appendChild(el('b', 'char-name', profile.name || ''));
+    const line = who.appendChild(el('span', 'char-line'));
+    line.appendChild(icon('cls-' + myCls(), ST.CLASSES[myCls()].icon));
+    line.appendChild(el('span', null, ST.CLASSES[myCls()].name));
+    line.appendChild(el('span', 'char-lv mono', 'Lv.' + (myStats ? myStats.level : 1)));
+    return side;
+  }
+  let charBody = null, charTabsEl = null;
+  function showChar(tab) {
+    charTab = tab;
+    try { localStorage.setItem('hq-char-tab', tab); } catch (e) {}
+    if (!charBody) return;
+    charLive = null;
+    [...charTabsEl.children].forEach(b => b.classList.toggle('on', b.dataset.k === tab));
+    const build = { me: buildMe, cls: buildClasses, skills: buildSkills, gear: buildGear }[tab];
+    charBody.replaceChildren(build());
+    charBody.scrollTop = 0;
+  }
+  function openChar(tab) {
+    const keep = modalKind === 'char' && charBody ? charBody.scrollTop : 0;
+    const box = el('div', 'char');
+    box.appendChild(charSide());
+    const main = box.appendChild(el('div', 'char-main'));
+    const tabs = main.appendChild(el('div', 'game-tabs char-tabs'));
+    CHAR_TABS.forEach(([k, label]) => {
+      const b = el('button', null, label);
+      b.type = 'button'; b.dataset.k = k;
+      b.onclick = () => showChar(k);
+      tabs.appendChild(b);
+    });
+    const body = main.appendChild(el('div', 'char-body'));
+    openModal('char', '角色', box);
+    charTabsEl = tabs; charBody = body;
+    $('modal').classList.add('wide', 'char-modal');
+    showChar(tab || charTab);
+    if (!tab && keep) charBody.scrollTop = keep;
   }
   // 轉職導師的對話視窗
   function openMentor() {

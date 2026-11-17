@@ -38,6 +38,16 @@
       background: rgba(251,246,233,.55); border: 1.5px solid rgba(43,42,51,.45); z-index: 3; }
     #knob { position: absolute; left: 50%; top: 50%; width: 52px; height: 52px; margin: -26px 0 0 -26px; border-radius: 50%; background: var(--note); border: 1.5px solid rgba(43,42,51,.6); box-shadow: var(--note-shadow); }
     #hint { position: fixed; left: 0; right: 0; bottom: calc(8px + env(safe-area-inset-bottom)); text-align: center; font-size: 11px; opacity: .65; pointer-events: none; z-index: 2; }
+    /* 換裝面板：一張紙條，從下面跳出來 */
+    #dress { position: fixed; left: 50%; bottom: calc(14px + env(safe-area-inset-bottom)); transform: translateX(-50%); width: min(380px, calc(100vw - 24px)); max-height: 62vh; overflow: auto; padding: 12px 14px 14px; z-index: 4; font-size: 13px; }
+    #dress h2 { font-size: 15px; margin: 0 0 8px; display: flex; justify-content: space-between; align-items: center; }
+    #dress h2 button { font: 700 12px/1 inherit; font-family: inherit; padding: 6px 10px; cursor: pointer; }
+    #dress .row { display: flex; align-items: center; gap: 6px; margin: 7px 0; flex-wrap: wrap; }
+    #dress .row > span { width: 44px; flex: none; font-weight: 700; }
+    #dress .opt { font: 500 12px/1 inherit; font-family: inherit; color: var(--note-ink); padding: 7px 9px; border-radius: 9px 6px 10px 7px; border: 1.5px solid rgba(43,42,51,.45); background: #fff; cursor: pointer; }
+    #dress .opt.on { background: #f3d27a; border-color: rgba(43,42,51,.8); font-weight: 700; }
+    #dress .sw { width: 26px; height: 26px; border-radius: 50%; border: 1.5px solid rgba(43,42,51,.45); cursor: pointer; padding: 0; }
+    #dress .sw.on { outline: 2.5px solid #2B2A33; outline-offset: 2px; }
     @media (max-width: 520px) { #btns button { min-width: 92px; padding: 8px 10px; font-size: 12px; } #hint { display: none; } }
   </style>
 </head>
@@ -46,6 +56,8 @@
 
   <div id="top" class="note" hidden><b>新世界測試頁</b>　管理員限定<br><span id="stats">量測中…</span><br><a href="hq.html">回總部</a></div>
   <div id="btns" hidden>
+    <button class="note" id="b-ctrl" hidden>角色<small id="s-ctrl">標準人物</small></button>
+    <button class="note" id="b-dress" hidden>換裝<small>髮型、衣服、翅膀</small></button>
     <button class="note" id="b-form">隊形<small id="s-form">單手捧著</small></button>
     <button class="note" id="b-gesture">揮手指揮<small>機器人照做</small></button>
     <button class="note" id="b-zoom">鏡頭<small id="s-zoom">遠</small></button>
@@ -53,24 +65,45 @@
     <button class="note" id="b-lines">外框線<small id="s-lines">開</small></button>
   </div>
   <div id="stick" hidden><div id="knob"></div></div>
+  <div id="dress" class="note" hidden></div>
   <div id="hint" hidden>鍵盤也可以用方向鍵或 WASD 走動</div>
 
   <script src="account.js"></script>
-  <script src="/vendor3/three.min.js"></script>
+  <!-- 3D 元件：three.js 和讀模型檔的 GLTFLoader（模組版），載好之後掛到 window.THREE -->
+  <script type="importmap">{ "imports": { "three": "/vendor3/three.module.js" } }</script>
+  <script type="module">
+    import * as THREE from 'three';
+    import { GLTFLoader } from '/vendor3/jsm/loaders/GLTFLoader.js';
+    import * as SkeletonUtils from '/vendor3/jsm/utils/SkeletonUtils.js';
+    window.THREE = THREE; window.NW_LIB = { GLTFLoader, SkeletonUtils }; window.dispatchEvent(new Event('nw3d'));
+  </script>
   <script>
   (function () {
     var $ = function (id) { return document.getElementById(id); };
     function say(msg, linkHtml) { $('gate-msg').textContent = msg; var l = $('gate-link'); l.hidden = !linkHtml; l.innerHTML = linkHtml || ''; }
     var token = window.HQ_ACCOUNT ? HQ_ACCOUNT.token() : '';
     if (!token) return say('這個頁面要先登入才能進來。', '<a href="./">去登入</a>');
-    if (!window.THREE) return say('3D 元件沒載到，請重新整理再試一次。');
-    // 場景程式放在伺服器後面，只有管理員帳號拿得到
-    fetch('/api/newworld/world.js', { headers: { Authorization: 'Bearer ' + token } }).then(function (r) {
-      if (r.status === 401) { say('登入過期了，請重新登入。', '<a href="./">去登入</a>'); return null; }
-      if (r.status === 403) { say('新世界還在施工，目前只開放管理員進來看。', '<a href="hq.html">回總部</a>'); return null; }
-      if (!r.ok) { say('載入失敗，等等再試。'); return null; }
-      return r.text();
-    }, function () { say('連不上伺服器，等等再試。'); return null; }).then(function (code) {
+    // 場景程式和 3D 模型檔都放在伺服器後面，只有管理員帳號拿得到
+    function get(name, kind) {
+      return fetch('/api/newworld/' + name, { headers: { Authorization: 'Bearer ' + token } }).then(function (r) {
+        if (r.status === 401) { say('登入過期了，請重新登入。', '<a href="./">去登入</a>'); return null; }
+        if (r.status === 403) { say('新世界還在施工，目前只開放管理員進來看。', '<a href="hq.html">回總部</a>'); return null; }
+        if (!r.ok) { say('載入失敗，等等再試。'); return null; }
+        return kind === 'text' ? r.text() : r.arrayBuffer();
+      }, function () { say('連不上伺服器，等等再試。'); return null; });
+    }
+    function parse(buf) { return new Promise(function (ok) { new NW_LIB.GLTFLoader().parse(buf, '', ok, function () { ok(null); }); }); }
+    function whenThree(cb) {
+      if (window.THREE && window.NW_LIB) return cb();
+      window.addEventListener('nw3d', cb, { once: true });
+      setTimeout(function () { if (!window.NW_LIB) say('3D 元件沒載到，請重新整理再試一次。'); }, 20000);
+    }
+    say('下載場景和人物模型中…（第一次大約 2 MB）');
+    Promise.all([get('world.js', 'text'), get('char.glb'), get('wing-ice.glb'), new Promise(whenThree)]).then(function (got) {
+      if (!got[0]) return null;
+      return Promise.all([got[1] ? parse(got[1]) : null, got[2] ? parse(got[2]) : null]).then(function (g) {
+        window.NW_ASSETS = { char: g[0], wing: g[1] }; return got[0]; });
+    }).then(function (code) {
       if (!code) return;
       var s = document.createElement('script');
       s.src = URL.createObjectURL(new Blob([code], { type: 'application/javascript' }));
@@ -84,6 +117,26 @@
       $('gate').hidden = true; ['top', 'btns', 'stick', 'hint'].forEach(function (id) { $(id).hidden = false; });
       // 手機預設用「低」比較不會燙，電腦用「中」
       if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) { NW.state.quality = 2; $('s-quality').textContent = NW.nextQuality(); }
+      if (NW.hasStd) { $('b-ctrl').hidden = false; $('b-dress').hidden = false; }
+      $('b-ctrl').onclick = function () { $('s-ctrl').textContent = NW.nextCtrl(); };
+      $('b-dress').onclick = function () { var d = $('dress'); d.hidden = !d.hidden; if (!d.hidden) drawDress(); };
+      // 換裝面板：只改自己的角色，不存檔
+      function drawDress() {
+        var d = $('dress'), L = NW.look(), O = NW.options(); d.innerHTML = '';
+        var h = document.createElement('h2'); h.innerHTML = '換裝（測試用，不會存檔）'; var x = document.createElement('button'); x.className = 'note'; x.textContent = '收起來'; x.onclick = function () { d.hidden = true; }; h.appendChild(x); d.appendChild(h);
+        function row(label) { var r = document.createElement('div'); r.className = 'row'; var s = document.createElement('span'); s.textContent = label; r.appendChild(s); d.appendChild(r); return r; }
+        function opt(r, text, on, patch) { var b = document.createElement('button'); b.className = 'opt' + (on ? ' on' : ''); b.textContent = text; b.onclick = function () { NW.dress(patch); drawDress(); }; r.appendChild(b); }
+        function sw(r, col, on, patch) { var b = document.createElement('button'); b.className = 'sw' + (on ? ' on' : ''); b.style.background = col; b.setAttribute('aria-label', col); b.onclick = function () { NW.dress(patch); drawDress(); }; r.appendChild(b); }
+        var r;
+        r = row('髮型'); O.parts.hair.forEach(function (k) { opt(r, O.names[k], L.hair === k, { hair: k }); });
+        r = row('髮色'); opt(r, '原色', !L.hairCol, { hairCol: null }); O.swatch.hair.forEach(function (c) { sw(r, c, L.hairCol === c, { hairCol: c }); });
+        r = row('上衣'); O.parts.top.forEach(function (k) { opt(r, O.names[k], L.top === k, { top: k }); });
+        r = row('衣色'); opt(r, '原色', !L.topCol, { topCol: null }); O.swatch.top.forEach(function (c) { sw(r, c, L.topCol === c, { topCol: c }); });
+        r = row('臉'); O.parts.face.forEach(function (k) { opt(r, O.names[k], L.face === k, { face: k }); });
+        r = row('膚色'); opt(r, '原色', !L.skinCol, { skinCol: null }); O.swatch.skin.forEach(function (c) { sw(r, c, L.skinCol === c, { skinCol: c }); });
+        r = row('眼鏡'); opt(r, '戴', L.glasses, { glasses: true }); opt(r, '不戴', !L.glasses, { glasses: false });
+        r = row('翅膀'); opt(r, '冰龍之翼', L.wings, { wings: true }); opt(r, '不要', !L.wings, { wings: false });
+      }
       $('b-form').onclick = function () { $('s-form').textContent = NW.nextForm(); };
       $('b-gesture').onclick = function () { NW.gesture(); };
       $('b-zoom').onclick = function () { $('s-zoom').textContent = NW.zoom(); };

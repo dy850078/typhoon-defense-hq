@@ -5467,6 +5467,19 @@
       kb.on('keydown-Z', (e) => { if (!typing() && !e.ctrlKey && !e.metaKey && $('games').hidden) { e.preventDefault(); this.pickNearest(); } });
       // 右鍵點人物（手機長按）可以看個人資料
       this.input.mouse.disableContextMenu();
+      // 手機：「手指放開」的訊號偶爾會丟（iPhone 上被通知、切 App、長按跳選單打斷），
+      // 遊戲就以為那根手指一直按著，之後點畫面全都不理（點地板不走、點箱子不敲）。
+      // 每次手指碰到螢幕，先比對瀏覽器說現在真的有哪些手指，遊戲記得、但已經不在的就清掉；切到背景時也全部清掉。
+      // 真的清到的時候記一筆到 data/client-errors.log，之後才查得到是什麼動作造成的
+      const freeStuck = (live, why) => {
+        const stuck = this.input.manager.pointers.filter(pt => pt.id > 0 && pt.active && !live.has(pt.identifier));
+        if (!stuck.length) return;
+        stuck.forEach(pt => pt.reset());
+        if (this.pressTimer) { this.pressTimer.remove(); this.pressTimer = null; }
+        report('touch', `${why}：清掉 ${stuck.length} 根卡住的手指` + ($('ctx-menu').hidden ? '' : '（選單開著）'));
+      };
+      window.addEventListener('touchstart', (e) => freeStuck(new Set([...e.touches].map(t => t.identifier)), '點螢幕'), { capture: true, passive: true });
+      document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') freeStuck(new Set(), '切到背景'); });
       this.input.on('pointerup', () => {
         if (this.pressTimer) { this.pressTimer.remove(); this.pressTimer = null; }
         if (this.drawing && this.drawing.pts.length) this.finishWall();

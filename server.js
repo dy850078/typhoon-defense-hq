@@ -1100,7 +1100,7 @@ const behindWall = (ax, ay, bx, by) => walls.some(w => w.pts.slice(1).some((q, i
 // 檢查玩家畫的線：點要在野區、離自己不太遠，總長度超過上限就截斷
 function wallLine(p, pts, maxLen) {
   if ((!inField(p) && !DG.inFight(p)) || !Array.isArray(pts) || pts.length < 2) return null;
-  const B = DG.boxAt(p.x, p.y) || MAP.FIELD_BOX;
+  const B = DG.boxAt(p.x, p.y) || MAP.fieldBoxAt(p.x);
   const out = [];
   let len = 0;
   for (const q of pts.slice(0, 120)) {
@@ -1401,8 +1401,9 @@ function tickSummon(sm, now) {
       sm.x = clamp(sm.x + (tx - sm.x) / d * step, box.x1 + 20, box.x2 - 20);
       sm.y = clamp(sm.y + (ty - sm.y) / d * step, box.y1 + 30, box.y2 - 10);
     } else {
-      sm.x = clamp(sm.x + (tx - sm.x) / d * step, MAP.FIELD_BOX.x1 + T, MAP.FIELD_BOX.x2 - T);
-      sm.y = clamp(sm.y + (ty - sm.y) / d * step, MAP.FIELD_BOX.y1 + T, MAP.FIELD_BOX.y2 - T);
+      const FB = MAP.fieldBoxAt(owner.x); // 南邊野區或東邊森林：跟著主人在的那一塊
+      sm.x = clamp(sm.x + (tx - sm.x) / d * step, FB.x1 + T, FB.x2 - T);
+      sm.y = clamp(sm.y + (ty - sm.y) / d * step, FB.y1 + T, FB.y2 - T);
     }
   }
   if (foe && d <= stop + 20 && now >= sm.nextHit) {

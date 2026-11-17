@@ -3870,6 +3870,9 @@
     walk: '野區的怪會追人，打不過就回到圍欄裡；愛放屁的馬也在這裡晃',
     office: '這一區的怪比較強，急件老闆也在這裡',
     temple: '最強的一區，小心虎姑婆婆',
+    ruins: '這裡是月霞的森林外圍，越往北走越深',
+    mist: '霧裡那間小屋，聽說是傳說中龍女被關的地方',
+    ridge: '山道的盡頭就是龍后的陵寢，大門還封印著',
     d1: '石碑上的顏色順序只亮一下，快記下來再照順序踩',
     d2: '把四顆大理石推進地上的凹槽，推到角落會卡住',
     d3: '兩塊踏板要同時有人踩，一個人可以把大理石推上去壓',
@@ -4800,8 +4803,14 @@
         return c === 'p' || c === 'T' ? 'plaza' : c === 'i' ? 'shaft' : c === 'l' ? 'outdoor' : c === 'o' || c === 'A' ? 'deck' : 'steel';
       }
       if (x >= MAP.LX) return ch === 'q' || ch === 'O' ? 'temple' : ch === 'Q' ? 'templewall' : 'void';
-      if (x >= MAP.MW) return ch === 'Z' ? 'sea' : ch === 'Y' ? 'rock' : 'yE'.includes(ch) ? 'sand' : ch === 'n' ? 'cliff'
+      if (x >= MAP.OW) return ch === 'Z' ? 'sea' : ch === 'Y' ? 'rock' : 'yE'.includes(ch) ? 'sand' : ch === 'n' ? 'cliff'
         : ch === 'a' ? 'gorge' : 'msv'.includes(ch) ? 'trail' : 'cave';
+      // 東邊：月霞的森林（樹、房子底下也鋪那一區的地板；山道左半邊雪地、右半邊火山岩）
+      if (x >= MAP.EX) {
+        if (ch === '徑') return 'epath';
+        if (y <= 28) return x >= MAP.EX + 17 ? 'basalt' : 'snow';
+        return y <= 56 ? 'moss' : 'dirt';
+      }
       // 野區：看是哪一區的地板（樹、路燈這些東西底下也鋪那一區的地板）
       if (y > 30) {
         if (ch === '人' || ch === '毯' || ch === '磚') return { 人: y === 38 || y === 39 ? 'road' : 'paver', 毯: 'office', 磚: 'brick' }[ch];
@@ -4898,6 +4907,34 @@
           ctx.fillRect(px + 20, py + 20, 8, 8);
           ctx.fillStyle = 'rgba(255,255,255,0.35)'; ctx.beginPath(); ctx.arc(px + 21, py + 20, 2, 0, Math.PI * 2); ctx.fill();
           CR.dots(ctx, px, py, T, T, 4, 'rgba(255,255,255,0.4)', r, 1.4);
+        } else if (base === 'dirt') {
+          // 荒廢村落：乾乾的黃土，有小石子和枯草
+          ctx.fillStyle = (x + y) % 3 ? '#cdb592' : '#c8b08c'; ctx.fillRect(px, py, T, T);
+          CR.dots(ctx, px, py, T, T, 5, 'rgba(255,248,230,0.4)', r, 1.8);
+          CR.dots(ctx, px, py, T, T, 3, 'rgba(120,96,70,0.35)', r, 2);
+          if (r() < 0.3) { const gx = px + 8 + r() * 30, gy = py + 14 + r() * 26; CR.line(ctx, gx, gy, gx - 3, gy - 7, r, 1.4, '#9a8a5a', 0.5); CR.line(ctx, gx + 3, gy, gx + 5, gy - 6, r, 1.4, '#9a8a5a', 0.5); }
+        } else if (base === 'epath') {
+          // 森林裡踩出來的小路：淺色的土，零星幾塊扁石頭
+          ctx.fillStyle = y <= 28 ? (x >= MAP.EX + 17 ? '#8a7f86' : '#dfe6ee') : '#dcc8a2'; ctx.fillRect(px, py, T, T);
+          CR.dots(ctx, px, py, T, T, 4, 'rgba(255,255,255,0.45)', r, 1.6);
+          if (r() < 0.55) { CR.blob(ctx, px + 10 + r() * 28, py + 10 + r() * 28, 6 + r() * 3, 4 + r() * 2, r, 0.12, 10); CR.fill(ctx, y <= 28 ? '#b9c0cc' : '#bfae8e', r, null); CR.stroke(ctx, r, 1.2, 'rgba(90,80,70,0.5)'); }
+        } else if (base === 'moss') {
+          // 迷霧森林：深綠色的苔蘚地，幾株小蕨類，偶爾一團淡淡的霧
+          ctx.fillStyle = (x * 3 + y) % 5 ? '#7da27f' : '#779c79'; ctx.fillRect(px, py, T, T);
+          CR.dots(ctx, px, py, T, T, 6, 'rgba(200,235,200,0.35)', r, 2);
+          CR.dots(ctx, px, py, T, T, 3, 'rgba(40,70,55,0.3)', r, 2.2);
+          if (r() < 0.25) { const gx = px + 10 + r() * 28, gy = py + 30 + r() * 10; [-0.6, 0, 0.6].forEach(a => CR.line(ctx, gx, gy, gx + Math.sin(a) * 9, gy - Math.cos(a) * 9, r, 1.6, '#4f7f5c', 0.5)); }
+        } else if (base === 'snow') {
+          // 山道的雪地：白白藍藍的，有一點點閃光
+          ctx.fillStyle = (x + y) % 2 ? '#eef3f8' : '#e8eef5'; ctx.fillRect(px, py, T, T);
+          CR.dots(ctx, px, py, T, T, 5, 'rgba(160,185,215,0.4)', r, 1.8);
+          CR.dots(ctx, px, py, T, T, 3, 'rgba(255,255,255,0.95)', r, 1.6);
+        } else if (base === 'basalt') {
+          // 山道的火山岩：深灰紫色，偶爾一條發著橘光的裂縫
+          ctx.fillStyle = (x + y) % 2 ? '#625a68' : '#5d5563'; ctx.fillRect(px, py, T, T);
+          CR.dots(ctx, px, py, T, T, 6, 'rgba(255,255,255,0.12)', r, 1.8);
+          CR.dots(ctx, px, py, T, T, 3, 'rgba(20,16,30,0.3)', r, 2);
+          if (r() < 0.07) { const sx = px + 6 + r() * 20, sy = py + 8 + r() * 20; ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(sx + 8, sy + 6); ctx.lineTo(sx + 6, sy + 14); ctx.lineTo(sx + 16, sy + 20); CR.stroke(ctx, r, 2.4, 'rgba(255,140,60,0.75)'); }
         } else if (base === 'void') {
           ctx.fillStyle = '#131a28'; ctx.fillRect(px, py, T, T);
         } else if (base === 'sand') {
@@ -5005,6 +5042,13 @@
         const ch = at(x, y), px = x * T, py = y * T;
         if (!!hotel !== (MAP.HOTEL_TILES.has(ch) || MAP.HOTEL_DECOR.has(ch))) continue;
         const r = CR.rng(x * 15485863 + y * 32452843 + 7);
+          // 迷霧森林的霧：跟物件一起畫，才不會被旁邊格子的地板蓋掉
+          if (x > MAP.EX && x < MAP.OW - 1 && y > 29 && y < 57 && (x * 5 + y * 3) % 13 === 0) {
+            // 一團淡淡的霧：邊緣慢慢淡掉，不畫邊
+            const g = ctx.createRadialGradient(px + 24, py + 24, 0, px + 24, py + 24, 70);
+            g.addColorStop(0, 'rgba(240,244,246,0.32)'); g.addColorStop(1, 'rgba(240,244,246,0)');
+            ctx.save(); ctx.translate(px + 24, py + 24); ctx.scale(1.6, 0.6); ctx.translate(-px - 24, -py - 24); ctx.fillStyle = g; ctx.fillRect(px - 46, py - 46, 140, 140); ctx.restore();
+          }
         if (ch === '#') {
           ctx.fillStyle = '#c3c9d3'; ctx.fillRect(px, py, T, T);
           if (at(x, y - 1) !== '#') { ctx.fillStyle = '#dfe3ea'; ctx.fillRect(px, py, T, T * 0.4); }
@@ -5334,7 +5378,7 @@
           CR.blob(ctx, px + 24, py - 28, 7, 4, r, 0.08, 12); CR.fill(ctx, '#f5d488', r, null); CR.stroke(ctx, r, 1.4);
         } else if (ch === '牌') {
           // 每一區入口的木頭路牌，寫著這一區的名字
-          const z = MAP.FIELD.filter(f => y >= f.y1).pop();
+          const z = x >= MAP.EX ? MAP.EAST.filter(f => y >= f.y1).pop() : MAP.FIELD.filter(f => y >= f.y1).pop();
           ctx.fillStyle = 'rgba(19,26,40,0.16)'; ctx.beginPath(); ctx.ellipse(px + 24, py + 42, 16, 4, 0, 0, Math.PI * 2); ctx.fill();
           CR.rect(ctx, px + 21, py - 6, 6, 48, r, 0.5); CR.fill(ctx, '#9a6b46', r, null); CR.stroke(ctx, r, 2);
           CR.rect(ctx, px - 22, py - 30, T + 44, 30, r, 1); CR.fill(ctx, '#c79a6b', r, [px - 22, py - 30, T + 44, 30]); CR.stroke(ctx, r, 2.4);
@@ -5391,6 +5435,158 @@
           CR.rect(ctx, px + 18, py - 32, 12, 4, r, 0.3); CR.fill(ctx, '#e6b94a', r, null); CR.stroke(ctx, r, 1.4);
           CR.rect(ctx, px + 18, py - 3, 12, 4, r, 0.3); CR.fill(ctx, '#e6b94a', r, null); CR.stroke(ctx, r, 1.4);
           CR.line(ctx, px + 24, py + 1, px + 24, py + 10, r, 1.6, '#e6b94a', 0.3);
+        } else if (ch === '杉') {
+          // 深綠色的杉樹：三層三角形的樹冠；雪山那邊頂上積雪
+          const snowy = y <= 28 && x < MAP.EX + 17, ash = y <= 28 && !snowy;
+          ctx.fillStyle = 'rgba(19,26,40,0.2)'; ctx.beginPath(); ctx.ellipse(px + 24, py + 44, 20, 5, 0, 0, Math.PI * 2); ctx.fill();
+          // 比一般的樹高大一圈（從樹根往上放大），森林看起來比較密
+          ctx.save(); ctx.translate(px + 24, py + 44); ctx.scale(1.3, 1.4); ctx.translate(-px - 24, -py - 44);
+          CR.rect(ctx, px + 20, py + 30, 8, 14, r, 0.6); CR.fill(ctx, '#6b4a32', r, null); CR.stroke(ctx, r, 2);
+          const col = ash ? '#4a5a52' : '#3f7a5c', lit = ash ? '#5f6e64' : '#4f8f6a';
+          [[34, 22, 18], [20, 18, 14], [6, 13, 11]].forEach(([dy, hw, hh], i) => {
+            ctx.beginPath(); ctx.moveTo(px + 24 - hw, py + dy + 4); ctx.quadraticCurveTo(px + 24, py + dy + 9, px + 24 + hw, py + dy + 4); ctx.lineTo(px + 24, py + dy - hh - 4); ctx.closePath();
+            CR.fill(ctx, i % 2 ? lit : col, r, [px, py + dy - hh - 4, T, hh + 12]); CR.stroke(ctx, r, 2.2);
+          });
+          if (snowy) { ctx.beginPath(); ctx.moveTo(px + 17, py - 3); ctx.quadraticCurveTo(px + 24, py + 1, px + 31, py - 3); ctx.lineTo(px + 24, py - 13); ctx.closePath(); CR.fill(ctx, '#f6f9fc', r, null); CR.stroke(ctx, r, 1.6); }
+          ctx.restore();
+        } else if (ch === '屋' && at(x - 1, y) !== '屋' && at(x, y - 1) !== '屋') {
+          // 倒塌的石板屋（2x2）：石牆塌了一角，屋頂破了個洞
+          const w = T * 2;
+          ctx.fillStyle = 'rgba(19,26,40,0.18)'; ctx.fillRect(px + 4, py + w - 8, w - 8, 8);
+          ctx.beginPath(); ctx.moveTo(px + 6, py + w - 4); ctx.lineTo(px + 6, py + 26); ctx.lineTo(px + 40, py + 24); ctx.lineTo(px + 52, py + 34); ctx.lineTo(px + 62, py + 30); ctx.lineTo(px + w - 6, py + 34); ctx.lineTo(px + w - 6, py + w - 4); ctx.closePath();
+          CR.fill(ctx, '#b4ada3', r, [px, py + 20, w, w - 20]); CR.stroke(ctx, r, 2.6);
+          for (let k = 0; k < 9; k++) { const bx = px + 12 + (k % 3) * 24 + (k > 2 && k < 6 ? 10 : 0), by = py + 40 + Math.floor(k / 3) * 16; CR.rect(ctx, bx, by, 18, 11, r, 0.8); CR.stroke(ctx, r, 1.2, 'rgba(70,64,60,0.45)'); }
+          // 屋頂（斜斜的深色石板，中間缺一塊）
+          ctx.beginPath(); ctx.moveTo(px - 2, py + 28); ctx.lineTo(px + 30, py - 2); ctx.lineTo(px + 44, py + 12); ctx.lineTo(px + 38, py + 24); ctx.closePath();
+          CR.fill(ctx, '#6d6377', r, null); CR.stroke(ctx, r, 2.4);
+          CR.rect(ctx, px + 58, py + 50, 18, 24, r, 1); CR.fill(ctx, '#3b3446', r, null); CR.stroke(ctx, r, 2.2);
+          [[70, 26], [80, 22], [62, 18]].forEach(([dx, dy]) => { CR.rect(ctx, px + dx, py + dy, 9, 6, r, 0.6); CR.fill(ctx, '#a39c92', r, null); CR.stroke(ctx, r, 1.4); });
+          // 爬上牆的藤蔓
+          ctx.beginPath(); ctx.moveTo(px + 10, py + w - 6); ctx.quadraticCurveTo(px + 22, py + 60, px + 14, py + 40); CR.stroke(ctx, r, 2.2, '#5f8f5f');
+          CR.dots(ctx, px + 8, py + 38, 18, 50, 5, '#79a873', r, 3);
+        } else if (ch === '風' && at(x - 1, y) !== '風' && at(x, y - 1) !== '風') {
+          // 停住的風車（2x2）：石頭塔身，四片破掉的帆
+          const cx = px + T, w = T * 2;
+          ctx.fillStyle = 'rgba(19,26,40,0.2)'; ctx.beginPath(); ctx.ellipse(cx, py + w - 4, 34, 7, 0, 0, Math.PI * 2); ctx.fill();
+          ctx.beginPath(); ctx.moveTo(cx - 26, py + w - 4); ctx.lineTo(cx - 16, py + 10); ctx.lineTo(cx + 16, py + 10); ctx.lineTo(cx + 26, py + w - 4); ctx.closePath();
+          CR.fill(ctx, '#c4b9a8', r, [cx - 26, py + 10, 52, w - 14]); CR.stroke(ctx, r, 2.6);
+          ctx.beginPath(); ctx.moveTo(cx - 22, py + 12); ctx.lineTo(cx, py - 14); ctx.lineTo(cx + 22, py + 12); ctx.closePath(); CR.fill(ctx, '#7a5a4a', r, null); CR.stroke(ctx, r, 2.4);
+          CR.rect(ctx, cx - 8, py + w - 26, 16, 22, r, 0.8); CR.fill(ctx, '#4a3a3a', r, null); CR.stroke(ctx, r, 2);
+          const hy = py + 8;
+          [0.35, 1.92, 3.5, 5.07].forEach((a, i) => {
+            ctx.save(); ctx.translate(cx, hy); ctx.rotate(a);
+            CR.line(ctx, 0, 0, 0, -44, r, 3.4, '#6b4a32', 0.3);
+            CR.rect(ctx, 2, -42, 14, i === 2 ? 18 : 34, r, 0.8); CR.fill(ctx, i === 2 ? '#d8cbb4' : '#efe3cc', r, null); CR.stroke(ctx, r, 1.8);
+            ctx.restore();
+          });
+          ctx.beginPath(); ctx.arc(cx, hy, 5, 0, Math.PI * 2); CR.fill(ctx, '#6b4a32', r, null); CR.stroke(ctx, r, 2);
+        } else if (ch === '柵') {
+          // 倒下的木柵欄：兩根歪歪的木樁，一根橫木掉在地上
+          ctx.fillStyle = 'rgba(19,26,40,0.14)'; ctx.fillRect(px + 2, py + 38, T - 4, 5);
+          [[10, -0.12], [36, 0.18]].forEach(([dx, a]) => { ctx.save(); ctx.translate(px + dx, py + 40); ctx.rotate(a); CR.rect(ctx, -4, -30, 8, 30, r, 0.6); CR.fill(ctx, '#9a7350', r, null); CR.stroke(ctx, r, 2); ctx.restore(); });
+          CR.line(ctx, px + 4, py + 18, px + 44, py + 24, r, 6, '#2b2a33', 0.4); CR.line(ctx, px + 4, py + 18, px + 44, py + 24, r, 4, '#b48a60', 0.4);
+          ctx.save(); ctx.translate(px + 26, py + 38); ctx.rotate(0.3); CR.rect(ctx, -18, -3, 36, 7, r, 0.6); CR.fill(ctx, '#a07a54', r, null); CR.stroke(ctx, r, 1.8); ctx.restore();
+        } else if (ch === '井') {
+          // 村子的老井：石頭圍一圈，木頭架子上掛著水桶
+          ctx.fillStyle = 'rgba(19,26,40,0.18)'; ctx.beginPath(); ctx.ellipse(px + 24, py + 42, 24, 6, 0, 0, Math.PI * 2); ctx.fill();
+          CR.blob(ctx, px + 24, py + 32, 22, 11, r, 0.05, 18); CR.fill(ctx, '#a8a29a', r, [px, py + 20, T, 24]); CR.stroke(ctx, r, 2.4);
+          CR.blob(ctx, px + 24, py + 28, 15, 6, r, 0.06, 14); CR.fill(ctx, '#2f3446', r, null); CR.stroke(ctx, r, 1.8);
+          [6, 42].forEach(dx => { CR.rect(ctx, px + dx - 3, py - 14, 6, 42, r, 0.5); CR.fill(ctx, '#8a6444', r, null); CR.stroke(ctx, r, 1.8); });
+          CR.line(ctx, px + 2, py - 14, px + 46, py - 14, r, 6, '#2b2a33', 0.3); CR.line(ctx, px + 2, py - 14, px + 46, py - 14, r, 4, '#9a7350', 0.3);
+          CR.line(ctx, px + 24, py - 12, px + 24, py + 6, r, 1.2, '#6b5a4a', 0.3);
+          CR.rect(ctx, px + 18, py + 4, 12, 10, r, 0.5); CR.fill(ctx, '#b48a60', r, null); CR.stroke(ctx, r, 1.6);
+        } else if (ch === '菇') {
+          // 大蘑菇：粉橘色的傘，白點點，矮矮胖胖的柄
+          ctx.fillStyle = 'rgba(19,26,40,0.18)'; ctx.beginPath(); ctx.ellipse(px + 24, py + 43, 16, 4, 0, 0, Math.PI * 2); ctx.fill();
+          CR.blob(ctx, px + 24, py + 32, 9, 12, r, 0.06, 14); CR.fill(ctx, '#f3ead8', r, null); CR.stroke(ctx, r, 2.2);
+          ctx.beginPath(); ctx.moveTo(px + 2, py + 22); ctx.quadraticCurveTo(px + 4, py - 6, px + 24, py - 6); ctx.quadraticCurveTo(px + 44, py - 6, px + 46, py + 22); ctx.quadraticCurveTo(px + 24, py + 28, px + 2, py + 22); ctx.closePath();
+          CR.fill(ctx, x % 2 ? '#e8826e' : '#d97aa0', r, [px + 2, py - 6, 44, 32]); CR.stroke(ctx, r, 2.4);
+          [[14, 6, 4], [30, 2, 3.4], [36, 14, 3], [20, 16, 2.6], [8, 14, 2.4]].forEach(([dx, dy, rr]) => { ctx.fillStyle = '#fff7ec'; ctx.beginPath(); ctx.arc(px + dx, py + dy, rr, 0, Math.PI * 2); ctx.fill(); });
+          // 森林裡的蘑菇會發一點點光
+          const g = ctx.createRadialGradient(px + 24, py + 8, 0, px + 24, py + 8, 34); g.addColorStop(0, 'rgba(255,220,200,0.25)'); g.addColorStop(1, 'rgba(255,220,200,0)'); ctx.fillStyle = g; ctx.fillRect(px - 10, py - 26, 68, 68);
+        } else if (ch === '寮' && at(x - 1, y) !== '寮' && at(x, y - 1) !== '寮') {
+          // 月霞的小屋（3x2）：歪歪的小木屋，茅草屋頂，窗戶用木板釘起來
+          const w = T * 3, cx = px + w / 2;
+          ctx.fillStyle = 'rgba(19,26,40,0.2)'; ctx.fillRect(px + 6, py + T * 2 - 8, w - 12, 8);
+          CR.rect(ctx, px + 14, py + 26, w - 28, T * 2 - 30, r, 1.2); CR.fill(ctx, '#a07a58', r, [px + 14, py + 26, w - 28, T * 2 - 30]); CR.stroke(ctx, r, 2.6);
+          for (let k = 0; k < 5; k++) CR.line(ctx, px + 16, py + 38 + k * 11, px + w - 16, py + 38 + k * 11, r, 1.2, 'rgba(80,54,36,0.5)', 1);
+          ctx.beginPath(); ctx.moveTo(px - 2, py + 34); ctx.lineTo(cx - 6, py - 22); ctx.lineTo(cx + 10, py - 18); ctx.lineTo(px + w + 2, py + 36); ctx.closePath();
+          CR.fill(ctx, '#c9a86a', r, [px - 2, py - 22, w + 4, 58]); CR.stroke(ctx, r, 2.6);
+          for (let k = 0; k < 8; k++) { const lx = px + 10 + k * 17; CR.line(ctx, lx, py + 30, lx + 8, py + 4, r, 1.2, 'rgba(120,90,40,0.5)', 1); }
+          CR.rect(ctx, cx - 11, py + 52, 22, 40, r, 1); CR.fill(ctx, '#5a3f2e', r, null); CR.stroke(ctx, r, 2.2);
+          ctx.fillStyle = '#e6b94a'; ctx.beginPath(); ctx.arc(cx + 6, py + 74, 2, 0, Math.PI * 2); ctx.fill();
+          CR.rect(ctx, px + 28, py + 50, 24, 20, r, 0.8); CR.fill(ctx, '#2f2a3a', r, null); CR.stroke(ctx, r, 2);
+          [[px + 26, py + 54, px + 54, py + 62], [px + 26, py + 64, px + 54, py + 58]].forEach(([a, b, c2, d]) => { CR.line(ctx, a, b, c2, d, r, 5, '#2b2a33', 0.3); CR.line(ctx, a, b, c2, d, r, 3.2, '#b48a60', 0.3); });
+          // 窗台上一個小小的鳥窩
+          CR.blob(ctx, px + w - 40, py + 48, 9, 4, r, 0.15, 10); CR.fill(ctx, '#8a6a3a', r, null); CR.stroke(ctx, r, 1.4);
+        } else if (ch === '堆') {
+          // 村民丟的石頭堆
+          ctx.fillStyle = 'rgba(19,26,40,0.16)'; ctx.beginPath(); ctx.ellipse(px + 24, py + 42, 20, 5, 0, 0, Math.PI * 2); ctx.fill();
+          [[14, 36, 11, 8], [32, 37, 12, 8], [24, 26, 10, 8], [36, 26, 7, 6], [12, 26, 6, 5]].forEach(([dx, dy, rx, ry], i) => {
+            CR.blob(ctx, px + dx, py + dy, rx, ry, r, 0.12, 12); CR.fill(ctx, ['#a6a29c', '#9a958e', '#b3afa8'][i % 3], r, null); CR.stroke(ctx, r, 2);
+          });
+        } else if (ch === '冰') {
+          // 冰岩：幾根淡藍色的冰柱擠在一起
+          ctx.fillStyle = 'rgba(19,26,40,0.14)'; ctx.beginPath(); ctx.ellipse(px + 24, py + 42, 20, 5, 0, 0, Math.PI * 2); ctx.fill();
+          [[14, 42, 8, 30, -0.25], [28, 42, 10, 40, 0.05], [38, 42, 7, 24, 0.3]].forEach(([dx, by, hw, h, a]) => {
+            ctx.save(); ctx.translate(px + dx, py + by); ctx.rotate(a);
+            ctx.beginPath(); ctx.moveTo(-hw, 0); ctx.lineTo(-hw * 0.8, -h * 0.7); ctx.lineTo(0, -h); ctx.lineTo(hw * 0.8, -h * 0.7); ctx.lineTo(hw, 0); ctx.closePath();
+            CR.fill(ctx, '#bfe4f7', r, [-hw, -h, hw * 2, h]); CR.stroke(ctx, r, 2, '#3e5f86');
+            CR.line(ctx, -hw * 0.3, -4, -hw * 0.3, -h * 0.75, r, 1.4, 'rgba(255,255,255,0.85)', 0.3);
+            ctx.restore();
+          });
+        } else if (ch === '熔') {
+          // 岩漿池：橘紅色、發光，表面有黑色的硬殼
+          const L = at(x - 1, y) !== '熔', Rr = at(x + 1, y) !== '熔';
+          const g = ctx.createRadialGradient(px + 24, py + 24, 0, px + 24, py + 24, 40); g.addColorStop(0, 'rgba(255,150,60,0.35)'); g.addColorStop(1, 'rgba(255,150,60,0)'); ctx.fillStyle = g; ctx.fillRect(px - 16, py - 16, 80, 80);
+          CR.blob(ctx, px + 24 + (L ? 3 : -3) - (Rr ? 3 : -3), py + 26, L && Rr ? 20 : 26, 14, r, 0.08, 16); CR.fill(ctx, '#ff8a3c', r, [px - 4, py + 10, T + 8, 32]); CR.stroke(ctx, r, 2.4, '#3b2a2a');
+          CR.blob(ctx, px + 24, py + 26, 12, 7, r, 0.12, 12); ctx.fillStyle = 'rgba(255,220,120,0.85)'; ctx.fill();
+          [[12, 22], [34, 30]].forEach(([dx, dy]) => { CR.blob(ctx, px + dx, py + dy, 5, 3, r, 0.2, 8); ctx.fillStyle = '#3b2f33'; ctx.fill(); });
+        } else if (ch === '陵') {
+          // 龍后的陵寢：灰紫色的大石磚牆，只描外緣；最上面一排有尖尖的屋簷
+          ctx.fillStyle = '#8f8aa0'; ctx.fillRect(px, py, T, T);
+          CR.rect(ctx, px + 2, py + 4 + (x % 2) * 6, T - 4, 18, r, 0.8); CR.stroke(ctx, r, 1.2, 'rgba(50,44,70,0.35)');
+          CR.rect(ctx, px + 2, py + 26 + (x % 2) * 6, T - 4, 14, r, 0.8); CR.stroke(ctx, r, 1.2, 'rgba(50,44,70,0.35)');
+          CR.dots(ctx, px, py, T, T, 6, 'rgba(255,255,255,0.25)', r, 1.6);
+          const lw = (dx, dy) => at(x + dx, y + dy) === '陵' || at(x + dx, y + dy) === '封';
+          if (!lw(0, -1)) {
+            ctx.fillStyle = '#6d6884'; ctx.fillRect(px, py, T, 10);
+            ctx.beginPath(); ctx.moveTo(px + 6, py); ctx.lineTo(px + 14, py - 12); ctx.lineTo(px + 22, py); ctx.moveTo(px + 30, py); ctx.lineTo(px + 38, py - 9); ctx.lineTo(px + 46, py);
+            CR.fill(ctx, '#6d6884', r, null); CR.stroke(ctx, r, 2);
+            CR.line(ctx, px - 1, py, px + T + 1, py, r, 3);
+          }
+          if (!lw(0, 1)) CR.line(ctx, px - 1, py + T, px + T + 1, py + T, r, 3);
+          if (!lw(-1, 0)) CR.line(ctx, px, py - 1, px, py + T + 1, r, 3);
+          if (!lw(1, 0)) CR.line(ctx, px + T, py - 1, px + T, py + T + 1, r, 3);
+        } else if (ch === '封' && at(x - 1, y) !== '封') {
+          // 陵寢封住的大門：兩扇深色石門，中間一圈一半冰藍、一半火紅的封印；門楣刻著「龍后的陵寢」
+          let n = 0; while (at(x + n, y) === '封') n++;
+          const w = n * T, cx = px + w / 2;
+          ctx.fillStyle = '#8f8aa0'; ctx.fillRect(px, py, w, T);
+          ctx.beginPath(); ctx.moveTo(px + 6, py + T); ctx.lineTo(px + 6, py - 50); ctx.quadraticCurveTo(cx, py - 92, px + w - 6, py - 50); ctx.lineTo(px + w - 6, py + T); ctx.closePath();
+          CR.fill(ctx, '#3e3852', r, [px, py - 92, w, T + 92]); CR.stroke(ctx, r, 3);
+          CR.line(ctx, cx, py - 70, cx, py + T, r, 2.4, 'rgba(20,16,30,0.8)');
+          const g = ctx.createRadialGradient(cx, py - 16, 0, cx, py - 16, 46); g.addColorStop(0, 'rgba(200,220,255,0.35)'); g.addColorStop(1, 'rgba(200,220,255,0)'); ctx.fillStyle = g; ctx.fillRect(cx - 50, py - 66, 100, 100);
+          ctx.save(); ctx.lineWidth = 4; ctx.lineCap = 'round';
+          ctx.strokeStyle = '#9fd4ef'; ctx.beginPath(); ctx.arc(cx, py - 16, 22, Math.PI * 0.5, Math.PI * 1.5); ctx.stroke();
+          ctx.strokeStyle = '#ff8a3c'; ctx.beginPath(); ctx.arc(cx, py - 16, 22, Math.PI * 1.5, Math.PI * 2.5); ctx.stroke(); ctx.restore();
+          [[0, -1], [0.866, 0.5], [-0.866, 0.5]].forEach(([a, b], i) => { ctx.fillStyle = i ? (a > 0 ? '#ffb070' : '#bfe4f7') : '#f3ead8'; ctx.beginPath(); ctx.arc(cx + a * 22, py - 16 + b * 22, 3.4, 0, Math.PI * 2); ctx.fill(); CR.stroke(ctx, r, 1.2); });
+          CR.rect(ctx, cx - 62, py - 132, 124, 26, r, 1); CR.fill(ctx, '#6d6884', r, null); CR.stroke(ctx, r, 2.4);
+          ctx.font = '900 15px ' + FONT; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#efe6d2';
+          ctx.fillText('龍后的陵寢', cx, py - 119);
+          ctx.font = 'bold 12px ' + FONT; ctx.fillStyle = 'rgba(239,230,210,0.85)'; ctx.fillText('封印中', cx, py + 18);
+        } else if (ch === '像') {
+          // 陵寢門前的石像：方形台座上蹲著一隻收著翅膀的小石像獸
+          ctx.fillStyle = 'rgba(19,26,40,0.2)'; ctx.beginPath(); ctx.ellipse(px + 24, py + 44, 22, 5, 0, 0, Math.PI * 2); ctx.fill();
+          CR.rect(ctx, px + 4, py + 18, T - 8, 26, r, 1); CR.fill(ctx, '#8f8aa0', r, [px + 4, py + 18, T - 8, 26]); CR.stroke(ctx, r, 2.4);
+          CR.rect(ctx, px, py + 14, T, 8, r, 0.6); CR.fill(ctx, '#a39fb3', r, null); CR.stroke(ctx, r, 2);
+          const k = x < MAP.EX + 16 ? 1 : -1;
+          ctx.beginPath(); ctx.moveTo(px + 24 - 12 * k, py + 14); ctx.quadraticCurveTo(px + 24 - 14 * k, py - 6, px + 24, py - 8); ctx.quadraticCurveTo(px + 24 + 14 * k, py - 4, px + 24 + 12 * k, py + 14); ctx.closePath();
+          CR.fill(ctx, '#a6a2b4', r, null); CR.stroke(ctx, r, 2.2);
+          ctx.beginPath(); ctx.moveTo(px + 24 - 10 * k, py - 2); ctx.lineTo(px + 24 - 22 * k, py - 26); ctx.lineTo(px + 24 - 2 * k, py - 10); ctx.closePath(); CR.fill(ctx, '#8f8aa0', r, null); CR.stroke(ctx, r, 2);
+          CR.blob(ctx, px + 24 + 6 * k, py - 14, 10, 9, r, 0.08, 12); CR.fill(ctx, '#a6a2b4', r, null); CR.stroke(ctx, r, 2.2);
+          [[2, -22], [10, -22]].forEach(([dx, dy]) => { ctx.beginPath(); ctx.moveTo(px + 24 + (dx - 3) * k, py + dy + 4); ctx.lineTo(px + 24 + dx * k, py + dy - 6); ctx.lineTo(px + 24 + (dx + 3) * k, py + dy + 4); ctx.closePath(); CR.fill(ctx, '#8f8aa0', r, null); CR.stroke(ctx, r, 1.4); });
+          ctx.fillStyle = '#2b2a33'; ctx.beginPath(); ctx.arc(px + 24 + 10 * k, py - 15, 1.6, 0, Math.PI * 2); ctx.fill();
         } else if (ch === 'S') {
           CR.rect(ctx, px + 1, py + 6, T - 2, T - 12, r, 1.2); CR.fill(ctx, '#4f7cc2', r, [px, py + 6, T, T - 12], 1.2);
           CR.rect(ctx, px + 5, py + 10, T - 10, 12, r, 1); CR.fill(ctx, '#86a8dd', r, null);
@@ -5442,11 +5638,13 @@
       };
       // 地圖切成幾塊畫：上面是總部和副本區，下面是往南延伸的野區（副本區下面全是虛空，不用畫）
       // 每塊寬度都要在 4096px 以內（很多手機顯示卡一張貼圖的上限）
-      [[0, 0, MAP.MW, MAP.DH], [MAP.MW, 0, MAP.LX, MAP.DH], [MAP.LX, 0, MAP.TLX, MAP.DH], [MAP.TLX, 0, MAP.W, MAP.DH], [0, MAP.DH, MAP.MW, MAP.H]].forEach(([x0, y0, x1, y1], i) => {
+      // 東邊的森林從上到下都有，跟總部、野區一樣分上下兩塊
+      [[0, 0, MAP.MW, MAP.DH], [MAP.MW, 0, MAP.OW, MAP.DH], [MAP.OW, 0, MAP.LX, MAP.DH], [MAP.LX, 0, MAP.TLX, MAP.DH], [MAP.TLX, 0, MAP.W, MAP.DH],
+        [0, MAP.DH, MAP.MW, MAP.H], [MAP.MW, MAP.DH, MAP.OW, MAP.H]].forEach(([x0, y0, x1, y1], i) => {
         this.textures.addCanvas('map' + i, drawMap(x0, y0, x1, y1));
         this.add.image(x0 * T, y0 * T, 'map' + i).setOrigin(0).setDepth(-10);
       });
-      this.cameras.main.setBounds(0, 0, MAP.MW * T, MAP.H * T); // 副本區另外設（見 update）
+      this.cameras.main.setBounds(0, 0, MAP.OW * T, MAP.H * T); // 副本區另外設（見 update）
       this.cameras.main.setBackgroundColor('#131a28');
       this.applyZoom();
       this.scale.on('resize', () => this.applyZoom());
@@ -9302,7 +9500,7 @@
       if (camKey !== this.camKey) {
         this.camKey = camKey;
         const [x1, x2, y1, y2] = zone === 'dungeon' ? [zd.dx + col * 22, zd.dx + col * 22 + 22, 0, MAP.H]
-          : zone === 'lobby' ? [zd.lx, zd.lx + 12, 0, 18] : zone === 'hub' ? [MAP.HX, MAP.HX + 16, 0, 18] : [0, MAP.MW, 0, MAP.H];
+          : zone === 'lobby' ? [zd.lx, zd.lx + 12, 0, 18] : zone === 'hub' ? [MAP.HX, MAP.HX + 16, 0, 18] : [0, MAP.OW, 0, MAP.H];
         const w = (x2 - x1) * T, h = (y2 - y1) * T;
         const bw = Math.max(w, vw), bh = Math.max(h, vh), bx = x1 * T - (bw - w) / 2, by = y1 * T - (bh - h) / 2;
         cam.setBounds(bx, by, bw, bh);

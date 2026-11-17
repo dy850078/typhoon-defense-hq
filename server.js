@@ -840,10 +840,11 @@ function tickMob(m, now) {
   if (now < m.frozenUntil || now < (m.stunUntil || 0)) return;
   if (def.skills && FB.tick(m, now)) return; // 有招式的頭目（愛放屁的馬）：放招、繞圈、頭暈的時候不照一般方式走
   // 追最近的人（只追在自己這一區的），召喚物也會被追
-  let prey = null, pd = 280;
+  // 二轉的超能力霸王會被當成比較近，小怪先追他
+  let prey = null, pd = 280, ps = Infinity;
   fieldPlayers().concat(summons).forEach(p => {
-    const d = dist(p.x, p.y, m.x, m.y);
-    if (d < pd && p.x >= B.x1 - T && p.x <= B.x2 + T && p.y >= B.y1 - T && p.y <= B.y2 + T) { pd = d; prey = p; }
+    const d = dist(p.x, p.y, m.x, m.y), sc = d * STATS.aggro(p);
+    if (d < 280 && sc < ps && p.x >= B.x1 - T && p.x <= B.x2 + T && p.y >= B.y1 - T && p.y <= B.y2 + T) { ps = sc; pd = d; prey = p; }
   });
   if (prey) { m.tx = prey.x; m.ty = prey.y; }
   else if (dist(m.x, m.y, m.tx, m.ty) < 10) {
@@ -975,12 +976,46 @@ function publicStats(p) {
   const buff = Math.max(0, ...Object.values(p.buffs).map(b => b.until - now));
   return { id: p.id, cls: p.cls, hp: p.hp, maxHp: p.maxHp, mp: p.mp, maxMp: p.maxMp, atk: Math.round(atkOf(p)),
     def: defOf(p), buffMs: buff, atkBuffMs: atkBuffMs(p), dead: p.dead,
-    level: p.level, exp: p.exp, expNext: STATS.LEVEL.expFor(p.level), onlineLeft: STATS.LEVEL.onlineMs - p.onlineMs };
+    level: p.level, exp: p.exp, expNext: STATS.LEVEL.expFor(p.level), onlineLeft: STATS.LEVEL.onlineMs - p.onlineMs, tier: tierOf(p) };
 }
 function sendStats(p) { io.emit('stats', publicStats(p)); }
 
 // 經驗值與升等
+// 被削弱的怪受到的傷害倍率（二轉的預言家削弱的比較多）
+const weakMul = (f, now) => (now < (f.weakUntil || 0) ? f.weakMul || STATS.WEAKEN.dmgTaken : 1);
+// 職業熟練度：現在這個職業累積多少、第幾階；二轉以後 p.passive 是職業名（被動技能看這個）
+const tierOf = (p) => STATS.MASTERY.tierOf(p.mastery && p.mastery[p.cls]);
+function refreshPassive(p) { p.passive = STATS.awakened(p.cls, tierOf(p)) ? p.cls : null; }
+const isPassive = (p, cls) => !!p && p.passive === cls;
+function cleanMastery(m) {
+  const out = {};
+  if (m && typeof m === 'object') Object.keys(STATS.CLASSES).forEach(c => { const n = Math.floor(Number(m[c])) || 0; if (n > 0) out[c] = Math.min(n, 1e12); });
+  return out;
+}
+function addMastery(p, n) {
+  if (!p.mastery || !(n > 0)) return;
+  const before = tierOf(p);
+  p.mastery[p.cls] = (p.mastery[p.cls] || 0) + Math.round(n);
+  const after = tierOf(p);
+  p.masteryDirty = true;
+  if (after <= before) return;
+  refreshPassive(p);
+  sendStats(p);
+  io.emit('tierUp', { id: p.id, cls: p.cls, tier: after });
+  const cname = STATS.CLASSES[p.cls].name;
+  // 二轉和滿階廣播給大家，中間的階數只跟自己說
+  if (after === 1 && STATS.MASTERY.PASSIVE[p.cls]) pushChat({ system: true, text: `${p.name} 的${cname}二轉了！`, t: Date.now() });
+  else if (after === STATS.MASTERY.max) pushChat({ system: true, text: `${p.name} 的${cname}熟練度練到 ${after} 階滿階了！`, t: Date.now() });
+  else tell(p.id, `${cname}熟練度升到 ${after} 階`);
+}
+// 熟練度的進度條只有自己要看：有變的話每 3 秒送一次
+setInterval(() => players.forEach(p => {
+  if (!p.masteryDirty) return;
+  p.masteryDirty = false;
+  io.to(p.id).emit('mastery', p.mastery);
+}), 3000);
 function gainExp(p, n) {
+  addMastery(p, n);
   if (p.level >= STATS.LEVEL.max) return;
   p.exp += Math.round(n);
   while (p.level < STATS.LEVEL.max && p.exp >= STATS.LEVEL.expFor(p.level)) {
@@ -1002,6 +1037,7 @@ function levelUp(p, byTime) {
 
 function hurt(p, raw, by) {
   if (p.dead) return;
+  if (isPassive(p, 'tank')) raw *= STATS.MASTERY.V.tankTaken;
   p.hp = Math.max(0, p.hp - STATS.reduce(raw, defOf(p)));
   if (p.hp > 0) return sendStats(p);
   p.dead = true;
@@ -1371,7 +1407,7 @@ function tickSummon(sm, now) {
   }
   if (foe && d <= stop + 20 && now >= sm.nextHit) {
     sm.nextHit = now + STATS.SUMMON_HIT_MS;
-    const weak = now < foe.weakUntil ? STATS.WEAKEN.dmgTaken : 1;
+    const weak = weakMul(foe, now);
     const crit = Math.random() < 0.1;
     const dmg = Math.round(sm.atk * (0.8 + Math.random() * 0.4) * (crit ? 2 : 1) * weak);
     damageFoe(owner, foe, isBoss, dmg, crit, 'pet', sm.id);
@@ -1532,13 +1568,14 @@ function keepProgress(d, account) {
   if (account.save.inv) d.inv = a.inv;
   if (account.save.gachaPity != null) d.gachaPity = a.gachaPity;
   d.pet = a.pet; // 寵物只存在帳號裡
+  d.mastery = cleanMastery(account.save.mastery); // 熟練度也只存在帳號裡，瀏覽器帶來的不算
 }
 // 把總部裡的角色狀態存回帳號
 function snapshot(p) {
   if (!p.account) return;
   accounts.update(p.account, { name: p.name, hair: p.hair, skin: p.skin, hairColor: p.hairColor, outfit: p.outfit, glasses: p.glasses, face: p.face,
     cls: p.cls, level: p.level, exp: p.exp, owned: p.owned, gear: p.gear, seen: p.seen, equip: p.equip, furn: p.furn, inv: p.inv, vip: p.vip,
-    gachaPity: p.gachaPity, pet: p.pet });
+    gachaPity: p.gachaPity, pet: p.pet, mastery: p.mastery });
 }
 setInterval(() => players.forEach(snapshot), 20000);
 
@@ -1558,7 +1595,7 @@ garden.start((st) => io.emit('garden', st), (note) => {
 });
 
 function publicPlayer(p) {
-  const { cooldowns, buffs, atkBuff, regenMs, cooking, eatAt, vip, owned, gear, seen, inv, cakeUntil, furn, account, photoHd, rk, pet, ...rest } = p;
+  const { cooldowns, buffs, atkBuff, regenMs, cooking, eatAt, vip, owned, gear, seen, inv, cakeUntil, furn, account, photoHd, rk, pet, mastery, masteryDirty, rushUntil, ...rest } = p;
   return Object.assign(rest, publicStats(p), { hasVip: !!vip, cakeMs: Math.max(0, cakeUntil - Date.now()) });
 }
 
@@ -1723,11 +1760,13 @@ io.on('connection', (socket) => {
     }, d, { account, photoHd: (account && account.save.photoHd) || '' });
     Object.assign(p, STATS.statsFor(p.cls, p.level));
     p.hp = p.maxHp; p.mp = p.maxMp;
+    if (!p.mastery) p.mastery = {};
+    refreshPassive(p);
     players.set(socket.id, p);
 
     growMonster();
     ack({ ok: true, you: Object.assign(publicPlayer(p), { owned: p.owned, gear: p.gear, seen: p.seen, furn: p.furn, inv: p.inv, gachaPity: p.gachaPity,
-      pet: p.pet, petsOn: petsAllowed(p) }), loot: LOOT.list(), players: [...players.values()].map(publicPlayer), history,
+      pet: p.pet, petsOn: petsAllowed(p), mastery: p.mastery }), loot: LOOT.list(), players: [...players.values()].map(publicPlayer), history,
       monster: monsterState(), mobs: mobs.map(mobState).concat(DG.allFoes().map(mobState)), emptyCrates: emptyCrates(), dungeon: DG.state(),
       summons: summons.map(summonState), decor: decorList(), garden: garden.state(),
       ...(petsAllowed(p) ? { pets: PETW.list(), petBeds: PETW.bedList() } : {}),
@@ -1798,7 +1837,8 @@ io.on('connection', (socket) => {
     const now = Date.now();
     if (now - lastAction < 300 || now < (p.cooldowns[skillId] || 0)) return ack({ ok: false });
     // 插畫結界師的城牆：target 是畫出來的線
-    const line = skill.wall ? wallLine(p, target && target.pts, skill.wall.len) : null;
+    const wallDef = skill.wall && isPassive(p, 'painter') ? Object.assign({}, skill.wall, { len: STATS.MASTERY.V.painterLen, ms: STATS.MASTERY.V.painterMs }) : skill.wall;
+    const line = skill.wall ? wallLine(p, target && target.pts, wallDef.len) : null;
     if (skill.wall && !line) return ack({ ok: false, error: '要在野區、自己附近畫一條線' });
     if (skill.wall) target = 'boss';
     const isBoss = !target || target === 'boss';
@@ -1812,11 +1852,14 @@ io.on('connection', (socket) => {
     let kind = null;
     if (skill.summon) {
       if (!inField(p) && !DG.inFight(p)) return ack({ ok: false, error: '要在野區或副本裡才能召喚' });
-      if (summons.filter(sm => sm.owner === p.id).length >= STATS.SUMMON_MAX) return ack({ ok: false, error: `最多同時召喚 ${STATS.SUMMON_MAX} 隻` });
+      const smax = isPassive(p, 'summoner') ? STATS.MASTERY.V.summonMax : STATS.SUMMON_MAX;
+      if (summons.filter(sm => sm.owner === p.id).length >= smax) return ack({ ok: false, error: `最多同時召喚 ${smax} 隻` });
       kind = pickSummonKind();
     }
     lastAction = now;
-    p.cooldowns[skillId] = now + skill.cooldown;
+    // 二轉的靈魂歌姬：爆擊後幾秒內普攻冷卻減半
+    const cd = Math.round(skill.cooldown * (skill.basic && now < (p.rushUntil || 0) ? STATS.MASTERY.V.singerRushCd : 1));
+    p.cooldowns[skillId] = now + cd;
     if (skill.mp) p.mp -= skill.mp;
 
     // 各種效果
@@ -1826,7 +1869,7 @@ io.on('connection', (socket) => {
     // 補血、加防的量跟著等級變強
     const boost = STATS.boost(p.level), plusDef = STATS.bonusDef(p.level);
     if (skill.heal) {
-      const hp = Math.round(skill.heal.hp * boost), mp = Math.round(skill.heal.mp * boost);
+      const hp = Math.round(skill.heal.hp * boost * (isPassive(p, 'nurse') ? STATS.MASTERY.V.nurseHeal : 1)), mp = Math.round(skill.heal.mp * boost);
       around(skill.heal.r).forEach(q => {
         support += Math.min(hp, q.maxHp - q.hp);
         q.hp = Math.min(q.maxHp, q.hp + hp);
@@ -1853,13 +1896,13 @@ io.on('connection', (socket) => {
       });
     }
     if (line) {
-      addWall(p, skill.wall, line, now);
+      addWall(p, wallDef, line, now);
       support += 15;
     }
     if (skill.summon) {
-      const def = STATS.SUMMONS[kind];
+      const def = STATS.SUMMONS[kind], smHp = isPassive(p, 'summoner') ? STATS.MASTERY.V.summonHp : 1;
       const sm = { id: 's' + (++summonSeq), summon: true, kind, owner: p.id, ownerName: p.name,
-        x: p.x + (Math.random() < 0.5 ? -50 : 50), y: p.y + 10, hp: Math.round(def.hp * boost), maxHp: Math.round(def.hp * boost),
+        x: p.x + (Math.random() < 0.5 ? -50 : 50), y: p.y + 10, hp: Math.round(def.hp * boost * smHp), maxHp: Math.round(def.hp * boost * smHp),
         atk: Math.round(def.atk * boost), nextHit: now + 800 };
       summons.push(sm);
       io.emit('summon', summonState(sm));
@@ -1882,8 +1925,15 @@ io.on('connection', (socket) => {
       fx.chain = near.map(m => m.id);
       if (c.bolt) fx.bolt = true;
     }
-    if (skill.weaken) hits.forEach(([f]) => { f.weakUntil = now + skill.weaken; });
-    if (skill.freeze) hits.forEach(([f]) => { f.frozenUntil = now + skill.freeze; });
+    if (skill.weaken) {
+      // 二轉的預言家削弱的怪吃更多傷害；還在削弱中的話取比較強的那個
+      const k = isPassive(p, 'prophet') ? STATS.MASTERY.V.prophetWeak : STATS.WEAKEN.dmgTaken;
+      hits.forEach(([f]) => { f.weakMul = now < (f.weakUntil || 0) ? Math.max(f.weakMul || 0, k) : k; f.weakUntil = Math.max(f.weakUntil || 0, now + skill.weaken); });
+    }
+    if (skill.freeze) hits.forEach(([f]) => {
+      f.frozenUntil = now + skill.freeze;
+      if (isPassive(p, 'skater')) f.shatterUntil = f.frozenUntil; // 二轉的陵媒凍住的怪：誰打都必定爆擊
+    });
     // 震飛：從自己的位置往外推，推到那一區的邊邊就停
     if (skill.knock) {
       fx.knock = [];
@@ -1905,17 +1955,20 @@ io.on('connection', (socket) => {
     io.emit('skillFx', fx);
     if (skill.weaken || skill.freeze) hits.forEach(([f, b]) => io.emit(b ? 'monster' : 'mob', b ? monsterState() : mobState(f)));
 
-    if (!skill.power) return ack({ ok: true });
+    if (!skill.power) return ack({ ok: true, cd });
     let total = 0;
     hits.forEach(([f, b, mul]) => {
       if (!f.alive) return;
-      const crit = Math.random() < (skill.crit || 0.12);
-      const weak = now < f.weakUntil ? STATS.WEAKEN.dmgTaken : 1;
-      const dmg = Math.round(atkOf(p) * skill.power * (mul || 1) * (0.6 + Math.random() * 0.6) * (crit ? 2.5 : 1) * weak);
+      const crit = Math.random() < (skill.crit || 0.12) || (now < (f.shatterUntil || 0) && now < f.frozenUntil);
+      if (crit && isPassive(p, 'singer')) p.rushUntil = now + STATS.MASTERY.V.singerRushMs;
+      const weak = weakMul(f, now);
+      // 二轉的精靈射手：站得越遠打越痛
+      const far = isPassive(p, 'archer') ? 1 + STATS.MASTERY.V.archerFar * clamp(STATS.foeGap(p, f, b) / 420, 0, 1) : 1;
+      const dmg = Math.round(atkOf(p) * skill.power * (mul || 1) * (0.6 + Math.random() * 0.6) * (crit ? 2.5 : 1) * weak * far);
       total += dmg;
       damageFoe(p, f, b, dmg, crit, skillId);
     });
-    ack({ ok: true, dmg: total });
+    ack({ ok: true, dmg: total, cd });
   });
 
   // 看某個人的個人資料（報名時做的識別證）
@@ -1935,6 +1988,7 @@ io.on('connection', (socket) => {
     if (cls === p.cls) return ack({ ok: false, error: '你已經是這個職業了' });
     const hpRatio = p.hp / p.maxHp, mpRatio = p.mp / p.maxMp;
     p.cls = cls;
+    refreshPassive(p);
     Object.assign(p, STATS.statsFor(cls, p.level));
     p.hp = Math.max(1, Math.round(p.maxHp * hpRatio));
     p.mp = Math.round(p.maxMp * mpRatio);

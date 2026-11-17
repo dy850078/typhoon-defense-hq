@@ -56,6 +56,7 @@
     ctx.beginPath(); ctx.ellipse(32, 77, 17, 3.5, 0, 0, Math.PI * 2); ctx.fill();
 
     gear('cape', 'cape');
+    if (p.awake) drawAwake(ctx, C, r, cos, 'back', W, hatted);
     if (NEW_HAIR[hair]) drawHairBack(ctx, C, r, hair, hairColor, W);
     if (hair === 'long') {
       // 長髮的後半：畫在身體後面，從肩膀兩側露出來，不會蓋住衣服
@@ -253,6 +254,7 @@
 
     gear('head', 'head');
     gear('outfit', 'over');
+    if (p.awake) drawAwake(ctx, C, r, cos, 'front', W, hatted);
     gear('weapon', 'hand'); // 武器拿在右手，畫在最上面
 
     ctx.restore();
@@ -264,6 +266,84 @@
     ctx.beginPath(); ctx.moveTo(37, 10); ctx.quadraticCurveTo(46, 12, 49, 20);
     C.stroke(ctx, r, 2, '#ffffff'); ctx.restore();
   }
+  // 二轉的職業配件：在原本的職業服上多一個小東西（不整套重畫），穿了別的服裝也看得到
+  // back 畫在身體後面（箭筒），front 畫在最上面、武器下面
+  function star4(ctx, x, y, s, col) {
+    ctx.save(); ctx.translate(x, y); ctx.fillStyle = col;
+    ctx.beginPath(); ctx.moveTo(0, -s); ctx.quadraticCurveTo(s * 0.18, -s * 0.18, s, 0); ctx.quadraticCurveTo(s * 0.18, s * 0.18, 0, s);
+    ctx.quadraticCurveTo(-s * 0.18, s * 0.18, -s, 0); ctx.quadraticCurveTo(-s * 0.18, -s * 0.18, 0, -s); ctx.fill(); ctx.restore();
+  }
+  function drawAwake(ctx, C, r, cos, layer, W, hatted) {
+    if (layer === 'back') {
+      if (cos !== 'archer') return;
+      // 精靈射手：背上的皮箭筒，右肩後面露出三支綠羽毛箭
+      ctx.save(); ctx.translate(48, 34); ctx.rotate(0.35);
+      C.rect(ctx, -5, -16, 10, 30, r, 0.6); C.fill(ctx, '#a0703f', r, [-5, -16, 10, 30]); C.stroke(ctx, r, 2);
+      C.line(ctx, -5, -10, 5, -10, r, 1.6, '#6b4a32', 0.2);
+      [-3, 0, 3].forEach((x, i) => {
+        C.line(ctx, x, -16, x, -22 - i, r, 1.4, '#6b4a32', 0.2);
+        C.blob(ctx, x, -24 - i, 1.8, 3.2, r, 0.1, 8); C.fill(ctx, '#7fd1a8', r, null); C.stroke(ctx, r, 1);
+      });
+      ctx.restore();
+      return;
+    }
+    if (cos === 'prophet') {
+      // 預言家：右上方飄著一彎金色月亮和兩顆小星星
+      ctx.beginPath(); ctx.arc(55, 7, 6.5, 0, Math.PI * 2); ctx.arc(58, 5, 5.2, 0, Math.PI * 2, true);
+      C.fill(ctx, '#f6d064', r, null); ctx.beginPath(); ctx.arc(55, 7, 6.5, 0.9, 4.2); C.stroke(ctx, r, 1.4, '#a07a20');
+      star4(ctx, 47, 2, 2.6, '#fff1b0'); star4(ctx, 61, 15, 2, '#fff1b0');
+    } else if (cos === 'nurse') {
+      // 南丁格爾：脖子上掛聽診器
+      ctx.beginPath(); ctx.moveTo(24, 46); ctx.quadraticCurveTo(25, 57, 32, 57); ctx.quadraticCurveTo(39, 57, 40, 46);
+      C.stroke(ctx, r, 2.6, '#5d6b80');
+      C.line(ctx, 37, 55, 38, 60, r, 2, '#5d6b80', 0.2);
+      C.blob(ctx, 38.5, 62, 3.2, 3, r, 0.08, 10); C.fill(ctx, '#d6dae1', r, null); C.stroke(ctx, r, 1.6);
+    } else if (cos === 'tank') {
+      // 超能力霸王：兩塊鐵肩甲、金色腰帶（中間一顆星星扣環）
+      [[14, 46], [50, 46]].forEach(([x, y]) => {
+        C.blob(ctx, x, y, 7.5, 5, r, 0.08, 12); C.fill(ctx, '#aeb6c4', r, [x - 8, y - 5, 16, 10]); C.stroke(ctx, r, 2);
+        ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(x - 2, y - 1.5, 1.2, 0, Math.PI * 2); ctx.fill();
+      });
+      C.rect(ctx, 17, 61, 30, 4, r, 0.4); C.fill(ctx, '#e0a92a', r, null); C.stroke(ctx, r, 1.8);
+      C.rect(ctx, 29, 60, 6, 6, r, 0.3); C.fill(ctx, '#f6d064', r, null); C.stroke(ctx, r, 1.4);
+      star4(ctx, 32, 63, 2.2, '#fff8df');
+    } else if (cos === 'skater') {
+      if (!hatted) {
+        // 陵媒：大拉翅上多一頂冰晶小皇冠
+        ctx.beginPath();
+        [[23, 9], [25, 2], [28.5, 6], [32, -1], [35.5, 6], [39, 2], [41, 9]].forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+        ctx.closePath(); C.fill(ctx, '#dff3ff', r, null); C.stroke(ctx, r, 1.6, '#3d7fb3');
+        [[32, 4], [25.5, 6.5], [38.5, 6.5]].forEach(([x, y]) => { ctx.fillStyle = '#7fc4f0'; ctx.beginPath(); ctx.arc(x, y, 1.5, 0, Math.PI * 2); ctx.fill(); });
+      } else {
+        // 戴了別的頭飾：改成頭側一支雪花髮簪
+        for (let i = 0; i < 3; i++) { const a = i * Math.PI / 3; C.line(ctx, 49 - Math.cos(a) * 4.5, 18 - Math.sin(a) * 4.5, 49 + Math.cos(a) * 4.5, 18 + Math.sin(a) * 4.5, r, 1.8, '#4f8fc0', 0.2); }
+      }
+    } else if (cos === 'summoner') {
+      // 召喚師：左上方跟著一台小飛碟
+      ctx.save(); ctx.globalAlpha = 0.35; ctx.fillStyle = '#fff3a8';
+      ctx.beginPath(); ctx.moveTo(6, 12); ctx.lineTo(14, 12); ctx.lineTo(17, 22); ctx.lineTo(3, 22); ctx.closePath(); ctx.fill(); ctx.restore();
+      C.blob(ctx, 10, 6, 3.6, 3.2, r, 0.06, 10); C.fill(ctx, '#bfe8f4', r, null); C.stroke(ctx, r, 1.3);
+      C.blob(ctx, 10, 10, 8, 3, r, 0.06, 14); C.fill(ctx, '#f6a8c4', r, null); C.stroke(ctx, r, 1.5);
+      [5.5, 10, 14.5].forEach(x => { ctx.fillStyle = '#ffd23f'; ctx.beginPath(); ctx.arc(x, 10.3, 1.1, 0, Math.PI * 2); ctx.fill(); });
+    } else if (cos === 'singer') {
+      // 靈魂歌姬：肩上一條粉紅羽毛圍巾
+      for (let i = 0; i <= 8; i++) {
+        const t = i / 8, x = 15 + t * 34, y = 46 + Math.sin(t * Math.PI) * 5;
+        C.blob(ctx, x, y, 3.6, 3, r, 0.25, 9); C.fill(ctx, i % 2 ? '#f9b9d3' : '#f48cb6', r, null);
+      }
+      ctx.beginPath(); ctx.moveTo(15, 46); ctx.quadraticCurveTo(32, 57, 49, 46); C.stroke(ctx, r, 1, '#c0567f');
+    } else if (cos === 'painter') {
+      // 插畫結界師：左上方飄著一支畫筆，拖著一道彩虹
+      ['#f26b6b', '#f6d64a', '#7fcf7f', '#6fb0ea'].forEach((c, i) => {
+        ctx.beginPath(); ctx.arc(14, 16, 9 + i * 1.8, Math.PI * 1.05, Math.PI * 1.55); C.stroke(ctx, r, 1.6, c);
+      });
+      ctx.save(); ctx.translate(14, 4); ctx.rotate(-0.7);
+      C.rect(ctx, -1.6, -2, 3.2, 12, r, 0.3); C.fill(ctx, '#c08a4a', r, null); C.stroke(ctx, r, 1.2);
+      C.blob(ctx, 0, -4, 2, 3.4, r, 0.1, 8); C.fill(ctx, '#d9384a', r, null); C.stroke(ctx, r, 1.1);
+      ctx.restore();
+    }
+  }
+
   function drawHairBack(ctx, C, r, hair, col, W) {
     if (hair === 'airy' || hair === 'hime') {
       // 長直髮的後半，從肩膀兩側露出來

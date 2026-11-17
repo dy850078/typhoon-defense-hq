@@ -212,8 +212,10 @@ function createDungeon(ctx, D, region) {
     const def = STATS.MOBS[m.kind], b = foeBox(m);
     if (!m.alive) { region.tickDead && region.tickDead(api, m, now); return; }
     if (now < m.frozenUntil || now < m.stunUntil || (m.busyUntil || 0) > now) return;
-    let prey = null, pd = def.sight || 360;
-    preyIn(b).forEach(p => { const d = dist(p.x, p.y, m.x, m.y); if (d < pd) { pd = d; prey = p; } });
+    // 二轉的超能力霸王會被當成比較近，小怪先追他
+    const sight = def.sight || 360;
+    let prey = null, pd = sight, ps = Infinity;
+    preyIn(b).forEach(p => { const d = dist(p.x, p.y, m.x, m.y), sc = d * STATS.aggro(p); if (d < sight && sc < ps) { ps = sc; pd = d; prey = p; } });
     if (region.tickMob && region.tickMob(api, m, now, prey)) return; // 會特殊招式的怪自己處理
     if (prey) { m.tx = prey.x; m.ty = prey.y; }
     else if (dist(m.x, m.y, m.tx, m.ty) < 10) {

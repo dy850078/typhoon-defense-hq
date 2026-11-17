@@ -7,6 +7,7 @@
 
 ```
 NO_RENDER=1 python build_char.py -- <輸出資料夾>
+python build_wing.py <繪師的翅膀圖 public/art/wing-ice.png> <輸出資料夾>
 ```
 
 輸出的 `.glb` 複製到 `newworld/assets/`。這兩個檔只透過 `/api/newworld/<檔名>` 給管理員帳號下載。

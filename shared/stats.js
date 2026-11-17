@@ -294,8 +294,33 @@
     return Math.hypot(dx, dy) - 40;
   }
 
+  // 職業熟練度：每個職業各自累積（打怪、補血拿到的經驗都算，滿等以後也繼續累積）
+  // need：到第幾階要累積多少；1 階是二轉（多一個手繪配件和被動），2、3 階之後會強化 K、L 招，4、5 階是外觀
+  const MASTERY = {
+    need: [0, 500000, 2000000, 5000000, 10000000, 20000000],
+    max: 5,
+    tierOf(n) { let t = 0; while (t < 5 && (n || 0) >= this.need[t + 1]) t++; return t; },
+    // 二轉被動：防颱職員是新手職業，不二轉
+    PASSIVE: {
+      prophet: '被你削弱的怪，受到的傷害再多一點（+30% 變成 +50%）',
+      nurse: '補血量 +30%',
+      archer: '離怪越遠傷害越高，最遠的時候 +30%',
+      tank: '身邊的小怪會先打你，你受到的傷害 −15%',
+      skater: '被你凍住的怪，不管誰打都一定爆擊',
+      summoner: `最多同時召喚 4 隻，召喚物血量 +30%`,
+      singer: '爆擊以後 3 秒內，普攻冷卻減半',
+      painter: '火牆、冰牆最長 1000，持續 14 秒',
+    },
+    V: { prophetWeak: 1.5, nurseHeal: 1.3, archerFar: 0.3, tankTaken: 0.85, tankAggro: 0.4, summonMax: 4, summonHp: 1.3,
+      singerRushMs: 3000, singerRushCd: 0.5, painterLen: 1000, painterMs: 14000 },
+  };
+  // 二轉了沒（有二轉被動的職業才算）
+  const awakened = (cls, tier) => tier >= 1 && !!MASTERY.PASSIVE[cls];
+  // 小怪挑要追誰：二轉的超能力霸王會被當成比較近（距離打折），其他人照實際距離
+  const aggro = (p) => (p && p.passive === 'tank' ? MASTERY.V.tankAggro : 1);
+
   const stats = { BASE, CLASSES, SKILLS, SUMMONS, SUMMON_MAX, SUMMON_HIT_MS, FOODS, REGEN, MONSTER, MONSTER2, RESPAWN_MS, WEAKEN, LEVEL,
-    MOBS, FIELD_MOBS, FIELD_BOSS, MOB_RESPAWN_MS, DROPS, EAT_CD_MS, statsFor, reduce, boost, bonusDef, foeGap, basicOf, skillsOf };
+    MOBS, FIELD_MOBS, FIELD_BOSS, MOB_RESPAWN_MS, DROPS, EAT_CD_MS, statsFor, reduce, boost, bonusDef, foeGap, basicOf, skillsOf, MASTERY, awakened, aggro };
   if (typeof module !== 'undefined' && module.exports) module.exports = stats;
   else root.HQ_STATS = stats;
 })(this);

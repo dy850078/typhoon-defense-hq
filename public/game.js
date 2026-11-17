@@ -49,7 +49,7 @@
       if (style.backgroundColor !== PAPER) return orig.call(this);
       // 留白照字級統一算：字跟紙邊至少隔一截，右下多留一點給影子
       const fs = parseFloat(style.fontSize) || 12, px = Math.round(fs * 0.65), py = Math.round(fs * 0.3);
-      Object.assign(this.padding, { left: px + 2, right: px + 3, top: py + 2, bottom: py + 3 });
+      Object.assign(this.padding, { left: px + 2 + (this.badgePad || 0), right: px + 3, top: py + 2, bottom: py + 3 });
       style.resolution = Math.max(style.resolution || 1, 2); // 小字用兩倍解析度畫，才不會糊
       style.backgroundColor = null;
       orig.call(this);
@@ -255,6 +255,7 @@
       setBag({ gear: res.you.gear || {}, seen: res.you.seen || [], owned: res.you.owned || [], furn: res.you.furn || {} });
       myEquip = res.you.equip || {};
       GACHA_UI.setPity(res.you.gachaPity);
+      myMastery = res.you.mastery || {};
       $('join').hidden = true;
       $('hud').hidden = false;
       $('messages').innerHTML = '';
@@ -474,6 +475,9 @@
   socket.on('mobHit', (m) => scene && scene.onMobHit(m));
   socket.on('mobAttack', (a) => scene && scene.onMobAttack(a));
   socket.on('levelUp', (l) => scene && scene.onLevelUp(l));
+  // 職業熟練度：自己的進度（每 3 秒有變才送）、有人升階
+  socket.on('mastery', (m) => { myMastery = m || {}; if (modalKind === 'char' && charTab === 'cls') openChar(); });
+  socket.on('tierUp', (t) => scene && scene.onTierUp(t));
   socket.on('firework', (f) => scene && scene.launchFirework(f));
   socket.on('crateHit', (c) => scene && scene.onCrateHit(c));
   socket.on('itemGot', (g) => scene && scene.onItemGot(g));
@@ -2460,7 +2464,7 @@
     src.width = 200 * S; src.height = 150 * S;
     const sx = src.getContext('2d');
     sx.scale(S, S); sx.translate(68, 50);
-    AV.drawAvatar(sx, Object.assign({}, profile, { cls: myCls(), equip }));
+    AV.drawAvatar(sx, Object.assign({}, profile, { cls: myCls(), equip, awake: !!myPassive() }));
     const d = src.getContext('2d').getImageData(0, 0, src.width, src.height).data;
     let l = src.width, t = src.height, r = -1, b = -1;
     for (let y = 0; y < src.height; y++) for (let x = 0; x < src.width; x++) {
@@ -3264,6 +3268,9 @@
 
   // ---------------- 數值、技能欄 ----------------
   let myStats = null;
+  let myMastery = {}; // 每個職業累積的熟練度
+  const myTier = (cls) => ST.MASTERY.tierOf(myMastery[cls || myCls()]);
+  const myPassive = () => (ST.awakened(myCls(), myTier()) ? myCls() : null);
   const myCls = () => (myStats && ST.CLASSES[myStats.cls] ? myStats.cls : 'staff');
   const special = () => ST.CLASSES[myCls()].skills[1];
   const basic = () => ST.basicOf(myCls(), myEquip); // 拿武器的話普攻換成武器的打法
@@ -3445,7 +3452,7 @@
       return b;
     };
     const clsName = el('span', 'char-card-name', c.name);
-    box.appendChild(card('cls', '職業', [icon('cls-' + myCls(), c.icon), clsName]));
+    box.appendChild(card('cls', '職業', [badgeOf(myCls(), myTier()), clsName, tierDots(myTier())]));
     box.appendChild(card('skills', '技能', skillsOf().map(id => icon('sk-' + id, ST.SKILLS[id].icon))));
     const slots = Object.keys(GR.SLOTS).map(slot => {
       const id = myEquip[slot], it = GR.GEAR[id];
@@ -3457,6 +3464,24 @@
     box.appendChild(card('gear', '裝備', slots));
     return box;
   }
+  // 熟練度進度：這一階到下一階走了多少（滿階就是滿的）
+  function tierProgress(cls) {
+    const n = myMastery[cls] || 0, t = ST.MASTERY.tierOf(n), need = ST.MASTERY.need;
+    if (t >= ST.MASTERY.max) return { t, pct: 100 };
+    return { t, pct: Math.max(0, Math.min(100, 100 * (n - need[t]) / (need[t + 1] - need[t]))) };
+  }
+  function tierBar(cls) {
+    const { pct } = tierProgress(cls), bar = el('div', 'tier-bar');
+    bar.appendChild(el('i')).style.width = pct + '%';
+    return bar;
+  }
+  // 五顆小點：練到第幾階
+  function tierDots(t) {
+    const d = el('span', 'tier-dots');
+    for (let i = 1; i <= ST.MASTERY.max; i++) d.appendChild(el('i', i <= t ? 'on' : null));
+    return d;
+  }
+  const badgeOf = (cls, tier, extra) => (window.HQ_MASTERY_ART ? HQ_MASTERY_ART.badgeEl(cls, tier, extra) : icon('cls-' + cls, ST.CLASSES[cls].icon));
   function buildClasses() {
     const box = el('div', 'char-cls');
     const grid = box.appendChild(el('div', 'char-cls-grid'));
@@ -3464,13 +3489,21 @@
     const pick = (k) => {
       charPick = k;
       [...grid.children].forEach(b => b.classList.toggle('picked', b.dataset.k === k));
-      const c = ST.CLASSES[k];
+      const c = ST.CLASSES[k], { t } = tierProgress(k);
       detail.replaceChildren();
       const h = detail.appendChild(el('div', 'char-cls-h'));
-      h.appendChild(icon('cls-' + k, c.icon));
+      h.appendChild(badgeOf(k, t));
       h.appendChild(el('b', null, c.name));
       h.appendChild(el('span', 'tag mono', c.role));
+      h.appendChild(tierDots(t));
+      detail.appendChild(tierBar(k));
       detail.appendChild(el('p', null, c.desc));
+      // 二轉被動：還沒二轉的是灰的、上鎖
+      if (ST.MASTERY.PASSIVE[k]) {
+        const ps = detail.appendChild(el('div', 'char-passive' + (t >= 1 ? ' on' : '')));
+        ps.appendChild(el('span', 'char-passive-k', t >= 1 ? '二轉' : '1 階二轉'));
+        ps.appendChild(el('span', null, ST.MASTERY.PASSIVE[k]));
+      }
       const sks = detail.appendChild(el('div', 'char-cls-sks'));
       c.skills.forEach((id, i) => {
         const sk = ST.SKILLS[id], s = sks.appendChild(el('div', 'char-cls-sk'));
@@ -3483,8 +3516,10 @@
     Object.entries(ST.CLASSES).forEach(([k, c]) => {
       const b = el('button', 'char-cls-card' + (k === myCls() ? ' on' : ''));
       b.type = 'button'; b.dataset.k = k;
-      b.appendChild(icon('cls-' + k, c.icon));
+      const { t } = tierProgress(k);
+      b.appendChild(badgeOf(k, t));
       b.appendChild(el('b', null, c.name));
+      b.appendChild(tierBar(k));
       if (k === myCls()) b.appendChild(el('span', 'char-now', '目前'));
       b.onclick = () => pick(k);
       grid.appendChild(b);
@@ -3502,7 +3537,7 @@
     const who = side.appendChild(el('div', 'char-who'));
     who.appendChild(el('b', 'char-name', profile.name || ''));
     const line = who.appendChild(el('span', 'char-line'));
-    line.appendChild(icon('cls-' + myCls(), ST.CLASSES[myCls()].icon));
+    line.appendChild(badgeOf(myCls(), myTier()));
     line.appendChild(el('span', null, ST.CLASSES[myCls()].name));
     line.appendChild(el('span', 'char-lv mono', 'Lv.' + (myStats ? myStats.level : 1)));
     return side;
@@ -5647,6 +5682,7 @@
         fontSize: '10px', fontStyle: 'bold', color: INK, fontFamily: FONT,
         backgroundColor: PAPER, padding: { x: 10, y: 4 },
       }).setOrigin(0.5, 0);
+      tag.badgePad = 15 + 4; tag.updateText(); // 紙條左邊多留位置給職業徽章
       const bar = this.add.graphics();
       const cont = this.add.container(p.x, p.y, [body, tag, bar]);
       cont.body_ = body;
@@ -5665,6 +5701,7 @@
       cont.tx = p.x; cont.ty = p.y;
       body.setFlipX(cont.dir === -1);
       this.treeMark(cont);
+      this.setBadge(cont, p.cls || 'staff', p.tier || 0);
       return cont;
     }
 
@@ -5708,13 +5745,15 @@
     avatarKey(p) {
       const eq = p.equip || {};
       const gear = Object.keys(GR.SLOTS).map(s => eq[s] || '').join('.');
-      const key = `av-${p.hair}-${p.hairColor}-${p.skin}-${p.outfit}-${p.glasses}-${p.cls || 'staff'}-${gear}${p.face ? '-' + p.face : ''}`;
+      // 二轉了的人身上多一個職業配件
+      const awake = ST.awakened(p.cls, p.tier || 0);
+      const key = `av-${p.hair}-${p.hairColor}-${p.skin}-${p.outfit}-${p.glasses}-${p.cls || 'staff'}${awake ? '+' : ''}-${gear}${p.face ? '-' + p.face : ''}`;
       if (!this.textures.exists(key)) {
         const c = document.createElement('canvas');
         c.width = FRAME.w * 2; c.height = FRAME.h * 2;
         // 會拍動的翅膀另外疊（applyWings），人物貼圖裡不畫
         const flap = GR.GEAR[eq.cape] && GR.GEAR[eq.cape].flap;
-        const look = flap ? Object.assign({}, p, { equip: Object.assign({}, eq, { cape: null }) }) : p;
+        const look = Object.assign({}, p, { awake }, flap ? { equip: Object.assign({}, eq, { cape: null }) } : {});
         const ctx = c.getContext('2d'); ctx.scale(2, 2); ctx.translate(FRAME.ox, FRAME.oy); AV.drawAvatar(ctx, look);
         this.textures.addCanvas(key, c);
       }
@@ -5732,7 +5771,7 @@
     }
     showFace(who) {
       who.body_.setTexture(who.emote
-        ? this.avatarKey(Object.assign({}, who.look, { cls: who.stats ? who.stats.cls : 'staff', face: who.emote }))
+        ? this.avatarKey(Object.assign({}, who.look, { cls: who.stats ? who.stats.cls : 'staff', tier: who.stats ? who.stats.tier : 0, face: who.emote }))
         : who.texKey);
     }
 
@@ -5741,7 +5780,7 @@
       const who = me && g.id === me.id ? this.me : this.remotes.get(g.id);
       if (!who) return;
       who.look.equip = g.equip || {};
-      who.texKey = this.avatarKey(Object.assign({}, who.look, { cls: who.stats ? who.stats.cls : 'staff' }));
+      who.texKey = this.avatarKey(Object.assign({}, who.look, { cls: who.stats ? who.stats.cls : 'staff', tier: who.stats ? who.stats.tier : 0 }));
       this.showFace(who);
       const was = who.prada, wasSet = who.setId;
       this.applyGlow(who);
@@ -5789,6 +5828,7 @@
       c.prada = on;
       c.tag.setColor(on ? '#b07d10' : INK); // 全身 SSR：名牌字變金色（光芒另外畫）
       c.tag.setY(on ? 16 : 6); // 紙條往下挪到彩虹圈外面，才不會蓋住光環
+      this.placeBadge(c);
       if (!on) {
         if (c.pradaTween) c.pradaTween.stop();
         (c.pradaFx || []).forEach(o => o.destroy());
@@ -5990,7 +6030,44 @@
     }
 
     // 名牌只寫等級和名字（職業、全身 SSR 點開個人資料看得到）
-    tagText(p) { return `Lv.${p.level || 1} ${p.name}`; }
+    // 名牌：職業徽章＋名字，等級改到角色面板和個人資料看
+    tagText(p) { return p.name; }
+    // 名牌左邊的職業徽章：框跟著這個職業的熟練度變（灰、墨線、銅、銀、金黃、七彩），5 階腳下多一圈光陣
+    setBadge(c, cls, tier) {
+      if (!window.HQ_MASTERY_ART) return;
+      const key = `badge-${cls}-${tier}`;
+      if (!this.textures.exists(key)) this.textures.addCanvas(key, HQ_MASTERY_ART.badge(cls, tier, 64));
+      if (!c.badge) { c.badge = this.add.image(0, 0, key).setOrigin(0.5); c.add(c.badge); }
+      c.badge.setTexture(key).setDisplaySize(15, 15);
+      this.placeBadge(c);
+      this.applyMasteryRing(c, tier >= ST.MASTERY.max);
+    }
+    placeBadge(c) {
+      if (c.badge) c.badge.setPosition(-c.tag.width / 2 + c.tag.padding.left - c.tag.badgePad + 7.5, c.tag.y + c.tag.height / 2);
+    }
+    // 5 階：腳下一圈慢慢轉的金色光陣，幾道光柱一閃一閃往上升（只用兩個 tween，手機也跑得動）
+    applyMasteryRing(c, on) {
+      if (on === !!c.mRing) return;
+      if (!on) {
+        (c.mRingTweens || []).forEach(t => t.stop());
+        c.mRing.destroy(); c.mRing = null; c.mRingTweens = null;
+        return;
+      }
+      if (!this.textures.exists('fx-mring')) {
+        this.textures.addCanvas('fx-mring', HQ_MASTERY_ART.footCircle(256));
+        this.textures.addCanvas('fx-mpillar', HQ_MASTERY_ART.pillar());
+      }
+      const disc = this.add.image(0, 0, 'fx-mring').setScale(0.5);
+      const flat = this.add.container(0, 0, [disc]).setScale(1, 0.3);
+      const pillars = [-40, -22, 22, 40, -8, 8].map((x, i) => this.add.image(x, 0, 'fx-mpillar').setOrigin(0.5, 1).setScale(0.8, 0.5 + (i % 3) * 0.2).setAlpha(0.7));
+      const ring = this.add.container(0, -2, [flat, ...pillars]);
+      c.addAt(ring, 0);
+      c.mRing = ring;
+      c.mRingTweens = [
+        this.tweens.add({ targets: disc, angle: 360, duration: 9000, repeat: -1 }),
+        this.tweens.add({ targets: pillars, alpha: { from: 0.15, to: 0.8 }, scaleY: '+=0.25', duration: 1100, yoyo: true, repeat: -1, ease: 'Sine.easeInOut', delay: (t, k, v, i) => i * 180 }),
+      ];
+    }
 
     // 世界座標上點到的是哪個人（自己也算）
     playerAt(x, y) {
@@ -6020,12 +6097,12 @@
       const prev = who.stats || st;
       if (st.hp < prev.hp) this.floatText(who.x, who.y - 60, '-' + (prev.hp - st.hp), '#ff6a13', 22);
       else if (st.hp > prev.hp && !prev.dead) this.floatText(who.x, who.y - 60, '+' + (st.hp - prev.hp), '#7be08f', 22);
-      if (st.cls && st.cls !== prev.cls) {
-        who.texKey = this.avatarKey(Object.assign({}, who.look, { cls: st.cls }));
+      if (st.cls && (st.cls !== prev.cls || (st.tier || 0) !== (prev.tier || 0))) {
+        who.texKey = this.avatarKey(Object.assign({}, who.look, { cls: st.cls, tier: st.tier }));
         this.showFace(who);
-        if (prev.cls) this.burst(who.x, who.y - 40, 10, 0xffd23f);
+        if (prev.cls && st.cls !== prev.cls) this.burst(who.x, who.y - 40, 10, 0xffd23f);
+        this.setBadge(who, st.cls, st.tier || 0);
       }
-      if (st.cls !== prev.cls || st.level !== prev.level) who.tag.setText(this.tagText({ name: who.name_, level: st.level }));
       this.drawHpBar(who, st);
       // 防禦增益：頭上掛一個小盾牌
       if (st.buffMs > 0) {
@@ -7615,7 +7692,7 @@
       const room = MAP.roomAt(this.me.x, this.me.y);
       if (!room || (!room.field && !room.dungeon)) { toast('要在野區或副本裡才能畫城牆'); return; }
       this.target = null;
-      this.drawing = { id, pts: [], len: 0, max: sk.wall.len, g: this.add.graphics().setDepth(2060),
+      this.drawing = { id, pts: [], len: 0, max: myPassive() === 'painter' ? ST.MASTERY.V.painterLen : sk.wall.len, g: this.add.graphics().setDepth(2060),
         timer: this.time.delayedCall(10000, () => { if (this.drawing) { this.cancelWall(); toast('太久沒畫，取消畫城牆'); } }) };
       toast(`在地上拖曳畫線，放開就變成${sk.name}`);
     }
@@ -8216,6 +8293,21 @@
       }).map(([key, img]) => ({ key, k: img.k }));
     }
 
+    // 熟練度升階：1 階是二轉
+    onTierUp(t) {
+      const who = me && t.id === me.id ? this.me : this.remotes.get(t.id);
+      if (!who) return;
+      const awake = t.tier === 1 && ST.MASTERY.PASSIVE[t.cls];
+      if (!fxOff()) {
+        this.burst(who.x, who.y - 50, 20, 0xffd23f, 100);
+        this.floatText(who.x, who.y - 110, awake ? '二轉！' : `熟練度 ${t.tier} 階`, '#ffd23f', 22);
+      }
+      if (who === this.me) {
+        if (myMastery) myMastery[t.cls] = Math.max(myMastery[t.cls] || 0, ST.MASTERY.need[t.tier]);
+        toast(awake ? `${ST.CLASSES[t.cls].name}二轉了！${ST.MASTERY.PASSIVE[t.cls]}` : `${ST.CLASSES[t.cls].name}熟練度升到 ${t.tier} 階`, 'cls-' + t.cls);
+        if (modalKind === 'char') openChar();
+      }
+    }
     onLevelUp(l) {
       const who = me && l.id === me.id ? this.me : this.remotes.get(l.id);
       if (!who) return;
@@ -8238,7 +8330,7 @@
       if (left > 0) return; // 冷卻看技能鈕上的遮罩就好，不跳文字
       if (myStats && myStats.mp < sk.mp) { toast(`魔力不夠，${sk.name}要 ${sk.mp} 點，喝礦泉水可以補`); return; }
       socket.emit('attack', id, target || 'boss', (res) => {
-        if (res && res.ok) cooldowns[id] = performance.now() + sk.cooldown;
+        if (res && res.ok) cooldowns[id] = performance.now() + (res.cd || sk.cooldown);
         else if (res && res.error) toast(res.error);
       });
     }

@@ -1244,3 +1244,17 @@ button.inv-item:hover { border-color: var(--accent); }
   .char .gear-tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
   .char .gear-tabs button { flex-shrink: 0; padding: 6px 12px; font-size: 14px; }
 }
+/* 職業熟練度：進度條、五顆階數點、二轉被動 */
+.tier-bar { height: 6px; border-radius: 999px; background: var(--silver); overflow: hidden; width: 100%; }
+.tier-bar i { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, #f2c14e, #ff9a3c); }
+.char-cls-card .tier-bar { width: 78%; height: 5px; margin-top: 2px; }
+.char-cls-detail .tier-bar { margin: 10px 0 2px; }
+.tier-dots { display: inline-flex; gap: 4px; margin-left: auto; }
+.tier-dots i { width: 9px; height: 9px; border-radius: 50%; border: 2px solid var(--line); background: var(--paper); }
+.tier-dots i.on { background: #f2c14e; border-color: #d99a1e; }
+.char-card-icons .tier-dots { margin-left: 4px; }
+.char-passive { display: flex; gap: 10px; align-items: baseline; font-size: 14px; color: var(--muted); background: var(--ground); border: 2px dashed var(--line); border-radius: 12px; padding: 8px 12px; margin: 0 0 10px; }
+.char-passive.on { color: var(--ink); background: #fff8df; border: 2px solid #e0a92a; }
+.char-passive-k { flex-shrink: 0; font-weight: 900; font-size: 13px; color: var(--muted); }
+.char-passive.on .char-passive-k { color: #b07d10; }
+.char-line .badge-ic { width: 22px; height: 22px; }

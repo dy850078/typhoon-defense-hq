@@ -3870,7 +3870,7 @@
     walk: '野區的怪會追人，打不過就回到圍欄裡；愛放屁的馬也在這裡晃',
     office: '這一區的怪比較強，急件老闆也在這裡',
     temple: '最強的一區，小心虎姑婆婆',
-    ruins: '這裡是月霞的森林外圍，越往北走越深',
+    ruins: '這裡是月霞的森林外圍，越往南走越深',
     mist: '霧裡那間小屋，聽說是傳說中龍女被關的地方',
     ridge: '山道的盡頭就是龍后的陵寢，大門還封印著',
     d1: '石碑上的顏色順序只亮一下，快記下來再照順序踩',
@@ -4805,11 +4805,12 @@
       if (x >= MAP.LX) return ch === 'q' || ch === 'O' ? 'temple' : ch === 'Q' ? 'templewall' : 'void';
       if (x >= MAP.OW) return ch === 'Z' ? 'sea' : ch === 'Y' ? 'rock' : 'yE'.includes(ch) ? 'sand' : ch === 'n' ? 'cliff'
         : ch === 'a' ? 'gorge' : 'msv'.includes(ch) ? 'trail' : 'cave';
-      // 東邊：月霞的森林（樹、房子底下也鋪那一區的地板；山道左半邊雪地、右半邊火山岩）
+      // 東邊：月霞的森林（樹、房子底下也鋪那一區的地板；最南邊的山道左半邊雪地、右半邊火山岩）
       if (x >= MAP.EX) {
         if (ch === '徑') return 'epath';
-        if (y <= 28) return x >= MAP.EX + 17 ? 'basalt' : 'snow';
-        return y <= 56 ? 'moss' : 'dirt';
+        if (y <= 28) return 'dirt';
+        if (y <= 56) return 'moss';
+        return x >= MAP.RIDGE_ROCK ? 'basalt' : 'snow';
       }
       // 野區：看是哪一區的地板（樹、路燈這些東西底下也鋪那一區的地板）
       if (y > 30) {
@@ -4915,9 +4916,9 @@
           if (r() < 0.3) { const gx = px + 8 + r() * 30, gy = py + 14 + r() * 26; CR.line(ctx, gx, gy, gx - 3, gy - 7, r, 1.4, '#9a8a5a', 0.5); CR.line(ctx, gx + 3, gy, gx + 5, gy - 6, r, 1.4, '#9a8a5a', 0.5); }
         } else if (base === 'epath') {
           // 森林裡踩出來的小路：淺色的土，零星幾塊扁石頭
-          ctx.fillStyle = y <= 28 ? (x >= MAP.EX + 17 ? '#8a7f86' : '#dfe6ee') : '#dcc8a2'; ctx.fillRect(px, py, T, T);
+          ctx.fillStyle = y >= 58 ? (x >= MAP.RIDGE_ROCK ? '#8a7f86' : '#dfe6ee') : '#dcc8a2'; ctx.fillRect(px, py, T, T);
           CR.dots(ctx, px, py, T, T, 4, 'rgba(255,255,255,0.45)', r, 1.6);
-          if (r() < 0.55) { CR.blob(ctx, px + 10 + r() * 28, py + 10 + r() * 28, 6 + r() * 3, 4 + r() * 2, r, 0.12, 10); CR.fill(ctx, y <= 28 ? '#b9c0cc' : '#bfae8e', r, null); CR.stroke(ctx, r, 1.2, 'rgba(90,80,70,0.5)'); }
+          if (r() < 0.55) { CR.blob(ctx, px + 10 + r() * 28, py + 10 + r() * 28, 6 + r() * 3, 4 + r() * 2, r, 0.12, 10); CR.fill(ctx, y >= 58 ? '#b9c0cc' : '#bfae8e', r, null); CR.stroke(ctx, r, 1.2, 'rgba(90,80,70,0.5)'); }
         } else if (base === 'moss') {
           // 迷霧森林：深綠色的苔蘚地，幾株小蕨類，偶爾一團淡淡的霧
           ctx.fillStyle = (x * 3 + y) % 5 ? '#7da27f' : '#779c79'; ctx.fillRect(px, py, T, T);
@@ -5437,7 +5438,7 @@
           CR.line(ctx, px + 24, py + 1, px + 24, py + 10, r, 1.6, '#e6b94a', 0.3);
         } else if (ch === '杉') {
           // 深綠色的杉樹：三層三角形的樹冠；雪山那邊頂上積雪
-          const snowy = y <= 28 && x < MAP.EX + 17, ash = y <= 28 && !snowy;
+          const snowy = y >= 58 && x < MAP.RIDGE_ROCK, ash = y >= 58 && !snowy;
           ctx.fillStyle = 'rgba(19,26,40,0.2)'; ctx.beginPath(); ctx.ellipse(px + 24, py + 44, 20, 5, 0, 0, Math.PI * 2); ctx.fill();
           // 比一般的樹高大一圈（從樹根往上放大），森林看起來比較密
           ctx.save(); ctx.translate(px + 24, py + 44); ctx.scale(1.3, 1.4); ctx.translate(-px - 24, -py - 44);

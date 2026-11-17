@@ -166,7 +166,7 @@
   // 兩欄：左欄由上往下 七星潭 → 太魯閣九曲洞 → 燕子口，過了燕子口被溪水送到右欄最上面的砂卡礑步道，
   // 再往下走到清水斷崖打花蓮王；關卡之間的石門解開謎題才會打開
   // ---------------- 東邊：月霞的森林 ----------------
-  // 由南往北越走越深：荒廢村落 → 迷霧森林 → 龍后山道，山道盡頭是龍后的陵寢大門（副本還沒開，先封著）
+  // 入口在總部東邊的院子；由北往南越走越深：荒廢村落 → 迷霧森林 → 龍后山道，山道盡頭是龍后的陵寢（副本還沒開，先封著）
   // 圖例（中文字，免得和副本的英文字母撞在一起）：
   //   泥  村落的泥土地    徑  踩出來的小路      苔  森林的苔蘚地    雪  山道的雪地    岩  山道的火山岩地
   //   杉  深綠色的杉樹（森林邊界、擋路）      屋  倒塌的石板屋（2x2）  風  停住的風車（2x2）  柵  倒下的木柵欄
@@ -174,55 +174,55 @@
   //   冰  冰岩            熔  岩漿池            陵  龍后的陵寢（整片石牆）  封  陵寢封印著的大門  像  門前的石像台座
   const EX = MW; // 東邊森林最左邊那一格（邊界樹）
   const EAST = [
-    { id: 'ridge', name: '龍后山道', y1: 0, y2: 28, floor: '雪' },
+    { id: 'ruins', name: '荒廢村落', y1: 0, y2: 28, floor: '泥' },
     { id: 'mist', name: '迷霧森林', y1: 30, y2: 56, floor: '苔' },
-    { id: 'ruins', name: '荒廢村落', y1: 58, y2: H - 1, floor: '泥' },
+    { id: 'ridge', name: '龍后山道', y1: 58, y2: H - 1, floor: '雪' },
   ];
+  const RIDGE_ROCK = EX + 17; // 山道從這一格往右是火山岩（左邊是雪地）
   EAST.forEach(z => rect(EX, z.y1, OW - 1, z.y2, z.floor));
-  // 山道：左半邊積雪、右半邊是火山岩
-  rect(EX + 17, 0, OW - 1, 28, '岩');
+  rect(RIDGE_ROCK, 58, OW - 1, H - 1, '岩');
   // 邊界：左右兩排杉樹、最上和最下一排；區和區之間也隔一排樹，各留一個缺口當通道
   rect(EX, 0, EX, H - 1, '杉'); rect(OW - 1, 0, OW - 1, H - 1, '杉');
   rect(EX, 0, OW - 1, 0, '杉'); rect(EX, H - 1, OW - 1, H - 1, '杉');
   rect(EX, 29, OW - 1, 29, '杉'); rect(EX + 14, 29, EX + 17, 29, '徑');
-  rect(EX, 57, OW - 1, 57, '杉'); rect(EX + 8, 57, EX + 11, 57, '徑');
-  // 入口：廟口老街的東邊（籬笆打開四格），一條小路彎進村子
-  rect(EX, 74, EX, 77, '徑');
+  rect(EX, 57, OW - 1, 57, '杉'); rect(EX + 14, 57, EX + 17, 57, '徑');
+  // 入口：總部東邊的院子（休息區下面那塊草地）走過去，一條小路彎進村子
+  rect(EX, 26, EX, 28, '徑');
   const path = (pts) => pts.slice(1).forEach(([x2, y2], i) => {
     const [x1, y1] = pts[i];
     for (let x = Math.min(x1, x2); x <= Math.max(x1, x2); x++) rect(x, y1, x, y1 + 1, '徑');
     for (let y = Math.min(y1, y2); y <= Math.max(y1, y2); y++) rect(x2, y, x2 + 1, y, '徑');
   });
-  path([[EX, 75], [EX + 9, 75], [EX + 9, 66], [EX + 9, 58]]);
-  path([[EX + 9, 56], [EX + 9, 48], [EX + 15, 48], [EX + 15, 30]]);
-  path([[EX + 15, 28], [EX + 15, 7]]);
+  path([[EX, 26], [EX + 6, 26], [EX + 6, 18], [EX + 15, 18], [EX + 15, 28]]);
+  path([[EX + 15, 30], [EX + 15, 38], [EX + 9, 38], [EX + 9, 49], [EX + 15, 49], [EX + 15, 56]]);
+  path([[EX + 15, 58], [EX + 15, 78]]);
   // 荒廢村落：倒塌的石板屋、停住的風車、倒下的柵欄、老井、幾棵樹
-  [[EX + 3, 61], [EX + 20, 60], [EX + 25, 70], [EX + 4, 80], [EX + 18, 79]].forEach(([x, y]) => rect(x, y, x + 1, y + 1, '屋'));
-  rect(EX + 26, 62, EX + 27, 63, '風');
-  [[EX + 13, 70], [EX + 14, 70], [EX + 15, 70], [EX + 22, 76], [EX + 23, 76], [EX + 3, 70], [EX + 4, 70], [EX + 12, 83], [EX + 13, 83]].forEach(([x, y]) => set(x, y, '柵'));
-  set(EX + 15, 77, '井');
-  [[EX + 7, 63], [EX + 28, 67], [EX + 2, 66], [EX + 27, 82], [EX + 20, 66], [EX + 8, 84], [EX + 29, 59], [EX + 24, 84]].forEach(([x, y]) => set(x, y, '杉'));
+  [[EX + 3, 3], [EX + 20, 2], [EX + 25, 12], [EX + 2, 21], [EX + 22, 22]].forEach(([x, y]) => rect(x, y, x + 1, y + 1, '屋'));
+  rect(EX + 26, 4, EX + 27, 5, '風');
+  [[EX + 10, 12], [EX + 11, 12], [EX + 12, 12], [EX + 21, 17], [EX + 22, 17], [EX + 3, 12], [EX + 4, 12], [EX + 11, 24], [EX + 12, 24]].forEach(([x, y]) => set(x, y, '柵'));
+  set(EX + 11, 8, '井');
+  [[EX + 7, 5], [EX + 28, 9], [EX + 2, 8], [EX + 27, 25], [EX + 18, 8], [EX + 8, 23], [EX + 29, 2], [EX + 18, 26], [EX + 13, 3]].forEach(([x, y]) => set(x, y, '杉'));
   // 迷霧森林：密密的杉樹和大蘑菇，中間一塊空地是月霞的小屋，屋子四周堆著村民丟的石頭
-  [[EX + 3, 32], [EX + 6, 35], [EX + 2, 39], [EX + 5, 43], [EX + 3, 47], [EX + 6, 51], [EX + 2, 54], [EX + 11, 33], [EX + 12, 38],
-    [EX + 13, 54], [EX + 20, 32], [EX + 25, 31], [EX + 29, 34], [EX + 27, 38], [EX + 29, 44], [EX + 26, 49],
-    [EX + 29, 53], [EX + 22, 54], [EX + 19, 51], [EX + 7, 39], [EX + 12, 44]].forEach(([x, y]) => set(x, y, '杉'));
-  [[EX + 4, 37], [EX + 8, 46], [EX + 18, 34], [EX + 28, 41], [EX + 24, 52], [EX + 3, 52], [EX + 12, 31]].forEach(([x, y]) => set(x, y, '菇'));
-  const HUT = { x: EX + 21, y: 41 };
+  [[EX + 3, 32], [EX + 6, 35], [EX + 2, 41], [EX + 5, 44], [EX + 3, 48], [EX + 6, 52], [EX + 2, 55], [EX + 11, 33], [EX + 12, 43],
+    [EX + 13, 54], [EX + 20, 32], [EX + 25, 31], [EX + 29, 34], [EX + 27, 38], [EX + 29, 46], [EX + 26, 50],
+    [EX + 29, 54], [EX + 22, 54], [EX + 19, 52], [EX + 7, 41], [EX + 12, 46]].forEach(([x, y]) => set(x, y, '杉'));
+  [[EX + 4, 37], [EX + 6, 47], [EX + 18, 35], [EX + 28, 42], [EX + 24, 53], [EX + 3, 52], [EX + 12, 31]].forEach(([x, y]) => set(x, y, '菇'));
+  const HUT = { x: EX + 21, y: 42 };
   rect(HUT.x, HUT.y, HUT.x + 2, HUT.y + 1, '寮');
   [[HUT.x - 2, HUT.y + 1], [HUT.x - 1, HUT.y + 3], [HUT.x + 2, HUT.y + 3], [HUT.x + 4, HUT.y + 2], [HUT.x + 4, HUT.y], [HUT.x - 2, HUT.y - 1], [HUT.x + 1, HUT.y - 2]]
     .forEach(([x, y]) => set(x, y, '堆'));
-  // 龍后山道：雪地這邊有冰岩和覆雪的杉樹，火山岩那邊有岩漿池；山道盡頭是陵寢
-  [[EX + 3, 22], [EX + 7, 25], [EX + 4, 15], [EX + 9, 18], [EX + 2, 10], [EX + 11, 12], [EX + 6, 8]].forEach(([x, y]) => set(x, y, '冰'));
-  [[EX + 2, 26], [EX + 12, 23], [EX + 5, 19], [EX + 2, 4], [EX + 6, 3]].forEach(([x, y]) => set(x, y, '杉'));
-  [[EX + 22, 24], [EX + 27, 19], [EX + 21, 15], [EX + 28, 11], [EX + 24, 7]].forEach(([x, y]) => rect(x, y, x + 1, y, '熔'));
-  [[EX + 20, 26], [EX + 25, 13], [EX + 29, 24], [EX + 29, 4]].forEach(([x, y]) => set(x, y, '冰'));
-  // 陵寢：一整片石牆，中間是封住的大門，門前兩座石像台座
-  rect(EX + 9, 1, EX + 22, 4, '陵');
-  rect(EX + 14, 4, EX + 17, 4, '封');
-  set(EX + 12, 6, '像'); set(EX + 19, 6, '像');
+  // 龍后山道：雪地這邊有冰岩和覆雪的杉樹，火山岩那邊有岩漿池；山道最南邊是陵寢，大門朝北
+  [[EX + 3, 63], [EX + 7, 60], [EX + 4, 70], [EX + 9, 67], [EX + 2, 75], [EX + 11, 73], [EX + 6, 77]].forEach(([x, y]) => set(x, y, '冰'));
+  [[EX + 2, 59], [EX + 12, 62], [EX + 5, 66], [EX + 2, 81], [EX + 6, 82]].forEach(([x, y]) => set(x, y, '杉'));
+  [[EX + 22, 61], [EX + 27, 66], [EX + 21, 70], [EX + 28, 74], [EX + 24, 78]].forEach(([x, y]) => rect(x, y, x + 1, y, '熔'));
+  [[EX + 20, 59], [EX + 25, 72], [EX + 29, 61], [EX + 29, 81]].forEach(([x, y]) => set(x, y, '冰'));
+  // 陵寢：一整片石牆，北面中間是封住的大門，門前兩座石像台座
+  rect(EX + 9, 81, EX + 22, 84, '陵');
+  rect(EX + 14, 81, EX + 17, 81, '封');
+  set(EX + 12, 79, '像'); set(EX + 19, 79, '像');
   // 每區的路牌
-  set(EX + 4, 74, '牌'); set(EX + 8, 55, '牌'); set(EX + 13, 27, '牌');
-  const SEAL = { x: (EX + 16) * TILE, y: 5 * TILE };
+  set(EX + 4, 25, '牌'); set(EX + 13, 31, '牌'); set(EX + 13, 59, '牌');
+  const SEAL = { x: (EX + 16) * TILE, y: 80 * TILE };
 
   rect(OW, 0, W - 1, H - 1, ' ');
   const HUALIEN = [
@@ -611,14 +611,14 @@
   // 每一區小怪活動的範圍（像素），和整個野區的範圍
   const FIELD_ZONES = {};
   FIELD.forEach(z => { FIELD_ZONES[z.id] = { x1: 2 * TILE, y1: (z.y1 + 1.5) * TILE, x2: (FW - 2) * TILE, y2: (z.y2 - 1) * TILE }; });
-  EAST.forEach(z => { FIELD_ZONES[z.id] = { x1: (EX + 2) * TILE, y1: (z.y1 + (z.id === 'ridge' ? 8 : 1.5)) * TILE, x2: (OW - 2) * TILE, y2: (z.y2 - 1) * TILE }; });
+  EAST.forEach(z => { FIELD_ZONES[z.id] = { x1: (EX + 2) * TILE, y1: (z.y1 + 1.5) * TILE, x2: (OW - 2) * TILE, y2: (z.y2 - (z.id === 'ridge' ? 8 : 1)) * TILE }; });
   const FIELD_BOX = { x1: 0, y1: 31 * TILE, x2: FW * TILE, y2: H * TILE };
   const EAST_BOX = { x1: (EX + 1) * TILE, y1: TILE, x2: (OW - 1) * TILE, y2: (H - 1) * TILE };
 
   // 會變動的擋路格子（關著的石門、九曲洞的大理石）：'tx,ty'
   const dyn = new Set();
   const map = {
-    W, H, MW, FW, EW, EX, OW, EAST, EAST_BOX, seal: SEAL, DX, LX, TDX, TLX, HX, HUB, DH, TILE, BLOCKING, ROOMS, ITEMS, CRATES, MONSTER_ZONE, FIELD, FIELD_ZONES, FIELD_BOX, DUNGEON, DUNGEONS, DG_LIST, LOBBY, dyn, PLOTS, PET_ROOM,
+    W, H, MW, FW, EW, EX, OW, EAST, RIDGE_ROCK, EAST_BOX, seal: SEAL, DX, LX, TDX, TLX, HX, HUB, DH, TILE, BLOCKING, ROOMS, ITEMS, CRATES, MONSTER_ZONE, FIELD, FIELD_ZONES, FIELD_BOX, DUNGEON, DUNGEONS, DG_LIST, LOBBY, dyn, PLOTS, PET_ROOM,
     portal: DUNGEON.portal,
     // 指揮中心的副本傳送門、副本大廳回總部的出口、還沒開放的台座（像素）
     hqPortal: { x: (HQ_PORTAL_TILE.x + 0.5) * TILE, y: (HQ_PORTAL_TILE.y + 0.5) * TILE },

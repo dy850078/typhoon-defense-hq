@@ -168,6 +168,41 @@
   // 小火焰
   const flame = (x, y, s) => { const p = new Path2D(); p.moveTo(x, y - 7 * s); p.quadraticCurveTo(x + 5 * s, y - 1 * s, x + 3 * s, y + 2 * s); p.quadraticCurveTo(x, y + 4 * s, x - 3 * s, y + 2 * s); p.quadraticCurveTo(x - 5 * s, y - 1 * s, x, y - 7 * s); p.closePath(); return p; };
 
+  // 龍寶寶（霜晶小龍、熔岩小龍共用）：側坐的圓肚子小龍，臉朝左
+  function babyDragon(seed, o) {
+    return canvas(96, 84, seed, (ctx, r) => {
+      shadow(ctx, 50, 80, 26);
+      // 尾巴
+      limb(ctx, [[66, 68], [84, 72], [86, 58]], 6, o.body);
+      o.tail(ctx, r);
+      // 後面那隻翅膀
+      const wing = (x, y, s, c) => { const p = new Path2D(); p.moveTo(0, 0); p.quadraticCurveTo(8, -20, 22, -24); p.quadraticCurveTo(20, -16, 26, -12); p.quadraticCurveTo(18, -10, 20, -2); p.quadraticCurveTo(10, -4, 0, 0); p.closePath();
+        paint(ctx, r, T(p, x, y, 0, s), [x, y - 24 * s, 26 * s, 24 * s], c, { lw: 1.8, shine: false }); brush(ctx, [[x + 2 * s, y - 1 * s], [x + 18 * s, y - 18 * s]], 1.1, 'rgba(40,40,70,0.4)'); };
+      wing(60, 40, 0.8, o.wingBack);
+      // 身體
+      paint(ctx, r, E(52, 60, 22, 19), [30, 41, 44, 38], o.body, { hue: o.hue, at: [0.3, 0.2] });
+      paint(ctx, r, E(45, 63, 12, 13), [33, 50, 24, 26], o.belly, { lw: 1.6, shine: false });
+      [56, 62, 68].forEach(y => brush(ctx, [[37, y], [53, y]], 1, 'rgba(120,100,90,0.35)'));
+      if (o.cracks) { glow(ctx, 62, 58, 12, '#f0a24a', 0.5); [[[58, 46], [62, 54], [60, 60]], [[66, 62], [70, 68], [68, 74]]].forEach(pts => { brush(ctx, pts, 3, INK); brush(ctx, pts, 1.6, '#f6a24a'); }); }
+      // 背上的刺
+      [[58, 42, 20], [66, 46, 45], [72, 54, 70]].forEach(([x, y, a]) => { const p = new Path2D(); p.moveTo(-3.4, 0); p.lineTo(0, -8); p.lineTo(3.4, 0); p.closePath(); paint(ctx, r, T(p, x, y, a), [x - 7, y - 7, 14, 14], o.spike, { lw: 1.4, shine: false }); });
+      // 腳
+      ball(ctx, r, 40, 77, 6, 3.4, o.body); ball(ctx, r, 60, 77, 6, 3.4, o.body);
+      // 頭
+      paint(ctx, r, E(34, 34, 17, 15), [17, 19, 34, 30], o.body, { hue: o.hue, at: [0.3, 0.2] });
+      paint(ctx, r, E(24, 40, 8, 6), [16, 34, 16, 12], o.belly, { lw: 1.4, shine: false });
+      [[20, 38], [25, 38]].forEach(([x, y]) => dab(ctx, x, y, 0.9, 0.7, INK));
+      [[30, 20, -25], [42, 20, 20]].forEach(([x, y, a]) => { const p = new Path2D(); p.moveTo(-3, 2); p.quadraticCurveTo(-2, -6, 2, -10); p.quadraticCurveTo(1, -4, 3, 2); p.closePath(); paint(ctx, r, T(p, x, y, a), [x - 6, y - 10, 12, 12], o.horn, { lw: 1.4, shine: false }); });
+      paint(ctx, r, E(47, 30, 4, 6, 0.4), [43, 24, 8, 12], o.wing, { lw: 1.4, shine: false });
+      face(ctx, 33, 32, 1.05, { gap: 5.6, mouth: 'none' });
+      // 小手
+      limb(ctx, [[34, 52], [28, 56], [27, 60]], 3.4, o.body); ball(ctx, r, 27, 61, 3, 2.6, o.body);
+      // 前面那隻翅膀
+      wing(56, 46, 0.95, o.wing);
+      o.breath(ctx, r);
+    });
+  }
+
   const DRAW = {
     // ---------- 下班路上 ----------
     // 便利貼精：一張黃色便利貼，後面黏著粉紅、藍色兩張，右下角翹起來
@@ -520,11 +555,218 @@
       limb(ctx, [[47, 4], [74, 11]], 1.8, '#c49a4a');
       ball(ctx, r, 75, 11.4, 2.4, 2.4, C.coral);
     }),
+
+    // ---------- 月霞的森林（荒廢村落 → 迷霧森林 → 龍后山道） ----------
+    // 蘑菇精：森林裡最常見的小精靈，頭上一頂紅點點大菇帽，下面是奶油色的菇柄身體
+    shroom: () => canvas(96, 84, 211, (ctx, r) => {
+      shadow(ctx, 48, 79, 22);
+      [[30, 76], [64, 77], [70, 74]].forEach(([x, y]) => brush(ctx, [[x, y], [x - 2, y - 7]], 1.6, 'rgba(110,150,90,0.8)'));
+      limb(ctx, [[41, 66], [40, 75]], 4.4, '#c9a27a'); limb(ctx, [[55, 66], [56, 75]], 4.4, '#c9a27a');
+      shoes(ctx, r, [[39, 77], [57, 77]], '#8a6a52');
+      const st = new Path2D(); st.moveTo(34, 40); st.quadraticCurveTo(31, 60, 35, 69); st.quadraticCurveTo(48, 73, 61, 69); st.quadraticCurveTo(65, 60, 62, 40); st.closePath();
+      paint(ctx, r, st, [31, 40, 34, 33], '#f1e4cc', { hue: '#e9c8a0', at: [0.5, 1], dir: 1.5 });
+      limb(ctx, [[35, 52], [28, 56], [25, 62]], 3.8, '#f1e4cc'); ball(ctx, r, 25, 63, 3, 3, '#f1e4cc');
+      limb(ctx, [[61, 52], [68, 55], [71, 61]], 3.8, '#f1e4cc'); ball(ctx, r, 71, 62, 3, 3, '#f1e4cc');
+      face(ctx, 48, 53, 1.05, { gap: 6 });
+      // 菇帽
+      const cap = new Path2D(); cap.moveTo(16, 42); cap.quadraticCurveTo(14, 12, 48, 10); cap.quadraticCurveTo(82, 12, 80, 42);
+      cap.quadraticCurveTo(64, 47, 48, 45); cap.quadraticCurveTo(32, 47, 16, 42); cap.closePath();
+      paint(ctx, r, cap, [14, 10, 68, 37], '#cf5a55', { hue: '#e98a6a', at: [0.3, 0.2] });
+      const under = new Path2D(); under.moveTo(19, 42); under.quadraticCurveTo(32, 47, 48, 45); under.quadraticCurveTo(64, 47, 77, 42); under.quadraticCurveTo(64, 50, 48, 49); under.quadraticCurveTo(32, 50, 19, 42); under.closePath();
+      paint(ctx, r, under, [19, 42, 58, 8], '#e9d2b4', { lw: 1.4, shine: false });
+      [[30, 24, 4.4], [47, 17, 3.6], [63, 25, 5], [38, 34, 3], [72, 36, 2.6], [24, 36, 2.4], [55, 33, 2.8]].forEach(([x, y, s]) =>
+        paint(ctx, r, E(x, y, s, s * 0.85), [x - s, y - s, s * 2, s * 2], '#fbf1de', { lw: 1.2, shine: false }));
+    }),
+
+    // 荊棘藤妖：一團纏在一起的綠藤，身上長著刺，頭頂開一朵紅玫瑰，藤蔓手捲捲的
+    thorn: () => canvas(96, 84, 212, (ctx, r) => {
+      shadow(ctx, 48, 80, 24);
+      const vine = '#5f8f5a', vineD = '#4a7550';
+      limb(ctx, [[36, 66], [30, 76], [22, 78]], 4.4, vineD); limb(ctx, [[60, 66], [66, 76], [74, 78]], 4.4, vineD);
+      limb(ctx, [[48, 68], [48, 78]], 4.4, vineD);
+      const body = S([[48, 22], [70, 28], [74, 48], [66, 68], [48, 72], [30, 68], [22, 48], [26, 28]]);
+      paint(ctx, r, body, [22, 22, 52, 50], vine, { hue: '#93b86a', at: [0.3, 0.2] });
+      ctx.save(); ctx.clip(body);
+      [[24, 36, 72, 52], [26, 58, 70, 34], [30, 26, 66, 66], [36, 70, 62, 24]].forEach(([a, b, c, d]) => brush(ctx, [[a, b], [48, (b + d) / 2 + 6], [c, d]], 2.4, 'rgba(60,100,60,0.55)'));
+      ctx.restore();
+      // 刺
+      const thorn = (x, y, a) => { const p = new Path2D(); p.moveTo(-2.6, 0); p.lineTo(0, -6); p.lineTo(2.6, 0); p.closePath(); paint(ctx, r, T(p, x, y, a), [x - 6, y - 6, 12, 12], '#d9d0a0', { lw: 1.2, shine: false }); };
+      [[24, 40, -80], [23, 56, -100], [30, 67, -140], [72, 40, 80], [73, 56, 100], [66, 67, 140], [34, 24, -40], [62, 24, 40]].forEach(([x, y, a]) => thorn(x, y, a));
+      face(ctx, 48, 47, 1.1, { gap: 7, eyes: 'sleepy' });
+      // 藤手（捲起來）
+      limb(ctx, [[24, 48], [12, 44], [12, 34]], 3.6, vine); limb(ctx, [[12, 34], [16, 30], [18, 35]], 3, vine);
+      limb(ctx, [[72, 48], [84, 46], [84, 36]], 3.6, vine); limb(ctx, [[84, 36], [80, 32], [78, 37]], 3, vine);
+      [[11, 41], [85, 43]].forEach(([x, y], i) => paint(ctx, r, E(x, y, 4, 2.2, i ? 0.7 : -0.7), [x - 4, y - 3, 8, 6], '#8fb07a', { lw: 1.2, shine: false }));
+      // 玫瑰
+      [[40, 22, -0.6], [57, 22, 0.6]].forEach(([x, y, a]) => paint(ctx, r, E(x, y, 6, 3, a), [x - 6, y - 4, 12, 8], '#8fb07a', { lw: 1.4, shine: false }));
+      paint(ctx, r, E(48, 16, 9, 8), [39, 8, 18, 16], '#c94a5a', { hue: '#e98a8a', at: [0.3, 0.2] });
+      brush(ctx, [[43, 16], [48, 11], [53, 16], [48, 20], [45, 15]], 1.4, 'rgba(120,30,50,0.6)');
+    }),
+
+    // 苔蘚小石像：荒村裡倒在路邊的小天使石像，背上一對石頭小翅膀，頭頂和肩膀長滿青苔
+    mossling: () => canvas(96, 84, 213, (ctx, r) => {
+      shadow(ctx, 48, 80, 24);
+      const stone = '#a9acb4';
+      paint(ctx, r, RR(26, 70, 44, 9, 3), [26, 70, 44, 9], '#8f939e', { lw: 2, shine: false });
+      [-1, 1].forEach(k => {
+        const p = new Path2D(); p.moveTo(48 + k * 10, 44); p.quadraticCurveTo(48 + k * 34, 30, 48 + k * 36, 46);
+        p.quadraticCurveTo(48 + k * 30, 46, 48 + k * 31, 54); p.quadraticCurveTo(48 + k * 22, 52, 48 + k * 12, 58); p.closePath();
+        paint(ctx, r, p, [k < 0 ? 12 : 58, 34, 26, 24], '#9aa0a8', { lw: 2, shine: false });
+        brush(ctx, [[48 + k * 14, 46], [48 + k * 28, 42]], 1.2, 'rgba(90,94,110,0.55)');
+        brush(ctx, [[48 + k * 14, 51], [48 + k * 26, 49]], 1.2, 'rgba(90,94,110,0.55)');
+      });
+      paint(ctx, r, S([[36, 44], [60, 44], [64, 70], [32, 70]]), [32, 44, 32, 26], stone, { hue: '#c4c8cc', at: [0.3, 0.2] });
+      ball(ctx, r, 40, 68, 5, 3, stone); ball(ctx, r, 56, 68, 5, 3, stone);
+      // 合起來的小手
+      ball(ctx, r, 44.5, 55, 3.4, 3, stone); ball(ctx, r, 51.5, 55, 3.4, 3, stone);
+      paint(ctx, r, E(48, 31, 15, 14), [33, 17, 30, 28], stone, { hue: '#c4c8cc', at: [0.3, 0.2] });
+      face(ctx, 48, 33, 1, { eyes: 'sleepy', mouth: 'line', blush: false });
+      brush(ctx, [[58, 22], [55, 28], [58, 31], [56, 36]], 1.1, 'rgba(70,72,86,0.7)');
+      brush(ctx, [[37, 50], [41, 56], [39, 62]], 1.1, 'rgba(70,72,86,0.6)');
+      // 青苔
+      const moss = (x, y, w, h) => { const pts = []; for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2; pts.push([x + Math.cos(a) * w * (0.8 + r() * 0.4), y + Math.sin(a) * h * (0.8 + r() * 0.4)]); } paint(ctx, r, S(pts), [x - w, y - h, w * 2, h * 2], '#7f9f5a', { lw: 1.4, shine: false }); };
+      moss(44, 19, 11, 4.4); moss(55, 21, 5, 3); moss(35, 46, 5, 3); moss(62, 47, 4, 2.6); moss(30, 71, 6, 2.4); moss(66, 72, 4, 2);
+      [[42, 16], [50, 17], [37, 44]].forEach(([x, y]) => { dab(ctx, x, y, 1.4, 1.4, '#f3ecdf'); dab(ctx, x, y, 0.6, 0.6, '#e6b94a'); });
+    }),
+
+    // 石頭精：迷霧裡會自己滾動的疊疊石，大石頭當身體，小石頭當帽子，頭頂冒一株小芽
+    pebble: () => canvas(96, 84, 214, (ctx, r) => {
+      shadow(ctx, 48, 80, 26);
+      paint(ctx, r, E(48, 60, 25, 19), [23, 41, 50, 38], '#9a968e', { hue: '#b9b2a4', at: [0.3, 0.2] });
+      brush(ctx, [[30, 70], [40, 74], [50, 72]], 1.2, 'rgba(80,76,90,0.45)');
+      face(ctx, 48, 58, 1.15, { gap: 8 });
+      paint(ctx, r, E(47, 35, 15, 9, -0.08), [32, 26, 30, 18], '#8a8a96', { hue: '#aab0b4', at: [0.3, 0.2] });
+      paint(ctx, r, E(49, 22, 8, 5.4, 0.1), [41, 16, 16, 11], '#a8a294', { lw: 1.8 });
+      limb(ctx, [[49, 17], [49, 9]], 1.6, '#6f9a5a');
+      [[45, 9, -0.5], [53, 8, 0.5]].forEach(([x, y, a]) => paint(ctx, r, E(x, y, 4.4, 2.4, a), [x - 5, y - 3, 10, 6], '#8fc07a', { lw: 1.2, shine: false }));
+      // 飄在旁邊的小石頭手
+      ball(ctx, r, 16, 56, 5.4, 4.4, '#9a968e'); ball(ctx, r, 80, 58, 5.4, 4.4, '#9a968e');
+      [[10, 50], [86, 52]].forEach(([x, y]) => brush(ctx, [[x, y], [x + (x < 48 ? -3 : 3), y - 3]], 1.2, 'rgba(160,170,190,0.8)'));
+      const moss = S([[30, 47], [38, 43], [46, 46], [41, 49]]);
+      paint(ctx, r, moss, [30, 43, 16, 6], '#7f9f5a', { lw: 1.2, shine: false });
+    }),
+
+    // 樹人寶寶：小小的樹人，樹幹是身體、樹冠是頭髮，根當腳，樹枝手上掛著兩片葉子
+    sapling: () => canvas(96, 84, 215, (ctx, r) => {
+      shadow(ctx, 48, 80, 24);
+      const bark = '#8f6a4c';
+      [[38, 70, 28, 78], [48, 72, 48, 79], [58, 70, 68, 78]].forEach(([a, b, c, d]) => limb(ctx, [[a, b], [(a + c) / 2, d - 1], [c, d]], 4.2, '#7a5a42'));
+      const tr = new Path2D(); tr.moveTo(36, 34); tr.quadraticCurveTo(33, 58, 34, 72); tr.quadraticCurveTo(48, 76, 62, 72); tr.quadraticCurveTo(63, 58, 60, 34); tr.closePath();
+      paint(ctx, r, tr, [33, 34, 30, 40], bark, { hue: '#b0845a', at: [0.3, 0.3], dir: 1.5 });
+      [[39, 50, 40, 70], [56, 52, 57, 70], [47, 64, 48, 72]].forEach(([a, b, c, d]) => brush(ctx, [[a, b], [c - 1, (b + d) / 2], [c, d]], 1.3, 'rgba(80,55,40,0.55)'));
+      paint(ctx, r, E(53, 66, 2.6, 3.2), [50, 63, 6, 7], '#5e4232', { lw: 1.2, shine: false });
+      face(ctx, 48, 50, 1.05, { gap: 6.4 });
+      limb(ctx, [[36, 46], [26, 42], [20, 34]], 3.4, bark); limb(ctx, [[25, 41], [20, 44]], 2.4, bark);
+      limb(ctx, [[60, 46], [70, 44], [76, 36]], 3.4, bark);
+      [[18, 31, -0.8], [19, 46, 0.4], [78, 33, 0.8]].forEach(([x, y, a]) => paint(ctx, r, E(x, y, 5, 2.6, a), [x - 5, y - 4, 10, 8], '#7fb06a', { lw: 1.4, shine: false }));
+      // 樹冠
+      [[34, 30, 11], [62, 30, 11], [40, 18, 12], [57, 17, 12], [48, 26, 13], [48, 11, 9]].forEach(([x, y, s], i) =>
+        paint(ctx, r, E(x, y, s, s * 0.88), [x - s, y - s, s * 2, s * 2], i % 2 ? '#6f9f5a' : '#7fae64', { lw: 1.8, hue: '#a8c87a', at: [0.3, 0.2] }));
+      [[41, 13], [58, 24], [33, 27]].forEach(([x, y]) => { for (let i = 0; i < 5; i++) { const a = i / 5 * Math.PI * 2; dab(ctx, x + Math.cos(a) * 1.7, y + Math.sin(a) * 1.7, 1.2, 1.2, '#f6d0dc'); } dab(ctx, x, y, 0.9, 0.9, C.mustard); });
+    }),
+
+    // 鬼火小精靈：迷霧裡飄來飄去的一團藍綠色光球，尾巴拖著光，身邊有小星星（不是螢火蟲）
+    wisp: () => canvas(96, 84, 216, (ctx, r) => {
+      shadow(ctx, 48, 80, 12);
+      glow(ctx, 48, 42, 40, '#8ae0d0', 0.45);
+      const b = new Path2D(); b.moveTo(48, 6); b.quadraticCurveTo(56, 18, 66, 26); b.quadraticCurveTo(76, 40, 70, 54);
+      b.quadraticCurveTo(62, 68, 48, 68); b.quadraticCurveTo(34, 68, 26, 54); b.quadraticCurveTo(20, 40, 30, 28); b.quadraticCurveTo(40, 20, 48, 6); b.closePath();
+      paint(ctx, r, b, [20, 6, 56, 62], '#7fd0c8', { hue: '#e0fff4', at: [0.45, 0.6], dir: -1.4 });
+      glow(ctx, 47, 50, 16, '#ffffff', 0.55);
+      face(ctx, 48, 48, 1.1, { gap: 7, eyes: 'happy', eyeColor: '#2f5f66' });
+      // 小光手
+      [[20, 46], [76, 46]].forEach(([x, y]) => { glow(ctx, x, y, 7, '#c8fff0', 0.7); ball(ctx, r, x, y, 3.2, 3.2, '#bdf0e4'); });
+      const star = (x, y, s) => { const p = new Path2D(); for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2 - Math.PI / 2, k = i % 2 ? s * 0.38 : s; i ? p.lineTo(x + Math.cos(a) * k, y + Math.sin(a) * k) : p.moveTo(x + Math.cos(a) * k, y + Math.sin(a) * k); } p.closePath(); glow(ctx, x, y, s * 2, '#fff6c0', 0.6); paint(ctx, r, p, [x - s, y - s, s * 2, s * 2], '#fff2b0', { lw: 1.1, shine: false }); };
+      star(16, 22, 4.4); star(80, 18, 3.4); star(84, 66, 3.8); star(12, 68, 3);
+    }),
+
+    // 月光鹿：守護森林的小神祇，淡紫白色的小鹿，額頭一枚彎月，鹿角上開著會發光的小花
+    moondeer: () => canvas(96, 84, 217, (ctx, r) => {
+      shadow(ctx, 50, 80, 26);
+      glow(ctx, 30, 18, 22, '#cfe0ff', 0.45);
+      const fur = '#e4dcef', furD = '#cbbfe0';
+      [[58, 58, 60, 77], [70, 56, 72, 76]].forEach(([a, b, c, d]) => limb(ctx, [[a, b], [c, d]], 4.6, furD));
+      [[40, 58, 38, 77], [50, 59, 50, 77]].forEach(([a, b, c, d]) => limb(ctx, [[a, b], [c, d]], 4.6, fur));
+      [[38, 78], [50, 78], [60, 78], [72, 77]].forEach(([x, y]) => ball(ctx, r, x, y, 3.4, 2.2, '#7a6a8a'));
+      paint(ctx, r, E(76, 44, 5, 4, -0.5), [71, 40, 10, 8], '#fbf6ff', { lw: 1.6, shine: false });
+      paint(ctx, r, E(56, 50, 22, 12), [34, 38, 44, 24], fur, { hue: '#b9c8f0', at: [0.8, 1] });
+      [[52, 46], [62, 44], [68, 50], [57, 53], [46, 52]].forEach(([x, y]) => dab(ctx, x, y, 1.6, 1.4, 'rgba(255,255,255,0.85)'));
+      // 脖子＋頭
+      const nk = new Path2D(); nk.moveTo(30, 30); nk.quadraticCurveTo(28, 44, 38, 52); nk.lineTo(48, 44); nk.quadraticCurveTo(42, 36, 42, 28); nk.closePath();
+      paint(ctx, r, nk, [28, 28, 20, 24], fur, { lw: 1.8, shine: false });
+      [[22, 22, -0.7], [44, 20, 0.7]].forEach(([x, y, a]) => { paint(ctx, r, E(x, y, 6.4, 3.2, a), [x - 6, y - 4, 13, 8], fur, { lw: 1.6, shine: false }); dab(ctx, x, y, 3.4, 1.4, '#f3c0d0', a); });
+      paint(ctx, r, E(33, 28, 11, 10), [22, 18, 22, 20], fur, { hue: '#ffffff', at: [0.3, 0.2] });
+      paint(ctx, r, E(29, 34, 6, 4.4), [23, 30, 12, 9], '#f6f0fb', { lw: 1.4, shine: false });
+      dab(ctx, 26, 33.6, 1.5, 1.1, INK);
+      face(ctx, 34, 27, 0.95, { gap: 5.4, mouth: 'none', eyes: 'sleepy' });
+      // 彎月
+      const moon = new Path2D(); moon.arc(34, 19, 3.6, Math.PI * 0.6, Math.PI * 1.9); moon.arc(35.6, 18, 2.6, Math.PI * 1.9, Math.PI * 0.6, true); moon.closePath();
+      glow(ctx, 34, 19, 6, '#fff2b0', 0.8); paint(ctx, r, moon, [30, 15, 8, 8], '#f6e08a', { lw: 1, shine: false });
+      // 鹿角＋小花
+      const ant = '#d8c8a8';
+      limb(ctx, [[28, 19], [24, 10], [18, 4]], 2.2, ant); limb(ctx, [[25, 12], [30, 6]], 1.8, ant);
+      limb(ctx, [[39, 19], [42, 10], [48, 4]], 2.2, ant); limb(ctx, [[41, 12], [37, 6]], 1.8, ant);
+      [[18, 4], [30, 6], [48, 4], [37, 6]].forEach(([x, y]) => { glow(ctx, x, y, 5, '#cfe0ff', 0.8); for (let i = 0; i < 5; i++) { const a = i / 5 * Math.PI * 2; dab(ctx, x + Math.cos(a) * 1.6, y + Math.sin(a) * 1.6, 1.2, 1.2, '#ffffff'); } dab(ctx, x, y, 0.8, 0.8, C.mustard); });
+    }),
+
+    // 霜晶小龍：圓滾滾的冰藍色龍寶寶，背上一排冰晶，短短的小翅膀，吐一口雪花
+    frostling: () => babyDragon(218, {
+      body: '#9cc8e6', belly: '#e8f4fb', hue: '#d8f0ff', wing: '#7fb0d8', wingBack: '#6690b8', horn: '#eef8ff', spike: '#d4f0ff',
+      tail: (ctx, r) => { const p = new Path2D(); p.moveTo(0, -5); p.lineTo(4, 0); p.lineTo(0, 5); p.lineTo(-4, 0); p.closePath(); paint(ctx, r, T(p, 86, 58, 20), [80, 52, 12, 12], '#d4f0ff', { lw: 1.4, shine: false }); },
+      breath: (ctx, r) => { [[12, 30, 3.4], [7, 38, 2.6], [15, 41, 2.2]].forEach(([x, y, s]) => { ctx.save(); ctx.strokeStyle = INK; ctx.lineWidth = 2.6; ctx.lineCap = 'round'; for (let i = 0; i < 3; i++) { const a = i / 3 * Math.PI; ctx.beginPath(); ctx.moveTo(x - Math.cos(a) * s, y - Math.sin(a) * s); ctx.lineTo(x + Math.cos(a) * s, y + Math.sin(a) * s); ctx.stroke(); } ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.2; for (let i = 0; i < 3; i++) { const a = i / 3 * Math.PI; ctx.beginPath(); ctx.moveTo(x - Math.cos(a) * s, y - Math.sin(a) * s); ctx.lineTo(x + Math.cos(a) * s, y + Math.sin(a) * s); ctx.stroke(); } ctx.restore(); }); },
+    }),
+
+    // 熔岩小龍：同一窩的另一隻，黑紅色的岩石皮，身上裂縫透出岩漿光，尾巴尖是一團火
+    magmaling: () => babyDragon(219, {
+      body: '#5a4448', belly: '#e9a060', hue: '#8a4a40', wing: '#a84a3a', wingBack: '#7e3a32', horn: '#3a3036', spike: '#3a3036',
+      cracks: true,
+      tail: (ctx, r) => { glow(ctx, 86, 54, 10, '#f0a24a', 0.7); paint(ctx, r, flame(86, 56, 1), [80, 48, 12, 12], '#f08a3a', { lw: 1.4, shine: false, hue: '#fff0b0', at: [0.5, 0.8] }); },
+      breath: (ctx, r) => { [[12, 33, 0.8], [6, 40, 0.6]].forEach(([x, y, s]) => { glow(ctx, x, y, 8 * s, '#f0a24a', 0.7); paint(ctx, r, flame(x, y, s), [x - 5, y - 7, 10, 11], '#f08a3a', { lw: 1.2, shine: false, hue: '#fff0b0', at: [0.5, 0.8] }); }); },
+    }),
+
+    // 守陵石像獸（精英）：陵寢門口那兩座石像活過來了，有角有翅膀的石獸，一隻眼睛是冰、一隻是火
+    warden: () => canvas(120, 100, 220, (ctx, r) => {
+      shadow(ctx, 60, 95, 40);
+      const stone = '#8e929c', stoneD = '#767a86';
+      paint(ctx, r, RR(22, 84, 76, 11, 3), [22, 84, 76, 11], '#7c808a', { lw: 2, shine: false });
+      brush(ctx, [[28, 89], [92, 89]], 1, 'rgba(60,60,80,0.35)');
+      // 翅膀
+      [-1, 1].forEach(k => {
+        const p = new Path2D(); p.moveTo(60 + k * 14, 46); p.quadraticCurveTo(60 + k * 30, 12, 60 + k * 54, 10);
+        p.quadraticCurveTo(60 + k * 50, 24, 60 + k * 56, 36); p.quadraticCurveTo(60 + k * 46, 38, 60 + k * 50, 50);
+        p.quadraticCurveTo(60 + k * 38, 50, 60 + k * 38, 62); p.quadraticCurveTo(60 + k * 26, 56, 60 + k * 18, 62); p.closePath();
+        paint(ctx, r, p, [k < 0 ? 4 : 74, 10, 42, 52], stoneD, { lw: 2.2, shine: false, dir: k * 0.6 });
+        [[22, 50, 38], [34, 46, 52], [46, 44, 34]].forEach(([a, b, c]) => brush(ctx, [[60 + k * a, 48], [60 + k * b, c - 10]], 1.3, 'rgba(60,62,80,0.55)'));
+      });
+      // 坐著的身體
+      paint(ctx, r, S([[44, 44], [76, 44], [84, 72], [78, 86], [42, 86], [36, 72]]), [36, 44, 48, 42], stone, { hue: '#b4b8bc', at: [0.3, 0.2] });
+      [[42, 84], [78, 84]].forEach(([x, y]) => { paint(ctx, r, E(x, y, 9, 5), [x - 9, y - 5, 18, 10], stone, { lw: 2, shine: false }); [-4, 0, 4].forEach(d => brush(ctx, [[x + d, y + 1], [x + d, y + 4]], 1, 'rgba(60,62,80,0.6)')); });
+      [[50, 60, 50, 84], [70, 60, 70, 84]].forEach(([a, b, c, d]) => limb(ctx, [[a, b], [c, d]], 6.4, stone));
+      [[50, 85], [70, 85]].forEach(([x, y]) => ball(ctx, r, x, y, 5.6, 3.4, stone));
+      brush(ctx, [[74, 52], [70, 60], [74, 66], [71, 74]], 1.2, 'rgba(60,62,80,0.7)');
+      // 頭
+      [-1, 1].forEach(k => { const p = new Path2D(); p.moveTo(60 + k * 9, 20); p.quadraticCurveTo(60 + k * 20, 14, 60 + k * 22, 2); p.quadraticCurveTo(60 + k * 14, 10, 60 + k * 4, 16); p.closePath(); paint(ctx, r, p, [k < 0 ? 38 : 64, 2, 18, 18], '#6e6a74', { lw: 1.8, shine: false }); });
+      paint(ctx, r, E(60, 32, 19, 16), [41, 16, 38, 32], stone, { hue: '#b4b8bc', at: [0.3, 0.2] });
+      paint(ctx, r, E(60, 41, 11, 7), [49, 34, 22, 14], '#a2a6ae', { lw: 1.6, shine: false });
+      [[55, 40], [65, 40]].forEach(([x, y]) => dab(ctx, x, y, 1.4, 1, INK));
+      [[52, 46, 1], [68, 46, -1]].forEach(([x, y, k]) => { const p = new Path2D(); p.moveTo(x - 2, y - 1); p.lineTo(x + 2, y - 1); p.lineTo(x + k, y + 4); p.closePath(); paint(ctx, r, p, [x - 2, y - 1, 4, 5], '#f3ecdf', { lw: 1, shine: false }); });
+      // 眼睛：左冰右火
+      [[52, 30, '#9ad8ff'], [68, 30, '#ffb060']].forEach(([x, y, c]) => { glow(ctx, x, y, 8, c, 0.9); paint(ctx, r, E(x, y, 3.4, 2.6), [x - 4, y - 3, 8, 6], c, { lw: 1.4, shine: false }); dab(ctx, x - 0.8, y - 0.6, 1, 0.8, '#ffffff'); });
+      brush(ctx, [[47, 25], [56, 27]], 1.6, INK); brush(ctx, [[73, 25], [64, 27]], 1.6, INK);
+      // 冰晶跟熔岩：一邊肩膀結冰，另一邊裂開透火光
+      [[40, 50, -20, 7], [36, 56, -50, 5], [44, 47, 10, 5]].forEach(([x, y, a, s]) => { const p = new Path2D(); p.moveTo(-s * 0.5, 0); p.lineTo(0, -s * 1.6); p.lineTo(s * 0.5, 0); p.closePath(); paint(ctx, r, T(p, x, y, a), [x - s, y - s * 2, s * 2, s * 2], '#cfeeff', { lw: 1.4, shine: false }); });
+      glow(ctx, 80, 58, 10, '#f0a24a', 0.6);
+      brush(ctx, [[76, 50], [80, 56], [78, 62], [82, 68]], 3.4, INK); brush(ctx, [[76, 50], [80, 56], [78, 62], [82, 68]], 1.8, '#f6a24a');
+      // 青苔
+      [[52, 18, 6], [80, 72, 4], [40, 74, 5]].forEach(([x, y, s]) => paint(ctx, r, S([[x - s, y], [x - s * 0.3, y - s * 0.5], [x + s, y - s * 0.2], [x + s * 0.4, y + s * 0.4]]), [x - s, y - s, s * 2, s * 2], '#7f9f5a', { lw: 1.2, shine: false }));
+    }),
   };
 
   // 名字（跟 shared/stats.js 的 MOBS 對應）
   const NAMES = { sticky: '便利貼精', seen: '已讀飄飄', wok: '甩鍋鍋', octo: '會議章魚', clock: '加班鬧鐘', boss: '急件老闆', fart: '愛放屁的馬',
-    lamp: '燈猴', lion: '石獅仔', imp: '小魔神仔', tiger: '虎姑婆婆' };
+    lamp: '燈猴', lion: '石獅仔', imp: '小魔神仔', tiger: '虎姑婆婆',
+    shroom: '蘑菇精', thorn: '荊棘藤妖', mossling: '苔蘚小石像', pebble: '石頭精', sapling: '樹人寶寶', wisp: '鬼火小精靈', moondeer: '月光鹿',
+    frostling: '霜晶小龍', magmaling: '熔岩小龍', warden: '守陵石像獸' };
 
   root.HQ_FIELD_MOBS = {
     // scale：畫布解析度（預設兩倍），預覽圖可以畫大一點

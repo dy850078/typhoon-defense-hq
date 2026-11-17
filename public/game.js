@@ -42,6 +42,9 @@
   // 場景裡的文字框統一用米白紙條：Phaser 的 Text 只會畫方方正正的底色，
   // 所以底色設成 PAPER 的文字改成先畫字、再在字的後面補一張蠟筆描邊的紙條
   const PAPER = '#fbf6e9', INK = '#2b2a33';
+  // 熟練度升級招式多出來那層光的顏色（金色光圈外面再染一點職業色）
+  const UP_COLOR = { staff: 0xff8a3d, prophet: 0x9b7be8, nurse: 0xff8fab, archer: 0x7be08f, tank: 0xffb020,
+    skater: 0x8fd3ff, summoner: 0x7be08f, singer: 0xf48cb6, painter: 0xff6b6b };
   (function paperText() {
     const Txt = Phaser.GameObjects.Text.prototype, orig = Txt.updateText;
     Txt.updateText = function () {
@@ -256,6 +259,7 @@
       myEquip = res.you.equip || {};
       GACHA_UI.setPity(res.you.gachaPity);
       myMastery = res.you.mastery || {};
+      renderSkillbar();
       $('join').hidden = true;
       $('hud').hidden = false;
       $('messages').innerHTML = '';
@@ -476,8 +480,21 @@
   socket.on('mobAttack', (a) => scene && scene.onMobAttack(a));
   socket.on('levelUp', (l) => scene && scene.onLevelUp(l));
   // 職業熟練度：自己的進度（每 3 秒有變才送）、有人升階
-  socket.on('mastery', (m) => { myMastery = m || {}; if (modalKind === 'char' && charTab === 'cls') openChar(); });
-  socket.on('tierUp', (t) => scene && scene.onTierUp(t));
+  socket.on('mastery', (m) => {
+    const t0 = myTier();
+    myMastery = m || {};
+    if (myTier() !== t0) renderSkillbar();
+    if (modalKind === 'char' && charTab === 'cls') openChar();
+  });
+  socket.on('tierUp', (t) => {
+    // 自己升階：進度每 3 秒才同步一次，先把這一階補上，技能欄的金框馬上換
+    if (me && t.id === me.id && ST.MASTERY.tierOf(myMastery[t.cls]) < t.tier) {
+      myMastery[t.cls] = ST.MASTERY.need[t.tier];
+      renderSkillbar();
+      if (modalKind === 'char') openChar();
+    }
+    if (scene) scene.onTierUp(t);
+  });
   socket.on('firework', (f) => scene && scene.launchFirework(f));
   socket.on('crateHit', (c) => scene && scene.onCrateHit(c));
   socket.on('itemGot', (g) => scene && scene.onItemGot(g));
@@ -3334,6 +3351,7 @@
       b.appendChild(icon('sk-' + id, sk.icon, 'sk-icon'));
       b.appendChild(el('kbd', null, key));
       b.setAttribute('aria-label', sk.name);
+      b.classList.toggle('up', ST.skillUp(myCls(), id, myTier()) > 1); // 熟練度升級過的招：金框
       b.tip = () => [sk.name, `${key === '空白' ? '空白鍵' : key} · ${sk.mp ? sk.mp + ' MP · ' : ''}冷卻 ${sk.cooldown / 1000} 秒` +
         (sk.support ? '' : ` · 射程 ${sk.range}`), sk.desc];
     });
@@ -3382,7 +3400,8 @@
     skillsOf().forEach((id, i) => {
       const sk = ST.SKILLS[id];
       const row = el('div', 'modal-row');
-      row.appendChild(el('div', 'modal-icon')).appendChild(icon('sk-' + id, sk.icon));
+      const up = ST.skillUp(myCls(), id, myTier());
+      row.appendChild(el('div', 'modal-icon' + (up > 1 ? ' up' : ''))).appendChild(icon('sk-' + id, sk.icon));
       const inf = el('div', 'modal-info');
       inf.appendChild(el('b', null, sk.name));
       inf.appendChild(el('span', 'mono tag', `${['空白鍵', 'K', 'L'][i]} · ${sk.mp} MP · 冷卻 ${sk.cooldown / 1000} 秒` +
@@ -3390,12 +3409,14 @@
       inf.appendChild(el('p', null, sk.desc));
       const lv = myStats ? myStats.level : 1, k = ST.boost(lv), plus = ST.bonusDef(lv);
       const now = [];
-      if (sk.power && myStats) now.push(`傷害約 ${Math.round(myStats.atk * sk.power * 0.6)}～${Math.round(myStats.atk * sk.power * 1.2)}`);
-      if (sk.heal) now.push(`補 ${Math.round(sk.heal.hp * k)} 血、${Math.round(sk.heal.mp * k)} 魔力`);
-      if (sk.teamDef) now.push(`隊友防禦 +${sk.teamDef.v + plus}`);
-      if (sk.selfDef) now.push(`自己防禦 +${sk.selfDef.v + plus}`);
-      if (sk.teamAtk) now.push(`隊友攻擊 +${Math.round(sk.teamAtk.mul * 100)}%`);
-      if (sk.summon) now.push(`召喚物攻擊和血量 ×${k.toFixed(2)}`);
+      if (sk.power && myStats) now.push(`傷害約 ${Math.round(myStats.atk * sk.power * 0.6 * up)}～${Math.round(myStats.atk * sk.power * 1.2 * up)}`);
+      if (sk.heal) now.push(`補 ${Math.round(sk.heal.hp * k * up)} 血、${Math.round(sk.heal.mp * k * up)} 魔力`);
+      if (sk.teamDef) now.push(`隊友防禦 +${Math.round((sk.teamDef.v + plus) * up)}`);
+      if (sk.selfDef) now.push(`自己防禦 +${Math.round((sk.selfDef.v + plus) * up)}`);
+      if (sk.teamAtk) now.push(`隊友攻擊 +${Math.round(sk.teamAtk.mul * up * 100)}%`);
+      if (sk.summon) now.push(`召喚物攻擊和血量 ×${(k * up).toFixed(2)}`);
+      if (sk.wall && sk.wall.burn) now.push(`每秒燒普攻 ${+(sk.wall.burn * up).toFixed(2)} 倍`);
+      if (sk.wall && sk.wall.freeze) now.push(`凍住 ${+(sk.wall.freeze * up / 1000).toFixed(1)} 秒`);
       if (now.length) inf.appendChild(el('p', 'mono', `Lv.${lv} 目前效果：${now.join('、')}`));
       row.appendChild(inf);
       const b = el('button', 'primary small', '使用');
@@ -3506,8 +3527,11 @@
       }
       const sks = detail.appendChild(el('div', 'char-cls-sks'));
       c.skills.forEach((id, i) => {
-        const sk = ST.SKILLS[id], s = sks.appendChild(el('div', 'char-cls-sk'));
-        s.appendChild(icon('sk-' + id, sk.icon));
+        const need = i === 1 ? 2 : i === 2 ? 3 : 0;
+        const sk = ST.SKILLS[id], s = sks.appendChild(el('div', 'char-cls-sk' + (need && t >= need ? ' up' : '')));
+        const ic = s.appendChild(el('span', 'char-cls-ic'));
+        ic.appendChild(icon('sk-' + id, sk.icon));
+        if (need && t < need) ic.appendChild(el('i', 'char-up-lock mono', String(need))); // 練到幾階會升級
         s.appendChild(el('small', 'mono', ['空白', 'K', 'L'][i]));
         s.appendChild(el('span', null, sk.name));
         s.title = sk.desc;
@@ -6743,6 +6767,35 @@
     }
 
     // 職業技能的特效
+    // 熟練度升級過的 K、L 招：範圍一樣，但多一層亮光——地上一圈發光的圓、往外放射的光芒、一把星星
+    // 打怪的招在怪身上亮（等飛行物到），範圍招和補血加攻這種在自己腳下亮
+    upFx(who, fx, sk, mx, my) {
+      const cls = Object.keys(ST.CLASSES).find(k => ST.CLASSES[k].skills.includes(fx.skill)) || 'staff';
+      const col = UP_COLOR[cls] || 0xffc93c;
+      const self = sk.support || sk.aoe;
+      const r = Math.min(260, sk.aoe || sk.aoeAt || (sk.heal && sk.heal.r) || (sk.teamDef && sk.teamDef.r) || (sk.teamAtk && sk.teamAtk.r) || 90);
+      const at = () => (self ? { x: who.x, y: who.y } : { x: mx, y: my + 30 });
+      this.time.delayedCall(self ? 60 : 240, () => {
+        const { x, y } = at();
+        const g = this.add.graphics({ x, y }).setDepth(-4);
+        g.fillStyle(col, 0.28); g.fillEllipse(0, 0, r * 2.2, r * 1.5);
+        g.fillStyle(0xfff1a8, 0.35); g.fillEllipse(0, 0, r * 1.1, r * 0.75);
+        g.lineStyle(5, 0xffc93c, 0.95); g.strokeEllipse(0, 0, r * 2.2, r * 1.5);
+        g.lineStyle(2, 0xffffff, 0.9); g.strokeEllipse(0, 0, r * 1.6, r * 1.1);
+        for (let i = 0; i < 12; i++) {
+          const a = i / 12 * Math.PI * 2 + 0.2, c = Math.cos(a), sn = Math.sin(a) * 0.68;
+          g.lineStyle(i % 2 ? 2 : 4, 0xffc93c, 0.9); g.lineBetween(c * r * 0.95, sn * r * 0.95, c * r * 1.3, sn * r * 1.3);
+        }
+        this.tweens.add({ targets: g, scale: { from: 0.25, to: 1 }, alpha: { from: 1, to: 0 }, duration: 900, ease: 'Quad.out', onComplete: () => g.destroy() });
+        this.burst(x, y - 30, 12, 0xffe27a, r * 0.9);
+        this.burst(x, y - 30, 6, col, r * 0.6);
+        // 幾顆白色小星星往上飄
+        for (let i = 0; i < 5; i++) {
+          const st = this.add.image(x + (Math.random() - 0.5) * r, y - Math.random() * 30, 'fx-star').setDepth(2051).setScale(0.5);
+          this.tweens.add({ targets: st, y: st.y - 70 - Math.random() * 40, alpha: 0, angle: 200, delay: i * 70, duration: 900, onComplete: () => st.destroy() });
+        }
+      });
+    }
     onSkillFx(fx) {
       if (fxOff()) return;
       const who = me && fx.id === me.id ? this.me : this.remotes.get(fx.id);
@@ -6750,7 +6803,8 @@
       const sk = ST.SKILLS[fx.skill];
       const foe = this.foePos(fx.target);
       const mx = foe.x, my = foe.mid;
-      if (!sk.basic) this.floatText(who.x, who.y - 130, `${sk.name}！`, '#ffd23f', 20, 'sk-' + fx.skill);
+      if (!sk.basic) this.floatText(who.x, who.y - 130, `${sk.name}！`, fx.up ? '#ffb020' : '#ffd23f', fx.up ? 24 : 20, 'sk-' + fx.skill);
+      if (fx.up) this.upFx(who, fx, sk, mx, my);
       const ring = (r, color) => {
         const g = this.add.graphics({ x: who.x, y: who.y }).setDepth(-4);
         g.fillStyle(color, 0.25); g.fillEllipse(0, 0, r * 2, r * 1.4);

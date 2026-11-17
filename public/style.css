@@ -1258,3 +1258,11 @@ button.inv-item:hover { border-color: var(--accent); }
 .char-passive-k { flex-shrink: 0; font-weight: 900; font-size: 13px; color: var(--muted); }
 .char-passive.on .char-passive-k { color: #b07d10; }
 .char-line .badge-ic { width: 22px; height: 22px; }
+/* 熟練度升級過的 K、L 招：技能鈕金框＋一點光；面板裡的圖示一圈金光，還沒升級的角落標要練到幾階 */
+.sk-btn.up { border-color: #e0a92a; box-shadow: 0 3px 0 #131a28, 0 0 0 2px #ffd23f, 0 0 14px rgba(255,201,60,.75); }
+.char-cls-ic { position: relative; display: inline-flex; width: 48px; height: 48px; align-items: center; justify-content: center; border-radius: 50%; }
+.char-cls-sk.up .char-cls-ic { background: radial-gradient(circle, #fff3c4 30%, rgba(255,210,63,.35) 70%, transparent 72%); box-shadow: 0 0 0 2.5px #e0a92a, 0 0 12px rgba(255,201,60,.7); }
+.char-up-lock { position: absolute; right: -2px; bottom: -2px; width: 17px; height: 17px; border-radius: 50%; background: #d6d3cb;
+  color: #fff; font-size: 11px; font-style: normal; font-weight: 700; line-height: 17px; text-align: center; border: 1.5px solid var(--paper, #fbf6e9); }
+.modal-icon.up .hq-icon { border-radius: 50%; background: radial-gradient(circle, #fff3c4 40%, rgba(255,210,63,.3) 72%, transparent 74%);
+  box-shadow: 0 0 0 2.5px #e0a92a, 0 0 12px rgba(255,201,60,.7); }

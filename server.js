@@ -1837,7 +1837,10 @@ io.on('connection', (socket) => {
     const now = Date.now();
     if (now - lastAction < 300 || now < (p.cooldowns[skillId] || 0)) return ack({ ok: false });
     // 插畫結界師的城牆：target 是畫出來的線
-    const wallDef = skill.wall && isPassive(p, 'painter') ? Object.assign({}, skill.wall, { len: STATS.MASTERY.V.painterLen, ms: STATS.MASTERY.V.painterMs }) : skill.wall;
+    // 熟練度 2 階的 K 招、3 階的 L 招效果 +20%
+    const up = STATS.skillUp(p.cls, skillId, tierOf(p));
+    let wallDef = skill.wall && isPassive(p, 'painter') ? Object.assign({}, skill.wall, { len: STATS.MASTERY.V.painterLen, ms: STATS.MASTERY.V.painterMs }) : skill.wall;
+    if (wallDef && up > 1) wallDef = Object.assign({}, wallDef, wallDef.burn ? { burn: wallDef.burn * up } : {}, wallDef.freeze ? { freeze: Math.round(wallDef.freeze * up) } : {});
     const line = skill.wall ? wallLine(p, target && target.pts, wallDef.len) : null;
     if (skill.wall && !line) return ack({ ok: false, error: '要在野區、自己附近畫一條線' });
     if (skill.wall) target = 'boss';
@@ -1864,12 +1867,13 @@ io.on('connection', (socket) => {
 
     // 各種效果
     const fx = { id: p.id, skill: skillId, x: Math.round(p.x), y: Math.round(p.y), target: isBoss || !foe ? 'boss' : foe.id, targets: [] };
+    if (up > 1) fx.up = 1;
     const around = (r) => alivePlayers().filter(q => dist(q.x, q.y, p.x, p.y) <= r);
     let support = 0; // 補血、加防也算經驗
     // 補血、加防的量跟著等級變強
     const boost = STATS.boost(p.level), plusDef = STATS.bonusDef(p.level);
     if (skill.heal) {
-      const hp = Math.round(skill.heal.hp * boost * (isPassive(p, 'nurse') ? STATS.MASTERY.V.nurseHeal : 1)), mp = Math.round(skill.heal.mp * boost);
+      const hp = Math.round(skill.heal.hp * boost * up * (isPassive(p, 'nurse') ? STATS.MASTERY.V.nurseHeal : 1)), mp = Math.round(skill.heal.mp * boost * up);
       around(skill.heal.r).forEach(q => {
         support += Math.min(hp, q.maxHp - q.hp);
         q.hp = Math.min(q.maxHp, q.hp + hp);
@@ -1880,16 +1884,16 @@ io.on('connection', (socket) => {
     }
     if (skill.teamDef) {
       around(skill.teamDef.r).forEach(q => {
-        q.buffs.team = { v: skill.teamDef.v + plusDef, until: now + skill.teamDef.ms };
+        q.buffs.team = { v: Math.round((skill.teamDef.v + plusDef) * up), until: now + skill.teamDef.ms };
         fx.targets.push(q.id);
         support += 15;
         if (q !== p) sendStats(q);
       });
     }
-    if (skill.selfDef) p.buffs.self = { v: skill.selfDef.v + plusDef, until: now + skill.selfDef.ms };
+    if (skill.selfDef) p.buffs.self = { v: Math.round((skill.selfDef.v + plusDef) * up), until: now + skill.selfDef.ms };
     if (skill.teamAtk) {
       around(skill.teamAtk.r).forEach(q => {
-        q.atkBuff = { mul: skill.teamAtk.mul, until: now + skill.teamAtk.ms };
+        q.atkBuff = { mul: skill.teamAtk.mul * up, until: now + skill.teamAtk.ms };
         fx.targets.push(q.id);
         support += 15;
         if (q !== p) sendStats(q);
@@ -1900,10 +1904,10 @@ io.on('connection', (socket) => {
       support += 15;
     }
     if (skill.summon) {
-      const def = STATS.SUMMONS[kind], smHp = isPassive(p, 'summoner') ? STATS.MASTERY.V.summonHp : 1;
+      const def = STATS.SUMMONS[kind], smHp = (isPassive(p, 'summoner') ? STATS.MASTERY.V.summonHp : 1) * up;
       const sm = { id: 's' + (++summonSeq), summon: true, kind, owner: p.id, ownerName: p.name,
         x: p.x + (Math.random() < 0.5 ? -50 : 50), y: p.y + 10, hp: Math.round(def.hp * boost * smHp), maxHp: Math.round(def.hp * boost * smHp),
-        atk: Math.round(def.atk * boost), nextHit: now + 800 };
+        atk: Math.round(def.atk * boost * up), nextHit: now + 800 };
       summons.push(sm);
       io.emit('summon', summonState(sm));
       support += 20;
@@ -1964,7 +1968,7 @@ io.on('connection', (socket) => {
       const weak = weakMul(f, now);
       // 二轉的精靈射手：站得越遠打越痛
       const far = isPassive(p, 'archer') ? 1 + STATS.MASTERY.V.archerFar * clamp(STATS.foeGap(p, f, b) / 420, 0, 1) : 1;
-      const dmg = Math.round(atkOf(p) * skill.power * (mul || 1) * (0.6 + Math.random() * 0.6) * (crit ? 2.5 : 1) * weak * far);
+      const dmg = Math.round(atkOf(p) * skill.power * (mul || 1) * (0.6 + Math.random() * 0.6) * (crit ? 2.5 : 1) * weak * far * up);
       total += dmg;
       damageFoe(p, f, b, dmg, crit, skillId);
     });

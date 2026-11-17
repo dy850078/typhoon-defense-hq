@@ -105,6 +105,7 @@ app.use(express.static(path.join(__dirname, 'public'), fresh));
 app.use('/shared', express.static(path.join(__dirname, 'shared'), fresh));
 app.use('/vendor', express.static(path.join(__dirname, 'node_modules/phaser/dist'), fresh));
 app.use('/vendor3', express.static(path.join(__dirname, 'node_modules/three/build'), fresh));   // 新世界測試頁用的 3D 元件
+app.use('/vendor3/jsm', express.static(path.join(__dirname, 'node_modules/three/examples/jsm'), fresh));   // 讀 3D 模型檔（GLTFLoader）和複製骨架角色用
 // 小樹屋語音用的 ICE 伺服器：預設只有 Google 的 STUN；有些公司、學校網路連不上的話，設 TURN_URL/TURN_USER/TURN_PASS 加一台中繼
 const ICE_SERVERS = [{ urls: 'stun:stun.l.google.com:19302' }].concat(process.env.TURN_URL
   ? [{ urls: process.env.TURN_URL.split(','), username: process.env.TURN_USER || '', credential: process.env.TURN_PASS || '' }] : []);
@@ -350,11 +351,15 @@ app.get('/api/me', (req, res) => {
   res.json(meOf(u));
 });
 // 新世界測試頁（public/newworld.html）：3D 場景的程式放在 newworld/，只有管理員帳號拿得到，其他人只會看到「施工中」
-app.get('/api/newworld/world.js', (req, res) => {
+// 3D 模型檔（Blender 做的標準人物、冰龍之翼）也一樣只給管理員
+const NEWWORLD_FILES = { 'world.js': ['world.js', 'application/javascript'], 'char.glb': ['assets/char.glb', 'model/gltf-binary'], 'wing-ice.glb': ['assets/wing-ice.glb', 'model/gltf-binary'] };
+app.get('/api/newworld/:file', (req, res) => {
+  const f = NEWWORLD_FILES[req.params.file];
+  if (!f) return res.status(404).json({ ok: false });
   const u = accounts.byToken(bearer(req));
   if (!u) return res.status(401).json({ ok: false });
   if (!u.admin) return res.status(403).json({ ok: false });
-  res.set('Cache-Control', 'no-cache').type('application/javascript').sendFile(path.join(__dirname, 'newworld', 'world.js'));
+  res.set('Cache-Control', 'no-cache').type(f[1]).sendFile(path.join(__dirname, 'newworld', f[0]));
 });
 // 報名頁改了邀請函，或是在沒登入的時候玩過，把資料存回帳號
 app.post('/api/save', (req, res) => {

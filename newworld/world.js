@@ -570,6 +570,127 @@ const TW = Q.town ? (() => {
   return T;
 })() : null;
 
+// ===== 標準人物（Blender 做的同一個底模，換髮型、上衣、臉、眼鏡、顏色）＋冰龍之翼 =====
+// 模型檔由 newworld.html 先下載好放在 window.NW_ASSETS；每個角色都複製一份骨架和材質，各自換裝。
+const STD = (() => {
+  const AS = window.NW_ASSETS, LIB = window.NW_LIB;
+  if (!AS || !AS.char || !LIB) return null;
+  const LC = new THREE.Color('#' + (Q.lc || 'c2a48a')), LW = +(Q.lw || 1), HEIGHT = 2.15;
+  const FLAT = /face_line|glasses|blush|nose/, NOLINE = /face_line|blush|nose|glasses|ear_inner|sole|stubble|stripe|string|button/;
+  const PARTS = { hair: ['bowl', 'bob', 'buns'], top: ['tee', 'dress', 'hoodie'], face: ['smile', 'dot'] };
+  const PART_SET = new Set(['Body', 'Shoes', 'Bottom_shorts', 'Top_tee', 'Top_dress', 'Top_hoodie', 'Hair_bowl', 'Hair_bob', 'Hair_buns', 'Glasses', 'Face_smile', 'Face_dot']);
+  const NAMES = { bowl: '西瓜皮', bob: '妹妹頭', buns: '丸子頭', tee: '條紋T', dress: '洋裝', hoodie: '帽T', smile: '笑眼', dot: '圓眼' };
+  // 顏色選項（換裝面板用）：key 是 Blender 裡的材質名稱
+  const SWATCH = {
+    hair: ['#23262f', '#7a4a2e', '#e6b85a', '#c9566b', '#8fb4d8'],
+    skin: ['#f8d9bb', '#e9b98f', '#c98e66', '#fbe6d6'],
+    top: ['#f6a3b4', '#f2c86a', '#8fc2a0', '#e98a6a', '#8fb4d8', '#b9a6e0'],
+  };
+  const SKIN_SET = { '#f8d9bb': ['#f3b49a', '#f1b9a4'], '#e9b98f': ['#dd9a78', '#d99a80'], '#c98e66': ['#b8745a', '#b77a60'], '#fbe6d6': ['#f5bfae', '#f3c4b4'] };
+
+  // 冰龍之翼：翼膜蠟筆筆觸＋亮點，骨頭淡顆粒（跟試做的冰翼一樣）
+  const RAMP4 = (() => { const t = new THREE.DataTexture(new Uint8Array([120, 175, 225, 255]), 4, 1, THREE.RedFormat); t.minFilter = t.magFilter = THREE.NearestFilter; t.needsUpdate = true; return t; })();
+  const CRAYON = (() => { const c = document.createElement('canvas'); c.width = c.height = 512; const x = c.getContext('2d'), r = rnd(21); x.fillStyle = '#cfcfcf'; x.fillRect(0, 0, 512, 512);
+    for (let i = 0; i < 2600; i++) { const a = r() * 512, b = r() * 512, l = 8 + r() * 22, th = -0.9 + (r() - 0.5) * 0.5; x.strokeStyle = r() < 0.55 ? `rgba(20,30,90,${0.1 + r() * 0.16})` : `rgba(255,255,255,${0.14 + r() * 0.22})`; x.lineWidth = 1.5 + r() * 3.5; x.lineCap = 'round'; x.beginPath(); x.moveTo(a, b); x.lineTo(a + Math.cos(th) * l, b + Math.sin(th) * l); x.stroke(); }
+    for (let k = 0; k < 12; k++) { const cx = r() * 512, cy = r() * 512, n = 4 + (r() * 4 | 0); for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) { if (r() < 0.25) continue; x.fillStyle = `rgba(255,255,255,${0.75 + r() * 0.25})`; x.beginPath(); x.arc(cx + i * 15 + j * 5, cy + j * 15 - i * 5, 2.6 + r() * 1.8, 0, 7); x.fill(); } }
+    const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(2.2, 2.2); t.colorSpace = THREE.SRGBColorSpace; return t; })();
+  const BGRAIN = GRAIN.clone(); BGRAIN.repeat.set(6, 6); BGRAIN.needsUpdate = true;
+  const outlines = [];
+  // 外框：同一份骨架，往外推一點、只畫背面
+  function addLine(o, w) {
+    const om = new THREE.MeshBasicMaterial({ color: LC, side: THREE.BackSide });
+    om.onBeforeCompile = (s) => { s.vertexShader = s.vertexShader.replace('#include <begin_vertex>', 'vec3 transformed = position + normalize(normal) * ' + (w * LW).toFixed(4) + ';'); };
+    const ol = o.clone(); ol.material = om; ol.castShadow = false; ol.frustumCulled = false; ol.bind(o.skeleton, o.bindMatrix); o.parent.add(ol); o.userData.line = ol; outlines.push(ol); return ol;
+  }
+  const scale0 = (() => { const b = new THREE.Box3().setFromObject(AS.char.scene); return HEIGHT / Math.max(0.01, b.max.y - b.min.y); })();
+
+  function makeWing(g) {   // 一邊的翅膀；回傳兩節骨頭和原本的轉向
+    const w = LIB.SkeletonUtils.clone(AS.wing.scene), bones = {};
+    w.traverse(o => { if (o.isBone) bones[o.name] = o; if (!o.isMesh) return;
+      const src = o.material, vc = src.name === 'membrane';
+      o.material = new THREE.MeshToonMaterial({ color: vc ? new THREE.Color(1.3, 1.3, 1.3) : src.color, vertexColors: vc, map: vc ? CRAYON : BGRAIN, gradientMap: RAMP4, side: THREE.DoubleSide });
+      o.castShadow = true; o.receiveShadow = false; o.frustumCulled = false; addLine(o, 0.03); });
+    const rest = {}; for (const n in bones) rest[n] = bones[n].quaternion.clone();
+    return { w, bones, rest };
+  }
+
+  function make(look) {
+    const g = LIB.SkeletonUtils.clone(AS.char.scene), meshes = [], bones = {};
+    g.traverse(o => { if (o.isBone) bones[o.name] = o; if (o.isMesh) meshes.push(o); });
+    meshes.forEach(o => {
+      let p = o; while (p && !PART_SET.has(p.name) && p.parent) p = p.parent;   // 多材質的零件會拆成好幾個子網格，往上找零件名稱
+      o.userData.part = p ? p.name : o.name;
+      const src = o.material, nm = src.name;
+      o.material = new THREE.MeshToonMaterial({ color: src.color.clone(), map: src.map || (FLAT.test(nm) ? null : GRAIN), gradientMap: RAMP });
+      o.material.userData = { name: nm, base: src.color.clone(), hasMap: !!src.map };
+      if (/face_line/.test(nm)) o.material.color.set(INK);
+      o.castShadow = true; o.receiveShadow = false; o.frustumCulled = false;
+      if (!NOLINE.test(nm)) addLine(o, 0.02);
+    });
+    const H = new THREE.Group(), body = new THREE.Group(); body.add(g); g.scale.setScalar(scale0); H.add(body); scene.add(H);
+    const mixer = new THREE.AnimationMixer(g), acts = {};
+    AS.char.animations.forEach(a => { acts[a.name] = mixer.clipAction(a); acts[a.name].play(); });
+    // 翅膀掛在脊椎骨上：先在角色自己的座標裡定好位置，再換算到骨頭底下
+    g.updateMatrixWorld(true);
+    const spine = bones.spine, wings = [-1, 1].map(k => {
+      const piv = new THREE.Group(), W = makeWing(g), holder = new THREE.Group();
+      holder.scale.set(k * 0.72 / scale0, 0.72 / scale0, 0.72 / scale0); holder.add(W.w); piv.add(holder);
+      const want = new THREE.Matrix4().compose(new THREE.Vector3(0.1 * k, 0.98, -0.3), new THREE.Quaternion(), new THREE.Vector3(1, 1, 1));
+      const inv = new THREE.Matrix4().copy(spine.matrixWorld).invert().multiply(g.matrixWorld).multiply(want);
+      inv.decompose(piv.position, piv.quaternion, piv.scale); spine.add(piv); return { piv, k, ...W };
+    });
+    const c = { H, body, g, meshes, mixer, acts, wings, look: {}, ph: Math.random() * 6, mv: 0, flap: Math.random() };
+    for (const n in W_DEFAULT) c.look[n] = W_DEFAULT[n];
+    setLook(c, look); return c;
+  }
+  const W_DEFAULT = { hair: 'bowl', top: 'tee', face: 'smile', glasses: true, wings: false, hairCol: null, skinCol: null, topCol: null };
+
+  function setLook(c, patch) {
+    Object.assign(c.look, patch || {}); const L = c.look;
+    const want = new Set(['Body', 'Shoes', 'Bottom_shorts', 'Hair_' + L.hair, 'Top_' + L.top, 'Face_' + L.face].concat(L.glasses ? ['Glasses'] : []));
+    c.meshes.forEach(o => { const on = want.has(o.userData.part); o.visible = on; if (o.userData.line) o.userData.line.visible = on && SHOW.lines;
+      const m = o.material, nm = m.userData.name; let col = null;
+      if (nm === 'hair' && L.hairCol) col = L.hairCol;
+      if (nm === 'skin' && L.skinCol) col = L.skinCol;
+      if (nm === 'nose' && L.skinCol) col = SKIN_SET[L.skinCol][0];
+      if (nm === 'ear_inner' && L.skinCol) col = SKIN_SET[L.skinCol][1];
+      if (/^(tee|dress|hoodie)$/.test(nm) && L.topCol) col = L.topCol;
+      // 條紋T 換顏色：白底藍條紋整件染上那個顏色，條紋還在
+      if (col) m.color.set(col); else { m.color.copy(m.userData.base); if (/face_line/.test(nm)) m.color.set(INK); }
+    });
+    c.wings.forEach(w => { w.piv.visible = !!L.wings; w.w.traverse(o => { if (o.isMesh && o.userData.line) o.userData.line.visible = !!L.wings && SHOW.lines; }); });
+  }
+  const SHOW = { lines: true };
+
+  // 每一格的動作：mv 0 = 站著、1 = 走路；翅膀上抬慢、下拍快
+  const Y = new THREE.Vector3(0, 1, 0), q = new THREE.Quaternion(), pw = new THREE.Quaternion(), pq = new THREE.Quaternion();
+  function swing(bone, restQ, piv, a) { bone.quaternion.copy(restQ); bone.parent.updateWorldMatrix(true, false); bone.parent.getWorldQuaternion(pw); piv.getWorldQuaternion(pq);
+    q.setFromAxisAngle(Y.clone().applyQuaternion(pq).applyQuaternion(pw.invert()), a); bone.quaternion.premultiply(q); }
+  const ease = (u) => u < 0.62 ? 0.5 - 0.5 * Math.cos(u / 0.62 * Math.PI) : 0.5 + 0.5 * Math.cos((u - 0.62) / 0.38 * Math.PI);
+  function tick(c, dt, mv, speed = 1) {
+    c.mv += (mv - c.mv) * Math.min(1, dt * 8);
+    c.acts.walk.setEffectiveWeight(c.mv); c.acts.idle.setEffectiveWeight(1 - c.mv);
+    c.acts.walk.timeScale = speed; c.mixer.update(dt);
+    if (!c.look.wings) return;
+    c.flap = (c.flap + dt / (c.mv > 0.5 ? 1.1 : 1.8)) % 1;
+    c.H.updateMatrixWorld(true);
+    c.wings.forEach(w => { const u = c.flap, u2 = (u - 0.08 + 1) % 1, f = 0.7 + 0.3 * c.mv;
+      swing(w.bones.wing_root, w.rest.wing_root, w.piv, 0.15 + 0.55 * ease(u) * f); swing(w.bones.wing_hand, w.rest.wing_hand, w.piv, (0.1 + 0.6 * ease(u2)) * f); });
+  }
+  function lines(on) { SHOW.lines = on; ALL.forEach(c => setLook(c)); }
+  const ALL = [];
+  return { make: (look) => { const c = make(look); ALL.push(c); return c; }, setLook, tick, lines, PARTS, NAMES, SWATCH, all: ALL };
+})();
+// 一般玩家換成標準人物；自己的角色也是標準人物，背上可以開冰龍之翼
+if (STD && TW) {
+  [TW.h1, TW.h2, TW.h3].forEach(h => { h.visible = false; });
+  const at = (c, x, z, ry) => { c.H.position.set(x, 0, z); c.H.rotation.y = ry; return c; };
+  TW.s1 = at(STD.make({ hair: 'bowl', top: 'tee', face: 'smile', glasses: true }), -7.4, 6.2, 0);
+  TW.s2 = at(STD.make({ hair: 'bob', top: 'dress', face: 'dot', glasses: false, hairCol: '#7a4a2e' }), -2.4, 9.8, -0.9);
+  TW.s3 = at(STD.make({ hair: 'buns', top: 'hoodie', face: 'dot', glasses: true, skinCol: '#e9b98f', topCol: '#8fc2a0' }), -4.9, 10.6, 1.6);
+  TW.me = at(STD.make({ hair: 'bob', top: 'dress', face: 'smile', glasses: true, wings: true, hairCol: '#e6b85a', topCol: '#b9a6e0' }), 2.5, 14, 0);
+}
+
 
 
 // ---- 燈光：兩版都用暖光 ----
@@ -601,9 +722,11 @@ const NW = (() => {
   const outlines = []; scene.traverse(o => { if (o.isMesh && o.material.isShaderMaterial) outlines.push(o); });
   Object.assign(sun.shadow.camera, { left: -26, right: 26, top: 26, bottom: -26, near: 1, far: 110 }); sun.shadow.camera.updateProjectionMatrix(); scene.add(sun.target);
 
-  const S = { x: 0, z: 0, face: 0, mv: 0, ph: 0, form: 'carry', cw: 1, gt: -1, time: 0, zoom: 0, quality: 1, lines: true, jx: 0, jy: 0, keys: {}, camT: new V3(0, 3.6, 3.2) };
+  // ME：自己操控的標準人物（有標準人物時預設操控它，按「角色」可以換回機器人騎士）
+  const ME = STD && TW && TW.me ? { c: TW.me, x: TW.me.H.position.x, z: TW.me.H.position.z, face: 0 } : null;
+  const S = { ctrl: ME ? 'me' : 'robot', x: 0, z: 0, face: 0, mv: 0, ph: 0, form: 'carry', cw: 1, gt: -1, time: 0, zoom: 0, quality: 1, lines: true, jx: 0, jy: 0, keys: {}, camT: new V3(0, 3.6, 3.2) };
   const FORMS = ['carry', 'float', 'front'], FORM_NAME = { carry: '單手捧著', float: '漂浮操控', front: '走在前面' };
-  const CAM = [{ dist: 47, hgt: 17 }, { dist: 30, hgt: 10.5 }], ANG = 0.62;
+  const CAM = [{ dist: 47, hgt: 17 }, { dist: 30, hgt: 10.5 }], CAM_ME = [{ dist: 30, hgt: 10.5 }, { dist: 17, hgt: 6 }], ANG = 0.62;
   const key = (tt, ks) => { for (let i = 0; i < ks.length - 1; i++) if (tt >= ks[i][0] && tt <= ks[i + 1][0]) return ks[i][1] + (ks[i + 1][1] - ks[i][1]) * sm((tt - ks[i][0]) / (ks[i + 1][0] - ks[i][0])); return 0; };
   const U = (tt) => tt < 0 ? 0 : key(tt, [[0, 0], [0.04, 0], [0.13, -1], [0.16, -1], [0.195, 1], [0.3, 1], [0.4, 0], [1, 0]]);   // 揮手：-1 舉高、+1 揮下去
   const Vv = (tt) => tt < 0 ? 0 : key(tt, [[0, 0], [0.46, 0], [0.54, 1], [0.68, 1], [0.8, 0], [1, 0]]);                            // 兩手高舉
@@ -614,7 +737,11 @@ const NW = (() => {
     // --- 移動：搖桿或鍵盤，方向以畫面為準 ---
     let jx = S.jx, jy = S.jy; const K = S.keys;
     if (K.ArrowLeft || K.a) jx -= 1; if (K.ArrowRight || K.d) jx += 1; if (K.ArrowUp || K.w) jy -= 1; if (K.ArrowDown || K.s) jy += 1;
-    const jl = Math.hypot(jx, jy), moving = jl > 0.15;
+    const jl = Math.hypot(jx, jy), moving = jl > 0.15 && S.ctrl === 'robot', meMoving = jl > 0.15 && S.ctrl === 'me';
+    if (ME) { if (meMoving) { const n = Math.min(1, jl) / jl, vx = (Math.cos(ANG) * jx + Math.sin(ANG) * jy) * n, vz = (-Math.sin(ANG) * jx + Math.cos(ANG) * jy) * n, sp = 4.2;
+        ME.x = Math.max(-70, Math.min(70, ME.x + vx * sp * dt)); ME.z = Math.max(-70, Math.min(70, ME.z + vz * sp * dt));
+        let df = Math.atan2(vx, vz) - ME.face; df = Math.atan2(Math.sin(df), Math.cos(df)); ME.face += df * Math.min(1, dt * 9); }
+      ME.c.H.position.set(ME.x, 0, ME.z); ME.c.H.rotation.y = ME.face; STD.tick(ME.c, dt, meMoving ? Math.min(1, jl) : 0, 1.6); }
     if (moving) { const n = Math.min(1, jl) / jl, vx = (Math.cos(ANG) * jx + Math.sin(ANG) * jy) * n, vz = (-Math.sin(ANG) * jx + Math.cos(ANG) * jy) * n, sp = 6.5;
       S.x = Math.max(-70, Math.min(70, S.x + vx * sp * dt)); S.z = Math.max(-70, Math.min(70, S.z + vz * sp * dt));
       let df = Math.atan2(vx, vz) - S.face; df = Math.atan2(Math.sin(df), Math.cos(df)); S.face += df * Math.min(1, dt * 7);
@@ -653,10 +780,11 @@ const NW = (() => {
     const a = t * PI2 * 2 + 2.2, cy = g.position.y + 1.36 * 1.25 + 0.35;
     A.plush.scale.setScalar(0.62); A.plush.position.set(g.position.x + Math.sin(a) * 1.05, cy + 0.2 * Math.cos(a) + 0.06 * Math.sin(t * PI2 * 6), g.position.z + Math.cos(a) * 1.05); A.plush.rotation.set(0.15 * Math.sin(t * PI2 * 6), a + Math.PI / 2, 0);
     // --- 鏡頭：固定斜角，跟著角色 ---
-    const cam = CAM[S.zoom], asp = W / H, far = asp < 1 ? Math.pow(1 / asp, 0.75) : 1;
-    S.camT.lerp(bp0.set(S.x - 0.8, 3.6 + shake * 0.07, S.z + 3.2), Math.min(1, dt * 5));
+    const cam = (S.ctrl === 'me' ? CAM_ME : CAM)[S.zoom], asp = W / H, far = asp < 1 ? Math.pow(1 / asp, 0.75) : 1;
+    if (S.ctrl === 'me') S.camT.lerp(bp0.set(ME.x, 1.3, ME.z), Math.min(1, dt * 5));
+    else S.camT.lerp(bp0.set(S.x - 0.8, 3.6 + shake * 0.07, S.z + 3.2), Math.min(1, dt * 5));
     camera.position.set(S.camT.x + Math.sin(ANG) * cam.dist * far, cam.hgt * far, S.camT.z + Math.cos(ANG) * cam.dist * far); camera.lookAt(S.camT);
-    sun.position.set(S.x - 12, 22, S.z + 18); sun.target.position.set(S.x, 0, S.z);
+    { const fx = S.ctrl === 'me' ? ME.x : S.x, fz = S.ctrl === 'me' ? ME.z : S.z; sun.position.set(fx - 12, 22, fz + 18); sun.target.position.set(fx, 0, fz); }
     // --- 念力：海浪狀的光帶 ---
     scene.updateMatrixWorld(true);
     const hp = WK.hand.getWorldPosition(new V3()), hh = A.heart.getWorldPosition(new V3()).add(new V3(0, 0, 0.7).applyAxisAngle(new V3(0, 1, 0), S.face)), mid = new V3();
@@ -680,6 +808,8 @@ const NW = (() => {
     const ta = t * PI2; TW.h1.position.set(-7.4 + Math.sin(ta) * 1.8, 0, 6.2 + Math.cos(ta) * 1.5); TW.h1.rotation.y = ta + Math.PI / 2; TW.c1.pose(t * PI2 * 8);
     TW.c2.position.y = 0.03 * Math.abs(Math.sin(t * PI2 * 3)); TW.c2.arms[1].rotation.x = -2.4 + 0.4 * Math.sin(t * PI2 * 6); TW.c2.head.rotation.z = 0.08 * Math.sin(t * PI2 * 2);
     TW.c3.position.y = 0.03 * Math.abs(Math.sin(t * PI2 * 3 + 1)); TW.c3.head.rotation.y = 0.2 * Math.sin(t * PI2 * 2); TW.c3.arms[0].rotation.x = -0.5 + 0.3 * Math.sin(t * PI2 * 4);
+    if (STD && TW.s1) { const a2 = t * PI2 * 0.5; TW.s1.H.position.set(-7.4 + Math.sin(a2) * 2.2, 0, 6.2 + Math.cos(a2) * 1.8); TW.s1.H.rotation.y = a2 + Math.PI / 2;
+      STD.tick(TW.s1, dt, 1, 1.1); STD.tick(TW.s2, dt, 0); STD.tick(TW.s3, dt, 0); }
     TW.pet.pose(t * PI2 * 4); TW.pet.position.y = 0.12 * Math.abs(Math.sin(t * PI2 * 4));
     TW.mobs.forEach((m) => { const h = Math.abs(Math.sin(t * PI2 * 3 + m.ph)); m.g.position.y = h * 0.45; m.g.scale.set(1 + (1 - h) * 0.1, 0.9 + h * 0.16, 1 + (1 - h) * 0.1); });
   }
@@ -705,7 +835,12 @@ const NW = (() => {
     gesture: () => { if (S.gt < 0) S.gt = 0; },
     zoom: () => { S.zoom = 1 - S.zoom; return S.zoom ? '近' : '遠'; },
     nextQuality: () => { S.quality = (S.quality + 1) % QUALITY.length; applyQuality(); return QUALITY[S.quality].name; },
-    lines: () => { S.lines = !S.lines; outlines.forEach(o => { o.visible = S.lines; }); return S.lines ? '開' : '關'; },
+    lines: () => { S.lines = !S.lines; outlines.forEach(o => { o.visible = S.lines; }); if (STD) STD.lines(S.lines); return S.lines ? '開' : '關'; },
+    // 標準人物：換操控的角色、換裝
+    hasStd: !!ME, ctrlName: () => (S.ctrl === 'me' ? '標準人物' : '機器人騎士'),
+    nextCtrl: () => { if (ME) S.ctrl = S.ctrl === 'me' ? 'robot' : 'me'; return S.ctrl === 'me' ? '標準人物' : '機器人騎士'; },
+    look: () => (ME ? Object.assign({}, ME.c.look) : null), dress: (patch) => { if (ME) STD.setLook(ME.c, patch); return ME ? Object.assign({}, ME.c.look) : null; },
+    options: () => (STD ? { parts: STD.PARTS, names: STD.NAMES, swatch: STD.SWATCH } : null),
     onStats: (fn) => { onStats = fn; },
   };
 })();

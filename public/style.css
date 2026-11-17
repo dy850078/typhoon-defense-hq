@@ -1158,3 +1158,89 @@ button.inv-item:hover { border-color: var(--accent); }
 .pet-bond b { white-space: nowrap; }
 .pet-bond-bar { flex: 1; min-width: 60px; max-width: 220px; height: 10px; border: 2px solid var(--ink); border-radius: 999px; background: var(--paper); overflow: hidden; }
 .pet-bond-bar i { display: block; height: 100%; background: #ff7b95; }
+
+/* ---------- 角色面板：人物、數值、職業、技能、裝備 ---------- */
+/* 數值框右上的小箭頭才是收合，點其他地方打開角色面板；箭頭四周放大一圈好點 */
+.stat-fold { position: relative; }
+.stat-fold::after { content: ''; position: absolute; inset: -12px; }
+#modal.char-modal .modal-card { max-width: 860px; width: calc(100vw - 32px); }
+.char { display: grid; grid-template-columns: 200px 1fr; gap: 18px; align-items: start; }
+.char-side { position: sticky; top: 0; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.char-pic { width: 178px; height: 208px; background: var(--silver); border-radius: 18px; }
+.char-pic.r-SR { box-shadow: 0 0 0 3px #ffb020, 0 0 18px rgba(255,176,32,.6); }
+.char-pic.r-SSR { animation: rainbow 4s linear infinite; }
+.char-pic.r-XR { animation: legend 3s ease-in-out infinite; }
+.char-who { display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; }
+.char-name { font-size: 20px; font-weight: 900; }
+.char-line { display: inline-flex; align-items: center; gap: 4px; font-size: 14px; color: var(--muted); }
+.char-line .hq-icon { width: 20px; height: 20px; vertical-align: 0; }
+.char-lv { margin-left: 4px; color: var(--ink); font-weight: 700; }
+.char-main { min-width: 0; }
+.char-tabs { margin-top: 0; }
+.char-body { min-height: 300px; }
+/* 總覽 */
+.char-me { display: flex; flex-direction: column; gap: 12px; }
+.char-bars { display: flex; flex-direction: column; gap: 8px; background: var(--navy); border-radius: 14px; padding: 12px 14px; color: var(--navy-fg); }
+.char-bar { display: grid; grid-template-columns: 40px 1fr auto; gap: 10px; align-items: center; }
+.char-bar-k { font: 700 13px var(--mono); color: var(--navy-dim); }
+.char-bar-track { height: 10px; border-radius: 999px; background: rgba(255,255,255,.12); overflow: hidden; }
+.char-bar-track i { display: block; height: 100%; border-radius: 999px; transition: width .25s; }
+.char-bar.hp i { background: var(--accent); }
+.char-bar.mp i { background: #4f7cc2; }
+.char-bar.exp i { background: #f2c14e; }
+.char-bar.exp .char-bar-track { height: 6px; }
+.char-bar-v { font-size: 12px; min-width: 76px; text-align: right; }
+.char-nums { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.char-num { display: flex; align-items: baseline; justify-content: space-between; background: var(--paper); border: 2px solid var(--line); border-radius: 12px; padding: 8px 14px; }
+.char-num span { font: 700 13px var(--mono); color: var(--muted); }
+.char-num b { font-size: 22px; }
+.char-card { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; font: inherit; color: inherit; cursor: pointer;
+  background: var(--paper); border: 2px solid var(--line); border-radius: 14px; padding: 10px 14px; }
+.char-card:hover { border-color: var(--accent); }
+.char-card-k { font-weight: 900; font-size: 15px; width: 40px; flex-shrink: 0; }
+.char-card-icons { flex: 1; display: flex; align-items: center; gap: 8px; min-width: 0; }
+.char-card-icons .hq-icon { width: 36px; height: 36px; vertical-align: 0; }
+.char-card-name { font-weight: 700; }
+.char-go { width: 9px; height: 9px; border: solid var(--muted); border-width: 2px 2px 0 0; transform: rotate(45deg); flex-shrink: 0; }
+.char-slot { width: 42px; height: 42px; border-radius: 10px; background: var(--ground); border: 2px solid var(--line); display: inline-flex; align-items: center; justify-content: center; }
+.char-slot.empty { border-style: dashed; }
+.char-slot.r-SR { border-color: #ffb020; }
+.char-slot.r-SSR, .char-slot.r-XR { border-color: #b06ad9; }
+.char-slot .hq-icon { width: 32px; height: 32px; }
+/* 職業 */
+.char-cls-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.char-cls-card { position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 6px 8px; font: inherit; color: inherit; cursor: pointer;
+  background: var(--paper); border: 2px solid var(--line); border-radius: 14px; }
+.char-cls-card .hq-icon { width: 40px; height: 40px; vertical-align: 0; }
+.char-cls-card b { font-size: 14px; }
+.char-cls-card.on { border-color: var(--accent); }
+.char-cls-card.picked { background: #fff3e8; box-shadow: 0 0 0 2px var(--accent); border-color: var(--accent); }
+.char-now { position: absolute; top: -8px; right: -4px; font-size: 11px; font-weight: 700; background: var(--accent); color: #fff; border-radius: 999px; padding: 1px 8px; }
+.char-cls-detail { margin-top: 12px; background: var(--paper); border: 2px solid var(--line); border-radius: 14px; padding: 12px 14px; }
+.char-cls-h { display: flex; align-items: center; gap: 8px; }
+.char-cls-h .hq-icon { width: 34px; height: 34px; vertical-align: 0; }
+.char-cls-h b { font-size: 17px; }
+.char-cls-detail p { margin: 8px 0; font-size: 14px; color: var(--muted); }
+.char-cls-sks { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.char-cls-sk { display: flex; flex-direction: column; align-items: center; gap: 2px; text-align: center; font-size: 13px; }
+.char-cls-sk .hq-icon { width: 40px; height: 40px; vertical-align: 0; }
+.char-cls-sk small { color: var(--muted); font-size: 11px; }
+/* 裝備分頁：人物圖已經在左邊，欄位直接撐滿 */
+.char .gear-top { display: block; }
+/* 手機：整個畫面，上面一排小人物＋名字，下面分頁 */
+@media (max-width: 600px) {
+  #modal.char-modal { padding: 0; align-items: stretch; }
+  #modal.char-modal .modal-card { width: 100vw; max-width: none; height: 100%; max-height: none; border-radius: 0; padding: 14px 14px 18px; }
+  .char { grid-template-columns: 1fr; gap: 10px; }
+  .char-side { position: static; flex-direction: row; justify-content: flex-start; gap: 12px; }
+  .char-pic { width: 72px; height: 84px; border-radius: 12px; }
+  .char-who { align-items: flex-start; text-align: left; }
+  .char-tabs { position: sticky; top: -14px; z-index: 2; background: var(--ground); padding: 6px 0; margin: 0; }
+  .char-tabs button { flex: 1; padding: 7px 0; }
+  .char-body { min-height: 0; }
+  .char-cls-card b { font-size: 13px; }
+}
+@media (max-width: 600px) {
+  .char .gear-tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .char .gear-tabs button { flex-shrink: 0; padding: 6px 12px; font-size: 14px; }
+}

@@ -66,7 +66,7 @@
   </div>
   <div id="stick" hidden><div id="knob"></div></div>
   <div id="dress" class="note" hidden></div>
-  <div id="hint" hidden>鍵盤也可以用方向鍵或 WASD 走動</div>
+  <div id="hint" hidden>點地面就會走過去，也可以用搖桿、方向鍵或 WASD</div>
 
   <script src="account.js"></script>
   <!-- 3D 元件：three.js 和讀模型檔的 GLTFLoader（模組版），載好之後掛到 window.THREE -->
@@ -151,6 +151,11 @@
       stick.addEventListener('pointerdown', function (e) { id = e.pointerId; stick.setPointerCapture(id); move(e); e.preventDefault(); });
       stick.addEventListener('pointermove', function (e) { if (e.pointerId === id) move(e); });
       stick.addEventListener('pointerup', end); stick.addEventListener('pointercancel', end);
+      // 點地面走路：按下和放開在差不多同一個位置才算點（避免誤觸）
+      var cv = $('nw-canvas'), tap = null;
+      cv.addEventListener('pointerdown', function (e) { if (e.button) return; tap = { id: e.pointerId, x: e.clientX, y: e.clientY }; });
+      cv.addEventListener('pointerup', function (e) { if (tap && tap.id === e.pointerId && Math.hypot(e.clientX - tap.x, e.clientY - tap.y) < 12) NW.walkTo(e.clientX, e.clientY); tap = null; });
+      cv.addEventListener('pointercancel', function () { tap = null; });
       window.addEventListener('keydown', function (e) { NW.key(e.key.length === 1 ? e.key.toLowerCase() : e.key, true); });
       window.addEventListener('keyup', function (e) { NW.key(e.key.length === 1 ? e.key.toLowerCase() : e.key, false); });
       window.addEventListener('blur', function () { ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'a', 'd', 'w', 's'].forEach(function (k) { NW.key(k, false); }); });

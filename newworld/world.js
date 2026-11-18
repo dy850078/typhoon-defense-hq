@@ -726,7 +726,12 @@ const NW = (() => {
   const ME = STD && TW && TW.me ? { c: TW.me, x: TW.me.H.position.x, z: TW.me.H.position.z, face: 0 } : null;
   const S = { ctrl: ME ? 'me' : 'robot', x: 0, z: 0, face: 0, mv: 0, ph: 0, form: 'carry', cw: 1, gt: -1, time: 0, zoom: 0, quality: 1, lines: true, jx: 0, jy: 0, keys: {}, camT: new V3(0, 3.6, 3.2) };
   const FORMS = ['carry', 'float', 'front'], FORM_NAME = { carry: '單手捧著', float: '漂浮操控', front: '走在前面' };
-  const CAM = [{ dist: 47, hgt: 17 }, { dist: 30, hgt: 10.5 }], CAM_ME = [{ dist: 30, hgt: 10.5 }, { dist: 17, hgt: 6 }], ANG = 0.62;
+  const CAM = [{ dist: 47, hgt: 17 }, { dist: 30, hgt: 10.5 }], CAM_ME = CAM, ANG = 0.62;
+  // 點地面走路的目標小圈圈
+  const GOAL = new THREE.Mesh(new THREE.RingGeometry(0.42, 0.62, 32), new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.95, depthWrite: false }));
+  GOAL.add(new THREE.Mesh(new THREE.RingGeometry(0.62, 0.69, 32), new THREE.MeshBasicMaterial({ color: '#b98a5e', transparent: true, opacity: 0.9, depthWrite: false })), new THREE.Mesh(new THREE.CircleGeometry(0.12, 16), new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.95, depthWrite: false })));
+  GOAL.rotation.x = -Math.PI / 2; GOAL.visible = false; GOAL.renderOrder = 5; scene.add(GOAL);
+  const RAY = new THREE.Raycaster(), NDC = new THREE.Vector2(), GROUND = new THREE.Plane(new V3(0, 1, 0), 0), HIT = new V3();
   const key = (tt, ks) => { for (let i = 0; i < ks.length - 1; i++) if (tt >= ks[i][0] && tt <= ks[i + 1][0]) return ks[i][1] + (ks[i + 1][1] - ks[i][1]) * sm((tt - ks[i][0]) / (ks[i + 1][0] - ks[i][0])); return 0; };
   const U = (tt) => tt < 0 ? 0 : key(tt, [[0, 0], [0.04, 0], [0.13, -1], [0.16, -1], [0.195, 1], [0.3, 1], [0.4, 0], [1, 0]]);   // 揮手：-1 舉高、+1 揮下去
   const Vv = (tt) => tt < 0 ? 0 : key(tt, [[0, 0], [0.46, 0], [0.54, 1], [0.68, 1], [0.8, 0], [1, 0]]);                            // 兩手高舉
@@ -737,12 +742,18 @@ const NW = (() => {
     // --- 移動：搖桿或鍵盤，方向以畫面為準 ---
     let jx = S.jx, jy = S.jy; const K = S.keys;
     if (K.ArrowLeft || K.a) jx -= 1; if (K.ArrowRight || K.d) jx += 1; if (K.ArrowUp || K.w) jy -= 1; if (K.ArrowDown || K.s) jy += 1;
-    const jl = Math.hypot(jx, jy), moving = jl > 0.15 && S.ctrl === 'robot', meMoving = jl > 0.15 && S.ctrl === 'me';
-    if (ME) { if (meMoving) { const n = Math.min(1, jl) / jl, vx = (Math.cos(ANG) * jx + Math.sin(ANG) * jy) * n, vz = (-Math.sin(ANG) * jx + Math.cos(ANG) * jy) * n, sp = 4.2;
+    let jl = Math.hypot(jx, jy), wx = 0, wz = 0;
+    if (jl > 0.15) { S.goal = null; const n = Math.min(1, jl) / jl; wx = (Math.cos(ANG) * jx + Math.sin(ANG) * jy) * n; wz = (-Math.sin(ANG) * jx + Math.cos(ANG) * jy) * n; }
+    else if (S.goal) { // 點地面走路：朝目標走，到了就停；搖桿或鍵盤一動就取消
+      const me = S.ctrl === 'me', dx = S.goal.x - (me ? ME.x : S.x), dz = S.goal.z - (me ? ME.z : S.z), d = Math.hypot(dx, dz), step = (me ? 4.2 : 6.5) * dt;
+      if (d < 0.12) S.goal = null; else { const n = Math.min(1, d / step) / d; wx = dx * n; wz = dz * n; jl = 1; } }
+    GOAL.visible = !!S.goal; if (S.goal) { GOAL.position.set(S.goal.x, 0.06, S.goal.z); const k = 1 + Math.sin(S.time * 6) * 0.12; GOAL.scale.set(k, k, k); }
+    const moving = jl > 0.15 && S.ctrl === 'robot', meMoving = jl > 0.15 && S.ctrl === 'me';
+    if (ME) { if (meMoving) { const vx = wx, vz = wz, sp = 4.2;
         ME.x = Math.max(-70, Math.min(70, ME.x + vx * sp * dt)); ME.z = Math.max(-70, Math.min(70, ME.z + vz * sp * dt));
         let df = Math.atan2(vx, vz) - ME.face; df = Math.atan2(Math.sin(df), Math.cos(df)); ME.face += df * Math.min(1, dt * 9); }
       ME.c.H.position.set(ME.x, 0, ME.z); ME.c.H.rotation.y = ME.face; STD.tick(ME.c, dt, meMoving ? Math.min(1, jl) : 0, 1.6); }
-    if (moving) { const n = Math.min(1, jl) / jl, vx = (Math.cos(ANG) * jx + Math.sin(ANG) * jy) * n, vz = (-Math.sin(ANG) * jx + Math.cos(ANG) * jy) * n, sp = 6.5;
+    if (moving) { const vx = wx, vz = wz, sp = 6.5;
       S.x = Math.max(-70, Math.min(70, S.x + vx * sp * dt)); S.z = Math.max(-70, Math.min(70, S.z + vz * sp * dt));
       let df = Math.atan2(vx, vz) - S.face; df = Math.atan2(Math.sin(df), Math.cos(df)); S.face += df * Math.min(1, dt * 7);
       S.ph += dt * sp * Math.hypot(vx, vz) / 7 * PI2; }
@@ -838,7 +849,10 @@ const NW = (() => {
     lines: () => { S.lines = !S.lines; outlines.forEach(o => { o.visible = S.lines; }); if (STD) STD.lines(S.lines); return S.lines ? '開' : '關'; },
     // 標準人物：換操控的角色、換裝
     hasStd: !!ME, ctrlName: () => (S.ctrl === 'me' ? '標準人物' : '機器人騎士'),
-    nextCtrl: () => { if (ME) S.ctrl = S.ctrl === 'me' ? 'robot' : 'me'; return S.ctrl === 'me' ? '標準人物' : '機器人騎士'; },
+    walkTo: (cx, cy) => { NDC.set(cx / W * 2 - 1, -(cy / H) * 2 + 1); RAY.setFromCamera(NDC, camera);
+      if (!RAY.ray.intersectPlane(GROUND, HIT)) return false;
+      S.goal = { x: Math.max(-70, Math.min(70, HIT.x)), z: Math.max(-70, Math.min(70, HIT.z)) }; return true; },
+    nextCtrl: () => { S.goal = null; if (ME) S.ctrl = S.ctrl === 'me' ? 'robot' : 'me'; return S.ctrl === 'me' ? '標準人物' : '機器人騎士'; },
     look: () => (ME ? Object.assign({}, ME.c.look) : null), dress: (patch) => { if (ME) STD.setLook(ME.c, patch); return ME ? Object.assign({}, ME.c.look) : null; },
     options: () => (STD ? { parts: STD.PARTS, names: STD.NAMES, swatch: STD.SWATCH } : null),
     onStats: (fn) => { onStats = fn; },

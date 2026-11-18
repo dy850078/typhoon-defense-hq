@@ -765,6 +765,19 @@ const NW = (() => {
     say: (id, text) => { const tag = id == null ? MYTAG : (OTH.get(id) || {}).tag; if (!tag) return; tag.b.textContent = text; tag.b.hidden = false; tag.until = S.time + 6; },
     count: () => OTH.size,
   };
+  // --- 碰撞：小屋是一個轉了角度的方塊，樹和石頭是圓；走到會被推出來，所以會沿著邊滑過去 ---
+  // 位置跟上面擺場景的地方對應（那邊的座標乘 2.3）
+  const K23 = 2.3, WALLS = [{ x: -5.2 * K23, z: -2.6 * K23, hx: 1.5 * K23, hz: 1.15 * K23, ry: -0.25 }];
+  const ROUNDS = [[-2.4, -4.2, 0.5 * 1.2], [-8.2, -3.4, 0.5], [3.6, -4.6, 0.5 * 1.3], [5.6, -3.2, 0.5 * 0.9], [-7.6, 0.6, 0.5], [5.6, -1.4, 0.5 * 1.1], [1.2, -5.2, 0.5], [-6.2, 2.2, 0.55 * 1.2], [5.2, 1.6, 0.55 * 0.9], [-2.5, 1.5, 0.4]]
+    .map(([x, z, r]) => ({ x: x * K23, z: z * K23, r: r * K23 }));
+  const HITP = { x: 0, z: 0 };
+  function collide(x, z, r) {
+    for (const c of ROUNDS) { const dx = x - c.x, dz = z - c.z, d = Math.hypot(dx, dz), m = c.r + r; if (d < m && d > 1e-4) { x = c.x + dx / d * m; z = c.z + dz / d * m; } }
+    for (const b of WALLS) { const cs = Math.cos(b.ry), sn = Math.sin(b.ry), dx = x - b.x, dz = z - b.z, lx = dx * cs - dz * sn, lz = dx * sn + dz * cs, ex = b.hx + r, ez = b.hz + r;
+      if (Math.abs(lx) < ex && Math.abs(lz) < ez) { let nx = lx, nz = lz; if (ex - Math.abs(lx) < ez - Math.abs(lz)) nx = Math.sign(lx || 1) * ex; else nz = Math.sign(lz || 1) * ez;
+        x = b.x + nx * cs + nz * sn; z = b.z - nx * sn + nz * cs; } }
+    HITP.x = x; HITP.z = z; return HITP;
+  }
   // 點地面走路的目標小圈圈
   const GOAL = new THREE.Mesh(new THREE.RingGeometry(0.42, 0.62, 32), new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.95, depthWrite: false }));
   GOAL.add(new THREE.Mesh(new THREE.RingGeometry(0.62, 0.69, 32), new THREE.MeshBasicMaterial({ color: '#b98a5e', transparent: true, opacity: 0.9, depthWrite: false })), new THREE.Mesh(new THREE.CircleGeometry(0.12, 16), new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.95, depthWrite: false })));
@@ -834,15 +847,16 @@ const NW = (() => {
     if (jl > 0.15) { S.goal = null; const n = Math.min(1, jl) / jl; wx = (Math.cos(ANG) * jx + Math.sin(ANG) * jy) * n; wz = (-Math.sin(ANG) * jx + Math.cos(ANG) * jy) * n; }
     else if (S.goal) { // 點地面走路：朝目標走，到了就停；搖桿或鍵盤一動就取消
       const me = S.ctrl === 'me', dx = S.goal.x - (me ? ME.x : S.x), dz = S.goal.z - (me ? ME.z : S.z), d = Math.hypot(dx, dz), step = (me ? 4.2 : 6.5) * dt;
-      if (d < 0.12) S.goal = null; else { const n = Math.min(1, d / step) / d; wx = dx * n; wz = dz * n; jl = 1; } }
+      if (d < S.goal.best - 0.01) { S.goal.best = d; S.goal.t = S.time; }   // 被擋住一陣子沒有更靠近，就不走了
+      if (d < 0.12 || S.time - S.goal.t > 0.8) S.goal = null; else { const n = Math.min(1, d / step) / d; wx = dx * n; wz = dz * n; jl = 1; } }
     GOAL.visible = !!S.goal; if (S.goal) { GOAL.position.set(S.goal.x, 0.06, S.goal.z); const k = 1 + Math.sin(S.time * 6) * 0.12; GOAL.scale.set(k, k, k); }
     const moving = jl > 0.15 && S.ctrl === 'robot', meMoving = jl > 0.15 && S.ctrl === 'me'; S.meMv = meMoving;
     if (ME) { if (meMoving) { const vx = wx, vz = wz, sp = 4.2;
-        ME.x = Math.max(-70, Math.min(70, ME.x + vx * sp * dt)); ME.z = Math.max(-70, Math.min(70, ME.z + vz * sp * dt));
+        const h = collide(Math.max(-70, Math.min(70, ME.x + vx * sp * dt)), Math.max(-70, Math.min(70, ME.z + vz * sp * dt)), 0.45); ME.x = h.x; ME.z = h.z;
         let df = Math.atan2(vx, vz) - ME.face; df = Math.atan2(Math.sin(df), Math.cos(df)); ME.face += df * Math.min(1, dt * 9); }
       if (S.ctrl === 'me') { ME.c.H.position.set(ME.x, 0, ME.z); ME.c.H.rotation.y = ME.face; STD.tick(ME.c, dt, meMoving ? Math.min(1, jl) : 0, 1.6); } }
     if (moving) { const vx = wx, vz = wz, sp = 6.5;
-      S.x = Math.max(-70, Math.min(70, S.x + vx * sp * dt)); S.z = Math.max(-70, Math.min(70, S.z + vz * sp * dt));
+      const h = collide(Math.max(-70, Math.min(70, S.x + vx * sp * dt)), Math.max(-70, Math.min(70, S.z + vz * sp * dt)), 1.9); S.x = h.x; S.z = h.z;
       let df = Math.atan2(vx, vz) - S.face; df = Math.atan2(Math.sin(df), Math.cos(df)); S.face += df * Math.min(1, dt * 7);
       S.ph += dt * sp * Math.hypot(vx, vz) / 7 * PI2; }
     stepRS(S, dt, moving);
@@ -926,7 +940,7 @@ const NW = (() => {
     hasStd: !!ME, ctrlName: () => CLS_NAME[S.ctrl === 'robot' ? 'rider' : ''], isRider: () => S.ctrl === 'robot',
     walkTo: (cx, cy) => { NDC.set(cx / W * 2 - 1, -(cy / H) * 2 + 1); RAY.setFromCamera(NDC, camera);
       if (!RAY.ray.intersectPlane(GROUND, HIT)) return false;
-      S.goal = { x: Math.max(-70, Math.min(70, HIT.x)), z: Math.max(-70, Math.min(70, HIT.z)) }; return true; },
+      S.goal = { x: Math.max(-70, Math.min(70, HIT.x)), z: Math.max(-70, Math.min(70, HIT.z)), best: 1e9, t: S.time }; return true; },
     // 職業：一般、機器人騎士（之後加召喚師、陵媒）。存在造型的 cls 裡，代號跟總部的職業代號同一套
     setClass: (cls) => { if (!ME) return ''; S.goal = null; const rider = cls === 'rider';
       if (rider && S.ctrl !== 'robot') { S.x = ME.x; S.z = ME.z; S.face = ME.face; S.rp = null; }
@@ -936,6 +950,7 @@ const NW = (() => {
     fromAccount: (b) => (STD ? STD.fromAccount(b) : null),
     options: () => (STD ? { parts: STD.PARTS, names: STD.NAMES, swatch: STD.SWATCH } : null),
     net: NET,
+    debugPlace: (x, z) => { if (ME && S.ctrl === 'me') { ME.x = x; ME.z = z; S.goal = null; } },   // 測試腳本用：把人直接放到某個位置
     onStats: (fn) => { onStats = fn; },
   };
 })();

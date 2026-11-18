@@ -50,7 +50,8 @@ const FIREWORK_MS = 6000; // 每個人放煙火的間隔
 const CAKE_CODE = String(process.env.CAKE_CODE || 'CAKE');
 const CAKE_MS = 3 * 60 * 1000;
 const T = MAP.TILE;
-const DATA_DIR = path.join(__dirname, 'data');
+// 測試腳本（scripts/nw-test.js）會用 DATA_DIR 指到暫存資料夾，才不會把測試帳號寫進正式資料
+const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 
 // ---------------- 派對設定（管理員介面可以改） ----------------
 // 存在 data/settings.json；管理員密碼可以用 ADMIN_PASSWORD 指定，沒指定就第一次啟動時隨機產生

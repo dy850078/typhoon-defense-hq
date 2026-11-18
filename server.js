@@ -374,6 +374,35 @@ app.post('/api/newworld/look', (req, res) => {
   accounts.update(u, { look3d: sanitizeLook3d((req.body || {}).look) || undefined });
   res.json(lookOf(u));
 });
+// 新世界的多人連線：自己一個頻道（/newworld），跟總部的連線、玩家資料完全分開；只有管理員連得上
+// 只同步標準人物的位置、造型、名字和聊天，聊天不跟總部互通
+const nwPlayers = new Map();
+function startNewworldNet() {
+  const nw = io.of('/newworld');
+  const num = (v, lo, hi) => Math.max(lo, Math.min(hi, Number(v) || 0));
+  nw.use((socket, next) => {
+    const u = accounts.byToken(socket.handshake.auth && socket.handshake.auth.token);
+    if (!u || !u.admin) return next(new Error('forbidden'));
+    socket.data.user = u; next();
+  });
+  nw.on('connection', (socket) => {
+    const u = socket.data.user, a = sanitizeSave(u.save);
+    const p = { id: socket.id, name: a.name || u.username, x: 2.5, z: 14, f: 0, mv: 0, look: sanitizeLook3d(u.save.look3d), said: 0 };
+    const pub = (q) => ({ id: q.id, name: q.name, x: q.x, z: q.z, f: q.f, look: q.look });
+    socket.emit('init', { id: p.id, name: p.name, players: [...nwPlayers.values()].map(pub) });
+    nwPlayers.set(p.id, p);
+    socket.broadcast.emit('join', pub(p));
+    socket.on('move', (d) => { if (!d || typeof d !== 'object') return; p.x = num(d.x, -70, 70); p.z = num(d.z, -70, 70); p.f = num(d.f, -7, 7); p.mv = d.mv ? 1 : 0; });
+    socket.on('look', (d) => { const l = sanitizeLook3d(d); if (!l) return; p.look = l; socket.broadcast.emit('look', { id: p.id, look: l }); });
+    socket.on('chat', (t) => {
+      const text = String(t == null ? '' : t).replace(/\s+/g, ' ').trim().slice(0, 60), now = Date.now();
+      if (!text || now - p.said < 600) return;
+      p.said = now; nw.emit('chat', { id: p.id, name: p.name, text });
+    });
+    socket.on('disconnect', () => { nwPlayers.delete(p.id); nw.emit('leave', p.id); });
+  });
+  setInterval(() => { if (nwPlayers.size > 1) nw.volatile.emit('state', [...nwPlayers.values()].map(q => [q.id, q.x, q.z, q.f, q.mv])); }, 100);
+}
 app.get('/api/newworld/:file', (req, res) => {
   const f = NEWWORLD_FILES[req.params.file];
   if (!f) return res.status(404).json({ ok: false });
@@ -738,6 +767,7 @@ const server = http.createServer(app);
 // 連線狀態恢復：網路閃斷後 2 分鐘內連回來，會拿回同一個連線（id、房間都一樣），中間錯過的訊息也會補送
 const AWAY_KEEP_MS = 2 * 60 * 1000;
 const io = new Server(server, { connectionStateRecovery: { maxDisconnectionDuration: AWAY_KEEP_MS, skipMiddlewares: true } });
+startNewworldNet();
 const awayTimers = new Map(); // 斷線中、角色還留著的人：id -> [timer, ...]（下面「斷線保留」）
 
 const players = new Map(); // socket.id -> player

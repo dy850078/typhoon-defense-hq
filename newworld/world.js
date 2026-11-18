@@ -728,10 +728,31 @@ const NW = (() => {
   Object.assign(sun.shadow.camera, { left: -26, right: 26, top: 26, bottom: -26, near: 1, far: 110 }); sun.shadow.camera.updateProjectionMatrix(); scene.add(sun.target);
 
   // ME：自己操控的標準人物（有標準人物時預設操控它，按「角色」可以換回機器人騎士）
-  const ME = STD && TW && TW.me ? { c: TW.me, x: TW.me.H.position.x, z: TW.me.H.position.z, face: 0 } : null;
+  const ME = STD && TW && TW.me ? { c: TW.me, x: TW.me.H.position.x + (Math.random() - 0.5) * 3, z: TW.me.H.position.z + (Math.random() - 0.5) * 3, face: 0 } : null;   // 進場位置錯開一點，多人同時進來才不會疊在一起
   const S = { ctrl: ME ? 'me' : 'robot', x: 0, z: 0, face: 0, mv: 0, ph: 0, form: 'carry', cw: 1, gt: -1, time: 0, zoom: 0, quality: 1, lines: true, jx: 0, jy: 0, keys: {}, camT: new V3(0, 3.6, 3.2) };
   const FORMS = ['carry', 'float', 'front'], FORM_NAME = { carry: '單手捧著', float: '漂浮操控', front: '走在前面' };
   const CAM = [{ dist: 47, hgt: 17 }, { dist: 30, hgt: 10.5 }], CAM_ME = CAM, ANG = 0.62;
+  // 多人：別的玩家的標準人物，還有頭上的名字紙條和聊天泡泡（用網頁元素疊在畫面上，字才清楚）
+  const OTH = new Map(), LAB = document.createElement('div'); LAB.id = 'nw-labels'; document.body.appendChild(LAB);
+  const mkTag = () => { const t = document.createElement('div'), b = document.createElement('div'), n = document.createElement('div');
+    t.className = 'nw-tag'; b.className = 'nw-bubble'; n.className = 'nw-name'; b.hidden = n.hidden = true; t.append(b, n); LAB.appendChild(t); return { t, b, n, until: 0 }; };
+  const MYTAG = ME ? mkTag() : null, PV = new V3();
+  const placeTag = (tag, x, z) => { PV.set(x, 2.5, z).project(camera); const on = PV.z < 1 && Math.abs(PV.x) < 1.15 && Math.abs(PV.y) < 1.15;
+    tag.t.style.display = on ? '' : 'none'; if (on) tag.t.style.transform = 'translate(' + ((PV.x * 0.5 + 0.5) * W).toFixed(1) + 'px,' + ((-PV.y * 0.5 + 0.5) * H).toFixed(1) + 'px) translate(-50%,-100%)';
+    if (tag.until && S.time > tag.until) { tag.b.hidden = true; tag.until = 0; } };
+  const NET = {
+    me: () => (ME ? { x: +ME.x.toFixed(2), z: +ME.z.toFixed(2), f: +ME.face.toFixed(2), mv: S.meMv ? 1 : 0 } : null),
+    name: (s) => { if (MYTAG) { MYTAG.n.textContent = s; MYTAG.n.hidden = !s; } },
+    put: (id, d) => { if (!STD) return; let o = OTH.get(id);
+      if (!o) { o = { c: STD.make(d.look || {}), x: d.x || 0, z: d.z || 0, f: d.f || 0, mv: 0, tag: mkTag() }; o.tx = o.x; o.tz = o.z; o.tf = o.f; OTH.set(id, o); }
+      else if (d.look) STD.setLook(o.c, d.look);
+      if (d.name != null) { o.tag.n.textContent = d.name; o.tag.n.hidden = !d.name; } },
+    move: (id, x, z, f, mv) => { const o = OTH.get(id); if (o) { o.tx = x; o.tz = z; o.tf = f; o.mv = mv; } },
+    drop: (id) => { const o = OTH.get(id); if (!o) return; scene.remove(o.c.H); o.tag.t.remove(); const i = STD.all.indexOf(o.c); if (i >= 0) STD.all.splice(i, 1); OTH.delete(id); },
+    clear: () => { [...OTH.keys()].forEach(NET.drop); },
+    say: (id, text) => { const tag = id == null ? MYTAG : (OTH.get(id) || {}).tag; if (!tag) return; tag.b.textContent = text; tag.b.hidden = false; tag.until = S.time + 6; },
+    count: () => OTH.size,
+  };
   // 點地面走路的目標小圈圈
   const GOAL = new THREE.Mesh(new THREE.RingGeometry(0.42, 0.62, 32), new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.95, depthWrite: false }));
   GOAL.add(new THREE.Mesh(new THREE.RingGeometry(0.62, 0.69, 32), new THREE.MeshBasicMaterial({ color: '#b98a5e', transparent: true, opacity: 0.9, depthWrite: false })), new THREE.Mesh(new THREE.CircleGeometry(0.12, 16), new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.95, depthWrite: false })));
@@ -753,7 +774,7 @@ const NW = (() => {
       const me = S.ctrl === 'me', dx = S.goal.x - (me ? ME.x : S.x), dz = S.goal.z - (me ? ME.z : S.z), d = Math.hypot(dx, dz), step = (me ? 4.2 : 6.5) * dt;
       if (d < 0.12) S.goal = null; else { const n = Math.min(1, d / step) / d; wx = dx * n; wz = dz * n; jl = 1; } }
     GOAL.visible = !!S.goal; if (S.goal) { GOAL.position.set(S.goal.x, 0.06, S.goal.z); const k = 1 + Math.sin(S.time * 6) * 0.12; GOAL.scale.set(k, k, k); }
-    const moving = jl > 0.15 && S.ctrl === 'robot', meMoving = jl > 0.15 && S.ctrl === 'me';
+    const moving = jl > 0.15 && S.ctrl === 'robot', meMoving = jl > 0.15 && S.ctrl === 'me'; S.meMv = meMoving;
     if (ME) { if (meMoving) { const vx = wx, vz = wz, sp = 4.2;
         ME.x = Math.max(-70, Math.min(70, ME.x + vx * sp * dt)); ME.z = Math.max(-70, Math.min(70, ME.z + vz * sp * dt));
         let df = Math.atan2(vx, vz) - ME.face; df = Math.atan2(Math.sin(df), Math.cos(df)); ME.face += df * Math.min(1, dt * 9); }
@@ -800,6 +821,7 @@ const NW = (() => {
     if (S.ctrl === 'me') S.camT.lerp(bp0.set(ME.x, 1.3, ME.z), Math.min(1, dt * 5));
     else S.camT.lerp(bp0.set(S.x - 0.8, 3.6 + shake * 0.07, S.z + 3.2), Math.min(1, dt * 5));
     camera.position.set(S.camT.x + Math.sin(ANG) * cam.dist * far, cam.hgt * far, S.camT.z + Math.cos(ANG) * cam.dist * far); camera.lookAt(S.camT);
+    camera.updateMatrixWorld(); if (MYTAG) placeTag(MYTAG, ME.x, ME.z); OTH.forEach(o => placeTag(o.tag, o.x, o.z));
     { const fx = S.ctrl === 'me' ? ME.x : S.x, fz = S.ctrl === 'me' ? ME.z : S.z; sun.position.set(fx - 12, 22, fz + 18); sun.target.position.set(fx, 0, fz); }
     // --- 念力：海浪狀的光帶 ---
     scene.updateMatrixWorld(true);
@@ -824,6 +846,11 @@ const NW = (() => {
     const ta = t * PI2; TW.h1.position.set(-7.4 + Math.sin(ta) * 1.8, 0, 6.2 + Math.cos(ta) * 1.5); TW.h1.rotation.y = ta + Math.PI / 2; TW.c1.pose(t * PI2 * 8);
     TW.c2.position.y = 0.03 * Math.abs(Math.sin(t * PI2 * 3)); TW.c2.arms[1].rotation.x = -2.4 + 0.4 * Math.sin(t * PI2 * 6); TW.c2.head.rotation.z = 0.08 * Math.sin(t * PI2 * 2);
     TW.c3.position.y = 0.03 * Math.abs(Math.sin(t * PI2 * 3 + 1)); TW.c3.head.rotation.y = 0.2 * Math.sin(t * PI2 * 2); TW.c3.arms[0].rotation.x = -0.5 + 0.3 * Math.sin(t * PI2 * 4);
+    // 別的玩家：朝伺服器給的位置補間，有在動就播走路
+    OTH.forEach(o => { const k = Math.min(1, dt * 9), dx = o.tx - o.x, dz = o.tz - o.z, far = Math.hypot(dx, dz);
+      if (far > 12) { o.x = o.tx; o.z = o.tz; } else { o.x += dx * k; o.z += dz * k; }
+      let df = o.tf - o.f; df = Math.atan2(Math.sin(df), Math.cos(df)); o.f += df * k;
+      o.c.H.position.set(o.x, 0, o.z); o.c.H.rotation.y = o.f; STD.tick(o.c, dt, o.mv || far > 0.08 ? 1 : 0, 1.6); });
     if (STD && TW.s1) { const a2 = t * PI2 * 0.5; TW.s1.H.position.set(-7.4 + Math.sin(a2) * 2.2, 0, 6.2 + Math.cos(a2) * 1.8); TW.s1.H.rotation.y = a2 + Math.PI / 2;
       STD.tick(TW.s1, dt, 1, 1.1); STD.tick(TW.s2, dt, 0); STD.tick(TW.s3, dt, 0); }
     TW.pet.pose(t * PI2 * 4); TW.pet.position.y = 0.12 * Math.abs(Math.sin(t * PI2 * 4));
@@ -861,6 +888,7 @@ const NW = (() => {
     look: () => (ME ? Object.assign({}, ME.c.look) : null), dress: (patch) => { if (ME) STD.setLook(ME.c, patch); return ME ? Object.assign({}, ME.c.look) : null; },
     fromAccount: (b) => (STD ? STD.fromAccount(b) : null),
     options: () => (STD ? { parts: STD.PARTS, names: STD.NAMES, swatch: STD.SWATCH } : null),
+    net: NET,
     onStats: (fn) => { onStats = fn; },
   };
 })();

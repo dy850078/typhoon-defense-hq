@@ -817,6 +817,58 @@ const NW = (() => {
         x = b.x + nx * cs + nz * sn; z = b.z - nx * sn + nz * cs; } }
     HITP.x = x; HITP.z = z; return HITP;
   }
+  // ===== 場景細節：草叢、小花、踏腳石（一次畫一整批，不多花繪製次數）、木柵欄、路燈、路牌 =====
+  // 小路的中心線：P(s) = (-7.5 + 0.479 s, 9 + 0.878 s)，s 從 -20 到 20；n 是路的右手邊
+  const DETAIL = TW ? (() => {
+    const r = rnd(77), PA = [0.479, 0.878], PN = [0.878, -0.479], P = (s, off) => [-7.5 + PA[0] * s + PN[0] * off, 9 + PA[1] * s + PN[1] * off];
+    const offPath = (x, z) => { const dx = x + 7.5, dz = z - 9; return Math.abs(dx * PN[0] + dz * PN[1]); };
+    const free = (x, z, m) => offPath(x, z) > 2.1 + m && collide(x, z, m).x === x && Math.hypot(x - 7.6, z - 9.5) > 4.5;   // 不要長在路上、屋子和樹裡面、香菇怪腳下
+    const G = new THREE.Group(); scene.add(G);
+    const batch = (geo, material, list, shadow) => { const im = new THREE.InstancedMesh(geo, material, list.length), o = new THREE.Object3D(), c = new THREE.Color();
+      list.forEach((d, i) => { o.position.set(d.x, d.y || 0, d.z); o.rotation.set(d.rx || 0, d.ry || 0, d.rz || 0); o.scale.set(d.sx || d.s || 1, d.sy || d.s || 1, d.sz || d.s || 1); o.updateMatrix(); im.setMatrixAt(i, o.matrix); if (d.col) im.setColorAt(i, c.set(d.col)); });
+      im.castShadow = !!shadow; im.receiveShadow = true; im.frustumCulled = false; G.add(im); return im; };
+    // 草叢：每叢三片葉子，往外歪
+    const blades = [];
+    for (let i = 0; i < 400 && blades.length < 330; i++) { const x = (r() - 0.5) * 70, z = (r() - 0.5) * 64 + 6; if (!free(x, z, 0.3)) continue;
+      const s = 0.7 + r() * 0.7, a0 = r() * 6.28, col = r() < 0.5 ? '#b9c765' : '#a9bd5c';
+      for (let k = 0; k < 3; k++) { const a = a0 + k * 2.1; blades.push({ x: x + Math.cos(a) * 0.09 * s, z: z + Math.sin(a) * 0.09 * s, y: 0.2 * s, rx: Math.sin(a) * 0.38, rz: -Math.cos(a) * 0.38, s, col }); } }
+    batch(new THREE.ConeGeometry(0.075, 0.46, 5), mat('#ffffff'), blades, false);
+    // 小花：白、粉、黃三種，一小群一小群地長
+    const stems = [], heads = [], hearts = [], FC = ['#fffdf2', '#f6b3c0', '#f6d76a', '#fffdf2', '#cdb6ee'];
+    for (let i = 0; i < 60 && heads.length < 90; i++) { const cx = (r() - 0.5) * 60, cz = (r() - 0.5) * 54 + 8, col = FC[(r() * FC.length) | 0], n = 2 + ((r() * 4) | 0);
+      for (let k = 0; k < n; k++) { const x = cx + (r() - 0.5) * 1.8, z = cz + (r() - 0.5) * 1.8, h = 0.32 + r() * 0.22; if (!free(x, z, 0.3)) continue;
+        stems.push({ x, z, y: h / 2, sy: h }); heads.push({ x, z, y: h + 0.03, sy: 0.55, col }); hearts.push({ x, z, y: h + 0.08, s: 0.42 }); } }
+    batch(new THREE.CylinderGeometry(0.018, 0.022, 1, 5), mat('#8fae5a'), stems, false);
+    batch(sph(0.13, 9, 6), mat('#ffffff'), heads, true); batch(sph(0.13, 7, 5), mat('#f0c75a'), hearts, false);
+    // 踏腳石：沿著小路一塊一塊
+    const stones = []; for (let s = -15; s <= 19; s += 2.3) { const [x, z] = P(s, (r() - 0.5) * 1.5); stones.push({ x, z, y: 0.035, ry: r() * 3, sx: 0.75 + r() * 0.3, sy: 1, sz: 0.55 + r() * 0.25 }); }
+    batch(new THREE.CylinderGeometry(0.7, 0.78, 0.07, 9), mat('#e9dcb8'), stones, false);
+    // 木柵欄：一段一段的，中間留缺口可以走過去；每一段都擋得住人
+    const WOOD = '#c98a52', fence = (s0, s1, off) => { const [x0, z0] = P(s0, off), [x1, z1] = P(s1, off), len = Math.hypot(x1 - x0, z1 - z0), g = new THREE.Group(), n = Math.round(len / 1.7);
+      g.position.set((x0 + x1) / 2, 0, (z0 + z1) / 2); g.rotation.y = -Math.atan2(z1 - z0, x1 - x0); G.add(g);
+      for (let i = 0; i <= n; i++) part(g, new THREE.CylinderGeometry(0.09, 0.1, 1.05, 7), WOOD, { pos: [-len / 2 + len * i / n, 0.52, 0], rot: [0, 0, (r() - 0.5) * 0.08], line: 0.022 });
+      [0.42, 0.8].forEach((y, j) => part(g, new THREE.BoxGeometry(len + 0.3, 0.11, 0.07), j ? '#d79a61' : WOOD, { pos: [0, y, 0], rot: [0, 0, (r() - 0.5) * 0.015], line: 0.02 }));
+      WALLS.push({ x: g.position.x, z: g.position.z, hx: len / 2 + 0.1, hz: 0.12, ry: g.rotation.y }); };
+    fence(-9, -1.5, -3.1); fence(7, 15.5, -3.1); fence(-13, -6.2, 3.1); fence(11, 18, 3.1);
+    // 路燈：木柱掛一盞紙燈籠
+    const lamp = (s, off, ry) => { const [x, z] = P(s, off), g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = ry; G.add(g);
+      part(g, new THREE.CylinderGeometry(0.09, 0.12, 3.3, 8), '#a8693f', { pos: [0, 1.65, 0], line: 0.024 });
+      part(g, new THREE.BoxGeometry(0.95, 0.1, 0.1), '#a8693f', { pos: [0.38, 3.15, 0], line: 0.02 });
+      part(g, new THREE.CylinderGeometry(0.012, 0.012, 0.3, 4), INK, { pos: [0.72, 2.97, 0], noLine: true, shadow: false });
+      part(g, sph(0.27, 14, 10), '#ffe9a8', { pos: [0.72, 2.6, 0], scale: [1, 1.15, 1], line: 0.024, shadow: false, mat: basic('#ffe9a8') });
+      [2.86, 2.34].forEach(y => part(g, new THREE.CylinderGeometry(0.15, 0.15, 0.07, 10), '#d9604a', { pos: [0.72, y, 0], noLine: true, shadow: false }));
+      ROUNDS.push({ x, z, r: 0.2 }); };
+    lamp(-11, 2.9, 2.2); lamp(3, -2.9, -1.0); lamp(17, 2.9, 2.2);
+    // 路牌：紙條風的木牌，字是畫上去的
+    const sign = (s, off, ry, text) => { const [x, z] = P(s, off), g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = ry; G.add(g);
+      const t = tex(256, 112, (c, w, h) => { c.fillStyle = '#f7ecd0'; c.fillRect(0, 0, w, h); c.strokeStyle = '#a8693f'; c.lineWidth = 8; c.strokeRect(4, 4, w - 8, h - 8);
+        c.fillStyle = '#5b4636'; c.font = '700 52px "Noto Sans TC", "PingFang TC", sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(text, w / 2, h / 2 + 3); });
+      part(g, new THREE.CylinderGeometry(0.08, 0.1, 1.9, 7), '#a8693f', { pos: [0, 0.95, 0], line: 0.022 });
+      part(g, new THREE.BoxGeometry(1.5, 0.66, 0.09), '#f7ecd0', { pos: [0, 1.62, 0.07], rot: [0, 0, -0.04], line: 0.024, mat: [0, 1, 2, 3, 4, 5].map(i => (i === 4 ? new THREE.MeshToonMaterial({ map: t, gradientMap: RAMP }) : mat('#e5cfa0'))) });
+      ROUNDS.push({ x, z, r: 0.25 }); };
+    sign(5.2, 3.0, Math.atan2(PN[0], PN[1]) + Math.PI + 0.25, '往小屋'); sign(-12.5, -3.0, 0.5, '小屋');
+    return G;
+  })() : null;
 
   // 點地面走路的目標小圈圈
   const GOAL = new THREE.Mesh(new THREE.RingGeometry(0.42, 0.62, 32), new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.95, depthWrite: false }));

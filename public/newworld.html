@@ -50,6 +50,9 @@
     #chat-log { font-size: 12px; line-height: 1.5; max-height: 92px; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; pointer-events: none; text-shadow: 0 0 3px #fbf5e6, 0 0 3px #fbf5e6, 0 0 2px #fbf5e6; }
     #chat-log b { font-weight: 700; }
     #chat form { display: flex; gap: 6px; }
+    #emotes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; padding: 8px; width: min(250px, 100%); }
+    #emotes[hidden] { display: none; }
+    #emotes button { font: 500 12px/1 inherit; font-family: inherit; color: var(--note-ink); padding: 8px 4px; border-radius: 9px 6px 10px 7px; border: 1.5px solid rgba(43,42,51,.45); background: #fff; cursor: pointer; }
     #chat input { all: unset; flex: 1; min-width: 0; font: 500 14px/1.2 inherit; font-family: inherit; color: var(--note-ink); background: rgba(251,246,233,.92); border: 1.5px solid rgba(43,42,51,.45); border-radius: 10px 8px 11px 7px; padding: 8px 10px; -webkit-user-select: text; user-select: text; }
     #chat button { font: 700 13px/1 inherit; font-family: inherit; color: var(--note-ink); padding: 8px 12px; cursor: pointer; }
     #dress { position: fixed; left: 50%; bottom: calc(14px + env(safe-area-inset-bottom)); transform: translateX(-50%); width: min(380px, calc(100vw - 24px)); max-height: 62vh; overflow: auto; padding: 12px 14px 14px; z-index: 4; font-size: 13px; }
@@ -79,7 +82,7 @@
   </div>
   <div id="stick" hidden><div id="knob"></div></div>
   <div id="dress" class="note" hidden></div>
-  <div id="chat" hidden><div id="chat-log"></div><form id="chat-form"><input id="chat-in" maxlength="60" autocomplete="off" placeholder="說點什麼"><button class="note" type="submit">送出</button></form></div>
+  <div id="chat" hidden><div id="chat-log"></div><div id="emotes" class="note" hidden></div><form id="chat-form"><button class="note" type="button" id="b-emote">表情</button><input id="chat-in" maxlength="60" autocomplete="off" placeholder="說點什麼"><button class="note" type="submit">送出</button></form></div>
   <div id="hint" hidden>點地面就會走過去，也可以用搖桿、方向鍵或 WASD</div>
 
   <script src="/socket.io/socket.io.js"></script>
@@ -170,9 +173,14 @@
         sock.on('leave', function (id) { NW.net.drop(id); });
         sock.on('look', function (d) { NW.net.put(d.id, { look: d.look }); });
         sock.on('state', function (list) { list.forEach(function (a) { if (a[0] !== sock.id) NW.net.move(a[0], a[1], a[2], a[3], a[4], a[5], a[6]); }); });
+        sock.on('emote', function (d) { NW.net.emote(d.id, d.face); });
         sock.on('chat', function (m) { NW.net.say(m.id === sock.id ? null : m.id, m.text); var log = $('chat-log'), row = document.createElement('div'), b = document.createElement('b');
           b.textContent = m.name + '：'; row.appendChild(b); row.appendChild(document.createTextNode(m.text)); log.appendChild(row); while (log.children.length > 5) log.removeChild(log.firstChild); });
         setInterval(function () { var m = NW.net.me(); if (!m || !sock.connected) return; var k = m.x + ',' + m.z + ',' + m.f + ',' + m.mv + ',' + m.fm + ',' + m.g; if (k !== last) { last = k; sock.emit('move', m); } }, 100);
+        // 表情：按一下換 5 秒的臉，別人也看得到；時間到變回平常的臉
+        var E = $('emotes'); NW.options().parts.face.forEach(function (k) { var b = document.createElement('button'); b.type = 'button'; b.textContent = NW.options().names[k];
+          b.onclick = function () { NW.emote(k); if (sock.connected) sock.emit('emote', k); E.hidden = true; }; E.appendChild(b); });
+        $('b-emote').onclick = function () { E.hidden = !E.hidden; };
         $('chat-form').addEventListener('submit', function (e) { e.preventDefault(); var i = $('chat-in'), t = i.value.trim(); if (t && sock.connected) sock.emit('chat', t); i.value = ''; i.blur(); });
       }
       // 換裝面板：只改新世界的造型，會記在帳號裡，不會動到總部的角色

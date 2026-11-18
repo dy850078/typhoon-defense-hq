@@ -576,10 +576,13 @@ const STD = (() => {
   const AS = window.NW_ASSETS, LIB = window.NW_LIB;
   if (!AS || !AS.char || !LIB) return null;
   const LC = new THREE.Color('#' + (Q.lc || 'c2a48a')), LW = +(Q.lw || 1), HEIGHT = 2.15;
-  const FLAT = /face_line|glasses|blush|nose/, NOLINE = /face_line|blush|nose|glasses|ear_inner|sole|stubble|stripe|string|button/;
-  const PARTS = { hair: ['short', 'bowl', 'bob', 'buns', 'buzz'], top: ['tee', 'dress', 'hoodie'], face: ['smile', 'dot'] };
-  const PART_SET = new Set(['Body', 'Shoes', 'Bottom_shorts', 'Top_tee', 'Top_dress', 'Top_hoodie', 'Hair_bowl', 'Hair_bob', 'Hair_buns', 'Hair_short', 'Hair_buzz', 'Glasses', 'Face_smile', 'Face_dot']);
-  const NAMES = { short: '短髮', bowl: '西瓜皮', bob: '妹妹頭', buns: '丸子頭', buzz: '平頭', tee: '條紋T', dress: '洋裝', hoodie: '帽T', smile: '笑眼', dot: '圓眼' };
+  const FLAT = /face_|glasses|blush|nose/, NOLINE = /face_|blush|nose|glasses|ear_inner|sole|stubble|stripe|string|button|gold/;
+  const PARTS = { hair: ['short', 'bowl', 'bob', 'long', 'airy', 'hime', 'bun', 'buns', 'buzz', 'bald'], top: ['tee', 'dress', 'hoodie'], face: ['smile', 'dot', 'grin', 'cat', 'wink', 'wow', 'love', 'star', 'grr', 'cry'] };
+  // 職業的服裝和配件：選了職業就換上整套（自己選的上衣還記著，換回一般就穿回來）
+  const CLS_KIT = { summoner: { top: 'space', acc: ['Acc_antenna'], hide: ['Shoes', 'Bottom_shorts'] }, skater: { top: 'qi', acc: ['Acc_liangbatou', 'Acc_skates'], hide: ['Shoes'], lift: 0.11 } };
+  const PART_SET = new Set(); { const R = /^(Body|Shoes|Glasses|Bottom_|Top_|Hair_|Face_|Acc_)/; AS.char.scene.traverse(o => { if (R.test(o.name) && !(o.parent && R.test(o.parent.name))) PART_SET.add(o.name); }); }   // 零件名稱的規則見 newworld/assets/MOUNTS.md
+  const NAMES = { short: '短髮', bowl: '西瓜皮', bob: '妹妹頭', buns: '丸子頭', buzz: '平頭', long: '長髮', airy: '空氣瀏海', hime: '公主切', bun: '包包頭', bald: '光頭', tee: '條紋T', dress: '洋裝', hoodie: '帽T',
+    smile: '笑眼', dot: '圓眼', grin: '開心笑', cat: '貓咪嘴', wink: '眨眼吐舌', wow: '驚訝', love: '愛心眼', star: '星星眼', grr: '不爽', cry: '哭哭' };
   // 顏色選項（換裝面板用）：key 是 Blender 裡的材質名稱
   const SWATCH = {
     // 前面幾個是總部（2D）創角可以選的顏色，後面是新世界多的
@@ -588,8 +591,8 @@ const STD = (() => {
     top: ['#ff7a2f', '#4f7cc2', '#aeb6c4', '#2f3b55', '#f2c14e', '#6baf7b', '#f6a3b4'],
   };
   // 總部的髮型對應到新世界有的髮型；還沒做的先用最接近的
-  const HAIR_FROM_2D = { short: 'short', bob: 'bob', long: 'bob', airy: 'bob', hime: 'bob', bun: 'buns', buns: 'buns', buzz: 'buzz', bald: 'buzz' };
-  const fromAccount = (b) => ({ hair: HAIR_FROM_2D[b.hair] || 'bowl', top: 'tee', face: 'smile', glasses: !!b.glasses, wings: false, hairCol: b.hairColor || null, skinCol: b.skin || null, topCol: b.outfit || null });
+  const HAIR_FROM_2D = { short: 'short', bob: 'bob', long: 'long', airy: 'airy', hime: 'hime', bun: 'bun', buns: 'buns', buzz: 'buzz', bald: 'bald' };
+  const fromAccount = (b) => ({ hair: HAIR_FROM_2D[b.hair] || 'bowl', top: 'tee', face: PARTS.face.indexOf(b.face) >= 0 ? b.face : 'smile', glasses: !!b.glasses, wings: false, hairCol: b.hairColor || null, skinCol: b.skin || null, topCol: b.outfit || null });
   // 鼻子、耳朵內側：比膚色紅一點、深一點
   const skinTint = (hex, k) => { const c = new THREE.Color(hex), h = {}; c.getHSL(h); return '#' + c.setHSL(Math.max(0, h.h - 0.025), Math.min(1, h.s + 0.08), h.l * k).getHexString(); };
 
@@ -644,7 +647,7 @@ const STD = (() => {
       const inv = new THREE.Matrix4().copy(spine.matrixWorld).invert().multiply(g.matrixWorld).multiply(want);
       inv.decompose(piv.position, piv.quaternion, piv.scale); spine.add(piv); return { piv, k, ...W };
     });
-    const c = { H, body, g, meshes, mixer, acts, wings, look: {}, ph: Math.random() * 6, mv: 0, flap: Math.random(), wt: { idle: 1, walk: 0, run: 0, sit: 0, wave: 0 } };
+    const c = { H, body, g, meshes, mixer, acts, wings, look: {}, ph: Math.random() * 6, mv: 0, flap: Math.random(), wt: { idle: 1, walk: 0, run: 0, sit: 0, wave: 0, skate: 0 }, emote: null, emoteT: 0 };
     for (const n in W_DEFAULT) c.look[n] = W_DEFAULT[n];
     setLook(c, look); return c;
   }
@@ -652,7 +655,10 @@ const STD = (() => {
 
   function setLook(c, patch) {
     Object.assign(c.look, patch || {}); const L = c.look;
-    const want = new Set(['Body', 'Shoes', 'Bottom_shorts', 'Hair_' + L.hair, 'Top_' + L.top, 'Face_' + L.face].concat(L.glasses ? ['Glasses'] : []));
+    const kit = CLS_KIT[L.cls] || null;
+    const want = new Set(['Body', 'Shoes', 'Bottom_shorts', 'Hair_' + L.hair, 'Top_' + (kit ? kit.top : L.top), 'Face_' + (c.emote || L.face)].concat(L.glasses ? ['Glasses'] : [], kit ? kit.acc : []));
+    if (kit) kit.hide.forEach(n => want.delete(n));
+    c.g.position.y = kit && kit.lift ? kit.lift * HEIGHT / 2.26 : 0;   // 冰刀比鞋底低，人要墊高一點
     c.meshes.forEach(o => { const on = want.has(o.userData.part); o.visible = on; if (o.userData.line) o.userData.line.visible = on && SHOW.lines;
       const m = o.material, nm = m.userData.name; let col = null;
       if (nm === 'hair' && L.hairCol) col = L.hairCol;
@@ -675,13 +681,15 @@ const STD = (() => {
   // pose：null 一般（站著或走路）、'sit' 坐著、'wave' 揮手、'run' 用跑的
   function tick(c, dt, mv, speed = 1, pose = null) {
     c.mv += (mv - c.mv) * Math.min(1, dt * 8);
-    const m = c.mv, tg = { idle: 1 - m, walk: m, run: 0, sit: 0, wave: 0 };
+    if (c.emote && performance.now() > c.emoteT) { c.emote = null; setLook(c); }   // 表情照真實時間算，畫面卡也是 5 秒
+    const m = c.mv, tg = { idle: 1 - m, walk: m, run: 0, sit: 0, wave: 0, skate: 0 };
     if (pose === 'sit') { tg.idle = tg.walk = 0; tg.sit = 1; }
     else if (pose === 'wave') { tg.wave = tg.idle; tg.idle = 0; }
     else if (pose === 'run') { tg.run = tg.walk; tg.walk = 0; }
+    if (c.look.cls === 'skater' && c.acts.skate) { tg.skate = tg.walk + tg.run; tg.walk = tg.run = 0; }   // 陵媒用溜的
     const k = Math.min(1, dt * 9);
     for (const n in tg) { const a = c.acts[n]; if (!a) continue; c.wt[n] += (tg[n] - c.wt[n]) * k; a.setEffectiveWeight(c.wt[n]); }
-    c.acts.walk.timeScale = speed; if (c.acts.run) c.acts.run.timeScale = speed * 0.8; c.mixer.update(dt);
+    c.acts.walk.timeScale = speed; if (c.acts.run) c.acts.run.timeScale = speed * 0.8; if (c.acts.skate) c.acts.skate.timeScale = speed * 0.55; c.mixer.update(dt);
     if (!c.look.wings) return;
     c.flap = (c.flap + dt / (c.mv > 0.5 ? 1.1 : 1.8)) % 1;
     c.H.updateMatrixWorld(true);
@@ -700,7 +708,7 @@ const STD = (() => {
     sk.forEach(s => s.dispose());
     if (c.H.parent) c.H.parent.remove(c.H);
   }
-  return { make: (look) => { const c = make(look); ALL.push(c); return c; }, dispose, lineCount: () => outlines.length, setLook, tick, lines, PARTS, NAMES, SWATCH, fromAccount, all: ALL };
+  return { make: (look) => { const c = make(look); ALL.push(c); return c; }, dispose, lineCount: () => outlines.length, emote: (c, face, secs) => { c.emote = PARTS.face.indexOf(face) >= 0 ? face : null; c.emoteT = performance.now() + (secs || 5) * 1000; setLook(c); }, setLook, tick, lines, PARTS, NAMES, SWATCH, fromAccount, all: ALL };
 })();
 // 一般玩家換成標準人物；自己的角色也是標準人物，背上可以開冰龍之翼
 if (STD && TW) {
@@ -746,7 +754,27 @@ const NW = (() => {
   // ME：自己操控的標準人物（有標準人物時預設操控它，按「角色」可以換回機器人騎士）
   const ME = STD && TW && TW.me ? { c: TW.me, x: TW.me.H.position.x + (Math.random() - 0.5) * 3, z: TW.me.H.position.z + (Math.random() - 0.5) * 3, face: 0 } : null;   // 進場位置錯開一點，多人同時進來才不會疊在一起
   const S = { ctrl: ME ? 'me' : 'robot', x: 0, z: 0, face: 0, mv: 0, ph: 0, form: 'carry', cw: 1, gt: -1, time: 0, zoom: 0, quality: 1, lines: true, jx: 0, jy: 0, keys: {}, camT: new V3(0, 3.6, 3.2), gn: 0, rp: null };
-  const CLS = ['', 'rider'], CLS_NAME = { '': '一般', rider: '機器人騎士' };
+  const CLS = ['', 'rider', 'summoner', 'skater'], CLS_NAME = { '': '一般', rider: '機器人騎士', summoner: '召喚師', skater: '陵媒' };
+  // 召喚師的召喚物：一隻飄在旁邊的小外星人，跟著主人走（每個人的畫面各自算，不用同步）
+  const SPIRITS = new Map(), TAG_UP = (c) => (c.look.cls === 'skater' ? 0.75 : c.look.cls === 'summoner' ? 0.45 : 0);   // 頭上有大拉翅或觸角，名字紙條要再高一點
+  const makeSpirit = () => { const g = new THREE.Group(), b = new THREE.Group(); g.add(b);
+    part(b, sph(0.34, 18, 14), '#8fe0c0', { scale: [1, 0.92, 0.95], line: 0.03 });
+    part(b, sph(0.2, 12, 10), '#c9f3e2', { pos: [0, -0.1, 0.2], scale: [1, 0.8, 0.6], noLine: true, shadow: false });
+    [-1, 1].forEach(k => { part(b, sph(0.075, 10, 8), INK, { pos: [0.13 * k, 0.06, 0.29], scale: [1, 1.25, 0.5], noLine: true, shadow: false, mat: basic(INK) });
+      part(b, sph(0.024, 6, 6), '#ffffff', { pos: [0.115 * k, 0.1, 0.32], noLine: true, shadow: false, mat: basic('#ffffff') });
+      part(b, sph(0.1, 10, 8), '#8fe0c0', { pos: [0.3 * k, -0.2, 0], scale: [0.8, 1.2, 0.8], line: 0.03 }); });
+    part(b, new THREE.CylinderGeometry(0.02, 0.02, 0.3, 6), '#6fc9a6', { pos: [0, 0.44, 0], noLine: true });
+    const tip = part(b, sph(0.08, 10, 8), '#f7a8c4', { pos: [0, 0.62, 0], line: 0.025 });
+    g.scale.setScalar(1.3); scene.add(g); return { g, b, tip, x: 0, z: 0, f: 0, ph: Math.random() * 6, fresh: true }; };
+  const dropSpirit = (c) => { const s = SPIRITS.get(c); if (!s) return; scene.remove(s.g); s.g.traverse(o => { if (o.isMesh) o.material.dispose(); }); SPIRITS.delete(c); };
+  const tickSpirit = (c, dt) => { if (c.look.cls !== 'summoner' || !c.H.visible) return dropSpirit(c);
+    let s = SPIRITS.get(c); if (!s) { s = makeSpirit(); SPIRITS.set(c, s); }
+    const f = c.H.rotation.y, tx = c.H.position.x - Math.sin(f) * 0.9 + Math.cos(f) * 1.25, tz = c.H.position.z - Math.cos(f) * 0.9 - Math.sin(f) * 1.25;
+    if (s.fresh) { s.x = tx; s.z = tz; s.f = f; s.fresh = false; }
+    const k = Math.min(1, dt * 3.2), dx = tx - s.x, dz = tz - s.z, d = Math.hypot(dx, dz); s.x += dx * k; s.z += dz * k; s.ph += dt;
+    let df = (d > 0.25 ? Math.atan2(dx, dz) : f) - s.f; df = Math.atan2(Math.sin(df), Math.cos(df)); s.f += df * Math.min(1, dt * 6);
+    s.g.position.set(s.x, 1.35 + 0.14 * Math.sin(s.ph * 2.4), s.z); s.g.rotation.y = s.f; s.b.rotation.z = 0.12 * Math.sin(s.ph * 1.7); s.b.rotation.x = Math.min(0.35, d * 0.25);
+    s.tip.scale.setScalar(1 + 0.18 * Math.sin(s.ph * 5)); };
   const FORMS = ['carry', 'float', 'front'], FORM_NAME = { carry: '單手捧著', float: '漂浮操控', front: '走在前面' };
   const CAM = [{ dist: 47, hgt: 17 }, { dist: 30, hgt: 10.5 }], CAM_ME = CAM, ANG = 0.62;
   // 多人：別的玩家的標準人物，還有頭上的名字紙條和聊天泡泡（用網頁元素疊在畫面上，字才清楚）
@@ -770,7 +798,8 @@ const NW = (() => {
       if (d.name != null) { o.tag.n.textContent = d.name; o.tag.n.hidden = !d.name; } },
     move: (id, x, z, f, mv, fm, g) => { const o = OTH.get(id); if (!o) return; o.tx = x; o.tz = z; o.tf = f; o.mv = mv; o.rs.form = FORMS[fm] || 'carry';
       if (g !== undefined && g !== o.g) { o.g = g; if (o.rs.gt < 0) o.rs.gt = 0; } },
-    drop: (id) => { const o = OTH.get(id); if (!o) return; o.tag.t.remove(); STD.dispose(o.c); OTH.delete(id); },
+    drop: (id) => { const o = OTH.get(id); if (!o) return; o.tag.t.remove(); dropSpirit(o.c); STD.dispose(o.c); OTH.delete(id); },
+    emote: (id, face) => { const o = id ? OTH.get(id) : ME; if (o && STD) STD.emote(o.c, face, 5); },
     clear: () => { [...OTH.keys()].forEach(NET.drop); },
     say: (id, text) => { const tag = id == null ? MYTAG : (OTH.get(id) || {}).tag; if (!tag) return; tag.b.textContent = text; tag.b.hidden = false; tag.until = S.time + 6; },
     count: () => OTH.size,
@@ -788,6 +817,7 @@ const NW = (() => {
         x = b.x + nx * cs + nz * sn; z = b.z - nx * sn + nz * cs; } }
     HITP.x = x; HITP.z = z; return HITP;
   }
+
   // 點地面走路的目標小圈圈
   const GOAL = new THREE.Mesh(new THREE.RingGeometry(0.42, 0.62, 32), new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.95, depthWrite: false }));
   GOAL.add(new THREE.Mesh(new THREE.RingGeometry(0.62, 0.69, 32), new THREE.MeshBasicMaterial({ color: '#b98a5e', transparent: true, opacity: 0.9, depthWrite: false })), new THREE.Mesh(new THREE.CircleGeometry(0.12, 16), new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.95, depthWrite: false })));
@@ -884,7 +914,7 @@ const NW = (() => {
     if (S.ctrl === 'me') S.camT.lerp(bp0.set(ME.x, 1.3, ME.z), Math.min(1, dt * 5));   // 騎士的鏡頭看整台機器人
     else S.camT.lerp(bp0.set(S.x - 0.8, 3.6 + shake * 0.07, S.z + 3.2), Math.min(1, dt * 5));
     camera.position.set(S.camT.x + Math.sin(ANG) * cam.dist * far, cam.hgt * far, S.camT.z + Math.cos(ANG) * cam.dist * far); camera.lookAt(S.camT);
-    camera.updateMatrixWorld(); if (MYTAG) placeTag(MYTAG, ME.x, ME.z, ME.y); OTH.forEach(o => placeTag(o.tag, o.x, o.z, o.y));
+    camera.updateMatrixWorld(); if (MYTAG) placeTag(MYTAG, ME.x, ME.z, ME.y + TAG_UP(ME.c)); OTH.forEach(o => placeTag(o.tag, o.x, o.z, o.y + TAG_UP(o.c)));
     { const fx = S.ctrl === 'me' ? ME.x : S.x, fz = S.ctrl === 'me' ? ME.z : S.z; sun.position.set(fx - 12, 22, fz + 18); sun.target.position.set(fx, 0, fz); }
     // --- 念力：海浪狀的光帶 ---
     scene.updateMatrixWorld(true);
@@ -914,6 +944,7 @@ const NW = (() => {
       if (far > 12) { o.x = o.tx; o.z = o.tz; } else { o.x += dx * k; o.z += dz * k; }
       let df = o.tf - o.f; df = Math.atan2(Math.sin(df), Math.cos(df)); o.f += df * k;
       o.c.H.position.set(o.x, 0, o.z); o.c.H.rotation.y = o.f; STD.tick(o.c, dt, o.mv || far > 0.08 ? 1 : 0, 1.6); });
+    if (STD) { if (ME) tickSpirit(ME.c, dt); OTH.forEach(o => tickSpirit(o.c, dt)); }
     if (STD && TW.s1) { const a2 = t * PI2 * 0.5; TW.s1.H.position.set(-7.4 + Math.sin(a2) * 2.2, 0, 6.2 + Math.cos(a2) * 1.8); TW.s1.H.rotation.y = a2 + Math.PI / 2;
       STD.tick(TW.s1, dt, 1, 1.1); STD.tick(TW.s2, dt, 0); STD.tick(TW.s3, dt, 0); }
     TW.pet.pose(t * PI2 * 4); TW.pet.position.y = 0.12 * Math.abs(Math.sin(t * PI2 * 4));
@@ -959,8 +990,9 @@ const NW = (() => {
     look: () => (ME ? Object.assign({}, ME.c.look) : null), dress: (patch) => { if (ME) STD.setLook(ME.c, patch); return ME ? Object.assign({}, ME.c.look) : null; },
     fromAccount: (b) => (STD ? STD.fromAccount(b) : null),
     options: () => (STD ? { parts: STD.PARTS, names: STD.NAMES, swatch: STD.SWATCH } : null),
-    net: NET,
-    mem: () => ({ chars: STD.all.length, lines: STD.lineCount(), geo: renderer.info.memory.geometries, tex: renderer.info.memory.textures }),   // 測試腳本用：看有沒有漏掉沒還的東西
+    net: NET, emote: (face) => { if (ME) STD.emote(ME.c, face, 5); },
+    mem: () => ({ spirits: SPIRITS.size, chars: STD.all.length, lines: STD.lineCount(), geo: renderer.info.memory.geometries, tex: renderer.info.memory.textures }),   // 測試腳本用：看有沒有漏掉沒還的東西
+    debugMe: () => (ME ? ME.c.g : null),
     debugPlace: (x, z) => { if (ME && S.ctrl === 'me') { ME.x = x; ME.z = z; S.goal = null; } },   // 測試腳本用：把人直接放到某個位置
     onStats: (fn) => { onStats = fn; },
   };

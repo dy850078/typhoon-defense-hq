@@ -370,7 +370,7 @@ function newworldUser(req, res) {
   if (!u.admin) { res.status(403).json({ ok: false }); return null; }
   return u;
 }
-const lookOf = (u) => { const a = sanitizeSave(u.save); return { ok: true, base: { name: a.name, hair: a.hair, skin: a.skin, hairColor: a.hairColor, outfit: a.outfit, glasses: a.glasses !== '0' }, look3d: sanitizeLook3d(u.save.look3d) }; };
+const lookOf = (u) => { const a = sanitizeSave(u.save); return { ok: true, base: { name: a.name, hair: a.hair, skin: a.skin, hairColor: a.hairColor, outfit: a.outfit, glasses: a.glasses !== '0', face: a.face || '' }, look3d: sanitizeLook3d(u.save.look3d) }; };
 app.get('/api/newworld/look', (req, res) => { const u = newworldUser(req, res); if (u) res.json(lookOf(u)); });
 app.post('/api/newworld/look', (req, res) => {
   const u = newworldUser(req, res); if (!u) return;
@@ -398,6 +398,7 @@ function startNewworldNet() {
     socket.on('move', (d) => { if (!d || typeof d !== 'object') return; p.x = num(d.x, -70, 70); p.z = num(d.z, -70, 70); p.f = num(d.f, -7, 7); p.mv = d.mv ? 1 : 0;
       p.fm = Math.round(num(d.fm, 0, 2)); p.g = Math.round(num(d.g, 0, 999)); });   // fm：騎士的隊形；g：揮手指揮的次數（變了就播一次）
     socket.on('look', (d) => { const l = sanitizeLook3d(d); if (!l) return; p.look = l; socket.broadcast.emit('look', { id: p.id, look: l }); });
+    socket.on('emote', (f) => { if (typeof f === 'string' && /^[a-z]{1,12}$/.test(f)) socket.broadcast.emit('emote', { id: p.id, face: f }); });
     socket.on('chat', (t) => {
       const text = String(t == null ? '' : t).replace(/\s+/g, ' ').trim().slice(0, 60), now = Date.now();
       if (!text || now - p.said < 600) return;

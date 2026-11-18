@@ -5,6 +5,7 @@
 //   node scripts/nw-test.js phone      只跑手機模擬
 //   node scripts/nw-test.js multi      只跑雙人
 //   node scripts/nw-test.js rider      只跑機器人騎士（兩個人，一個當騎士）
+//   node scripts/nw-test.js classes    只跑召喚師、陵媒、表情
 //   OUT=some/dir 可以指定截圖要放哪裡（預設是系統暫存資料夾）
 //
 // 需要 playwright（沒有列在 package.json，本機要跑的話先 npm i -D playwright && npx playwright install chromium）
@@ -131,9 +132,37 @@ async function main() {
     await pa.click('#b-form'); await pa.waitForTimeout(2500); await shot(pa, 'rider-3-float');
     await pa.click('#b-form'); await pa.waitForTimeout(2500); await shot(pa, 'rider-4-front');
     await pa.click('#b-gesture'); await pa.waitForTimeout(2200); await shot(pa, 'rider-5-gesture'); await shot(pb, 'rider-6-gesture-seen');
-    await pa.click('#b-ctrl'); await pa.waitForTimeout(1500);
+    for (let i = 0; i < 3; i++) await pa.click('#b-ctrl'); await pa.waitForTimeout(1500);
     ok(!(await NW(pa, () => HQ_NEWWORLD.isRider())) && (await pa.isHidden('#b-form')), '切回一般，機器人收起來');
     await shot(pa, 'rider-7-back-to-normal');
+    ok(pa.errors.length + pb.errors.length === 0, '沒有主控台錯誤' + (pa.errors.concat(pb.errors).length ? '：' + pa.errors.concat(pb.errors).join(' / ') : ''));
+    await pa.context().close(); await pb.context().close();
+  };
+
+  // ---- 召喚師、陵媒、表情：換職業換整套衣服，別人看得到；表情 5 秒後變回來 ----
+  const classes = async () => {
+    console.log('classes');
+    const a = await account({ name: '小召', hair: 'long', hairColor: '#6b4a32', glasses: '0', face: 'cat' }), b = await account({ name: '阿陵', hair: 'hime', glasses: '1' });
+    const pa = await open(a), pb = await open(b);
+    await pa.click('#b-zoom'); await pb.click('#b-zoom');   // 鏡頭拉近，截圖才看得清楚
+    const vis = (p, n) => NW(p, (n) => { let v = false; const r = HQ_NEWWORLD.debugMe().getObjectByName(n); if (r) r.traverse(o => { if (o.isMesh && o.visible && !o.material.isMeshBasicMaterial) v = true; }); return v; }, n);
+    ok((await NW(pa, () => HQ_NEWWORLD.look().hair)) === 'long' && (await NW(pa, () => HQ_NEWWORLD.look().face)) === 'cat', '總部的長髮和表情有帶過來');
+    await pa.click('#b-ctrl'); await pa.click('#b-ctrl'); await pa.waitForTimeout(1500);
+    ok((await NW(pa, () => HQ_NEWWORLD.look().cls)) === 'summoner' && (await vis(pa, 'Top_space')) && (await vis(pa, 'Acc_antenna')) && !(await vis(pa, 'Top_tee')), '召喚師：換上太空衣和觸角髮箍');
+    ok((await NW(pa, () => HQ_NEWWORLD.mem().spirits)) === 1, '召喚師：召喚物出現');
+    await NW(pa, () => HQ_NEWWORLD.key('d', true)); await pa.waitForTimeout(2500); await NW(pa, () => HQ_NEWWORLD.key('d', false)); await pa.waitForTimeout(1200);
+    await shot(pa, 'class-1-summoner');
+    for (let i = 0; i < 3; i++) await pb.click('#b-ctrl'); await pb.waitForTimeout(1500);
+    ok((await NW(pb, () => HQ_NEWWORLD.look().cls)) === 'skater' && (await vis(pb, 'Top_qi')) && (await vis(pb, 'Acc_liangbatou')) && (await vis(pb, 'Acc_skates')), '陵媒：換上旗裝、大拉翅、冰刀');
+    await NW(pb, () => HQ_NEWWORLD.key('a', true)); await pb.waitForTimeout(1800); await shot(pb, 'class-2-skater-moving'); await NW(pb, () => HQ_NEWWORLD.key('a', false));
+    await pb.waitForTimeout(1500); await shot(pb, 'class-3-skater-sees-summoner');
+    ok((await NW(pb, () => HQ_NEWWORLD.mem().spirits)) === 1, '別人看得到召喚師的召喚物');
+    await pa.click('#b-emote'); await pa.click('#emotes button:nth-of-type(7)'); await pa.waitForTimeout(800);
+    ok(await vis(pa, 'Face_love'), '表情：按了換成愛心眼'); await shot(pa, 'class-4-emote');
+    await pa.waitForFunction(() => { const r = HQ_NEWWORLD.debugMe().getObjectByName('Face_love'); let v = false; r.traverse(o => { if (o.isMesh && o.visible) v = true; }); return !v; }, null, { timeout: 60000 }).catch(() => {});   // 模擬器跑得慢，等到變回來為止
+    ok(!(await vis(pa, 'Face_love')) && (await vis(pa, 'Face_cat')), '表情：時間到變回平常的臉');
+    await pa.click('#b-ctrl'); await pa.click('#b-ctrl'); await pa.waitForTimeout(1200);
+    ok((await NW(pa, () => HQ_NEWWORLD.look().cls)) === null && (await NW(pa, () => HQ_NEWWORLD.mem().spirits)) === 0 && (await vis(pa, 'Top_tee')), '切回一般：穿回自己的上衣，召喚物收起來');
     ok(pa.errors.length + pb.errors.length === 0, '沒有主控台錯誤' + (pa.errors.concat(pb.errors).length ? '：' + pa.errors.concat(pb.errors).join(' / ') : ''));
     await pa.context().close(); await pb.context().close();
   };
@@ -141,6 +170,7 @@ async function main() {
   if (want === 'all' || want === 'solo') await solo(false);
   if (want === 'all' || want === 'phone') await solo(true);
   if (want === 'all' || want === 'multi') await multi();
+  if (want === 'all' || want === 'classes') await classes();
   if (want === 'all' || want === 'rider') await rider();
   await browser.close();
   console.log('截圖在 ' + OUT);

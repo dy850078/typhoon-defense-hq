@@ -39,6 +39,16 @@
     #knob { position: absolute; left: 50%; top: 50%; width: 52px; height: 52px; margin: -26px 0 0 -26px; border-radius: 50%; background: var(--note); border: 1.5px solid rgba(43,42,51,.6); box-shadow: var(--note-shadow); }
     #hint { position: fixed; left: 0; right: 0; bottom: calc(8px + env(safe-area-inset-bottom)); text-align: center; font-size: 11px; opacity: .65; pointer-events: none; z-index: 2; }
     /* 換裝面板：一張紙條，從下面跳出來 */
+    #nw-labels { position: fixed; inset: 0; pointer-events: none; z-index: 1; overflow: hidden; }
+    .nw-tag { position: absolute; left: 0; top: 0; display: flex; flex-direction: column; align-items: center; gap: 3px; will-change: transform; }
+    .nw-name { font: 700 11px/1.2 inherit; font-family: inherit; color: var(--note-ink); background: #fbf5e6; border: 1.5px solid rgba(43,42,51,.5); border-radius: 7px 5px 8px 6px; padding: 2px 7px; white-space: nowrap; }
+    .nw-bubble { max-width: 190px; font: 500 12px/1.4 inherit; font-family: inherit; color: var(--note-ink); background: #fff; border: 1.5px solid rgba(43,42,51,.5); border-radius: 12px 10px 13px 9px; padding: 5px 9px; overflow-wrap: anywhere; }
+    #chat { position: fixed; left: calc(164px + env(safe-area-inset-left)); bottom: calc(34px + env(safe-area-inset-bottom)); width: min(380px, calc(100vw - 180px)); z-index: 3; display: flex; flex-direction: column; gap: 5px; }
+    #chat-log { font-size: 12px; line-height: 1.5; max-height: 92px; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; pointer-events: none; text-shadow: 0 0 3px #fbf5e6, 0 0 3px #fbf5e6, 0 0 2px #fbf5e6; }
+    #chat-log b { font-weight: 700; }
+    #chat form { display: flex; gap: 6px; }
+    #chat input { all: unset; flex: 1; min-width: 0; font: 500 14px/1.2 inherit; font-family: inherit; color: var(--note-ink); background: rgba(251,246,233,.92); border: 1.5px solid rgba(43,42,51,.45); border-radius: 10px 8px 11px 7px; padding: 8px 10px; -webkit-user-select: text; user-select: text; }
+    #chat button { font: 700 13px/1 inherit; font-family: inherit; color: var(--note-ink); padding: 8px 12px; cursor: pointer; }
     #dress { position: fixed; left: 50%; bottom: calc(14px + env(safe-area-inset-bottom)); transform: translateX(-50%); width: min(380px, calc(100vw - 24px)); max-height: 62vh; overflow: auto; padding: 12px 14px 14px; z-index: 4; font-size: 13px; }
     #dress h2 { font-size: 15px; margin: 0 0 8px; display: flex; justify-content: space-between; align-items: center; }
     #dress h2 button { font: 700 12px/1 inherit; font-family: inherit; padding: 6px 10px; cursor: pointer; }
@@ -66,8 +76,10 @@
   </div>
   <div id="stick" hidden><div id="knob"></div></div>
   <div id="dress" class="note" hidden></div>
+  <div id="chat" hidden><div id="chat-log"></div><form id="chat-form"><input id="chat-in" maxlength="60" autocomplete="off" placeholder="說點什麼"><button class="note" type="submit">送出</button></form></div>
   <div id="hint" hidden>點地面就會走過去，也可以用搖桿、方向鍵或 WASD</div>
 
+  <script src="/socket.io/socket.io.js"></script>
   <script src="account.js"></script>
   <!-- 3D 元件：three.js 和讀模型檔的 GLTFLoader（模組版），載好之後掛到 window.THREE -->
   <script type="importmap">{ "imports": { "three": "/vendor3/three.module.js" } }</script>
@@ -123,10 +135,26 @@
       // 自己的角色：存過新世界造型就用存的，沒有就照總部的角色（髮型、膚色、髮色、衣服顏色、眼鏡）
       var base = null, saveT = 0;
       function api(body) { return fetch('/api/newworld/look', body ? { method: 'POST', headers: { Authorization: 'Bearer ' + token, 'content-type': 'application/json' }, body: JSON.stringify(body) } : { headers: { Authorization: 'Bearer ' + token } }).then(function (r) { return r.ok ? r.json() : null; }, function () { return null; }); }
-      function saveLook() { clearTimeout(saveT); saveT = setTimeout(function () { api({ look: NW.look() }); }, 600); }
+      function saveLook() { if (sock) sock.emit('look', NW.look()); clearTimeout(saveT); saveT = setTimeout(function () { api({ look: NW.look() }); }, 600); }
       if (NW.hasStd) api().then(function (r) { if (!r) return; base = r.base; var O = NW.options(), L = r.look3d;
         if (L && (O.parts.hair.indexOf(L.hair) < 0 || O.parts.top.indexOf(L.top) < 0 || O.parts.face.indexOf(L.face) < 0)) L = null;
-        NW.dress(L || NW.fromAccount(base)); if (!$('dress').hidden) drawDress(); });
+        NW.dress(L || NW.fromAccount(base)); if (!$('dress').hidden) drawDress(); }).then(online);
+      // 多人：看得到其他在線的管理員，聊天只在新世界裡，不會傳到總部
+      var sock = null;
+      function online() {
+        if (!window.io || sock) return;
+        sock = io('/newworld', { auth: { token: token } });
+        var last = '';
+        sock.on('init', function (d) { NW.net.clear(); NW.net.name(d.name); d.players.forEach(function (p) { NW.net.put(p.id, p); }); sock.emit('look', NW.look()); last = ''; $('chat').hidden = false; });
+        sock.on('join', function (p) { NW.net.put(p.id, p); });
+        sock.on('leave', function (id) { NW.net.drop(id); });
+        sock.on('look', function (d) { NW.net.put(d.id, { look: d.look }); });
+        sock.on('state', function (list) { list.forEach(function (a) { if (a[0] !== sock.id) NW.net.move(a[0], a[1], a[2], a[3], a[4]); }); });
+        sock.on('chat', function (m) { NW.net.say(m.id === sock.id ? null : m.id, m.text); var log = $('chat-log'), row = document.createElement('div'), b = document.createElement('b');
+          b.textContent = m.name + '：'; row.appendChild(b); row.appendChild(document.createTextNode(m.text)); log.appendChild(row); while (log.children.length > 5) log.removeChild(log.firstChild); });
+        setInterval(function () { var m = NW.net.me(); if (!m || !sock.connected) return; var k = m.x + ',' + m.z + ',' + m.f + ',' + m.mv; if (k !== last) { last = k; sock.emit('move', m); } }, 100);
+        $('chat-form').addEventListener('submit', function (e) { e.preventDefault(); var i = $('chat-in'), t = i.value.trim(); if (t && sock.connected) sock.emit('chat', t); i.value = ''; i.blur(); });
+      }
       // 換裝面板：只改新世界的造型，會記在帳號裡，不會動到總部的角色
       function drawDress() {
         var d = $('dress'), L = NW.look(), O = NW.options(); d.innerHTML = '';
@@ -164,7 +192,7 @@
       cv.addEventListener('pointerdown', function (e) { if (e.button) return; tap = { id: e.pointerId, x: e.clientX, y: e.clientY }; });
       cv.addEventListener('pointerup', function (e) { if (tap && tap.id === e.pointerId && Math.hypot(e.clientX - tap.x, e.clientY - tap.y) < 12) NW.walkTo(e.clientX, e.clientY); tap = null; });
       cv.addEventListener('pointercancel', function () { tap = null; });
-      window.addEventListener('keydown', function (e) { NW.key(e.key.length === 1 ? e.key.toLowerCase() : e.key, true); });
+      window.addEventListener('keydown', function (e) { if (e.target && e.target.tagName === 'INPUT') return; NW.key(e.key.length === 1 ? e.key.toLowerCase() : e.key, true); });
       window.addEventListener('keyup', function (e) { NW.key(e.key.length === 1 ? e.key.toLowerCase() : e.key, false); });
       window.addEventListener('blur', function () { ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'a', 'd', 'w', 's'].forEach(function (k) { NW.key(k, false); }); });
     }

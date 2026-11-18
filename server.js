@@ -355,7 +355,8 @@ app.get('/api/me', (req, res) => {
 // 3D 模型檔（Blender 做的標準人物、冰龍之翼）也一樣只給管理員
 const NEWWORLD_FILES = { 'world.js': ['world.js', 'application/javascript'], 'char.glb': ['assets/char.glb', 'model/gltf-binary'], 'wing-ice.glb': ['assets/wing-ice.glb', 'model/gltf-binary'] };
 // 新世界的 3D 造型：另外存在帳號的 look3d，不會動到總部（2D）的角色
-const LOOK3D = { hair: /^[a-z]{1,12}$/, top: /^[a-z]{1,12}$/, face: /^[a-z]{1,12}$/, hairCol: /^#[0-9a-f]{6}$/i, skinCol: /^#[0-9a-f]{6}$/i, topCol: /^#[0-9a-f]{6}$/i };
+// cls 是新世界的職業，代號跟 shared/stats.js 的職業代號同一套（rider 是新世界才有的機器人騎士，先保留這個代號）
+const LOOK3D = { cls: /^(rider|summoner|skater)$/, hair: /^[a-z]{1,12}$/, top: /^[a-z]{1,12}$/, face: /^[a-z]{1,12}$/, hairCol: /^#[0-9a-f]{6}$/i, skinCol: /^#[0-9a-f]{6}$/i, topCol: /^#[0-9a-f]{6}$/i };
 function sanitizeLook3d(d) {
   if (!d || typeof d !== 'object') return null;
   const o = { glasses: !!d.glasses, wings: !!d.wings };
@@ -388,12 +389,13 @@ function startNewworldNet() {
   });
   nw.on('connection', (socket) => {
     const u = socket.data.user, a = sanitizeSave(u.save);
-    const p = { id: socket.id, name: a.name || u.username, x: 2.5, z: 14, f: 0, mv: 0, look: sanitizeLook3d(u.save.look3d), said: 0 };
-    const pub = (q) => ({ id: q.id, name: q.name, x: q.x, z: q.z, f: q.f, look: q.look });
+    const p = { id: socket.id, name: a.name || u.username, x: 2.5, z: 14, f: 0, mv: 0, fm: 0, g: 0, look: sanitizeLook3d(u.save.look3d), said: 0 };
+    const pub = (q) => ({ id: q.id, name: q.name, x: q.x, z: q.z, f: q.f, fm: q.fm, g: q.g, look: q.look });
     socket.emit('init', { id: p.id, name: p.name, players: [...nwPlayers.values()].map(pub) });
     nwPlayers.set(p.id, p);
     socket.broadcast.emit('join', pub(p));
-    socket.on('move', (d) => { if (!d || typeof d !== 'object') return; p.x = num(d.x, -70, 70); p.z = num(d.z, -70, 70); p.f = num(d.f, -7, 7); p.mv = d.mv ? 1 : 0; });
+    socket.on('move', (d) => { if (!d || typeof d !== 'object') return; p.x = num(d.x, -70, 70); p.z = num(d.z, -70, 70); p.f = num(d.f, -7, 7); p.mv = d.mv ? 1 : 0;
+      p.fm = Math.round(num(d.fm, 0, 2)); p.g = Math.round(num(d.g, 0, 999)); });   // fm：騎士的隊形；g：揮手指揮的次數（變了就播一次）
     socket.on('look', (d) => { const l = sanitizeLook3d(d); if (!l) return; p.look = l; socket.broadcast.emit('look', { id: p.id, look: l }); });
     socket.on('chat', (t) => {
       const text = String(t == null ? '' : t).replace(/\s+/g, ' ').trim().slice(0, 60), now = Date.now();
@@ -402,7 +404,7 @@ function startNewworldNet() {
     });
     socket.on('disconnect', () => { nwPlayers.delete(p.id); nw.emit('leave', p.id); });
   });
-  setInterval(() => { if (nwPlayers.size > 1) nw.volatile.emit('state', [...nwPlayers.values()].map(q => [q.id, q.x, q.z, q.f, q.mv])); }, 100);
+  setInterval(() => { if (nwPlayers.size > 1) nw.volatile.emit('state', [...nwPlayers.values()].map(q => [q.id, q.x, q.z, q.f, q.mv, q.fm, q.g])); }, 100);
 }
 app.get('/api/newworld/:file', (req, res) => {
   const f = NEWWORLD_FILES[req.params.file];

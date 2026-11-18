@@ -4,6 +4,7 @@
 //   node scripts/nw-test.js solo       只跑單人
 //   node scripts/nw-test.js phone      只跑手機模擬
 //   node scripts/nw-test.js multi      只跑雙人
+//   node scripts/nw-test.js rider      只跑機器人騎士（兩個人，一個當騎士）
 //   OUT=some/dir 可以指定截圖要放哪裡（預設是系統暫存資料夾）
 //
 // 需要 playwright（沒有列在 package.json，本機要跑的話先 npm i -D playwright && npx playwright install chromium）
@@ -94,9 +95,35 @@ async function main() {
     await pa.context().close();
   };
 
+  // ---- 機器人騎士：騎士是自己的標準人物，別人看得到機器人跟著走、換隊形、揮手 ----
+  const rider = async () => {
+    console.log('rider');
+    const a = await account({ name: '騎士', hair: 'bob', hairColor: '#c9772f', outfit: '#6baf7b', glasses: '1' }), b = await account({ name: '觀眾', hair: 'short' });
+    const pa = await open(a), pb = await open(b);
+    await pa.click('#b-ctrl'); await pa.waitForTimeout(2500);
+    ok(await NW(pa, () => HQ_NEWWORLD.isRider()) && !(await pa.isHidden('#b-form')), '切成機器人騎士，隊形和揮手按鈕出現');
+    await shot(pa, 'rider-1-carry');
+    const p0 = await NW(pa, () => HQ_NEWWORLD.net.me());
+    await NW(pa, () => HQ_NEWWORLD.key('d', true)); await pa.waitForTimeout(3000); await NW(pa, () => HQ_NEWWORLD.key('d', false));
+    const p1 = await NW(pa, () => HQ_NEWWORLD.net.me());
+    ok(Math.hypot(p1.x - p0.x, p1.z - p0.z) > 0.5, '騎士操控機器人走路');
+    await pb.waitForTimeout(2500); await shot(pb, 'rider-2-seen-by-other');
+    await pb.waitForFunction(() => /繪製/.test(document.getElementById('stats').textContent), null, { timeout: 60000 }).catch(() => {});
+    console.log('  自己是騎士：' + (await pa.textContent('#stats')) + '　看別人當騎士：' + (await pb.textContent('#stats')));
+    await pa.click('#b-form'); await pa.waitForTimeout(2500); await shot(pa, 'rider-3-float');
+    await pa.click('#b-form'); await pa.waitForTimeout(2500); await shot(pa, 'rider-4-front');
+    await pa.click('#b-gesture'); await pa.waitForTimeout(2200); await shot(pa, 'rider-5-gesture'); await shot(pb, 'rider-6-gesture-seen');
+    await pa.click('#b-ctrl'); await pa.waitForTimeout(1500);
+    ok(!(await NW(pa, () => HQ_NEWWORLD.isRider())) && (await pa.isHidden('#b-form')), '切回一般，機器人收起來');
+    await shot(pa, 'rider-7-back-to-normal');
+    ok(pa.errors.length + pb.errors.length === 0, '沒有主控台錯誤' + (pa.errors.concat(pb.errors).length ? '：' + pa.errors.concat(pb.errors).join(' / ') : ''));
+    await pa.context().close(); await pb.context().close();
+  };
+
   if (want === 'all' || want === 'solo') await solo(false);
   if (want === 'all' || want === 'phone') await solo(true);
   if (want === 'all' || want === 'multi') await multi();
+  if (want === 'all' || want === 'rider') await rider();
   await browser.close();
   console.log('截圖在 ' + OUT);
   console.log(failed ? failed + ' 項沒過' : '全部通過');

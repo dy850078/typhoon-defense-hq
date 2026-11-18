@@ -66,10 +66,10 @@
 
   <div id="top" class="note" hidden><b>新世界測試頁</b>　管理員限定<br><span id="stats">量測中…</span><br><a href="hq.html">回總部</a></div>
   <div id="btns" hidden>
-    <button class="note" id="b-ctrl" hidden>角色<small id="s-ctrl">標準人物</small></button>
+    <button class="note" id="b-ctrl" hidden>職業<small id="s-ctrl">一般</small></button>
     <button class="note" id="b-dress" hidden>換裝<small>髮型、衣服、翅膀</small></button>
-    <button class="note" id="b-form">隊形<small id="s-form">單手捧著</small></button>
-    <button class="note" id="b-gesture">揮手指揮<small>機器人照做</small></button>
+    <button class="note" id="b-form" hidden>隊形<small id="s-form">單手捧著</small></button>
+    <button class="note" id="b-gesture" hidden>揮手指揮<small>機器人照做</small></button>
     <button class="note" id="b-zoom">鏡頭<small id="s-zoom">遠</small></button>
     <button class="note" id="b-quality">畫質<small id="s-quality">中</small></button>
     <button class="note" id="b-lines">外框線<small id="s-lines">開</small></button>
@@ -130,7 +130,8 @@
       // 手機預設用「低」比較不會燙，電腦用「中」
       if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) { NW.state.quality = 2; $('s-quality').textContent = NW.nextQuality(); }
       if (NW.hasStd) { $('b-ctrl').hidden = false; $('b-dress').hidden = false; }
-      $('b-ctrl').onclick = function () { $('s-ctrl').textContent = NW.nextCtrl(); };
+      function showClass(name) { $('s-ctrl').textContent = name; $('b-form').hidden = $('b-gesture').hidden = !NW.isRider(); }
+      $('b-ctrl').onclick = function () { showClass(NW.nextCtrl()); saveLook(); };
       $('b-dress').onclick = function () { var d = $('dress'); d.hidden = !d.hidden; if (!d.hidden) drawDress(); };
       // 自己的角色：存過新世界造型就用存的，沒有就照總部的角色（髮型、膚色、髮色、衣服顏色、眼鏡）
       var base = null, saveT = 0;
@@ -138,7 +139,7 @@
       function saveLook() { if (sock) sock.emit('look', NW.look()); clearTimeout(saveT); saveT = setTimeout(function () { api({ look: NW.look() }); }, 600); }
       if (NW.hasStd) api().then(function (r) { if (!r) return; base = r.base; var O = NW.options(), L = r.look3d;
         if (L && (O.parts.hair.indexOf(L.hair) < 0 || O.parts.top.indexOf(L.top) < 0 || O.parts.face.indexOf(L.face) < 0)) L = null;
-        NW.dress(L || NW.fromAccount(base)); if (!$('dress').hidden) drawDress(); }).then(online);
+        NW.dress(L || NW.fromAccount(base)); showClass(NW.setClass(L && L.cls)); if (!$('dress').hidden) drawDress(); }).then(online);
       // 多人：看得到其他在線的管理員，聊天只在新世界裡，不會傳到總部
       var sock = null;
       function online() {
@@ -149,10 +150,10 @@
         sock.on('join', function (p) { NW.net.put(p.id, p); });
         sock.on('leave', function (id) { NW.net.drop(id); });
         sock.on('look', function (d) { NW.net.put(d.id, { look: d.look }); });
-        sock.on('state', function (list) { list.forEach(function (a) { if (a[0] !== sock.id) NW.net.move(a[0], a[1], a[2], a[3], a[4]); }); });
+        sock.on('state', function (list) { list.forEach(function (a) { if (a[0] !== sock.id) NW.net.move(a[0], a[1], a[2], a[3], a[4], a[5], a[6]); }); });
         sock.on('chat', function (m) { NW.net.say(m.id === sock.id ? null : m.id, m.text); var log = $('chat-log'), row = document.createElement('div'), b = document.createElement('b');
           b.textContent = m.name + '：'; row.appendChild(b); row.appendChild(document.createTextNode(m.text)); log.appendChild(row); while (log.children.length > 5) log.removeChild(log.firstChild); });
-        setInterval(function () { var m = NW.net.me(); if (!m || !sock.connected) return; var k = m.x + ',' + m.z + ',' + m.f + ',' + m.mv; if (k !== last) { last = k; sock.emit('move', m); } }, 100);
+        setInterval(function () { var m = NW.net.me(); if (!m || !sock.connected) return; var k = m.x + ',' + m.z + ',' + m.f + ',' + m.mv + ',' + m.fm + ',' + m.g; if (k !== last) { last = k; sock.emit('move', m); } }, 100);
         $('chat-form').addEventListener('submit', function (e) { e.preventDefault(); var i = $('chat-in'), t = i.value.trim(); if (t && sock.connected) sock.emit('chat', t); i.value = ''; i.blur(); });
       }
       // 換裝面板：只改新世界的造型，會記在帳號裡，不會動到總部的角色

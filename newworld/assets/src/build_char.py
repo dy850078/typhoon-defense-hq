@@ -14,6 +14,11 @@ argv = sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else []
 OUT = argv[0] if argv else os.path.dirname(os.path.abspath(__file__))
 BLEND = argv[1] if len(argv) > 1 else os.path.join(OUT, 'char.blend')
 os.makedirs(OUT, exist_ok=True)
+# 身材：頭不動，脖子以下左右、前後收窄（1 = 原本，0.9 = 瘦 10%）；可以用環境變數 SLIM 試別的值
+SLIM = float(os.environ.get('SLIM', '0.82'))   # ZS 選 B：瘦 18%
+def slim(p):
+    p = Vector(p); fy = SLIM if p.z > 0.3 else 1 - (1 - SLIM) * max(0.0, p.z - 0.15) / 0.15 if p.z > 0.15 else 1.0
+    return Vector((p.x * SLIM, p.y * fy, p.z))
 
 # ---------------- 場景清空 ----------------
 bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -93,10 +98,10 @@ class Builder:
     def __init__(s):
         s.v, s.f, s.fm, s.fuv, s.vb = [], [], [], [], []
     def add(s, verts, faces, mat, bones, uv=None):
-        o = len(s.v); s.v += [Vector(p) for p in verts]
+        o = len(s.v); s.v += [Vector(p) if bones == ['head'] else slim(p) for p in verts]
         s.vb += [bones] * len(verts)
         for f in faces:
-            s.f.append([i + o for i in f]); s.fm.append(mat if not callable(mat) else mat([verts[i] for i in f]))
+            s.f.append([i + o for i in f]); s.fm.append(mat if not callable(mat) else mat([s.v[i + o] for i in f]))
             s.fuv.append(uv)
         return o
     def build(s, name, mats):
@@ -288,6 +293,7 @@ for s, k in (('L', 1), ('R', -1)):
         (f'shin.{s}', (0.2 * k, -0.004, 0.33), (0.2 * k, 0.0, 0.19), f'leg.{s}', True),
         (f'foot.{s}', (0.2 * k, 0.0, 0.19), (0.2 * k, -0.2, 0.06), f'shin.{s}', True),
     ]
+BONES = [(n, h if n in ('head', 'root') else tuple(slim(h)), t if n in ('head', 'root') else tuple(slim(t)), p, c) for n, h, t, p, c in BONES]
 BMAP = {b[0]: b for b in BONES}
 
 def seg_dist(p, a, b):

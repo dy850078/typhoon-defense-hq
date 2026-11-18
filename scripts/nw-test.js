@@ -80,6 +80,12 @@ async function main() {
     ok(pg.errors.length === 0, '沒有主控台錯誤' + (pg.errors.length ? '：' + pg.errors.join(' / ') : ''));
     console.log('  ' + (await pg.textContent('#stats')));
     await pg.context().close();
+    // 載入：模型檔有壓縮、沒變的話第二次不用重新下載
+    if (!phone) { const h = { Authorization: 'Bearer ' + acc.token, 'Accept-Encoding': 'gzip' }, http = require('http');
+      const head = (extra) => new Promise(r => http.get(B + '/api/newworld/char.glb', { headers: { ...h, ...extra } }, (res) => { let n = 0; res.on('data', d => { n += d.length; }); res.on('end', () => r({ s: res.statusCode, h: res.headers, n })); }));
+      const r1 = await head({}), r2 = await head({ 'If-None-Match': r1.h.etag });
+      ok(r1.s === 200 && r1.h['content-encoding'] === 'gzip' && r1.n < +r1.h['x-size'] * 0.5, '模型檔有壓縮（' + (r1.h['x-size'] / 1048576).toFixed(2) + ' MB 變 ' + (r1.n / 1048576).toFixed(2) + ' MB）');
+      ok(r2.s === 304 && r2.n === 0, '檔案沒變時第二次不用重新下載'); }
   };
 
   // ---- 雙人：互相看得到、移動和聊天同步、離線會消失、非管理員連不上 ----
@@ -87,7 +93,8 @@ async function main() {
     console.log('multi');
     const a = await account({ name: '小安', hair: 'short', glasses: '1' }), b = await account({ name: '阿寶', hair: 'buzz', glasses: '0' }), x = await account({ name: '路人' }, false);
     const pa = await open(a), pb = await open(b, true);
-    await pa.waitForTimeout(3000);
+    const cnt = (p, n) => p.waitForFunction((k) => HQ_NEWWORLD.net.count() === k, n, { timeout: 30000 }).catch(() => {});
+    await cnt(pa, 1); await cnt(pb, 1);
     ok((await NW(pa, () => HQ_NEWWORLD.net.count())) === 1 && (await NW(pb, () => HQ_NEWWORLD.net.count())) === 1, '兩邊都看得到對方');
     await pb.fill('#chat-in', '哈囉'); await pb.press('#chat-in', 'Enter'); await pa.waitForTimeout(1500);
     ok((await pa.textContent('#chat-log')).includes('阿寶：哈囉'), '聊天有傳到對方');
@@ -95,8 +102,14 @@ async function main() {
     ok(pa.errors.length + pb.errors.length === 0, '沒有主控台錯誤');
     const deny = await pa.evaluate((t) => new Promise(r => { const s = io('/newworld', { auth: { token: t } }); s.on('connect_error', () => { s.close(); r(true); }); s.on('connect', () => { s.close(); r(false); }); }), x.token);
     ok(deny, '非管理員連不上新世界頻道');
+    const m1 = await NW(pa, () => HQ_NEWWORLD.mem());
     await pb.context().close(); await pa.waitForTimeout(2000);
     ok((await NW(pa, () => HQ_NEWWORLD.net.count())) === 0, '對方離線後人物消失');
+    // 再進出三次，人物數、外框數、貼圖數都要回到只有自己時的數字（沒有越積越多）
+    const m0 = await NW(pa, () => HQ_NEWWORLD.mem());
+    for (let i = 0; i < 3; i++) { const p = await open(b, true); await cnt(pa, 1); await p.context().close(); await cnt(pa, 0); }
+    const m2 = await NW(pa, () => HQ_NEWWORLD.mem());
+    ok(m1.chars === m0.chars + 1 && m2.chars === m0.chars && m2.lines === m0.lines && m2.tex <= m0.tex && m2.geo <= m0.geo, '進出三次後記憶體用量沒有增加（' + JSON.stringify(m0) + ' → ' + JSON.stringify(m2) + '）');
     await pa.context().close();
   };
 

@@ -690,7 +690,17 @@ const STD = (() => {
   }
   function lines(on) { SHOW.lines = on; ALL.forEach(c => setLook(c)); }
   const ALL = [];
-  return { make: (look) => { const c = make(look); ALL.push(c); return c; }, setLook, tick, lines, PARTS, NAMES, SWATCH, fromAccount, all: ALL };
+  // 有人離開時把這個人物用掉的東西還回去：材質、骨架貼圖、動畫；形狀和共用的貼圖大家一起用，不能丟
+  function dispose(c) {
+    const i = ALL.indexOf(c); if (i >= 0) ALL.splice(i, 1);
+    c.mixer.stopAllAction(); c.mixer.uncacheRoot(c.g);
+    const sk = new Set();
+    c.H.traverse(o => { if (!o.isMesh) return; const k = outlines.indexOf(o); if (k >= 0) outlines.splice(k, 1);
+      if (o.material) o.material.dispose(); if (o.skeleton) sk.add(o.skeleton); });
+    sk.forEach(s => s.dispose());
+    if (c.H.parent) c.H.parent.remove(c.H);
+  }
+  return { make: (look) => { const c = make(look); ALL.push(c); return c; }, dispose, lineCount: () => outlines.length, setLook, tick, lines, PARTS, NAMES, SWATCH, fromAccount, all: ALL };
 })();
 // 一般玩家換成標準人物；自己的角色也是標準人物，背上可以開冰龍之翼
 if (STD && TW) {
@@ -760,7 +770,7 @@ const NW = (() => {
       if (d.name != null) { o.tag.n.textContent = d.name; o.tag.n.hidden = !d.name; } },
     move: (id, x, z, f, mv, fm, g) => { const o = OTH.get(id); if (!o) return; o.tx = x; o.tz = z; o.tf = f; o.mv = mv; o.rs.form = FORMS[fm] || 'carry';
       if (g !== undefined && g !== o.g) { o.g = g; if (o.rs.gt < 0) o.rs.gt = 0; } },
-    drop: (id) => { const o = OTH.get(id); if (!o) return; scene.remove(o.c.H); o.tag.t.remove(); const i = STD.all.indexOf(o.c); if (i >= 0) STD.all.splice(i, 1); OTH.delete(id); },
+    drop: (id) => { const o = OTH.get(id); if (!o) return; o.tag.t.remove(); STD.dispose(o.c); OTH.delete(id); },
     clear: () => { [...OTH.keys()].forEach(NET.drop); },
     say: (id, text) => { const tag = id == null ? MYTAG : (OTH.get(id) || {}).tag; if (!tag) return; tag.b.textContent = text; tag.b.hidden = false; tag.until = S.time + 6; },
     count: () => OTH.size,
@@ -950,6 +960,7 @@ const NW = (() => {
     fromAccount: (b) => (STD ? STD.fromAccount(b) : null),
     options: () => (STD ? { parts: STD.PARTS, names: STD.NAMES, swatch: STD.SWATCH } : null),
     net: NET,
+    mem: () => ({ chars: STD.all.length, lines: STD.lineCount(), geo: renderer.info.memory.geometries, tex: renderer.info.memory.textures }),   // 測試腳本用：看有沒有漏掉沒還的東西
     debugPlace: (x, z) => { if (ME && S.ctrl === 'me') { ME.x = x; ME.z = z; S.goal = null; } },   // 測試腳本用：把人直接放到某個位置
     onStats: (fn) => { onStats = fn; },
   };

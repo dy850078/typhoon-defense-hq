@@ -24,6 +24,9 @@
     #gate h1 { font-size: 20px; margin: 0 0 8px; }
     #gate p { font-size: 14px; line-height: 1.7; margin: 0 0 12px; }
     #gate a { color: #B84300; font-weight: 700; }
+    #gate-bar { height: 10px; border: 2px solid #5b4636; border-radius: 8px; overflow: hidden; margin: 0 6px 12px; background: #fffaf0; }
+    #gate-bar[hidden] { display: none; }
+    #gate-bar i { display: block; height: 100%; width: 0; background: #e8a23c; transition: width .15s; }
     /* 左上：標題和每秒張數 */
     #top { position: fixed; left: 10px; top: calc(10px + env(safe-area-inset-top)); padding: 6px 10px; font-size: 12px; line-height: 1.5; z-index: 3; pointer-events: none; }
     #top b { font-size: 13px; }
@@ -62,7 +65,7 @@
   </style>
 </head>
 <body>
-  <div id="gate"><div class="note"><h1>新世界測試頁</h1><p id="gate-msg">確認身分中…</p><p id="gate-link" hidden></p></div></div>
+  <div id="gate"><div class="note"><h1>新世界測試頁</h1><p id="gate-msg">確認身分中…</p><div id="gate-bar" hidden><i></i></div><p id="gate-link" hidden></p></div></div>
 
   <div id="top" class="note" hidden><b>新世界測試頁</b>　管理員限定<br><span id="stats">量測中…</span><br><a href="hq.html">回總部</a></div>
   <div id="btns" hidden>
@@ -101,8 +104,24 @@
         if (r.status === 401) { say('登入過期了，請重新登入。', '<a href="./">去登入</a>'); return null; }
         if (r.status === 403) { say('新世界還在施工，目前只開放管理員進來看。', '<a href="hq.html">回總部</a>'); return null; }
         if (!r.ok) { say('載入失敗，等等再試。'); return null; }
-        return kind === 'text' ? r.text() : r.arrayBuffer();
+        return read(r, name).then(function (buf) { return kind === 'text' ? new TextDecoder().decode(buf) : buf; });
       }, function () { say('連不上伺服器，等等再試。'); return null; });
+    }
+    // 邊下載邊算進度：伺服器會先說每個檔案原本多大（X-Size），收到多少就畫多少
+    var prog = {}, showBar = false;
+    function draw() {
+      var got = 0, all = 0; for (var k in prog) { got += prog[k][0]; all += prog[k][1]; }
+      if (!showBar || !all) return;
+      var p = Math.min(1, got / all); $('gate-bar').hidden = false; $('gate-bar').firstChild.style.width = Math.round(p * 100) + '%';
+      $('gate-msg').textContent = p < 1 ? '下載場景和人物模型中… ' + Math.round(p * 100) + '%（共 ' + (all / 1048576).toFixed(1) + ' MB）' : '組裝場景中…';
+    }
+    function read(r, name) {
+      var size = +r.headers.get('X-Size') || 0;
+      if (!size || !r.body || !r.body.getReader) return r.arrayBuffer();
+      var rd = r.body.getReader(), parts = [], n = 0; prog[name] = [0, size];
+      return (function pump() { return rd.read().then(function (x) {
+        if (x.done) { prog[name][0] = size; draw(); var out = new Uint8Array(n), o = 0; parts.forEach(function (p) { out.set(p, o); o += p.length; }); return out.buffer; }
+        parts.push(x.value); n += x.value.length; prog[name][0] = Math.min(size, n); draw(); return pump(); }); })();
     }
     function parse(buf) { return new Promise(function (ok) { new NW_LIB.GLTFLoader().parse(buf, '', ok, function () { ok(null); }); }); }
     function whenThree(cb) {
@@ -110,7 +129,7 @@
       window.addEventListener('nw3d', cb, { once: true });
       setTimeout(function () { if (!window.NW_LIB) say('3D 元件沒載到，請重新整理再試一次。'); }, 20000);
     }
-    say('下載場景和人物模型中…（第一次大約 2 MB）');
+    say('下載場景和人物模型中…'); showBar = true;
     Promise.all([get('world.js', 'text'), get('char.glb'), get('wing-ice.glb'), new Promise(whenThree)]).then(function (got) {
       if (!got[0]) return null;
       return Promise.all([got[1] ? parse(got[1]) : null, got[2] ? parse(got[2]) : null]).then(function (g) {
@@ -126,7 +145,7 @@
     function start() {
       var NW = window.HQ_NEWWORLD;
       if (!NW) return say('場景開不起來，請把這個畫面截圖給管理員。');
-      $('gate').hidden = true; ['top', 'btns', 'stick', 'hint'].forEach(function (id) { $(id).hidden = false; });
+      showBar = false; $('gate').hidden = true; ['top', 'btns', 'stick', 'hint'].forEach(function (id) { $(id).hidden = false; });
       // 手機預設用「低」比較不會燙，電腦用「中」
       if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) { NW.state.quality = 2; $('s-quality').textContent = NW.nextQuality(); }
       if (NW.hasStd) { $('b-ctrl').hidden = false; $('b-dress').hidden = false; }

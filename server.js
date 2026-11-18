@@ -1,6 +1,7 @@
 require('./env'); // 先讀 .env，後面的設定才拿得到
 const path = require('path');
 const fs = require('fs');
+const zlib = require('zlib');
 const http = require('http');
 const express = require('express');
 const { Server } = require('socket.io');
@@ -412,8 +413,22 @@ app.get('/api/newworld/:file', (req, res) => {
   const u = accounts.byToken(bearer(req));
   if (!u) return res.status(401).json({ ok: false });
   if (!u.admin) return res.status(403).json({ ok: false });
-  res.set('Cache-Control', 'no-cache').type(f[1]).sendFile(path.join(__dirname, 'newworld', f[0]));
+  // 壓縮後再送（模型檔大約剩三分之一），壓好的放在記憶體裡，檔案有改才重壓
+  // 瀏覽器會記住，下次只問「有沒有變」（ETag），沒變就不用重新下載
+  const file = path.join(__dirname, 'newworld', f[0]);
+  fs.stat(file, (err, st) => {
+    if (err) return res.status(404).json({ ok: false });
+    const tag = '"nw-' + st.size + '-' + Math.round(st.mtimeMs) + '"';
+    res.set({ 'Cache-Control': 'private, no-cache', ETag: tag, Vary: 'Accept-Encoding', 'X-Size': String(st.size) }).type(f[1]);
+    if (req.headers['if-none-match'] === tag) return res.status(304).end();
+    if (!/\bgzip\b/.test(req.headers['accept-encoding'] || '')) return res.sendFile(file);
+    const hit = NEWWORLD_GZ.get(file);
+    if (hit && hit.tag === tag) return res.set('Content-Encoding', 'gzip').end(hit.buf);
+    fs.readFile(file, (e2, raw) => { if (e2) return res.status(500).json({ ok: false });
+      zlib.gzip(raw, { level: 9 }, (e3, buf) => { if (e3) return res.sendFile(file); NEWWORLD_GZ.set(file, { tag, buf }); res.set('Content-Encoding', 'gzip').end(buf); }); });
+  });
 });
+const NEWWORLD_GZ = new Map();
 // 報名頁改了邀請函，或是在沒登入的時候玩過，把資料存回帳號
 app.post('/api/save', (req, res) => {
   const u = accounts.byToken(bearer(req));

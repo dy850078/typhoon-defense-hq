@@ -272,6 +272,11 @@ def hairline(th):
         e = (20 + 3 * math.cos(3 * th)) * (1 - w) + (-36 + 4 * math.cos(th * 9)) * w
     elif STYLE == 'buns':                                       # 丸子頭：瀏海有點波浪
         e += 3.0 * math.cos(th * 7)
+    elif STYLE == 'short':                                      # 短髮：跟西瓜皮一樣的齊瀏海，整圈剪短一點，沒有缺口
+        e = 23.0 + 1.2 * math.cos(th * 2)
+    elif STYLE == 'buzz':                                       # 平頭：額頭方方的高髮際線，兩側在耳朵上面，後面推到後腦中間
+        f = max(0.0, min(1.0, (62 - thd) / 26)); f = f * f * (3 - 2 * f)
+        e = (34 - 2.0 * (thd / 40) ** 2) * f + (11 + 9 * math.cos(th) - 8 * max(0.0, -math.cos(th)) ** 2) * (1 - f)
     else:                                                       # 西瓜皮：像西瓜切一半，前後左右一樣高的平切
         e = 17.0 + 8.0 * math.exp(-(math.degrees(th) / 6.5) ** 2)   # 只留正中間的小缺口
     return D(e)
@@ -427,6 +432,10 @@ def hair_rows(th):
     for i in range(1, n + 1):
         fe = e + D(6) + (D(88) - e - D(6)) * i / n
         rows.append((fe, 0.052))
+    if STYLE == 'buzz':  # 平頭：薄薄一層貼著頭皮
+        rows = [(e + D(2), -0.012), (e - D(0.3), 0.004), (e + D(1.5), 0.014)] + [(e + D(1.5) + (D(88) - e - D(1.5)) * i / 10, 0.017) for i in range(1, 11)]
+    if STYLE == 'short': # 短髮：頭頂蓬一點
+        rows = [(fe, off + 0.02 * max(0.0, math.sin(fe)) ** 2) for fe, off in rows]
     if STYLE == 'bob':   # 鮑伯頭在耳朵那裡鼓起來，把耳朵整個包住
         rows = [(fe, off + 0.085 * math.exp(-((abs(thd) - 95) / 26) ** 2) * math.exp(-((math.degrees(fe) + 4) / 24) ** 2)) for fe, off in rows]
     return rows
@@ -438,7 +447,7 @@ def stub_rows(th):
     band *= 1 - 0.45 * math.exp(-((thd - 95) / 18) ** 2)       # 耳朵上方窄一點
     e = hairline(th)
     return [(e - band - D(1.5), -0.006), (e - band, 0.011), (e + D(4), 0.012)]
-for STYLE in ('bowl', 'bob', 'buns'):
+for STYLE in ('bowl', 'bob', 'buns', 'short', 'buzz'):
     hair = Builder()
     v, f = hair_shell(hair_rows, COLS); hair.add(v, f, 'hair', ['head'])
     if STYLE == 'bowl':

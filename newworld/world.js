@@ -577,9 +577,9 @@ const STD = (() => {
   if (!AS || !AS.char || !LIB) return null;
   const LC = new THREE.Color('#' + (Q.lc || 'c2a48a')), LW = +(Q.lw || 1), HEIGHT = 2.15;
   const FLAT = /face_line|glasses|blush|nose/, NOLINE = /face_line|blush|nose|glasses|ear_inner|sole|stubble|stripe|string|button/;
-  const PARTS = { hair: ['bowl', 'bob', 'buns'], top: ['tee', 'dress', 'hoodie'], face: ['smile', 'dot'] };
-  const PART_SET = new Set(['Body', 'Shoes', 'Bottom_shorts', 'Top_tee', 'Top_dress', 'Top_hoodie', 'Hair_bowl', 'Hair_bob', 'Hair_buns', 'Glasses', 'Face_smile', 'Face_dot']);
-  const NAMES = { bowl: '西瓜皮', bob: '妹妹頭', buns: '丸子頭', tee: '條紋T', dress: '洋裝', hoodie: '帽T', smile: '笑眼', dot: '圓眼' };
+  const PARTS = { hair: ['short', 'bowl', 'bob', 'buns', 'buzz'], top: ['tee', 'dress', 'hoodie'], face: ['smile', 'dot'] };
+  const PART_SET = new Set(['Body', 'Shoes', 'Bottom_shorts', 'Top_tee', 'Top_dress', 'Top_hoodie', 'Hair_bowl', 'Hair_bob', 'Hair_buns', 'Hair_short', 'Hair_buzz', 'Glasses', 'Face_smile', 'Face_dot']);
+  const NAMES = { short: '短髮', bowl: '西瓜皮', bob: '妹妹頭', buns: '丸子頭', buzz: '平頭', tee: '條紋T', dress: '洋裝', hoodie: '帽T', smile: '笑眼', dot: '圓眼' };
   // 顏色選項（換裝面板用）：key 是 Blender 裡的材質名稱
   const SWATCH = {
     // 前面幾個是總部（2D）創角可以選的顏色，後面是新世界多的
@@ -588,7 +588,7 @@ const STD = (() => {
     top: ['#ff7a2f', '#4f7cc2', '#aeb6c4', '#2f3b55', '#f2c14e', '#6baf7b', '#f6a3b4'],
   };
   // 總部的髮型對應到新世界有的髮型；還沒做的先用最接近的
-  const HAIR_FROM_2D = { short: 'bowl', bob: 'bob', long: 'bob', airy: 'bob', hime: 'bob', bun: 'buns', buns: 'buns', buzz: 'bowl', bald: 'bowl' };
+  const HAIR_FROM_2D = { short: 'short', bob: 'bob', long: 'bob', airy: 'bob', hime: 'bob', bun: 'buns', buns: 'buns', buzz: 'buzz', bald: 'buzz' };
   const fromAccount = (b) => ({ hair: HAIR_FROM_2D[b.hair] || 'bowl', top: 'tee', face: 'smile', glasses: !!b.glasses, wings: false, hairCol: b.hairColor || null, skinCol: b.skin || null, topCol: b.outfit || null });
   // 鼻子、耳朵內側：比膚色紅一點、深一點
   const skinTint = (hex, k) => { const c = new THREE.Color(hex), h = {}; c.getHSL(h); return '#' + c.setHSL(Math.max(0, h.h - 0.025), Math.min(1, h.s + 0.08), h.l * k).getHexString(); };

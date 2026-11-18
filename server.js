@@ -353,6 +353,27 @@ app.get('/api/me', (req, res) => {
 // 新世界測試頁（public/newworld.html）：3D 場景的程式放在 newworld/，只有管理員帳號拿得到，其他人只會看到「施工中」
 // 3D 模型檔（Blender 做的標準人物、冰龍之翼）也一樣只給管理員
 const NEWWORLD_FILES = { 'world.js': ['world.js', 'application/javascript'], 'char.glb': ['assets/char.glb', 'model/gltf-binary'], 'wing-ice.glb': ['assets/wing-ice.glb', 'model/gltf-binary'] };
+// 新世界的 3D 造型：另外存在帳號的 look3d，不會動到總部（2D）的角色
+const LOOK3D = { hair: /^[a-z]{1,12}$/, top: /^[a-z]{1,12}$/, face: /^[a-z]{1,12}$/, hairCol: /^#[0-9a-f]{6}$/i, skinCol: /^#[0-9a-f]{6}$/i, topCol: /^#[0-9a-f]{6}$/i };
+function sanitizeLook3d(d) {
+  if (!d || typeof d !== 'object') return null;
+  const o = { glasses: !!d.glasses, wings: !!d.wings };
+  Object.keys(LOOK3D).forEach(k => { o[k] = typeof d[k] === 'string' && LOOK3D[k].test(d[k]) ? d[k] : null; });
+  return o;
+}
+function newworldUser(req, res) {
+  const u = accounts.byToken(bearer(req));
+  if (!u) { res.status(401).json({ ok: false }); return null; }
+  if (!u.admin) { res.status(403).json({ ok: false }); return null; }
+  return u;
+}
+const lookOf = (u) => { const a = sanitizeSave(u.save); return { ok: true, base: { name: a.name, hair: a.hair, skin: a.skin, hairColor: a.hairColor, outfit: a.outfit, glasses: a.glasses !== '0' }, look3d: sanitizeLook3d(u.save.look3d) }; };
+app.get('/api/newworld/look', (req, res) => { const u = newworldUser(req, res); if (u) res.json(lookOf(u)); });
+app.post('/api/newworld/look', (req, res) => {
+  const u = newworldUser(req, res); if (!u) return;
+  accounts.update(u, { look3d: sanitizeLook3d((req.body || {}).look) || undefined });
+  res.json(lookOf(u));
+});
 app.get('/api/newworld/:file', (req, res) => {
   const f = NEWWORLD_FILES[req.params.file];
   if (!f) return res.status(404).json({ ok: false });

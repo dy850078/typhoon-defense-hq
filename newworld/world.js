@@ -582,11 +582,16 @@ const STD = (() => {
   const NAMES = { bowl: '西瓜皮', bob: '妹妹頭', buns: '丸子頭', tee: '條紋T', dress: '洋裝', hoodie: '帽T', smile: '笑眼', dot: '圓眼' };
   // 顏色選項（換裝面板用）：key 是 Blender 裡的材質名稱
   const SWATCH = {
-    hair: ['#23262f', '#7a4a2e', '#e6b85a', '#c9566b', '#8fb4d8'],
-    skin: ['#f8d9bb', '#e9b98f', '#c98e66', '#fbe6d6'],
-    top: ['#f6a3b4', '#f2c86a', '#8fc2a0', '#e98a6a', '#8fb4d8', '#b9a6e0'],
+    // 前面幾個是總部（2D）創角可以選的顏色，後面是新世界多的
+    hair: ['#2b2a33', '#6b4a32', '#c9772f', '#9aa3b5', '#e6b85a', '#c9566b', '#8fb4d8'],
+    skin: ['#fde6d4', '#f6cfae', '#e2a983', '#b77a55'],
+    top: ['#ff7a2f', '#4f7cc2', '#aeb6c4', '#2f3b55', '#f2c14e', '#6baf7b', '#f6a3b4'],
   };
-  const SKIN_SET = { '#f8d9bb': ['#f3b49a', '#f1b9a4'], '#e9b98f': ['#dd9a78', '#d99a80'], '#c98e66': ['#b8745a', '#b77a60'], '#fbe6d6': ['#f5bfae', '#f3c4b4'] };
+  // 總部的髮型對應到新世界有的髮型；還沒做的先用最接近的
+  const HAIR_FROM_2D = { short: 'bowl', bob: 'bob', long: 'bob', airy: 'bob', hime: 'bob', bun: 'buns', buns: 'buns', buzz: 'bowl', bald: 'bowl' };
+  const fromAccount = (b) => ({ hair: HAIR_FROM_2D[b.hair] || 'bowl', top: 'tee', face: 'smile', glasses: !!b.glasses, wings: false, hairCol: b.hairColor || null, skinCol: b.skin || null, topCol: b.outfit || null });
+  // 鼻子、耳朵內側：比膚色紅一點、深一點
+  const skinTint = (hex, k) => { const c = new THREE.Color(hex), h = {}; c.getHSL(h); return '#' + c.setHSL(Math.max(0, h.h - 0.025), Math.min(1, h.s + 0.08), h.l * k).getHexString(); };
 
   // 冰龍之翼：翼膜蠟筆筆觸＋亮點，骨頭淡顆粒（跟試做的冰翼一樣）
   const RAMP4 = (() => { const t = new THREE.DataTexture(new Uint8Array([120, 175, 225, 255]), 4, 1, THREE.RedFormat); t.minFilter = t.magFilter = THREE.NearestFilter; t.needsUpdate = true; return t; })();
@@ -652,8 +657,8 @@ const STD = (() => {
       const m = o.material, nm = m.userData.name; let col = null;
       if (nm === 'hair' && L.hairCol) col = L.hairCol;
       if (nm === 'skin' && L.skinCol) col = L.skinCol;
-      if (nm === 'nose' && L.skinCol) col = SKIN_SET[L.skinCol][0];
-      if (nm === 'ear_inner' && L.skinCol) col = SKIN_SET[L.skinCol][1];
+      if (nm === 'nose' && L.skinCol) col = skinTint(L.skinCol, 0.86);
+      if (nm === 'ear_inner' && L.skinCol) col = skinTint(L.skinCol, 0.88);
       if (/^(tee|dress|hoodie)$/.test(nm) && L.topCol) col = L.topCol;
       // 條紋T 換顏色：白底藍條紋整件染上那個顏色，條紋還在
       if (col) m.color.set(col); else { m.color.copy(m.userData.base); if (/face_line/.test(nm)) m.color.set(INK); }
@@ -679,7 +684,7 @@ const STD = (() => {
   }
   function lines(on) { SHOW.lines = on; ALL.forEach(c => setLook(c)); }
   const ALL = [];
-  return { make: (look) => { const c = make(look); ALL.push(c); return c; }, setLook, tick, lines, PARTS, NAMES, SWATCH, all: ALL };
+  return { make: (look) => { const c = make(look); ALL.push(c); return c; }, setLook, tick, lines, PARTS, NAMES, SWATCH, fromAccount, all: ALL };
 })();
 // 一般玩家換成標準人物；自己的角色也是標準人物，背上可以開冰龍之翼
 if (STD && TW) {
@@ -854,6 +859,7 @@ const NW = (() => {
       S.goal = { x: Math.max(-70, Math.min(70, HIT.x)), z: Math.max(-70, Math.min(70, HIT.z)) }; return true; },
     nextCtrl: () => { S.goal = null; if (ME) S.ctrl = S.ctrl === 'me' ? 'robot' : 'me'; return S.ctrl === 'me' ? '標準人物' : '機器人騎士'; },
     look: () => (ME ? Object.assign({}, ME.c.look) : null), dress: (patch) => { if (ME) STD.setLook(ME.c, patch); return ME ? Object.assign({}, ME.c.look) : null; },
+    fromAccount: (b) => (STD ? STD.fromAccount(b) : null),
     options: () => (STD ? { parts: STD.PARTS, names: STD.NAMES, swatch: STD.SWATCH } : null),
     onStats: (fn) => { onStats = fn; },
   };

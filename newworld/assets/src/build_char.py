@@ -576,7 +576,7 @@ def make_action(name, fn):
         for pb in ob_arm.pose.bones:
             if pb.name == 'root': continue
             pb.keyframe_insert('rotation_euler', frame=fr, group=pb.name)
-            if pb.name in ('hips', 'leg.L', 'leg.R'):
+            if pb.name in ('hips', 'leg.L', 'leg.R'):   # 這三根骨頭有位移
                 pb.keyframe_insert('location', frame=fr, group=pb.name)
     act.use_frame_range = True; act.frame_start = 1; act.frame_end = 25
     return act
@@ -613,18 +613,86 @@ def walk(ph):
         P[f'upper_arm.{side}'].rotation_euler.x = -AS * sw
         P[f'lower_arm.{side}'].rotation_euler.x = -D(10) - D(6) * sw
 
+def run(ph):
+    s, c = math.sin(ph), math.cos(ph)
+    P['hips'].location.y = -0.07 * s * s + 0.02                    # 跑步彈得比較高
+    P['hips'].rotation_euler.y = D(8) * s
+    P['spine'].rotation_euler.y = D(-7) * s
+    P['spine'].rotation_euler.x = D(13)                            # 身體往前傾
+    P['head'].rotation_euler.y = D(-3) * s
+    P['head'].rotation_euler.x = D(-11)                            # 頭抬起來看前面
+    for side, k in (('L', 1), ('R', -1)):
+        sw = k * s; lift = max(0.0, k * c)
+        P[f'leg.{side}'].rotation_euler.x = D(40) * sw + D(24) * lift
+        P[f'shin.{side}'].rotation_euler.x = -D(84) * lift - D(14) * max(0.0, -sw)
+        P[f'foot.{side}'].rotation_euler.x = -D(26) * sw + D(30) * lift
+        P[f'leg.{side}'].location.y = -0.03 * lift
+        P[f'upper_arm.{side}'].rotation_euler.x = -D(46) * sw
+        P[f'lower_arm.{side}'].rotation_euler.x = D(62) + D(10) * sw   # 手肘彎著擺
+
+def sit(ph):
+    # 坐著：大腿往前平放、小腿垂下來。屁股的高度由遊戲決定（模型座標大約 z=0.36 是屁股底）
+    s = math.sin(ph)
+    P['spine'].rotation_euler.x = D(-4) + D(1.5) * s
+    P['head'].rotation_euler.z = D(3.0) * math.sin(ph + 0.6)
+    P['head'].rotation_euler.x = D(-2) - D(1.5) * s
+    for side, k in (('L', 1), ('R', -1)):
+        P[f'leg.{side}'].rotation_euler.x = D(84)
+        P[f'leg.{side}'].rotation_euler.z = D(7) * k * SIGN_OUT
+        P[f'shin.{side}'].rotation_euler.x = -D(80) + D(5) * math.sin(ph + (0.0 if k > 0 else 1.6))   # 小腿輕輕晃
+        P[f'foot.{side}'].rotation_euler.x = D(8)
+        P[f'upper_arm.{side}'].rotation_euler.x = D(16)
+        P[f'lower_arm.{side}'].rotation_euler.x = D(34)
+
+def wave(ph):
+    # 揮手：右手舉高左右擺，身體跟著微微晃
+    s = math.sin(ph * 2)
+    idle(ph)
+    P['spine'].rotation_euler.y = D(2.5) * s
+    P['head'].rotation_euler.y = D(4) * s
+    P['upper_arm.R'].rotation_euler.z = -SIGN_OUT * (D(76) + D(7) * s)   # 頭很大，手舉到斜上方就好，不然會插進頭裡
+    P['upper_arm.R'].rotation_euler.x = D(18)
+    P['lower_arm.R'].rotation_euler.z = -SIGN_OUT * (D(24) + D(30) * s)
+    P['hand.R'].rotation_euler.z = -SIGN_OUT * D(14) * s
+
+SIGN_OUT = float(os.environ.get('SIGN_OUT', '1'))   # 手腳往外張開的旋轉方向（跟骨頭的 roll 有關）
 A_IDLE = make_action('idle', idle)
 A_WALK = make_action('walk', walk)
-# 把兩個動作都擺進 NLA（匯出器會個別輸出），骨架回到 rest pose
-for act in (A_IDLE, A_WALK):
+A_RUN = make_action('run', run)
+A_SIT = make_action('sit', sit)
+A_WAVE = make_action('wave', wave)
+ACTIONS = [A_IDLE, A_WALK, A_RUN, A_SIT, A_WAVE]
+# 把動作都擺進 NLA（匯出器會個別輸出），骨架回到 rest pose
+for act in ACTIONS:
     tr = ob_arm.animation_data.nla_tracks.new(); tr.name = act.name
     st = tr.strips.new(act.name, 1, act); tr.mute = True
 ob_arm.animation_data.action = None
 for pb in ob_arm.pose.bones: pb.rotation_euler = (0, 0, 0); pb.location = (0, 0, 0)
 
+# ---------------- 掛點：裝備和職業配件掛的位置（規格見 newworld/assets/MOUNTS.md） ----------------
+# 每個掛點是骨頭底下的一個空物件，匯出後在 three.js 用名字找得到；位置是 rest pose 的世界座標
+MOUNTS = [
+    ('mount_head', 'head', (0, 0, HC.z + HCc)),            # 頭頂：帽子、頭飾
+    ('mount_face', 'head', (0, -HB, HC.z)),                # 臉正前方：面具、口罩
+    ('mount_back', 'spine', (0, 0.2, 0.93)),               # 背後：背包、披風、翅膀
+    ('mount_chest', 'spine', (0, -0.21, 0.9)),             # 胸前：徽章、項鍊
+    ('mount_waist', 'hips', (0, 0, 0.6)),                  # 腰：腰帶、尾巴
+    ('mount_hand.L', 'hand.L', BMAP['hand.L'][2]),         # 左手掌心：手持物
+    ('mount_hand.R', 'hand.R', BMAP['hand.R'][2]),         # 右手掌心：手持物
+    ('mount_foot.L', 'foot.L', (BMAP['foot.L'][1][0], -0.08, 0.0)),   # 左腳底：鞋底的東西（冰刀、輪子）
+    ('mount_foot.R', 'foot.R', (BMAP['foot.R'][1][0], -0.08, 0.0)),
+]
+from mathutils import Matrix
+MOUNT_OBS = []
+for name, bone, pos in MOUNTS:
+    e = bpy.data.objects.new(name, None); scene.collection.objects.link(e)
+    e.empty_display_size = 0.05; e.parent = ob_arm; e.parent_type = 'BONE'; e.parent_bone = bone
+    bpy.context.view_layer.update(); e.matrix_world = Matrix.Translation(Vector(pos)); MOUNT_OBS.append(e)
+bpy.context.view_layer.update()
+
 # ---------------- 匯出 GLB ----------------
 bpy.ops.object.select_all(action='DESELECT')
-for ob in [ob_arm] + [p[0] for p in PARTS]: ob.select_set(True)
+for ob in [ob_arm] + [p[0] for p in PARTS] + MOUNT_OBS: ob.select_set(True)
 bpy.context.view_layer.objects.active = ob_arm
 glb = os.path.join(OUT, 'char.glb')
 kw = dict(filepath=glb, export_format='GLB', use_selection=True, export_apply=True, export_yup=True,

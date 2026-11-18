@@ -120,13 +120,20 @@
       if (NW.hasStd) { $('b-ctrl').hidden = false; $('b-dress').hidden = false; }
       $('b-ctrl').onclick = function () { $('s-ctrl').textContent = NW.nextCtrl(); };
       $('b-dress').onclick = function () { var d = $('dress'); d.hidden = !d.hidden; if (!d.hidden) drawDress(); };
-      // 換裝面板：只改自己的角色，不存檔
+      // 自己的角色：存過新世界造型就用存的，沒有就照總部的角色（髮型、膚色、髮色、衣服顏色、眼鏡）
+      var base = null, saveT = 0;
+      function api(body) { return fetch('/api/newworld/look', body ? { method: 'POST', headers: { Authorization: 'Bearer ' + token, 'content-type': 'application/json' }, body: JSON.stringify(body) } : { headers: { Authorization: 'Bearer ' + token } }).then(function (r) { return r.ok ? r.json() : null; }, function () { return null; }); }
+      function saveLook() { clearTimeout(saveT); saveT = setTimeout(function () { api({ look: NW.look() }); }, 600); }
+      if (NW.hasStd) api().then(function (r) { if (!r) return; base = r.base; var O = NW.options(), L = r.look3d;
+        if (L && (O.parts.hair.indexOf(L.hair) < 0 || O.parts.top.indexOf(L.top) < 0 || O.parts.face.indexOf(L.face) < 0)) L = null;
+        NW.dress(L || NW.fromAccount(base)); if (!$('dress').hidden) drawDress(); });
+      // 換裝面板：只改新世界的造型，會記在帳號裡，不會動到總部的角色
       function drawDress() {
         var d = $('dress'), L = NW.look(), O = NW.options(); d.innerHTML = '';
-        var h = document.createElement('h2'); h.innerHTML = '換裝（測試用，不會存檔）'; var x = document.createElement('button'); x.className = 'note'; x.textContent = '收起來'; x.onclick = function () { d.hidden = true; }; h.appendChild(x); d.appendChild(h);
+        var h = document.createElement('h2'); h.innerHTML = '換裝（會記住，不影響總部的角色）'; var x = document.createElement('button'); x.className = 'note'; x.textContent = '收起來'; x.onclick = function () { d.hidden = true; }; h.appendChild(x); d.appendChild(h);
         function row(label) { var r = document.createElement('div'); r.className = 'row'; var s = document.createElement('span'); s.textContent = label; r.appendChild(s); d.appendChild(r); return r; }
-        function opt(r, text, on, patch) { var b = document.createElement('button'); b.className = 'opt' + (on ? ' on' : ''); b.textContent = text; b.onclick = function () { NW.dress(patch); drawDress(); }; r.appendChild(b); }
-        function sw(r, col, on, patch) { var b = document.createElement('button'); b.className = 'sw' + (on ? ' on' : ''); b.style.background = col; b.setAttribute('aria-label', col); b.onclick = function () { NW.dress(patch); drawDress(); }; r.appendChild(b); }
+        function opt(r, text, on, patch) { var b = document.createElement('button'); b.className = 'opt' + (on ? ' on' : ''); b.textContent = text; b.onclick = function () { NW.dress(patch); saveLook(); drawDress(); }; r.appendChild(b); }
+        function sw(r, col, on, patch) { var b = document.createElement('button'); b.className = 'sw' + (on ? ' on' : ''); b.style.background = col; b.setAttribute('aria-label', col); b.onclick = function () { NW.dress(patch); saveLook(); drawDress(); }; r.appendChild(b); }
         var r;
         r = row('髮型'); O.parts.hair.forEach(function (k) { opt(r, O.names[k], L.hair === k, { hair: k }); });
         r = row('髮色'); opt(r, '原色', !L.hairCol, { hairCol: null }); O.swatch.hair.forEach(function (c) { sw(r, c, L.hairCol === c, { hairCol: c }); });
@@ -136,6 +143,7 @@
         r = row('膚色'); opt(r, '原色', !L.skinCol, { skinCol: null }); O.swatch.skin.forEach(function (c) { sw(r, c, L.skinCol === c, { skinCol: c }); });
         r = row('眼鏡'); opt(r, '戴', L.glasses, { glasses: true }); opt(r, '不戴', !L.glasses, { glasses: false });
         r = row('翅膀'); opt(r, '冰龍之翼', L.wings, { wings: true }); opt(r, '不要', !L.wings, { wings: false });
+        if (base) { r = row('重來'); opt(r, '換回總部的造型', false, NW.fromAccount(base)); }
       }
       $('b-form').onclick = function () { $('s-form').textContent = NW.nextForm(); };
       $('b-gesture').onclick = function () { NW.gesture(); };

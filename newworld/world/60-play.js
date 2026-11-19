@@ -125,7 +125,7 @@ const NW = (() => {
   }
   // ===== 場景細節：草叢、小花、踏腳石（一次畫一整批，不多花繪製次數）、木柵欄、路燈、路牌 =====
   // 小路的中心線：P(s) = (-7.5 + 0.479 s, 9 + 0.878 s)，s 從 -20 到 20；n 是路的右手邊
-  const WELL = { x: 3.0, z: 4.0, y: 4.0 };
+  const WELL = { x: -1.0, z: 1.5, y: 4.0 };
   const DETAIL = TW ? (() => {
     const r = rnd(77), PA = [0.479, 0.878], PN = [0.878, -0.479], P = (s, off) => [-7.5 + PA[0] * s + PN[0] * off, 9 + PA[1] * s + PN[1] * off];
     const offPath = (x, z) => { const dx = x + 7.5, dz = z - 9; return Math.abs(dx * PN[0] + dz * PN[1]); };
@@ -174,7 +174,7 @@ const NW = (() => {
       part(g, new THREE.CylinderGeometry(0.08, 0.1, 1.9, 7), '#a8693f', { pos: [0, 0.95, 0], line: 0.022 });
       part(g, new THREE.BoxGeometry(1.5, 0.66, 0.09), '#f7ecd0', { pos: [0, 1.62, 0.07], rot: [0, 0, -0.04], line: 0.024, mat: [0, 1, 2, 3, 4, 5].map(i => (i === 4 ? new THREE.MeshToonMaterial({ map: t, gradientMap: RAMP }) : mat('#e5cfa0'))) });
       ROUNDS.push({ x, z, r: 0.25 }); };
-    sign(5.2, 3.0, Math.atan2(PN[0], PN[1]) + Math.PI + 0.25, '往總部'); sign(-12.5, -3.0, 0.5, '總部'); if (LOBBY) sign(3.0, 12.4, 0.2, '許願池');
+    sign(5.2, 3.0, Math.atan2(PN[0], PN[1]) + Math.PI + 0.25, '往總部'); sign(-12.5, -3.0, 0.5, '總部'); if (LOBBY) sign(-1.09, 10.1, 0.2, '許願池');
     // 長椅：面向小路，一張可以坐兩個人
     const SEATS = [], bench = (s, off) => { const [x, z] = P(s, off), g = new THREE.Group(), ry = Math.atan2(-PN[0] * Math.sign(off), -PN[1] * Math.sign(off)); g.position.set(x, 0, z); g.rotation.y = ry; G.add(g);
       part(g, new THREE.BoxGeometry(2.3, 0.12, 0.72), '#d79a61', { pos: [0, 0.55, 0], line: 0.022 });

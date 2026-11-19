@@ -328,8 +328,13 @@ async function main() {
     await place(2.5, 12); await pa.waitForFunction(() => { const q = HQ_NEWWORLD.pet(); return Math.hypot(q.x - 2.5, q.z - 12) < 2.5; }, null, { timeout: 30000 }).catch(() => {}); const pet2 = await NW(pa, () => HQ_NEWWORLD.pet());
     ok(Math.hypot(pet2.x - 2.5, pet2.z - 12) < 2.5, '人換位置，寵物會跟上來'); await shot(pa, 'home-1-pet');
     // 前院的許願池
-    await place(S.well.x - 0.4, S.well.z + 2.3); await near('well');
-    ok((await pa.textContent('.nw-hint')) === '許願', '前院的許願池冒出「許願」紙條'); await shot(pa, 'home-2-well');
+    await place(S.well.x - 0.4, S.well.z + 2.7); await near('well');
+    ok((await pa.textContent('.nw-hint')) === '許個願' && !!(await pa.$('.nw-hint.art img')), '前院的許願池冒出手繪的「許個願」紙條'); await shot(pa, 'home-2-well');
+    ok((await pa.locator('.nw-npc').count()) === 3, 'NPC 和許願池有手繪名牌');
+    await place(S.greek.x + 0.3, S.greek.z + 1.3); await near('greek'); await shot(pa, 'home-2b-greek');
+    ok((await pa.textContent('.nw-hint')) === '說話', '希臘少女旁邊冒出「說話」'); await pa.click('.nw-hint'); await panel('well');
+    ok(/希臘少女：/.test(await toast()), '跟希臘少女說話，她講一句就打開許願池'); await NW(pa, () => window.NW_UI.close());
+    await place(S.well.x - 0.4, S.well.z + 2.7); await near('well');
     await pa.click('.nw-hint'); await panel('well');
     ok(/還沒有人許願/.test(await pa.textContent('#panel')), '許願池面板打開，一開始是空的');
     await pa.click('#wish-add'); await pa.fill('#wish-title', '想要在大廳養魚'); await pa.click('#panel [data-cat="feature"]'); await pa.fill('#wish-body', '陽台的水缸可以放幾隻魚'); await pa.click('#wish-send');

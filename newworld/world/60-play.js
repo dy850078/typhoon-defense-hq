@@ -125,13 +125,13 @@ const NW = (() => {
   }
   // ===== 場景細節：草叢、小花、踏腳石（一次畫一整批，不多花繪製次數）、木柵欄、路燈、路牌 =====
   // 小路的中心線：P(s) = (-7.5 + 0.479 s, 9 + 0.878 s)，s 從 -20 到 20；n 是路的右手邊
-  const WELL = { x: -1.0, z: 1.5, y: 4.0 };
+  const WELL = { x: -1.0, z: 1.5, y: 3.3, reach: 1.2 }, GREEK_AT = { x: 1.7, z: 2.6, y: 3.0, f: 0.25 };
   const DETAIL = TW ? (() => {
     const r = rnd(77), PA = [0.479, 0.878], PN = [0.878, -0.479], P = (s, off) => [-7.5 + PA[0] * s + PN[0] * off, 9 + PA[1] * s + PN[1] * off];
     const offPath = (x, z) => { const dx = x + 7.5, dz = z - 9; return Math.abs(dx * PN[0] + dz * PN[1]); };
     const free = (x, z, m) => offPath(x, z) > 2.1 + m && collide(x, z, m).x === x && Math.hypot(x - 7.6, z - 9.5) > 4.5;   // 不要長在路上、屋子和樹裡面、香菇怪腳下
     const G = new THREE.Group(); scene.add(G);
-    if (LOBBY) { ROUNDS.push({ x: WELL.x, z: WELL.z, r: 1.55 }); wishWell(WELL.x, WELL.z); }   // 許願池在前院（草和花會避開它）
+    if (LOBBY) { ROUNDS.push({ x: WELL.x, z: WELL.z, r: 2.05 }, { x: GREEK_AT.x, z: GREEK_AT.z, r: 0.45 }); wishWell(WELL.x, WELL.z); }   // 許願池在前院（草和花會避開它）
     const batch = (geo, material, list, shadow) => { const im = new THREE.InstancedMesh(geo, material, list.length), o = new THREE.Object3D(), c = new THREE.Color();
       list.forEach((d, i) => { o.position.set(d.x, d.y || 0, d.z); o.rotation.set(d.rx || 0, d.ry || 0, d.rz || 0); o.scale.set(d.sx || d.s || 1, d.sy || d.s || 1, d.sz || d.s || 1); o.updateMatrix(); im.setMatrixAt(i, o.matrix); if (d.col) im.setColorAt(i, c.set(d.col)); });
       im.castShadow = !!shadow; im.receiveShadow = true; im.frustumCulled = false; G.add(im); return im; };
@@ -174,7 +174,7 @@ const NW = (() => {
       part(g, new THREE.CylinderGeometry(0.08, 0.1, 1.9, 7), '#a8693f', { pos: [0, 0.95, 0], line: 0.022 });
       part(g, new THREE.BoxGeometry(1.5, 0.66, 0.09), '#f7ecd0', { pos: [0, 1.62, 0.07], rot: [0, 0, -0.04], line: 0.024, mat: [0, 1, 2, 3, 4, 5].map(i => (i === 4 ? new THREE.MeshToonMaterial({ map: t, gradientMap: RAMP }) : mat('#e5cfa0'))) });
       ROUNDS.push({ x, z, r: 0.25 }); };
-    sign(5.2, 3.0, Math.atan2(PN[0], PN[1]) + Math.PI + 0.25, '往總部'); sign(-12.5, -3.0, 0.5, '總部'); if (LOBBY) sign(-1.09, 10.1, 0.2, '許願池');
+    sign(5.2, 3.0, Math.atan2(PN[0], PN[1]) + Math.PI + 0.25, '往總部'); sign(-12.5, -3.0, 0.5, '總部');
     // 長椅：面向小路，一張可以坐兩個人
     const SEATS = [], bench = (s, off) => { const [x, z] = P(s, off), g = new THREE.Group(), ry = Math.atan2(-PN[0] * Math.sign(off), -PN[1] * Math.sign(off)); g.position.set(x, 0, z); g.rotation.y = ry; G.add(g);
       part(g, new THREE.BoxGeometry(2.3, 0.12, 0.72), '#d79a61', { pos: [0, 0.55, 0], line: 0.022 });
@@ -198,11 +198,24 @@ const NW = (() => {
   const sitY = (x, z) => { for (const s of SEATS) if (Math.hypot(x - s.x, z - s.z) < 0.5) return s.h ?? 0.2; return -0.3; };   // 坐椅子或坐地上，屁股的高度不一樣
   // 可以互動的東西：靠近會在上面冒出一張小紙條，點紙條或按 E
   const YARD_DOOR = { x: -11.8, z: -1.6, f: 0.5 };
-  const INTER = SEATS.map(s => ({ kind: 'bench', x: s.x, z: s.z, f: s.f, y: 1.3 + (s.h ?? 0.2) + FY(s.x, s.z) })).concat(JUKE ? [{ kind: 'juke', x: JUKE.x, z: JUKE.z, y: JUKE.y }] : [], [{ kind: 'door', x: -12.3, z: -2.7, y: 3.2 }], LOBBY ? [{ kind: 'exit', x: LOBBY.EXIT.x, z: LOBBY.EXIT.z, y: LOBBY.EXIT.y }, { kind: 'well', ...WELL }, { kind: 'mentor', ...LOBBY.SPOTS.mentor }, { kind: 'gacha', ...LOBBY.SPOTS.gacha }, { kind: 'seedbox', ...LOBBY.SPOTS.seedbox }, ...LOBBY.SPOTS.plots.map((q, i) => ({ kind: 'plot', i, ...q }))] : []);
-  const HINT_TEXT = { bench: '坐下', juke: '聽歌', door: LOBBY ? '進大廳' : '敲門', exit: '到前院', well: '許願', mentor: '轉職', gacha: '扭蛋', seedbox: '領種子' }; let NEAR = null, onInteract = null;
+  const INTER = SEATS.map(s => ({ kind: 'bench', x: s.x, z: s.z, f: s.f, y: 1.3 + (s.h ?? 0.2) + FY(s.x, s.z) })).concat(JUKE ? [{ kind: 'juke', x: JUKE.x, z: JUKE.z, y: JUKE.y }] : [], [{ kind: 'door', x: -12.3, z: -2.7, y: 3.2 }], LOBBY ? [{ kind: 'exit', x: LOBBY.EXIT.x, z: LOBBY.EXIT.z, y: LOBBY.EXIT.y }, { kind: 'well', ...WELL }, { kind: 'greek', ...GREEK_AT }, { kind: 'mentor', ...LOBBY.SPOTS.mentor }, { kind: 'gacha', ...LOBBY.SPOTS.gacha }, { kind: 'seedbox', ...LOBBY.SPOTS.seedbox }, ...LOBBY.SPOTS.plots.map((q, i) => ({ kind: 'plot', i, ...q }))] : []);
+  const HINT_TEXT = { bench: '坐下', juke: '聽歌', door: LOBBY ? '進大廳' : '敲門', exit: '到前院', well: '許個願', greek: '說話', mentor: '轉職', gacha: '扭蛋', seedbox: '領種子' }; let NEAR = null, onInteract = null;
   // 公共花園：12 格的狀態（伺服器送來的，跟總部同一塊）；紙條上的字照那一格現在能做什麼
   let PLOTS = [];
   const plotHint = (i) => { const q = PLOTS[i]; return !q ? '種東西' : q.stage === 4 ? '收成' : q.stage === 5 ? '清掉' : q.wet <= 0 ? '澆水' : '看看'; };
+  // 紙條上的手繪小圖示（跟總部同一套，另外補了坐下和門）
+  const HINT_ICON = { bench: 'act-sit', juke: 'btn-song', door: 'act-home', exit: 'act-door', well: 'wish-coin', greek: 'act-greek', mentor: 'act-mentor', gacha: 'act-gacha', seedbox: 'act-seedbox' },
+    PLOT_ICON = { '種東西': 'act-plant', '收成': 'act-harvest', '清掉': 'item-twig', '澆水': 'act-water', '看看': 'act-plant' };
+  const TOUCH = window.matchMedia && matchMedia('(pointer: coarse)').matches;
+  const showHint = (it) => { const lb = hintOf(it), key = it.kind + lb; if (HINT.dataset.k === key) return; HINT.dataset.k = key;
+    const art = window.NW_HINT ? window.NW_HINT.hint(it.kind === 'plot' ? PLOT_ICON[lb] : HINT_ICON[it.kind], lb, TOUCH) : null;
+    HINT.classList.toggle('art', !!art); HINT.textContent = ''; if (!art) { HINT.textContent = lb; return; }
+    const i = document.createElement('img'), sp = document.createElement('span'); i.src = art.url; i.width = art.w; i.height = art.h; i.alt = ''; sp.textContent = lb; HINT.append(i, sp); };
+  // NPC 和地點的名牌：手繪紙條，飄在頭上
+  const NPCS = LOBBY ? [{ name: '職業導師', icon: 'act-mentor', x: LOBBY.SPOTS.mentorSeat.x, z: LOBBY.SPOTS.mentorSeat.z, y: 3.0, lob: true }, { name: '希臘少女', icon: 'act-greek', x: GREEK_AT.x, z: GREEK_AT.z, y: 2.62, lob: false }, { name: '許願池', icon: 'wish-coin', x: WELL.x, z: WELL.z, y: 2.75, lob: false }] : [];
+  const placeNpcs = () => NPCS.forEach(n => { if (!n.el) { if (!window.NW_HINT) return; const a = window.NW_HINT.tag(n.icon, n.name); n.el = document.createElement('img'); n.el.className = 'nw-npc'; n.el.src = a.url; n.el.width = a.w; n.el.height = a.h; n.el.alt = n.name; LAB.appendChild(n.el); }
+    PV.set(n.x, n.y, n.z).project(camera); const on = !!S.lob === n.lob && PV.z < 1 && Math.abs(PV.x) < 1.1 && Math.abs(PV.y) < 1.1 && !(NEAR && Math.hypot(NEAR.x - n.x, NEAR.z - n.z) < 1.2);   // 動作紙條冒出來的時候，名牌先讓位
+    n.el.style.display = on ? '' : 'none'; if (on) n.el.style.transform = 'translate(' + ((PV.x * 0.5 + 0.5) * W).toFixed(1) + 'px,' + ((-PV.y * 0.5 + 0.5) * H).toFixed(1) + 'px) translate(-50%,-100%)'; });
   const hintOf = (it) => (it.kind === 'bench' && ACT.pose === 'sit' ? '站起來' : it.kind === 'plot' ? plotHint(it.i) : HINT_TEXT[it.kind]);
 
   // 點地面走路的目標小圈圈
@@ -266,6 +279,24 @@ const NW = (() => {
   // 職業導師：坐在大廳後牆的桌子後面（只有在大廳才畫）
   const MENTOR = LOBBY && STD ? STD.make({ hair: 'bun', top: 'hoodie', face: 'smile', glasses: true, hairCol: '#9a96a0', topCol: '#7d6a9c' }) : null, LOBX = [];
   if (MENTOR) { const q = LOBBY.SPOTS.mentorSeat; MENTOR.H.position.set(q.x, q.h, q.z); MENTOR.H.rotation.y = 0; MENTOR.H.visible = false; LOBX.push(MENTOR.H); }
+  // 許願池旁邊的希臘少女（照總部 2D 的樣子）：紅棕色長髮、白色長袍、金色腰繩和橄欖葉冠，右手食指比「噓」
+  const GREEK = LOBBY && STD ? (() => { const c = STD.make({ hair: 'long', top: 'dress', face: 'smile', glasses: false, hairCol: '#b5532c', topCol: '#fbfbf8' }), B = {};
+    c.g.traverse(o => { if (o.isBone && !B[o.name]) B[o.name] = o; }); c.H.updateMatrixWorld(true);
+    const hang = (bone, fn) => { const piv = new THREE.Group(); new THREE.Matrix4().copy(bone.matrixWorld).invert().multiply(c.H.matrixWorld).decompose(piv.position, piv.quaternion, piv.scale); bone.add(piv); fn(piv); };
+    const GOLD = '#e8c04a';
+    hang(B.spine, (g) => { const w = new THREE.Group(); w.position.set(0, 1.88, 0); w.rotation.x = -0.12; g.add(w);   // 橄欖葉冠：後面高、前面低，前面留個缺口
+      for (let i = 0; i < 15; i++) { const a = (i - 7) / 7 * 2.9, x = Math.sin(a) * 0.66, z = Math.cos(a) * 0.66;
+        part(w, sph(0.14, 8, 6), i % 2 ? GOLD : '#f2d36a', { pos: [x, (i % 2) * 0.035, z], scale: [0.55, 0.5, 1.5], rot: [0.5 * (i % 2 ? 1 : -1), a + Math.PI / 2, 0], line: 0.014, shadow: false }); } });
+    hang(B.spine, (g) => { part(g, new THREE.TorusGeometry(0.335, 0.028, 6, 22), GOLD, { pos: [0, 0.97, 0.01], rot: [Math.PI / 2, 0, 0], scale: [1, 0.86, 1], line: 0.014, shadow: false });   // 金色腰繩，打結垂下來
+      part(g, sph(0.05, 8, 6), GOLD, { pos: [0.12, 0.96, 0.3], noLine: true, shadow: false }); [0.09, 0.15].forEach((x, i) => part(g, new THREE.CylinderGeometry(0.016, 0.016, 0.26 - i * 0.05, 5), GOLD, { pos: [x, 0.83 + i * 0.02, 0.31], rot: [0, 0, 0.12 - i * 0.3], noLine: true, shadow: false })); });
+    c.H.position.set(GREEK_AT.x, 0, GREEK_AT.z); c.H.rotation.y = GREEK_AT.f; c.B = B; return c; })() : null;
+  // 把一根骨頭轉到朝某個方向（世界座標）：用來擺「噓」的手
+  const _a = new V3(), _b = new V3(), _d = new V3(), _q1 = new THREE.Quaternion(), _q2 = new THREE.Quaternion();
+  const aim = (bone, child, dx, dy, dz, f) => { bone.updateWorldMatrix(true, true); bone.getWorldPosition(_a); child.getWorldPosition(_b); _b.sub(_a).normalize(); _d.set(dx, dy, dz).normalize().applyAxisAngle(V3_UP, f);
+    _q1.setFromUnitVectors(_b, _d); bone.getWorldQuaternion(_q2); _q1.multiply(_q2); bone.parent.getWorldQuaternion(_q2).invert(); bone.quaternion.copy(_q2.multiply(_q1)); };
+  const V3_UP = new V3(0, 1, 0);
+  const tickGreek = (dt) => { if (!GREEK || S.lob) return; STD.tick(GREEK, dt, 0); const B = GREEK.B, f = GREEK.H.rotation.y;
+    aim(B.upper_armR, B.lower_armR, 0.12, 0.18, 1, f); aim(B.lower_armR, B.handR, 0.75, 0.62, 0.22, f); };
   const YARD = LOBBY ? scene.children.filter(o => o.visible && !o.isLight && o !== sun.target && o !== R && o !== GOAL && o !== LOBBY.G && !(ME && o === ME.c.H) && !RIDER_FX.includes(o)) : [], SKY = scene.background;
   const setZone = (lob) => { S.lob = lob; YARD.forEach(o => { o.visible = !lob; }); LOBBY.G.visible = lob; LOBX.forEach(o => { o.visible = lob; }); scene.background = lob ? LOBBY.bg : SKY; S.goal = null; S.camT.set(ME.x, 1.3 + FY(ME.x, ME.z), ME.z); };
   A.boy.visible = false;   // 舊的小男孩不再出現：騎士就是玩家自己的標準人物
@@ -296,7 +327,7 @@ const NW = (() => {
         ME.sy = ACT.pose === 'sit' ? sitY(ME.x, ME.z) : 0; ME.c.H.position.set(ME.x, ME.sy + FY(ME.x, ME.z), ME.z); ME.c.H.rotation.y = ME.face;
         STD.tick(ME.c, dt, meMoving ? Math.min(1, jl) : 0, ACT.run ? 2.1 : 1.6, ACT.pose || (ACT.run ? 'run' : null));
         // 最近的可以互動的東西
-        let best = null, bd = 2.4; for (const it of INTER) { const d = Math.hypot(it.x - ME.x, it.z - ME.z); if (d < bd) { bd = d; best = it; } } NEAR = best; } else { NEAR = null; ME.sy = 0; } }
+        let best = null, bd = 2.4; for (const it of INTER) { const d = Math.hypot(it.x - ME.x, it.z - ME.z) - (it.reach || 0); if (d < bd) { bd = d; best = it; } } NEAR = best; } else { NEAR = null; ME.sy = 0; } }
     if (moving) { const vx = wx, vz = wz, sp = 6.5;
       const h = collide(LIMX(S.x + vx * sp * dt, S.z), LIMZ(S.z + vz * sp * dt, S.z), 1.9); S.x = h.x; S.z = h.z;
       let df = Math.atan2(vx, vz) - S.face; df = Math.atan2(Math.sin(df), Math.cos(df)); S.face += df * Math.min(1, dt * 7);
@@ -317,8 +348,9 @@ const NW = (() => {
     if (S.ctrl === 'me') S.camT.lerp(bp0.set(ME.x, 1.3 + FY(ME.x, ME.z), ME.z), Math.min(1, dt * 5));   // 騎士的鏡頭看整台機器人
     else S.camT.lerp(bp0.set(S.x - 0.8, 3.6 + shake * 0.07, S.z + 3.2), Math.min(1, dt * 5));
     camera.position.set(S.camT.x + Math.sin(ANG) * cam.dist * far, cam.hgt * far, S.camT.z + Math.cos(ANG) * cam.dist * far); camera.lookAt(S.camT);
-    camera.updateMatrixWorld(); if (NEAR) { PV.set(NEAR.x, NEAR.y, NEAR.z).project(camera); HINT.hidden = false; HINT.textContent = hintOf(NEAR);
+    camera.updateMatrixWorld(); if (NEAR) { PV.set(NEAR.x, NEAR.y, NEAR.z).project(camera); HINT.hidden = false; showHint(NEAR);
       HINT.style.transform = 'translate(' + ((PV.x * 0.5 + 0.5) * W).toFixed(1) + 'px,' + ((-PV.y * 0.5 + 0.5) * H).toFixed(1) + 'px) translate(-50%,-100%)'; } else HINT.hidden = true;
+    placeNpcs();
     if (MYTAG) placeTag(MYTAG, ME.x, ME.z, ME.y + TAG_UP(ME.c));
     { const fx = S.ctrl === 'me' ? ME.x : S.x, fz = S.ctrl === 'me' ? ME.z : S.z; sun.position.set(fx - 12, 22, fz + 18); sun.target.position.set(fx, 0, fz); }
     // --- 念力：海浪狀的光帶 ---
@@ -355,7 +387,7 @@ const NW = (() => {
       o.c.H.position.set(o.x, o.y, o.z); o.c.H.rotation.y = o.f; STD.tick(o.c, dt, o.mv || far > 0.08 ? 1 : 0, o.mv === 2 ? 2.1 : 1.6, ps); tagOf(o); });
     if (STD) { if (ME) tickSpirit(ME.c, dt); OTH.forEach(o => tickSpirit(o.c, dt)); }
     if (MENTOR && S.lob) STD.tick(MENTOR, dt, 0, 1, 'sit');
-    tickPet(dt);
+    tickPet(dt); tickGreek(dt);
     if (STD && TW.s1) { const a2 = t * PI2 * 0.5; TW.s1.H.position.set(-7.4 + Math.sin(a2) * 2.2, 0, 6.2 + Math.cos(a2) * 1.8); TW.s1.H.rotation.y = a2 + Math.PI / 2;
       STD.tick(TW.s1, dt, 1, 1.1); STD.tick(TW.s2, dt, 0); STD.tick(TW.s3, dt, 0); }
     TW.pet.pose(t * PI2 * 4); TW.pet.position.y = 0.12 * Math.abs(Math.sin(t * PI2 * 4));
@@ -419,7 +451,7 @@ const NW = (() => {
     onStats: (fn) => { onStats = fn; },
     // 大廳第二、三期：花園的狀態、寵物、可以互動的點（測試腳本用 spots 找位置）
     garden: (st) => { PLOTS = Array.isArray(st) ? st : []; if (LOBBY) LOBBY.setGarden(PLOTS); }, plots: () => PLOTS, setPet, pet: () => (PET ? { name: PET.pet.name, kind: PET.pet.kind, x: PET.x, z: PET.z } : null),
-    spots: () => (LOBBY ? { well: WELL, ...LOBBY.SPOTS } : null), hint: () => (HINT.hidden ? '' : HINT.textContent), CLS, CLS_NAME,
+    spots: () => (LOBBY ? { well: WELL, greek: GREEK_AT, ...LOBBY.SPOTS } : null), hint: () => (HINT.hidden ? '' : HINT.textContent), CLS, CLS_NAME,
   };
 })();
 window.HQ_NEWWORLD = NW;

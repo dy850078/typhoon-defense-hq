@@ -49,6 +49,13 @@
     .nw-name img { height: 15px; width: 15px; vertical-align: -3px; margin-right: 3px; }
     .nw-hint { position: absolute; left: 0; top: 0; pointer-events: auto; font: 700 12px/1.2 inherit; font-family: inherit; color: var(--note-ink); background: #fff3c4; border: 1.5px solid rgba(43,42,51,.55); border-radius: 8px 6px 9px 5px; padding: 6px 12px; cursor: pointer; white-space: nowrap; box-shadow: 1px 2px 0 rgba(43,42,51,.18); transform-origin: 50% 100%; }
     .nw-hint[hidden] { display: none; }
+    /* 手繪版的紙條（newworld-hint.js 畫的圖）：外框和底色都在圖裡，按鈕本身透明；字留著給報讀和測試用 */
+    .nw-hint.art { background: none; border: 0; padding: 0; box-shadow: none; border-radius: 0; }
+    .nw-hint.art img { display: block; animation: nw-pop .16s ease-out, nw-bob 2s ease-in-out .16s infinite; transform-origin: 50% 100%; }
+    .nw-hint.art span { position: absolute; left: 0; top: 0; width: 1px; height: 1px; overflow: hidden; opacity: 0; }
+    .nw-npc { position: absolute; left: 0; top: 0; will-change: transform; pointer-events: none; }
+    @keyframes nw-pop { from { transform: scale(.6); } to { transform: scale(1); } }
+    @keyframes nw-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
     #acts { display: flex; gap: 6px; padding: 8px; width: min(250px, 100%); }
     #acts[hidden] { display: none; }
     #acts button { flex: 1; font: 500 12px/1 inherit; font-family: inherit; color: var(--note-ink); padding: 8px 4px; border-radius: 9px 6px 10px 7px; border: 1.5px solid rgba(43,42,51,.45); background: #fff; cursor: pointer; }
@@ -127,6 +134,7 @@
   <script src="/shared/avatar.js"></script>
   <script src="/shared/gear.js"></script>
   <script src="gacha-art.js"></script>
+  <script src="newworld-hint.js"></script>
   <script src="newworld-panels.js"></script>
   <!-- 3D 元件：three.js 和讀模型檔的 GLTFLoader（模組版），載好之後掛到 window.THREE -->
   <script type="importmap">{ "imports": { "three": "/vendor3/three.module.js" } }</script>
@@ -221,7 +229,8 @@
       // 大廳的導師、扭蛋機、花圃、種子箱和前院的許願池：點紙條開面板
       var panels = window.NW_PANELS ? NW_PANELS(NW, token, { curClass: function () { return (NW.look() || {}).cls || ''; }, setClass: function (c) { var n = NW.setClass(c); showClass(n); saveLook(); return n; } }) : null;
       window.NW_UI = panels;
-      NW.onInteract(function (kind, it) { if (kind === 'juke') music.toggle(); if (panels) { $('dress').hidden = true; panels.open(kind, it); } });
+      var GREEK = ['噓…願望說出來就不靈了，寫下來吧', '把硬幣丟進池子裡，再把願望寫清楚一點', '遇到 Bug 也可以來這裡說，我會偷偷轉告管理員', '先看看有沒有人許過一樣的願，幫他按個讚吧'];
+      NW.onInteract(function (kind, it) { if (kind === 'juke') music.toggle(); if (kind === 'greek' && panels) { panels.toast('希臘少女：「' + GREEK[Math.floor(Math.random() * GREEK.length)] + '」'); kind = 'well'; } if (panels) { $('dress').hidden = true; panels.open(kind, it); } });
       // 多人：看得到其他在線的管理員，聊天只在新世界裡，不會傳到總部
       var sock = null;
       function online() {

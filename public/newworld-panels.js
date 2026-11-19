@@ -151,7 +151,7 @@ window.NW_PANELS = function (NW, token, opt) {
   }
 
   // 走遠了就把面板收起來
-  setInterval(function () { if (!cur) return; var k = NW.near(); if (k !== cur) close(); }, 500);
+  setInterval(function () { if (!cur) return; var k = NW.near(); if (k === 'greek') k = 'well'; if (k !== cur) close(); }, 500);
   // 一進來先拿一次花園的狀態（之後有變伺服器會推過來）
   post('garden', { act: 'state' }).then(gardenSync);
   return { close: close, toast: toast,

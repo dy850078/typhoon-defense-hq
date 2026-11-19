@@ -34,23 +34,26 @@ function hqHouse(x, z) {
   part(g, B(0.5, 0.21, 0.04), '#f7ecd0', { pos: [-0.12, 1.15, 1.18], line: 0.014, shadow: false, mat: [0, 1, 2, 3, 4, 5].map(i => (i === 4 ? new THREE.MeshToonMaterial({ map: t, gradientMap: RAMP }) : mat('#e5cfa0'))) });
 }
 
-// 前院的許願池：一口石頭井，有小屋頂和水桶；跟總部的許願池是同一個（同一批願望）
+// 前院的許願池：西式的圓形石砌噴水池（照總部 2D 的樣子：淺色石頭圍一圈、藍色的水、池底幾枚金幣），中間一根石柱托著小水盤
+// 跟總部的許願池是同一個（同一批願望）
 function wishWell(x, z) {
-  const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = 0.35; scene.add(g);
-  const STONE = ['#cfc6b4', '#bdb3a0', '#d9d1c0'], r = rnd(61), WOOD = '#a8693f';
-  part(g, new THREE.CylinderGeometry(1.5, 1.6, 0.14, 20), '#e3d9bf', { pos: [0, 0.07, 0], line: 0.03, shadow: false });
-  part(g, new THREE.LatheGeometry([[0.86, 0], [1.14, 0], [1.2, 0.5], [1.14, 0.98], [1.22, 1.0], [1.22, 1.12], [0.86, 1.12], [0.86, 0]].map(([a, b]) => new THREE.Vector2(a, b)), 20), STONE[0], { pos: [0, 0.1, 0], line: 0.035 });
-  for (let i = 0; i < 16; i++) { const a = i / 16 * 6.283 + (r() - 0.5) * 0.2, y = 0.3 + (i % 3) * 0.26 + r() * 0.06; part(g, sph(0.2, 7, 5), STONE[1 + (i % 2)], { pos: [Math.sin(a) * 1.13, y, Math.cos(a) * 1.13], scale: [1.2, 0.7, 0.45], rot: [0, a, 0], noLine: true, shadow: false }); }
-  part(g, new THREE.CircleGeometry(0.9, 20), '#7fc3d8', { pos: [0, 0.95, 0], rot: [-Math.PI / 2, 0, 0], noLine: true, shadow: false, mat: basic('#8fd0e0') });
-  [[0.3, 0.2, 0.2], [-0.35, -0.1, 0.14], [0.05, -0.45, 0.17]].forEach(([a, b, s]) => part(g, new THREE.RingGeometry(s, s + 0.03, 16), '#ffffff', { pos: [a, 0.96, b], rot: [-Math.PI / 2, 0, 0], noLine: true, shadow: false, mat: basic('#e6f7fb') }));
-  [[0.45, -0.25], [-0.2, 0.4], [-0.5, -0.3]].forEach(([a, b]) => part(g, new THREE.CylinderGeometry(0.07, 0.07, 0.02, 10), '#f2c14e', { pos: [a, 0.965, b], noLine: true, shadow: false, mat: basic('#ffd86a') }));
-  [-1, 1].forEach(k => part(g, new THREE.BoxGeometry(0.16, 2.5, 0.16), WOOD, { pos: [1.2 * k, 1.35, 0], line: 0.026 }));
-  part(g, new THREE.CylinderGeometry(0.07, 0.07, 2.5, 8), '#8a5f3d', { pos: [0, 2.2, 0], rot: [0, 0, Math.PI / 2], line: 0.02 });
-  part(g, new THREE.CylinderGeometry(0.014, 0.014, 0.8, 4), '#e5d6b4', { pos: [0.2, 1.8, 0], noLine: true, shadow: false });
-  part(g, new THREE.CylinderGeometry(0.2, 0.16, 0.3, 10), '#c98a52', { pos: [0.2, 1.3, 0], line: 0.022 }); part(g, new THREE.TorusGeometry(0.19, 0.02, 5, 12), '#8d9aa0', { pos: [0.2, 1.38, 0], rot: [Math.PI / 2, 0, 0], noLine: true, shadow: false });
-  [-1, 1].forEach(k => part(g, new THREE.BoxGeometry(3.2, 0.1, 1.2), k > 0 ? '#c9604a' : '#b8433c', { pos: [0, 2.95, 0.48 * k], rot: [0.62 * k, 0, 0], line: 0.03 }));
-  part(g, new THREE.BoxGeometry(3.3, 0.12, 0.16), '#8a3a30', { pos: [0, 3.3, 0], noLine: true });
-  return g;
+  const g = new THREE.Group(); g.position.set(x, 0, z); scene.add(g);
+  const S1 = '#d6d0c2', S2 = '#b9b2a4', S3 = '#e6e1d4', WATER = '#6fb4e0', r = rnd(61), V = (pts) => pts.map(([a, b]) => new THREE.Vector2(a, b)), FLAT = [-Math.PI / 2, 0, 0];
+  const water = (rad, y, px = 0, pz = 0) => part(g, new THREE.CircleGeometry(rad, 28), WATER, { pos: [px, y, pz], rot: FLAT, noLine: true, shadow: false, mat: basic(WATER) });
+  part(g, new THREE.CylinderGeometry(2.15, 2.25, 0.12, 28), S2, { pos: [0, 0.06, 0], line: 0.03, shadow: false });                                    // 底座
+  part(g, new THREE.LatheGeometry(V([[1.45, 0.1], [1.9, 0.1], [1.96, 0.3], [1.86, 0.52], [1.98, 0.6], [1.98, 0.72], [1.5, 0.72], [1.45, 0.6], [1.45, 0.1]]), 28), S1, { line: 0.035 });   // 池壁
+  for (let i = 0; i < 14; i++) { const a = i / 14 * 6.283; part(g, new THREE.BoxGeometry(0.03, 0.4, 0.05), S2, { pos: [Math.sin(a) * 1.93, 0.33, Math.cos(a) * 1.93], rot: [0, a, 0], noLine: true, shadow: false }); }   // 石頭的縫
+  water(1.5, 0.56);
+  [[0.75, 0.6], [-0.9, 0.3], [0.3, -1.0], [-0.5, -0.8], [1.05, -0.35]].forEach(([a, b], i) => part(g, new THREE.CylinderGeometry(0.08, 0.08, 0.02, 10), '#ffd23f', { pos: [a, 0.575, b], noLine: true, shadow: false, mat: basic(i % 2 ? '#ffd23f' : '#f2b632') }));
+  [[0.9, 0.1, 0.24], [-0.6, 0.85, 0.18], [-0.2, -1.1, 0.2]].forEach(([a, b, s]) => part(g, new THREE.RingGeometry(s, s + 0.035, 18), '#ffffff', { pos: [a, 0.58, b], rot: FLAT, noLine: true, shadow: false, mat: basic('#dff1fb') }));
+  part(g, new THREE.LatheGeometry(V([[0, 0.5], [0.42, 0.5], [0.4, 0.66], [0.24, 0.74], [0.19, 1.2], [0.24, 1.62], [0.34, 1.7], [0, 1.7]]), 16), S3, { line: 0.03 });   // 中間的石柱
+  part(g, new THREE.LatheGeometry(V([[0, 1.66], [0.3, 1.68], [0.8, 1.86], [0.92, 2.0], [0.86, 2.04], [0, 2.04]]), 22), S1, { line: 0.03 });                            // 上面的小水盤
+  water(0.8, 2.01);
+  part(g, new THREE.LatheGeometry(V([[0, 2.0], [0.13, 2.0], [0.1, 2.2], [0.16, 2.3], [0, 2.42]]), 12), S3, { line: 0.02 });                                            // 頂端的小尖
+  for (let i = 0; i < 4; i++) { const a = i / 4 * 6.283 + 0.6;   // 從水盤邊流下來的四道水
+    part(g, new THREE.CylinderGeometry(0.035, 0.05, 1.42, 6), '#bfe2f5', { pos: [Math.sin(a) * 0.9, 1.28, Math.cos(a) * 0.9], noLine: true, shadow: false, mat: basic('#bfe2f5', { transparent: true, opacity: 0.8 }) });
+    part(g, new THREE.RingGeometry(0.1, 0.16, 14), '#ffffff', { pos: [Math.sin(a) * 0.9, 0.585, Math.cos(a) * 0.9], rot: FLAT, noLine: true, shadow: false, mat: basic('#eaf6fd') }); }
+  void r; return g;
 }
 const LOBBY = TW ? (() => {
   const OZ = -55, HW = 20, HD = 12, WH = 6.4, PH = 1.0, PI = Math.PI, T0 = performance.now();

@@ -7,6 +7,7 @@
 //   node scripts/nw-test.js rider      只跑機器人騎士（兩個人，一個當騎士）
 //   node scripts/nw-test.js classes    只跑召喚師、陵媒、表情
 //   node scripts/nw-test.js live       只跑動作、長椅、徽章、點唱機、假人壓力測試
+//   node scripts/nw-test.js lobby      只跑總部大廳（進門、出門、坐沙發、作戰角的高度、點唱機）
 //   OUT=some/dir 可以指定截圖要放哪裡（預設是系統暫存資料夾）
 //
 // 需要 playwright（沒有列在 package.json，本機要跑的話先 npm i -D playwright && npx playwright install chromium）
@@ -49,7 +50,7 @@ async function main() {
     pg.on('pageerror', e => pg.errors.push(e.message));
     await pg.goto(B + '/'); await pg.evaluate(([t, u]) => { localStorage.setItem('hq-token', t); localStorage.setItem('hq-user', u); }, [acc.token, acc.name]);
     await pg.goto(B + '/newworld.html', { waitUntil: 'domcontentloaded', timeout: 120000 });
-    await pg.waitForFunction(() => document.getElementById('gate').hidden, null, { timeout: 120000 });
+    await pg.waitForFunction(() => document.getElementById('gate').hidden && document.body.dataset.look === '1', null, { timeout: 120000 });   // 等場景載完、帳號的造型也套上
     await pg.waitForTimeout(300); if (pg.errors.length) console.log('  頁面錯誤：' + pg.errors.join(' / '));
     await pg.waitForTimeout(3500); return pg;
   };
@@ -208,14 +209,14 @@ async function main() {
     ok(await pb.evaluate(() => [...document.querySelectorAll('.nw-name img')].some(i => !i.hidden)), '別人也看得到徽章');
     await shot(pb, 'live-3-badge');
     // 點唱機：總部沒有人點歌時會說一聲
-    await NW(pa, () => HQ_NEWWORLD.debugPlace(2.0, 12.0)); await pa.waitForFunction(() => HQ_NEWWORLD.near() === 'juke', null, { timeout: 30000 }).catch(() => {});
+    await NW(pa, () => { const j = HQ_NEWWORLD.lobby().juke; HQ_NEWWORLD.debugPlace(j.x, j.z + 1.6); }); await pa.waitForFunction(() => HQ_NEWWORLD.near() === 'juke', null, { timeout: 30000 }).catch(() => {});
     await pa.click('.nw-hint'); await pa.waitForTimeout(600);
     ok((await pa.textContent('.nw-tag .nw-bubble')).includes('沒有人點歌') && !(await pa.evaluate(() => NW_MUSIC.state().on)), '點唱機：沒有歌的時候會說一聲');
     await shot(pa, 'live-4-jukebox');
     // 假人：放 19 個進來，量張數
     await pa.click('#b-bots'); await pa.click('#b-bots'); await cnt(pa, 20);
     ok((await NW(pa, () => HQ_NEWWORLD.net.count())) === 20, '放 19 個假人進來（加上觀眾共 20 個別人）');
-    await NW(pa, () => HQ_NEWWORLD.debugPlace(0, 14)); await pa.waitForTimeout(8000);
+    await NW(pa, () => HQ_NEWWORLD.debugPlace(0, 14)); await pa.waitForFunction(() => HQ_NEWWORLD.zone() === 'yard', null, { timeout: 30000 }).catch(() => {}); await pa.waitForTimeout(8000);
     await pa.waitForFunction(() => /繪製/.test(document.getElementById('stats').textContent), null, { timeout: 60000 }).catch(() => {});
     console.log('  21 人同時在線（模擬器用軟體算圖，數字只能看繪製次數和面數）：' + (await pa.textContent('#stats')));
     await pb.context().close(); await pa.screenshot({ path: path.join(OUT, 'live-5-crowd.png'), timeout: 180000 }).catch(() => console.log('  （21 人的截圖太慢，跳過）'));
@@ -225,12 +226,95 @@ async function main() {
     await pa.context().close();
   };
 
+  // ---- 總部大廳：前院和室內是分開的兩區 ----
+  const lobby = async () => {
+    console.log('lobby');
+    const a = await account({ name: '小廳', hair: 'bob', glasses: '0' }), b = await account({ name: '訪客', hair: 'short' });
+    const pa = await open(a), pb = await open(b);
+    const cnt = (p, n) => p.waitForFunction((k) => HQ_NEWWORLD.net.count() === k, n, { timeout: 30000 }).catch(() => {});
+    const zone = (p, z) => p.waitForFunction((k) => HQ_NEWWORLD.zone() === k, z, { timeout: 30000 }).catch(() => {});
+    const near = (p, k) => p.waitForFunction((v) => HQ_NEWWORLD.near() === v, k, { timeout: 30000 }).catch(() => {});
+    const place = async (p, x, z) => { await NW(p, ([x, z]) => HQ_NEWWORLD.debugPlace(x, z), [x, z]); await p.waitForTimeout(700); };
+    const L = await NW(pa, () => HQ_NEWWORLD.lobby()), OZ = -55;
+    await cnt(pb, 1);
+    // 前院：小樓的門口冒出「進大廳」
+    await place(pa, -11.8, -1.6); await near(pa, 'door');
+    ok((await pa.textContent('.nw-hint')) === '進大廳', '小樓門口冒出「進大廳」紙條');
+    await shot(pa, 'lobby-0-yard-house');
+    await pa.click('.nw-hint'); await zone(pa, 'lobby');
+    const me0 = await NW(pa, () => HQ_NEWWORLD.net.me());
+    ok((await NW(pa, () => HQ_NEWWORLD.zone())) === 'lobby' && Math.abs(me0.z - L.spawn.z) < 0.5, '點紙條就進到大廳門口');
+    await pa.waitForTimeout(1200); await shot(pa, 'lobby-1-entry-far');
+    // 還在前院的人看不到大廳裡的人；自己也進來就看得到
+    await pb.waitForFunction(() => { let z = 0; HQ_NEWWORLD.net.each((o) => { z = o.tz; }); return z < -40; }, null, { timeout: 30000 }).catch(() => {}); await pb.waitForTimeout(800);
+    ok(await NW(pb, () => { let v = true; HQ_NEWWORLD.net.each((o) => { v = o.c.H.visible || o.tag.t.style.display !== 'none'; }); return v === false; }), '在前院的人看不到大廳裡的人和名字');
+    await place(pb, L.spawn.x + 1.5, L.spawn.z); await zone(pb, 'lobby'); await pb.waitForTimeout(800);
+    ok(await NW(pb, () => { let v = false; HQ_NEWWORLD.net.each((o) => { v = o.c.H.visible; }); return v; }), '兩個人都在大廳就互相看得到');
+    // 往門外走會被擋住，不會掉出去
+    await NW(pa, () => HQ_NEWWORLD.key('s', true)); await pa.waitForFunction((t) => HQ_NEWWORLD.state.time > t + 1.5, await NW(pa, () => HQ_NEWWORLD.state.time), { timeout: 60000 }).catch(() => {}); await NW(pa, () => HQ_NEWWORLD.key('s', false));
+    const me1 = await NW(pa, () => HQ_NEWWORLD.net.me());
+    ok((await NW(pa, () => HQ_NEWWORLD.zone())) === 'lobby' && me1.z <= OZ + 11.7 && me1.z > OZ + 11.3, '走到大廳邊緣會被擋住（z ' + me1.z + '）');
+    // 沙發可以坐，別人看得到
+    await zoomIn(pa); await place(pa, 1, OZ - 5.2); await near(pa, 'bench');
+    await pa.click('.nw-hint'); await pa.waitForFunction(() => document.querySelector('.nw-hint').textContent === '站起來', null, { timeout: 30000 }).catch(() => {});
+    ok((await NW(pa, () => HQ_NEWWORLD.acts().pose)) === 'sit' && (await pa.textContent('.nw-hint')) === '站起來', '沙發可以坐');
+    await pb.waitForFunction(() => { let p = 0; HQ_NEWWORLD.net.each((o) => { p = o.p; }); return p === 1; }, null, { timeout: 30000 }).catch(() => {});
+    ok(await NW(pb, () => { let p = 0; HQ_NEWWORLD.net.each((o) => { p = o.p; }); return p === 1; }), '別人看得到坐在沙發上');
+    await place(pb, 3.2, OZ - 0.2); await pb.waitForTimeout(600);
+    await shot(pa, 'lobby-2-living-sofa');
+    // 吧台椅
+    await NW(pa, () => HQ_NEWWORLD.act('sit')); await place(pa, -11.0, OZ - 6.75); await near(pa, 'bench'); await pa.click('.nw-hint'); await pa.waitForFunction(() => HQ_NEWWORLD.height() > 0.6, null, { timeout: 30000 }).catch(() => {});
+    ok((await NW(pa, () => HQ_NEWWORLD.acts().pose)) === 'sit' && (await NW(pa, () => HQ_NEWWORLD.height())) > 0.6, '吧台椅可以坐，而且比沙發高（' + (await NW(pa, () => HQ_NEWWORLD.height())).toFixed(2) + '）');
+    await shot(pa, 'lobby-3-kitchen-bar');
+    await NW(pa, () => HQ_NEWWORLD.act('sit'));
+    // 職業導師和扭蛋機那一角
+    await place(pa, -6.2, OZ - 7.2); await shot(pa, 'lobby-4-mentor-gacha');
+    // 作戰角高一階，樓梯在中間
+    await place(pa, 11.5, OZ - 1.8); await pa.waitForFunction(() => HQ_NEWWORLD.height() > 0.3, null, { timeout: 30000 }).catch(() => {}); const hs = await NW(pa, () => HQ_NEWWORLD.height());
+    await place(pa, 15.2, OZ - 5.0); await pa.waitForFunction(() => HQ_NEWWORLD.height() > 0.9, null, { timeout: 30000 }).catch(() => {}); const hp = await NW(pa, () => HQ_NEWWORLD.height());
+    ok(hs > 0.3 && hs < 0.7 && Math.abs(hp - 1) < 0.02, '作戰角高一階、樓梯走到一半是半高（' + hs.toFixed(2) + '、' + hp.toFixed(2) + '）');
+    await shot(pa, 'lobby-5-work-corner');
+    // 平地上的人走不進高起來的平台側面
+    await place(pa, 6.8, OZ - 6); await NW(pa, () => HQ_NEWWORLD.key('d', true)); await pa.waitForFunction((t) => HQ_NEWWORLD.state.time > t + 1.5, await NW(pa, () => HQ_NEWWORLD.state.time), { timeout: 60000 }).catch(() => {}); await NW(pa, () => HQ_NEWWORLD.key('d', false)); await pa.waitForTimeout(500);
+    ok((await NW(pa, () => HQ_NEWWORLD.height())) < 0.05 && (await NW(pa, () => HQ_NEWWORLD.net.me().x)) < 8, '平台的側面有欄杆擋住，只能走樓梯上去');
+    // 大長桌、陽台
+    await place(pa, 10.5, OZ + 9.6); await shot(pa, 'lobby-6-long-table');
+    await place(pa, 23.2, OZ + 5.2); await shot(pa, 'lobby-7-balcony');
+    await place(pa, -15.0, OZ + 6.2); await shot(pa, 'lobby-8-gallery-wall');
+    // 點唱機搬進客廳
+    await place(pa, L.juke.x, L.juke.z + 1.6); await near(pa, 'juke');
+    await pa.click('.nw-hint'); await pa.waitForTimeout(600);
+    ok((await pa.textContent('.nw-tag .nw-bubble')).includes('沒有人點歌'), '點唱機在客廳，點得到');
+    await pa.waitForFunction(() => /繪製/.test(document.getElementById('stats').textContent), null, { timeout: 60000 }).catch(() => {});
+    console.log('  大廳（模擬器用軟體算圖，只看繪製次數和面數）：' + (await pa.textContent('#stats')));
+    // 在大廳切成機器人騎士：機器人進不來，會回到前院
+    await NW(pa, () => HQ_NEWWORLD.setClass('rider')); await zone(pa, 'yard');
+    ok((await NW(pa, () => HQ_NEWWORLD.zone())) === 'yard' && (await NW(pa, () => HQ_NEWWORLD.isRider())), '在大廳切成機器人騎士會回到前院');
+    await NW(pa, () => HQ_NEWWORLD.setClass(''));
+    // 前院往北走不到大廳那一塊
+    await place(pa, 0, -34.5); await NW(pa, () => HQ_NEWWORLD.key('w', true)); await pa.waitForFunction((t) => HQ_NEWWORLD.state.time > t + 1.5, await NW(pa, () => HQ_NEWWORLD.state.time), { timeout: 60000 }).catch(() => {}); await NW(pa, () => HQ_NEWWORLD.key('w', false));
+    const me2 = await NW(pa, () => HQ_NEWWORLD.net.me());
+    ok((await NW(pa, () => HQ_NEWWORLD.zone())) === 'yard' && me2.z >= -36.5 && me2.z < -35.5, '前院往北走不進大廳（z ' + me2.z + '）');
+    // 從大廳走出門回前院
+    await place(pb, L.exit.x, L.exit.z - 0.8); await near(pb, 'exit');
+    ok((await pb.textContent('.nw-hint')) === '到前院', '大廳門口冒出「到前院」紙條');
+    await pb.click('.nw-hint'); await zone(pb, 'yard'); const mb = await NW(pb, () => HQ_NEWWORLD.net.me());
+    ok((await NW(pb, () => HQ_NEWWORLD.zone())) === 'yard' && Math.hypot(mb.x + 11.8, mb.z + 1.6) < 1.5, '點紙條就回到小樓門口');
+    ok(pa.errors.length + pb.errors.length === 0, '沒有主控台錯誤' + (pa.errors.concat(pb.errors).length ? '：' + pa.errors.concat(pb.errors).join(' / ') : ''));
+    await pa.context().close(); await pb.context().close();
+    // 手機直式看大廳
+    const pp = await open(a, true); await place(pp, L.spawn.x, L.spawn.z); await zone(pp, 'lobby'); await pp.waitForTimeout(1500); await shot(pp, 'lobby-9-phone-entry');
+    await zoomIn(pp); await place(pp, 1, OZ - 0.6); await pp.waitForTimeout(1200); await shot(pp, 'lobby-10-phone-living');
+    ok(pp.errors.length === 0, '手機沒有主控台錯誤'); await pp.context().close();
+  };
+
   if (want === 'all' || want === 'solo') await solo(false);
   if (want === 'all' || want === 'phone') await solo(true);
   if (want === 'all' || want === 'multi') await multi();
   if (want === 'all' || want === 'classes') await classes();
   if (want === 'all' || want === 'live') await live();
   if (want === 'all' || want === 'rider') await rider();
+  if (want === 'all' || want === 'lobby') await lobby();
   await browser.close();
   console.log('截圖在 ' + OUT);
   console.log(failed ? failed + ' 項沒過' : '全部通過');

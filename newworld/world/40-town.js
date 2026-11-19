@@ -30,7 +30,7 @@ const TW = Q.town ? (() => {
     T.mobs.push({ g, h: put(g, 7.6, 11.2, 0.6, 1.0), ph: 2 }); }
   // 小屋、樹、石頭、花：放大到跟機器人比起來合理
   const big = (fn, s) => { const before = scene.children.length; fn(); for (let i = before; i < scene.children.length; i++) { const o = scene.children[i]; o.position.multiplyScalar(s); o.scale.multiplyScalar(s); } };
-  big(() => { cabin(-5.2, -2.6); pine(-2.4, -4.2, 1.2); pine(-8.2, -3.4, 1.0); pine(3.6, -4.6, 1.3); pine(5.6, -3.2, 0.9); roundTree(-7.6, 0.6, 1.0); roundTree(5.6, -1.4, 1.1, PAL.leaf2); roundTree(1.2, -5.2, 1.0); rock(-6.2, 2.2, 1.2); rock(5.2, 1.6, 0.9); mushroom(-2.6, 1.4, 1); mushroom(-2.2, 1.7, 0.7); }, 2.3);
+  big(() => { hqHouse(-5.2, -2.6); pine(-2.4, -4.2, 1.2); pine(-8.2, -3.4, 1.0); pine(3.6, -4.6, 1.3); pine(5.6, -3.2, 0.9); roundTree(-7.6, 0.6, 1.0); roundTree(5.6, -1.4, 1.1, PAL.leaf2); roundTree(1.2, -5.2, 1.0); rock(-6.2, 2.2, 1.2); rock(5.2, 1.6, 0.9); mushroom(-2.6, 1.4, 1); mushroom(-2.2, 1.7, 0.7); }, 2.3);
   big(() => { [[-3.2, 5.2], [-4.4, 6.3], [-1.6, 6.4], [2.2, 6.1], [3.6, 4.6], [-5.6, 4.2], [0.8, 7.2], [4.8, 6.6], [-2.4, 7.4]].forEach(([x, z]) => flower(x, z)); }, 1.6);
   // 小路
   const path = new THREE.Mesh(new THREE.PlaneGeometry(4.2, 40), STYLE === 'clay' ? new THREE.MeshStandardMaterial({ color: PAL.path, roughness: 1 }) : new THREE.MeshToonMaterial({ color: PAL.path, gradientMap: RAMP, map: GRAIN })); path.rotation.set(-Math.PI / 2, 0, 0.5); path.position.set(-7.5, 0.02, 9); path.receiveShadow = true; scene.add(path);

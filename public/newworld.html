@@ -24,6 +24,9 @@
     #gate h1 { font-size: 20px; margin: 0 0 8px; }
     #gate p { font-size: 14px; line-height: 1.7; margin: 0 0 12px; }
     #gate a { color: #B84300; font-weight: 700; }
+    #gate-bar { height: 10px; border: 2px solid #5b4636; border-radius: 8px; overflow: hidden; margin: 0 6px 12px; background: #fffaf0; }
+    #gate-bar[hidden] { display: none; }
+    #gate-bar i { display: block; height: 100%; width: 0; background: #e8a23c; transition: width .15s; }
     /* 左上：標題和每秒張數 */
     #top { position: fixed; left: 10px; top: calc(10px + env(safe-area-inset-top)); padding: 6px 10px; font-size: 12px; line-height: 1.5; z-index: 3; pointer-events: none; }
     #top b { font-size: 13px; }
@@ -47,6 +50,9 @@
     #chat-log { font-size: 12px; line-height: 1.5; max-height: 92px; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; pointer-events: none; text-shadow: 0 0 3px #fbf5e6, 0 0 3px #fbf5e6, 0 0 2px #fbf5e6; }
     #chat-log b { font-weight: 700; }
     #chat form { display: flex; gap: 6px; }
+    #emotes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; padding: 8px; width: min(250px, 100%); }
+    #emotes[hidden] { display: none; }
+    #emotes button { font: 500 12px/1 inherit; font-family: inherit; color: var(--note-ink); padding: 8px 4px; border-radius: 9px 6px 10px 7px; border: 1.5px solid rgba(43,42,51,.45); background: #fff; cursor: pointer; }
     #chat input { all: unset; flex: 1; min-width: 0; font: 500 14px/1.2 inherit; font-family: inherit; color: var(--note-ink); background: rgba(251,246,233,.92); border: 1.5px solid rgba(43,42,51,.45); border-radius: 10px 8px 11px 7px; padding: 8px 10px; -webkit-user-select: text; user-select: text; }
     #chat button { font: 700 13px/1 inherit; font-family: inherit; color: var(--note-ink); padding: 8px 12px; cursor: pointer; }
     #dress { position: fixed; left: 50%; bottom: calc(14px + env(safe-area-inset-bottom)); transform: translateX(-50%); width: min(380px, calc(100vw - 24px)); max-height: 62vh; overflow: auto; padding: 12px 14px 14px; z-index: 4; font-size: 13px; }
@@ -62,21 +68,21 @@
   </style>
 </head>
 <body>
-  <div id="gate"><div class="note"><h1>新世界測試頁</h1><p id="gate-msg">確認身分中…</p><p id="gate-link" hidden></p></div></div>
+  <div id="gate"><div class="note"><h1>新世界測試頁</h1><p id="gate-msg">確認身分中…</p><div id="gate-bar" hidden><i></i></div><p id="gate-link" hidden></p></div></div>
 
   <div id="top" class="note" hidden><b>新世界測試頁</b>　管理員限定<br><span id="stats">量測中…</span><br><a href="hq.html">回總部</a></div>
   <div id="btns" hidden>
-    <button class="note" id="b-ctrl" hidden>角色<small id="s-ctrl">標準人物</small></button>
+    <button class="note" id="b-ctrl" hidden>職業<small id="s-ctrl">一般</small></button>
     <button class="note" id="b-dress" hidden>換裝<small>髮型、衣服、翅膀</small></button>
-    <button class="note" id="b-form">隊形<small id="s-form">單手捧著</small></button>
-    <button class="note" id="b-gesture">揮手指揮<small>機器人照做</small></button>
+    <button class="note" id="b-form" hidden>隊形<small id="s-form">單手捧著</small></button>
+    <button class="note" id="b-gesture" hidden>揮手指揮<small>機器人照做</small></button>
     <button class="note" id="b-zoom">鏡頭<small id="s-zoom">遠</small></button>
     <button class="note" id="b-quality">畫質<small id="s-quality">中</small></button>
     <button class="note" id="b-lines">外框線<small id="s-lines">開</small></button>
   </div>
   <div id="stick" hidden><div id="knob"></div></div>
   <div id="dress" class="note" hidden></div>
-  <div id="chat" hidden><div id="chat-log"></div><form id="chat-form"><input id="chat-in" maxlength="60" autocomplete="off" placeholder="說點什麼"><button class="note" type="submit">送出</button></form></div>
+  <div id="chat" hidden><div id="chat-log"></div><div id="emotes" class="note" hidden></div><form id="chat-form"><button class="note" type="button" id="b-emote">表情</button><input id="chat-in" maxlength="60" autocomplete="off" placeholder="說點什麼"><button class="note" type="submit">送出</button></form></div>
   <div id="hint" hidden>點地面就會走過去，也可以用搖桿、方向鍵或 WASD</div>
 
   <script src="/socket.io/socket.io.js"></script>
@@ -101,8 +107,24 @@
         if (r.status === 401) { say('登入過期了，請重新登入。', '<a href="./">去登入</a>'); return null; }
         if (r.status === 403) { say('新世界還在施工，目前只開放管理員進來看。', '<a href="hq.html">回總部</a>'); return null; }
         if (!r.ok) { say('載入失敗，等等再試。'); return null; }
-        return kind === 'text' ? r.text() : r.arrayBuffer();
+        return read(r, name).then(function (buf) { return kind === 'text' ? new TextDecoder().decode(buf) : buf; });
       }, function () { say('連不上伺服器，等等再試。'); return null; });
+    }
+    // 邊下載邊算進度：伺服器會先說每個檔案原本多大（X-Size），收到多少就畫多少
+    var prog = {}, showBar = false;
+    function draw() {
+      var got = 0, all = 0; for (var k in prog) { got += prog[k][0]; all += prog[k][1]; }
+      if (!showBar || !all) return;
+      var p = Math.min(1, got / all); $('gate-bar').hidden = false; $('gate-bar').firstChild.style.width = Math.round(p * 100) + '%';
+      $('gate-msg').textContent = p < 1 ? '下載場景和人物模型中… ' + Math.round(p * 100) + '%（共 ' + (all / 1048576).toFixed(1) + ' MB）' : '組裝場景中…';
+    }
+    function read(r, name) {
+      var size = +r.headers.get('X-Size') || 0;
+      if (!size || !r.body || !r.body.getReader) return r.arrayBuffer();
+      var rd = r.body.getReader(), parts = [], n = 0; prog[name] = [0, size];
+      return (function pump() { return rd.read().then(function (x) {
+        if (x.done) { prog[name][0] = size; draw(); var out = new Uint8Array(n), o = 0; parts.forEach(function (p) { out.set(p, o); o += p.length; }); return out.buffer; }
+        parts.push(x.value); n += x.value.length; prog[name][0] = Math.min(size, n); draw(); return pump(); }); })();
     }
     function parse(buf) { return new Promise(function (ok) { new NW_LIB.GLTFLoader().parse(buf, '', ok, function () { ok(null); }); }); }
     function whenThree(cb) {
@@ -110,7 +132,7 @@
       window.addEventListener('nw3d', cb, { once: true });
       setTimeout(function () { if (!window.NW_LIB) say('3D 元件沒載到，請重新整理再試一次。'); }, 20000);
     }
-    say('下載場景和人物模型中…（第一次大約 2 MB）');
+    say('下載場景和人物模型中…'); showBar = true;
     Promise.all([get('world.js', 'text'), get('char.glb'), get('wing-ice.glb'), new Promise(whenThree)]).then(function (got) {
       if (!got[0]) return null;
       return Promise.all([got[1] ? parse(got[1]) : null, got[2] ? parse(got[2]) : null]).then(function (g) {
@@ -126,11 +148,12 @@
     function start() {
       var NW = window.HQ_NEWWORLD;
       if (!NW) return say('場景開不起來，請把這個畫面截圖給管理員。');
-      $('gate').hidden = true; ['top', 'btns', 'stick', 'hint'].forEach(function (id) { $(id).hidden = false; });
+      showBar = false; $('gate').hidden = true; ['top', 'btns', 'stick', 'hint'].forEach(function (id) { $(id).hidden = false; });
       // 手機預設用「低」比較不會燙，電腦用「中」
       if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) { NW.state.quality = 2; $('s-quality').textContent = NW.nextQuality(); }
       if (NW.hasStd) { $('b-ctrl').hidden = false; $('b-dress').hidden = false; }
-      $('b-ctrl').onclick = function () { $('s-ctrl').textContent = NW.nextCtrl(); };
+      function showClass(name) { $('s-ctrl').textContent = name; $('b-form').hidden = $('b-gesture').hidden = !NW.isRider(); }
+      $('b-ctrl').onclick = function () { showClass(NW.nextCtrl()); saveLook(); };
       $('b-dress').onclick = function () { var d = $('dress'); d.hidden = !d.hidden; if (!d.hidden) drawDress(); };
       // 自己的角色：存過新世界造型就用存的，沒有就照總部的角色（髮型、膚色、髮色、衣服顏色、眼鏡）
       var base = null, saveT = 0;
@@ -138,7 +161,7 @@
       function saveLook() { if (sock) sock.emit('look', NW.look()); clearTimeout(saveT); saveT = setTimeout(function () { api({ look: NW.look() }); }, 600); }
       if (NW.hasStd) api().then(function (r) { if (!r) return; base = r.base; var O = NW.options(), L = r.look3d;
         if (L && (O.parts.hair.indexOf(L.hair) < 0 || O.parts.top.indexOf(L.top) < 0 || O.parts.face.indexOf(L.face) < 0)) L = null;
-        NW.dress(L || NW.fromAccount(base)); if (!$('dress').hidden) drawDress(); }).then(online);
+        NW.dress(L || NW.fromAccount(base)); showClass(NW.setClass(L && L.cls)); if (!$('dress').hidden) drawDress(); }).then(online);
       // 多人：看得到其他在線的管理員，聊天只在新世界裡，不會傳到總部
       var sock = null;
       function online() {
@@ -149,10 +172,15 @@
         sock.on('join', function (p) { NW.net.put(p.id, p); });
         sock.on('leave', function (id) { NW.net.drop(id); });
         sock.on('look', function (d) { NW.net.put(d.id, { look: d.look }); });
-        sock.on('state', function (list) { list.forEach(function (a) { if (a[0] !== sock.id) NW.net.move(a[0], a[1], a[2], a[3], a[4]); }); });
+        sock.on('state', function (list) { list.forEach(function (a) { if (a[0] !== sock.id) NW.net.move(a[0], a[1], a[2], a[3], a[4], a[5], a[6]); }); });
+        sock.on('emote', function (d) { NW.net.emote(d.id, d.face); });
         sock.on('chat', function (m) { NW.net.say(m.id === sock.id ? null : m.id, m.text); var log = $('chat-log'), row = document.createElement('div'), b = document.createElement('b');
           b.textContent = m.name + '：'; row.appendChild(b); row.appendChild(document.createTextNode(m.text)); log.appendChild(row); while (log.children.length > 5) log.removeChild(log.firstChild); });
-        setInterval(function () { var m = NW.net.me(); if (!m || !sock.connected) return; var k = m.x + ',' + m.z + ',' + m.f + ',' + m.mv; if (k !== last) { last = k; sock.emit('move', m); } }, 100);
+        setInterval(function () { var m = NW.net.me(); if (!m || !sock.connected) return; var k = m.x + ',' + m.z + ',' + m.f + ',' + m.mv + ',' + m.fm + ',' + m.g; if (k !== last) { last = k; sock.emit('move', m); } }, 100);
+        // 表情：按一下換 5 秒的臉，別人也看得到；時間到變回平常的臉
+        var E = $('emotes'); NW.options().parts.face.forEach(function (k) { var b = document.createElement('button'); b.type = 'button'; b.textContent = NW.options().names[k];
+          b.onclick = function () { NW.emote(k); if (sock.connected) sock.emit('emote', k); E.hidden = true; }; E.appendChild(b); });
+        $('b-emote').onclick = function () { E.hidden = !E.hidden; };
         $('chat-form').addEventListener('submit', function (e) { e.preventDefault(); var i = $('chat-in'), t = i.value.trim(); if (t && sock.connected) sock.emit('chat', t); i.value = ''; i.blur(); });
       }
       // 換裝面板：只改新世界的造型，會記在帳號裡，不會動到總部的角色

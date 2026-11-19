@@ -11,3 +11,5 @@ python build_wing.py <繪師的翅膀圖 public/art/wing-ice.png> <輸出資料�
 ```
 
 輸出的 `.glb` 複製到 `newworld/assets/`。這兩個檔只透過 `/api/newworld/<檔名>` 給管理員帳號下載。
+
+骨架、零件命名、掛點和動作片段的規格寫在 `newworld/assets/MOUNTS.md`，新的職業服裝和裝備都照那份做。

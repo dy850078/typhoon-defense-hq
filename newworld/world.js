@@ -576,10 +576,13 @@ const STD = (() => {
   const AS = window.NW_ASSETS, LIB = window.NW_LIB;
   if (!AS || !AS.char || !LIB) return null;
   const LC = new THREE.Color('#' + (Q.lc || 'c2a48a')), LW = +(Q.lw || 1), HEIGHT = 2.15;
-  const FLAT = /face_line|glasses|blush|nose/, NOLINE = /face_line|blush|nose|glasses|ear_inner|sole|stubble|stripe|string|button/;
-  const PARTS = { hair: ['short', 'bowl', 'bob', 'buns', 'buzz'], top: ['tee', 'dress', 'hoodie'], face: ['smile', 'dot'] };
-  const PART_SET = new Set(['Body', 'Shoes', 'Bottom_shorts', 'Top_tee', 'Top_dress', 'Top_hoodie', 'Hair_bowl', 'Hair_bob', 'Hair_buns', 'Hair_short', 'Hair_buzz', 'Glasses', 'Face_smile', 'Face_dot']);
-  const NAMES = { short: '短髮', bowl: '西瓜皮', bob: '妹妹頭', buns: '丸子頭', buzz: '平頭', tee: '條紋T', dress: '洋裝', hoodie: '帽T', smile: '笑眼', dot: '圓眼' };
+  const FLAT = /face_|glasses|blush|nose/, NOLINE = /face_|blush|nose|glasses|ear_inner|sole|stubble|stripe|string|button|gold/;
+  const PARTS = { hair: ['short', 'bowl', 'bob', 'long', 'airy', 'hime', 'bun', 'buns', 'buzz', 'bald'], top: ['tee', 'dress', 'hoodie'], face: ['smile', 'dot', 'grin', 'cat', 'wink', 'wow', 'love', 'star', 'grr', 'cry'] };
+  // 職業的服裝和配件：選了職業就換上整套（自己選的上衣還記著，換回一般就穿回來）
+  const CLS_KIT = { summoner: { top: 'space', acc: ['Acc_antenna'], hide: ['Shoes', 'Bottom_shorts'] }, skater: { top: 'qi', acc: ['Acc_liangbatou', 'Acc_skates'], hide: ['Shoes'], lift: 0.11 } };
+  const PART_SET = new Set(); { const R = /^(Body|Shoes|Glasses|Bottom_|Top_|Hair_|Face_|Acc_)/; AS.char.scene.traverse(o => { if (R.test(o.name) && !(o.parent && R.test(o.parent.name))) PART_SET.add(o.name); }); }   // 零件名稱的規則見 newworld/assets/MOUNTS.md
+  const NAMES = { short: '短髮', bowl: '西瓜皮', bob: '妹妹頭', buns: '丸子頭', buzz: '平頭', long: '長髮', airy: '空氣瀏海', hime: '公主切', bun: '包包頭', bald: '光頭', tee: '條紋T', dress: '洋裝', hoodie: '帽T',
+    smile: '笑眼', dot: '圓眼', grin: '開心笑', cat: '貓咪嘴', wink: '眨眼吐舌', wow: '驚訝', love: '愛心眼', star: '星星眼', grr: '不爽', cry: '哭哭' };
   // 顏色選項（換裝面板用）：key 是 Blender 裡的材質名稱
   const SWATCH = {
     // 前面幾個是總部（2D）創角可以選的顏色，後面是新世界多的
@@ -588,8 +591,8 @@ const STD = (() => {
     top: ['#ff7a2f', '#4f7cc2', '#aeb6c4', '#2f3b55', '#f2c14e', '#6baf7b', '#f6a3b4'],
   };
   // 總部的髮型對應到新世界有的髮型；還沒做的先用最接近的
-  const HAIR_FROM_2D = { short: 'short', bob: 'bob', long: 'bob', airy: 'bob', hime: 'bob', bun: 'buns', buns: 'buns', buzz: 'buzz', bald: 'buzz' };
-  const fromAccount = (b) => ({ hair: HAIR_FROM_2D[b.hair] || 'bowl', top: 'tee', face: 'smile', glasses: !!b.glasses, wings: false, hairCol: b.hairColor || null, skinCol: b.skin || null, topCol: b.outfit || null });
+  const HAIR_FROM_2D = { short: 'short', bob: 'bob', long: 'long', airy: 'airy', hime: 'hime', bun: 'bun', buns: 'buns', buzz: 'buzz', bald: 'bald' };
+  const fromAccount = (b) => ({ hair: HAIR_FROM_2D[b.hair] || 'bowl', top: 'tee', face: PARTS.face.indexOf(b.face) >= 0 ? b.face : 'smile', glasses: !!b.glasses, wings: false, hairCol: b.hairColor || null, skinCol: b.skin || null, topCol: b.outfit || null });
   // 鼻子、耳朵內側：比膚色紅一點、深一點
   const skinTint = (hex, k) => { const c = new THREE.Color(hex), h = {}; c.getHSL(h); return '#' + c.setHSL(Math.max(0, h.h - 0.025), Math.min(1, h.s + 0.08), h.l * k).getHexString(); };
 
@@ -644,15 +647,18 @@ const STD = (() => {
       const inv = new THREE.Matrix4().copy(spine.matrixWorld).invert().multiply(g.matrixWorld).multiply(want);
       inv.decompose(piv.position, piv.quaternion, piv.scale); spine.add(piv); return { piv, k, ...W };
     });
-    const c = { H, body, g, meshes, mixer, acts, wings, look: {}, ph: Math.random() * 6, mv: 0, flap: Math.random() };
+    const c = { H, body, g, meshes, mixer, acts, wings, look: {}, ph: Math.random() * 6, mv: 0, flap: Math.random(), wt: { idle: 1, walk: 0, run: 0, sit: 0, wave: 0, skate: 0 }, emote: null, emoteT: 0 };
     for (const n in W_DEFAULT) c.look[n] = W_DEFAULT[n];
     setLook(c, look); return c;
   }
-  const W_DEFAULT = { hair: 'bowl', top: 'tee', face: 'smile', glasses: true, wings: false, hairCol: null, skinCol: null, topCol: null };
+  const W_DEFAULT = { hair: 'bowl', top: 'tee', face: 'smile', glasses: true, wings: false, hairCol: null, skinCol: null, topCol: null, cls: null };
 
   function setLook(c, patch) {
     Object.assign(c.look, patch || {}); const L = c.look;
-    const want = new Set(['Body', 'Shoes', 'Bottom_shorts', 'Hair_' + L.hair, 'Top_' + L.top, 'Face_' + L.face].concat(L.glasses ? ['Glasses'] : []));
+    const kit = CLS_KIT[L.cls] || null;
+    const want = new Set(['Body', 'Shoes', 'Bottom_shorts', 'Hair_' + L.hair, 'Top_' + (kit ? kit.top : L.top), 'Face_' + (c.emote || L.face)].concat(L.glasses ? ['Glasses'] : [], kit ? kit.acc : []));
+    if (kit) kit.hide.forEach(n => want.delete(n));
+    c.g.position.y = kit && kit.lift ? kit.lift * HEIGHT / 2.26 : 0;   // 冰刀比鞋底低，人要墊高一點
     c.meshes.forEach(o => { const on = want.has(o.userData.part); o.visible = on; if (o.userData.line) o.userData.line.visible = on && SHOW.lines;
       const m = o.material, nm = m.userData.name; let col = null;
       if (nm === 'hair' && L.hairCol) col = L.hairCol;
@@ -672,10 +678,18 @@ const STD = (() => {
   function swing(bone, restQ, piv, a) { bone.quaternion.copy(restQ); bone.parent.updateWorldMatrix(true, false); bone.parent.getWorldQuaternion(pw); piv.getWorldQuaternion(pq);
     q.setFromAxisAngle(Y.clone().applyQuaternion(pq).applyQuaternion(pw.invert()), a); bone.quaternion.premultiply(q); }
   const ease = (u) => u < 0.62 ? 0.5 - 0.5 * Math.cos(u / 0.62 * Math.PI) : 0.5 + 0.5 * Math.cos((u - 0.62) / 0.38 * Math.PI);
-  function tick(c, dt, mv, speed = 1) {
+  // pose：null 一般（站著或走路）、'sit' 坐著、'wave' 揮手、'run' 用跑的
+  function tick(c, dt, mv, speed = 1, pose = null) {
     c.mv += (mv - c.mv) * Math.min(1, dt * 8);
-    c.acts.walk.setEffectiveWeight(c.mv); c.acts.idle.setEffectiveWeight(1 - c.mv);
-    c.acts.walk.timeScale = speed; c.mixer.update(dt);
+    if (c.emote && performance.now() > c.emoteT) { c.emote = null; setLook(c); }   // 表情照真實時間算，畫面卡也是 5 秒
+    const m = c.mv, tg = { idle: 1 - m, walk: m, run: 0, sit: 0, wave: 0, skate: 0 };
+    if (pose === 'sit') { tg.idle = tg.walk = 0; tg.sit = 1; }
+    else if (pose === 'wave') { tg.wave = tg.idle; tg.idle = 0; }
+    else if (pose === 'run') { tg.run = tg.walk; tg.walk = 0; }
+    if (c.look.cls === 'skater' && c.acts.skate) { tg.skate = tg.walk + tg.run; tg.walk = tg.run = 0; }   // 陵媒用溜的
+    const k = Math.min(1, dt * 9);
+    for (const n in tg) { const a = c.acts[n]; if (!a) continue; c.wt[n] += (tg[n] - c.wt[n]) * k; a.setEffectiveWeight(c.wt[n]); }
+    c.acts.walk.timeScale = speed; if (c.acts.run) c.acts.run.timeScale = speed * 0.8; if (c.acts.skate) c.acts.skate.timeScale = speed * 0.55; c.mixer.update(dt);
     if (!c.look.wings) return;
     c.flap = (c.flap + dt / (c.mv > 0.5 ? 1.1 : 1.8)) % 1;
     c.H.updateMatrixWorld(true);
@@ -684,7 +698,17 @@ const STD = (() => {
   }
   function lines(on) { SHOW.lines = on; ALL.forEach(c => setLook(c)); }
   const ALL = [];
-  return { make: (look) => { const c = make(look); ALL.push(c); return c; }, setLook, tick, lines, PARTS, NAMES, SWATCH, fromAccount, all: ALL };
+  // 有人離開時把這個人物用掉的東西還回去：材質、骨架貼圖、動畫；形狀和共用的貼圖大家一起用，不能丟
+  function dispose(c) {
+    const i = ALL.indexOf(c); if (i >= 0) ALL.splice(i, 1);
+    c.mixer.stopAllAction(); c.mixer.uncacheRoot(c.g);
+    const sk = new Set();
+    c.H.traverse(o => { if (!o.isMesh) return; const k = outlines.indexOf(o); if (k >= 0) outlines.splice(k, 1);
+      if (o.material) o.material.dispose(); if (o.skeleton) sk.add(o.skeleton); });
+    sk.forEach(s => s.dispose());
+    if (c.H.parent) c.H.parent.remove(c.H);
+  }
+  return { make: (look) => { const c = make(look); ALL.push(c); return c; }, dispose, lineCount: () => outlines.length, emote: (c, face, secs) => { c.emote = PARTS.face.indexOf(face) >= 0 ? face : null; c.emoteT = performance.now() + (secs || 5) * 1000; setLook(c); }, setLook, tick, lines, PARTS, NAMES, SWATCH, fromAccount, all: ALL };
 })();
 // 一般玩家換成標準人物；自己的角色也是標準人物，背上可以開冰龍之翼
 if (STD && TW) {
@@ -729,7 +753,28 @@ const NW = (() => {
 
   // ME：自己操控的標準人物（有標準人物時預設操控它，按「角色」可以換回機器人騎士）
   const ME = STD && TW && TW.me ? { c: TW.me, x: TW.me.H.position.x + (Math.random() - 0.5) * 3, z: TW.me.H.position.z + (Math.random() - 0.5) * 3, face: 0 } : null;   // 進場位置錯開一點，多人同時進來才不會疊在一起
-  const S = { ctrl: ME ? 'me' : 'robot', x: 0, z: 0, face: 0, mv: 0, ph: 0, form: 'carry', cw: 1, gt: -1, time: 0, zoom: 0, quality: 1, lines: true, jx: 0, jy: 0, keys: {}, camT: new V3(0, 3.6, 3.2) };
+  const S = { ctrl: ME ? 'me' : 'robot', x: 0, z: 0, face: 0, mv: 0, ph: 0, form: 'carry', cw: 1, gt: -1, time: 0, zoom: 0, quality: 1, lines: true, jx: 0, jy: 0, keys: {}, camT: new V3(0, 3.6, 3.2), gn: 0, rp: null };
+  const CLS = ['', 'rider', 'summoner', 'skater'], CLS_NAME = { '': '一般', rider: '機器人騎士', summoner: '召喚師', skater: '陵媒' };
+  // 召喚師的召喚物：一隻飄在旁邊的小外星人，跟著主人走（每個人的畫面各自算，不用同步）
+  const SPIRITS = new Map(), TAG_UP = (c) => (c.look.cls === 'skater' ? 0.75 : c.look.cls === 'summoner' ? 0.45 : 0);   // 頭上有大拉翅或觸角，名字紙條要再高一點
+  const makeSpirit = () => { const g = new THREE.Group(), b = new THREE.Group(); g.add(b);
+    part(b, sph(0.34, 18, 14), '#8fe0c0', { scale: [1, 0.92, 0.95], line: 0.03 });
+    part(b, sph(0.2, 12, 10), '#c9f3e2', { pos: [0, -0.1, 0.2], scale: [1, 0.8, 0.6], noLine: true, shadow: false });
+    [-1, 1].forEach(k => { part(b, sph(0.075, 10, 8), INK, { pos: [0.13 * k, 0.06, 0.29], scale: [1, 1.25, 0.5], noLine: true, shadow: false, mat: basic(INK) });
+      part(b, sph(0.024, 6, 6), '#ffffff', { pos: [0.115 * k, 0.1, 0.32], noLine: true, shadow: false, mat: basic('#ffffff') });
+      part(b, sph(0.1, 10, 8), '#8fe0c0', { pos: [0.3 * k, -0.2, 0], scale: [0.8, 1.2, 0.8], line: 0.03 }); });
+    part(b, new THREE.CylinderGeometry(0.02, 0.02, 0.3, 6), '#6fc9a6', { pos: [0, 0.44, 0], noLine: true });
+    const tip = part(b, sph(0.08, 10, 8), '#f7a8c4', { pos: [0, 0.62, 0], line: 0.025 });
+    g.scale.setScalar(1.3); scene.add(g); return { g, b, tip, x: 0, z: 0, f: 0, ph: Math.random() * 6, fresh: true }; };
+  const dropSpirit = (c) => { const s = SPIRITS.get(c); if (!s) return; scene.remove(s.g); s.g.traverse(o => { if (o.isMesh) o.material.dispose(); }); SPIRITS.delete(c); };
+  const tickSpirit = (c, dt) => { if (c.look.cls !== 'summoner' || !c.H.visible) return dropSpirit(c);
+    let s = SPIRITS.get(c); if (!s) { s = makeSpirit(); SPIRITS.set(c, s); }
+    const f = c.H.rotation.y, tx = c.H.position.x - Math.sin(f) * 0.9 + Math.cos(f) * 1.25, tz = c.H.position.z - Math.cos(f) * 0.9 - Math.sin(f) * 1.25;
+    if (s.fresh) { s.x = tx; s.z = tz; s.f = f; s.fresh = false; }
+    const k = Math.min(1, dt * 3.2), dx = tx - s.x, dz = tz - s.z, d = Math.hypot(dx, dz); s.x += dx * k; s.z += dz * k; s.ph += dt;
+    let df = (d > 0.25 ? Math.atan2(dx, dz) : f) - s.f; df = Math.atan2(Math.sin(df), Math.cos(df)); s.f += df * Math.min(1, dt * 6);
+    s.g.position.set(s.x, 1.35 + 0.14 * Math.sin(s.ph * 2.4), s.z); s.g.rotation.y = s.f; s.b.rotation.z = 0.12 * Math.sin(s.ph * 1.7); s.b.rotation.x = Math.min(0.35, d * 0.25);
+    s.tip.scale.setScalar(1 + 0.18 * Math.sin(s.ph * 5)); };
   const FORMS = ['carry', 'float', 'front'], FORM_NAME = { carry: '單手捧著', float: '漂浮操控', front: '走在前面' };
   const CAM = [{ dist: 47, hgt: 17 }, { dist: 30, hgt: 10.5 }], CAM_ME = CAM, ANG = 0.62;
   // 多人：別的玩家的標準人物，還有頭上的名字紙條和聊天泡泡（用網頁元素疊在畫面上，字才清楚）
@@ -737,22 +782,94 @@ const NW = (() => {
   const mkTag = () => { const t = document.createElement('div'), b = document.createElement('div'), n = document.createElement('div');
     t.className = 'nw-tag'; b.className = 'nw-bubble'; n.className = 'nw-name'; b.hidden = n.hidden = true; t.append(b, n); LAB.appendChild(t); return { t, b, n, until: 0 }; };
   const MYTAG = ME ? mkTag() : null, PV = new V3();
-  const placeTag = (tag, x, z) => { PV.set(x, 2.5, z).project(camera); const on = PV.z < 1 && Math.abs(PV.x) < 1.15 && Math.abs(PV.y) < 1.15;
+  const placeTag = (tag, x, z, y) => { PV.set(x, 2.5 + (y || 0), z).project(camera); const on = PV.z < 1 && Math.abs(PV.x) < 1.15 && Math.abs(PV.y) < 1.15;
     tag.t.style.display = on ? '' : 'none'; if (on) tag.t.style.transform = 'translate(' + ((PV.x * 0.5 + 0.5) * W).toFixed(1) + 'px,' + ((-PV.y * 0.5 + 0.5) * H).toFixed(1) + 'px) translate(-50%,-100%)';
     if (tag.until && S.time > tag.until) { tag.b.hidden = true; tag.until = 0; } };
   const NET = {
-    me: () => (ME ? { x: +ME.x.toFixed(2), z: +ME.z.toFixed(2), f: +ME.face.toFixed(2), mv: S.meMv ? 1 : 0 } : null),
+    // 自己要同步出去的狀態：一般職業是人的位置；騎士是機器人的位置、隊形、揮手次數
+    me: () => { if (!ME) return null; const r = S.ctrl === 'robot';
+      return { x: +(r ? S.x : ME.x).toFixed(2), z: +(r ? S.z : ME.z).toFixed(2), f: +(r ? S.face : ME.face).toFixed(2), mv: (r ? S.mv > 0.5 : S.meMv) ? 1 : 0, fm: FORMS.indexOf(S.form), g: S.gn }; },
     name: (s) => { if (MYTAG) { MYTAG.n.textContent = s; MYTAG.n.hidden = !s; } },
     put: (id, d) => { if (!STD) return; let o = OTH.get(id);
-      if (!o) { o = { c: STD.make(d.look || {}), x: d.x || 0, z: d.z || 0, f: d.f || 0, mv: 0, tag: mkTag() }; o.tx = o.x; o.tz = o.z; o.tf = o.f; OTH.set(id, o); }
+      if (!o) { o = { c: STD.make(d.look || {}), x: d.x || 0, z: d.z || 0, y: 0, f: d.f || 0, mv: 0, g: d.g || 0, tag: mkTag() }; o.tx = o.x; o.tz = o.z; o.tf = o.f;
+        o.rs = { x: o.x, z: o.z, face: o.f, mv: 0, ph: 0, form: FORMS[d.fm] || 'carry', cw: 1, gt: -1, rp: null }; OTH.set(id, o); }
       else if (d.look) STD.setLook(o.c, d.look);
+      const rider = o.c.look.cls === 'rider'; if (rider !== o.rider) { o.rider = rider; o.rs.x = o.tx; o.rs.z = o.tz; o.rs.rp = null; if (!rider) { o.x = o.tx; o.z = o.tz; } }
       if (d.name != null) { o.tag.n.textContent = d.name; o.tag.n.hidden = !d.name; } },
-    move: (id, x, z, f, mv) => { const o = OTH.get(id); if (o) { o.tx = x; o.tz = z; o.tf = f; o.mv = mv; } },
-    drop: (id) => { const o = OTH.get(id); if (!o) return; scene.remove(o.c.H); o.tag.t.remove(); const i = STD.all.indexOf(o.c); if (i >= 0) STD.all.splice(i, 1); OTH.delete(id); },
+    move: (id, x, z, f, mv, fm, g) => { const o = OTH.get(id); if (!o) return; o.tx = x; o.tz = z; o.tf = f; o.mv = mv; o.rs.form = FORMS[fm] || 'carry';
+      if (g !== undefined && g !== o.g) { o.g = g; if (o.rs.gt < 0) o.rs.gt = 0; } },
+    drop: (id) => { const o = OTH.get(id); if (!o) return; o.tag.t.remove(); dropSpirit(o.c); STD.dispose(o.c); OTH.delete(id); },
+    emote: (id, face) => { const o = id ? OTH.get(id) : ME; if (o && STD) STD.emote(o.c, face, 5); },
     clear: () => { [...OTH.keys()].forEach(NET.drop); },
     say: (id, text) => { const tag = id == null ? MYTAG : (OTH.get(id) || {}).tag; if (!tag) return; tag.b.textContent = text; tag.b.hidden = false; tag.until = S.time + 6; },
     count: () => OTH.size,
   };
+  // --- 碰撞：小屋是一個轉了角度的方塊，樹和石頭是圓；走到會被推出來，所以會沿著邊滑過去 ---
+  // 位置跟上面擺場景的地方對應（那邊的座標乘 2.3）
+  const K23 = 2.3, WALLS = [{ x: -5.2 * K23, z: -2.6 * K23, hx: 1.5 * K23, hz: 1.15 * K23, ry: -0.25 }];
+  const ROUNDS = [[-2.4, -4.2, 0.5 * 1.2], [-8.2, -3.4, 0.5], [3.6, -4.6, 0.5 * 1.3], [5.6, -3.2, 0.5 * 0.9], [-7.6, 0.6, 0.5], [5.6, -1.4, 0.5 * 1.1], [1.2, -5.2, 0.5], [-6.2, 2.2, 0.55 * 1.2], [5.2, 1.6, 0.55 * 0.9], [-2.5, 1.5, 0.4]]
+    .map(([x, z, r]) => ({ x: x * K23, z: z * K23, r: r * K23 }));
+  const HITP = { x: 0, z: 0 };
+  function collide(x, z, r) {
+    for (const c of ROUNDS) { const dx = x - c.x, dz = z - c.z, d = Math.hypot(dx, dz), m = c.r + r; if (d < m && d > 1e-4) { x = c.x + dx / d * m; z = c.z + dz / d * m; } }
+    for (const b of WALLS) { const cs = Math.cos(b.ry), sn = Math.sin(b.ry), dx = x - b.x, dz = z - b.z, lx = dx * cs - dz * sn, lz = dx * sn + dz * cs, ex = b.hx + r, ez = b.hz + r;
+      if (Math.abs(lx) < ex && Math.abs(lz) < ez) { let nx = lx, nz = lz; if (ex - Math.abs(lx) < ez - Math.abs(lz)) nx = Math.sign(lx || 1) * ex; else nz = Math.sign(lz || 1) * ez;
+        x = b.x + nx * cs + nz * sn; z = b.z - nx * sn + nz * cs; } }
+    HITP.x = x; HITP.z = z; return HITP;
+  }
+  // ===== 場景細節：草叢、小花、踏腳石（一次畫一整批，不多花繪製次數）、木柵欄、路燈、路牌 =====
+  // 小路的中心線：P(s) = (-7.5 + 0.479 s, 9 + 0.878 s)，s 從 -20 到 20；n 是路的右手邊
+  const DETAIL = TW ? (() => {
+    const r = rnd(77), PA = [0.479, 0.878], PN = [0.878, -0.479], P = (s, off) => [-7.5 + PA[0] * s + PN[0] * off, 9 + PA[1] * s + PN[1] * off];
+    const offPath = (x, z) => { const dx = x + 7.5, dz = z - 9; return Math.abs(dx * PN[0] + dz * PN[1]); };
+    const free = (x, z, m) => offPath(x, z) > 2.1 + m && collide(x, z, m).x === x && Math.hypot(x - 7.6, z - 9.5) > 4.5;   // 不要長在路上、屋子和樹裡面、香菇怪腳下
+    const G = new THREE.Group(); scene.add(G);
+    const batch = (geo, material, list, shadow) => { const im = new THREE.InstancedMesh(geo, material, list.length), o = new THREE.Object3D(), c = new THREE.Color();
+      list.forEach((d, i) => { o.position.set(d.x, d.y || 0, d.z); o.rotation.set(d.rx || 0, d.ry || 0, d.rz || 0); o.scale.set(d.sx || d.s || 1, d.sy || d.s || 1, d.sz || d.s || 1); o.updateMatrix(); im.setMatrixAt(i, o.matrix); if (d.col) im.setColorAt(i, c.set(d.col)); });
+      im.castShadow = !!shadow; im.receiveShadow = true; im.frustumCulled = false; G.add(im); return im; };
+    // 草叢：每叢三片葉子，往外歪
+    const blades = [];
+    for (let i = 0; i < 400 && blades.length < 330; i++) { const x = (r() - 0.5) * 70, z = (r() - 0.5) * 64 + 6; if (!free(x, z, 0.3)) continue;
+      const s = 0.7 + r() * 0.7, a0 = r() * 6.28, col = r() < 0.5 ? '#b9c765' : '#a9bd5c';
+      for (let k = 0; k < 3; k++) { const a = a0 + k * 2.1; blades.push({ x: x + Math.cos(a) * 0.09 * s, z: z + Math.sin(a) * 0.09 * s, y: 0.2 * s, rx: Math.sin(a) * 0.38, rz: -Math.cos(a) * 0.38, s, col }); } }
+    batch(new THREE.ConeGeometry(0.075, 0.46, 5), mat('#ffffff'), blades, false);
+    // 小花：白、粉、黃三種，一小群一小群地長
+    const stems = [], heads = [], hearts = [], FC = ['#fffdf2', '#f6b3c0', '#f6d76a', '#fffdf2', '#cdb6ee'];
+    for (let i = 0; i < 60 && heads.length < 90; i++) { const cx = (r() - 0.5) * 60, cz = (r() - 0.5) * 54 + 8, col = FC[(r() * FC.length) | 0], n = 2 + ((r() * 4) | 0);
+      for (let k = 0; k < n; k++) { const x = cx + (r() - 0.5) * 1.8, z = cz + (r() - 0.5) * 1.8, h = 0.32 + r() * 0.22; if (!free(x, z, 0.3)) continue;
+        stems.push({ x, z, y: h / 2, sy: h }); heads.push({ x, z, y: h + 0.03, sy: 0.55, col }); hearts.push({ x, z, y: h + 0.08, s: 0.42 }); } }
+    batch(new THREE.CylinderGeometry(0.018, 0.022, 1, 5), mat('#8fae5a'), stems, false);
+    batch(sph(0.13, 9, 6), mat('#ffffff'), heads, true); batch(sph(0.13, 7, 5), mat('#f0c75a'), hearts, false);
+    // 踏腳石：沿著小路一塊一塊
+    const stones = []; for (let s = -15; s <= 19; s += 2.3) { const [x, z] = P(s, (r() - 0.5) * 1.5); stones.push({ x, z, y: 0.035, ry: r() * 3, sx: 0.75 + r() * 0.3, sy: 1, sz: 0.55 + r() * 0.25 }); }
+    batch(new THREE.CylinderGeometry(0.7, 0.78, 0.07, 9), mat('#e9dcb8'), stones, false);
+    // 木柵欄：一段一段的，中間留缺口可以走過去；每一段都擋得住人
+    const WOOD = '#c98a52', fence = (s0, s1, off) => { const [x0, z0] = P(s0, off), [x1, z1] = P(s1, off), len = Math.hypot(x1 - x0, z1 - z0), g = new THREE.Group(), n = Math.round(len / 1.7);
+      g.position.set((x0 + x1) / 2, 0, (z0 + z1) / 2); g.rotation.y = -Math.atan2(z1 - z0, x1 - x0); G.add(g);
+      for (let i = 0; i <= n; i++) part(g, new THREE.CylinderGeometry(0.09, 0.1, 1.05, 7), WOOD, { pos: [-len / 2 + len * i / n, 0.52, 0], rot: [0, 0, (r() - 0.5) * 0.08], line: 0.022 });
+      [0.42, 0.8].forEach((y, j) => part(g, new THREE.BoxGeometry(len + 0.3, 0.11, 0.07), j ? '#d79a61' : WOOD, { pos: [0, y, 0], rot: [0, 0, (r() - 0.5) * 0.015], line: 0.02 }));
+      WALLS.push({ x: g.position.x, z: g.position.z, hx: len / 2 + 0.1, hz: 0.12, ry: g.rotation.y }); };
+    fence(-9, -1.5, -3.1); fence(7, 15.5, -3.1); fence(-13, -6.2, 3.1); fence(11, 18, 3.1);
+    // 路燈：木柱掛一盞紙燈籠
+    const lamp = (s, off, ry) => { const [x, z] = P(s, off), g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = ry; G.add(g);
+      part(g, new THREE.CylinderGeometry(0.09, 0.12, 3.3, 8), '#a8693f', { pos: [0, 1.65, 0], line: 0.024 });
+      part(g, new THREE.BoxGeometry(0.95, 0.1, 0.1), '#a8693f', { pos: [0.38, 3.15, 0], line: 0.02 });
+      part(g, new THREE.CylinderGeometry(0.012, 0.012, 0.3, 4), INK, { pos: [0.72, 2.97, 0], noLine: true, shadow: false });
+      part(g, sph(0.27, 14, 10), '#ffe9a8', { pos: [0.72, 2.6, 0], scale: [1, 1.15, 1], line: 0.024, shadow: false, mat: basic('#ffe9a8') });
+      [2.86, 2.34].forEach(y => part(g, new THREE.CylinderGeometry(0.15, 0.15, 0.07, 10), '#d9604a', { pos: [0.72, y, 0], noLine: true, shadow: false }));
+      ROUNDS.push({ x, z, r: 0.2 }); };
+    lamp(-11, 2.9, 2.2); lamp(3, -2.9, -1.0); lamp(17, 2.9, 2.2);
+    // 路牌：紙條風的木牌，字是畫上去的
+    const sign = (s, off, ry, text) => { const [x, z] = P(s, off), g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = ry; G.add(g);
+      const t = tex(256, 112, (c, w, h) => { c.fillStyle = '#f7ecd0'; c.fillRect(0, 0, w, h); c.strokeStyle = '#a8693f'; c.lineWidth = 8; c.strokeRect(4, 4, w - 8, h - 8);
+        c.fillStyle = '#5b4636'; c.font = '700 52px "Noto Sans TC", "PingFang TC", sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(text, w / 2, h / 2 + 3); });
+      part(g, new THREE.CylinderGeometry(0.08, 0.1, 1.9, 7), '#a8693f', { pos: [0, 0.95, 0], line: 0.022 });
+      part(g, new THREE.BoxGeometry(1.5, 0.66, 0.09), '#f7ecd0', { pos: [0, 1.62, 0.07], rot: [0, 0, -0.04], line: 0.024, mat: [0, 1, 2, 3, 4, 5].map(i => (i === 4 ? new THREE.MeshToonMaterial({ map: t, gradientMap: RAMP }) : mat('#e5cfa0'))) });
+      ROUNDS.push({ x, z, r: 0.25 }); };
+    sign(5.2, 3.0, Math.atan2(PN[0], PN[1]) + Math.PI + 0.25, '往小屋'); sign(-12.5, -3.0, 0.5, '小屋');
+    return G;
+  })() : null;
+
   // 點地面走路的目標小圈圈
   const GOAL = new THREE.Mesh(new THREE.RingGeometry(0.42, 0.62, 32), new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.95, depthWrite: false }));
   GOAL.add(new THREE.Mesh(new THREE.RingGeometry(0.62, 0.69, 32), new THREE.MeshBasicMaterial({ color: '#b98a5e', transparent: true, opacity: 0.9, depthWrite: false })), new THREE.Mesh(new THREE.CircleGeometry(0.12, 16), new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.95, depthWrite: false })));
@@ -763,37 +880,17 @@ const NW = (() => {
   const Vv = (tt) => tt < 0 ? 0 : key(tt, [[0, 0], [0.46, 0], [0.54, 1], [0.68, 1], [0.8, 0], [1, 0]]);                            // 兩手高舉
   const bp0 = new V3(), tq = new THREE.Quaternion();
 
-  function update(dt) {
-    S.time += dt; const t = S.time / 6;
-    // --- 移動：搖桿或鍵盤，方向以畫面為準 ---
-    let jx = S.jx, jy = S.jy; const K = S.keys;
-    if (K.ArrowLeft || K.a) jx -= 1; if (K.ArrowRight || K.d) jx += 1; if (K.ArrowUp || K.w) jy -= 1; if (K.ArrowDown || K.s) jy += 1;
-    let jl = Math.hypot(jx, jy), wx = 0, wz = 0;
-    if (jl > 0.15) { S.goal = null; const n = Math.min(1, jl) / jl; wx = (Math.cos(ANG) * jx + Math.sin(ANG) * jy) * n; wz = (-Math.sin(ANG) * jx + Math.cos(ANG) * jy) * n; }
-    else if (S.goal) { // 點地面走路：朝目標走，到了就停；搖桿或鍵盤一動就取消
-      const me = S.ctrl === 'me', dx = S.goal.x - (me ? ME.x : S.x), dz = S.goal.z - (me ? ME.z : S.z), d = Math.hypot(dx, dz), step = (me ? 4.2 : 6.5) * dt;
-      if (d < 0.12) S.goal = null; else { const n = Math.min(1, d / step) / d; wx = dx * n; wz = dz * n; jl = 1; } }
-    GOAL.visible = !!S.goal; if (S.goal) { GOAL.position.set(S.goal.x, 0.06, S.goal.z); const k = 1 + Math.sin(S.time * 6) * 0.12; GOAL.scale.set(k, k, k); }
-    const moving = jl > 0.15 && S.ctrl === 'robot', meMoving = jl > 0.15 && S.ctrl === 'me'; S.meMv = meMoving;
-    if (ME) { if (meMoving) { const vx = wx, vz = wz, sp = 4.2;
-        ME.x = Math.max(-70, Math.min(70, ME.x + vx * sp * dt)); ME.z = Math.max(-70, Math.min(70, ME.z + vz * sp * dt));
-        let df = Math.atan2(vx, vz) - ME.face; df = Math.atan2(Math.sin(df), Math.cos(df)); ME.face += df * Math.min(1, dt * 9); }
-      ME.c.H.position.set(ME.x, 0, ME.z); ME.c.H.rotation.y = ME.face; STD.tick(ME.c, dt, meMoving ? Math.min(1, jl) : 0, 1.6); }
-    if (moving) { const vx = wx, vz = wz, sp = 6.5;
-      S.x = Math.max(-70, Math.min(70, S.x + vx * sp * dt)); S.z = Math.max(-70, Math.min(70, S.z + vz * sp * dt));
-      let df = Math.atan2(vx, vz) - S.face; df = Math.atan2(Math.sin(df), Math.cos(df)); S.face += df * Math.min(1, dt * 7);
-      S.ph += dt * sp * Math.hypot(vx, vz) / 7 * PI2; }
-    S.mv += ((moving ? 1 : 0) - S.mv) * Math.min(1, dt * 7); S.cw += ((S.form === 'carry' ? 1 : 0) - S.cw) * Math.min(1, dt * 5);
-    if (S.gt >= 0) { S.gt += dt / 6; if (S.gt >= 1) S.gt = -1; }
-    R.position.set(S.x, 0, S.z); R.rotation.y = S.face;
-    const mv = S.mv, ph = S.ph, bp = ph * 3, FORM = S.form, DL = 0.03, u = U(S.gt), v = Vv(S.gt), ru = U(S.gt - DL), rv = Vv(S.gt - DL);
+  // 把機器人擺成 st 這個騎士的樣子（位置、走路、隊形、揮手）。同一台機器人模型會輪流擺給每個騎士用
+  function poseRobot(st, dt, t) {
+    R.position.set(st.x, 0, st.z); R.rotation.y = st.face;
+    const mv = st.mv, ph = st.ph, bp = ph * 3, FORM = st.form, DL = 0.03, u = U(st.gt), v = Vv(st.gt), ru = U(st.gt - DL), rv = Vv(st.gt - DL);
     // --- 機器人：沉沉的大步 ---
     const Aw = 0.34 * mv;
     WK.legs.forEach((lg, i) => { const p = ph + i * Math.PI, hip = -Aw * Math.sin(p), knee = 0.75 * mv * Math.pow(Math.max(0, Math.cos(p)), 1.3) + 0.5 * rv * (1 - rv); lg.Hp.rotation.x = hip - knee * 0.35; lg.Kn.rotation.x = knee; lg.F.rotation.x = -(hip - knee * 0.35 + knee) * 0.75; });
     WK.arms.forEach((ar, i) => { const p = ph + (1 - i) * Math.PI, uu = i ? ru : 0;
-      ar.S.rotation.set(-0.34 * mv * Math.sin(p) + (uu < 0 ? 2.8 * uu : -1.25 * uu) - 2.55 * rv * (i ? 1 : 1 - S.cw), 0, (i ? 1 : -1) * (0.1 + 0.3 * rv));
+      ar.S.rotation.set(-0.34 * mv * Math.sin(p) + (uu < 0 ? 2.8 * uu : -1.25 * uu) - 2.55 * rv * (i ? 1 : 1 - st.cw), 0, (i ? 1 : -1) * (0.1 + 0.3 * rv));
       ar.E.rotation.set(-0.35 - 0.2 * mv * Math.max(0, Math.sin(p)) + (uu < 0 ? 0.6 * uu : 0.2 * uu) - 0.95 * rv, 0, 0); });
-    arm0.S.quaternion.slerp(carry.S, S.cw); arm0.E.quaternion.slerp(carry.E, S.cw); arm0.h.quaternion.copy(carry.h0).slerp(carry.h, S.cw);
+    arm0.S.quaternion.slerp(carry.S, st.cw); arm0.E.quaternion.slerp(carry.E, st.cw); arm0.h.quaternion.copy(carry.h0).slerp(carry.h, st.cw);
     const drop = Math.abs(Math.sin(ph)) * mv; A.bot.position.y = -0.22 * drop * drop + 0.05 + (1 - mv) * 0.06 * Math.sin(t * PI2 * 3) + 0.25 * rv - 0.36 * Math.max(0, ru) * (1 - Math.max(0, ru));
     A.torso.rotation.set(0.06 + 0.02 * Math.cos(ph * 2) + (ru < 0 ? 0.12 * ru : 0.22 * ru) - 0.1 * rv, 0.07 * mv * Math.sin(ph) - 0.25 * Math.max(0, ru) + 0.12 * Math.min(0, ru), 0.035 * mv * Math.sin(ph)); A.torso.position.y = WK.TY;
     A.rhead.rotation.set(0.3 + 0.03 * Math.cos(ph * 2), -0.05 * Math.sin(ph), 0.03 * Math.sin(ph + 0.6));
@@ -809,19 +906,67 @@ const NW = (() => {
     else if (FORM === 'float') { bp0.set(0, 4.3 + 0.28 * Math.sin(t * PI2 * 2), WK.bz); rot = [0.14 + 0.04 * Math.sin(t * PI2 * 2 + 1) + 0.2 * Math.max(0, u), 0.25 * Math.max(0, u), 0.05 * Math.sin(t * PI2)];
       legs = (i) => 0.3 + 0.14 * Math.sin(t * PI2 * 2 + 1.2 + i * 0.9); armR = [-0.35 - 2.5 * v, 0, -0.85 + 0.5 * v + 0.08 * Math.sin(t * PI2 * 2)]; }
     else { bp0.set(0, WK.by + 0.05 * Math.abs(Math.sin(bp)) * mv, WK.bz); rot = [0.05, 0, 0.05 * Math.sin(bp) * mv]; legs = (i) => -0.75 * mv * Math.sin(bp + i * Math.PI); armR = [-0.6 * mv * Math.sin(bp + Math.PI) - 2.5 * v, 0, -0.15]; }
-    g.position.lerp(bp0, Math.min(1, dt * 9)); g.rotation.set(...rot);
+    if (!st.rp) st.rp = bp0.clone(); st.rp.lerp(bp0, Math.min(1, dt * 9)); g.position.copy(st.rp); g.rotation.set(...rot);
     WK.disc.forEach((d, i) => { d.position.set(g.position.x, g.position.y - 0.12 - i * 0.22, g.position.z); d.scale.setScalar(1 + 0.12 * Math.sin(t * PI2 * 4 + i * 2)); d.material.opacity = 0.75 - i * 0.3; });
     WK.bl.forEach((h, i) => { h.rotation.x = legs(i); }); WK.ba[0].rotation.set(...armR); WK.ba[1].rotation.set(...armL);
     A.bhead.rotation.set(0.02 - 0.15 * v, 0.06 * Math.sin(ph), -0.04 + 0.03 * Math.sin(t * PI2 * 2));
     // 小精靈繞著人
     const a = t * PI2 * 2 + 2.2, cy = g.position.y + 1.36 * 1.25 + 0.35;
     A.plush.scale.setScalar(0.62); A.plush.position.set(g.position.x + Math.sin(a) * 1.05, cy + 0.2 * Math.cos(a) + 0.06 * Math.sin(t * PI2 * 6), g.position.z + Math.cos(a) * 1.05); A.plush.rotation.set(0.15 * Math.sin(t * PI2 * 6), a + Math.PI / 2, 0);
+    return { shake, u, v };
+  }
+  // 騎士坐（或走、飄）在機器人旁邊的位置：把標準人物放過去，回傳世界座標
+  const seatV = new V3(), YAX = new V3(0, 1, 0);
+  function seat(c, st, dt, info) {
+    seatV.copy(st.rp).applyAxisAngle(YAX, st.face); seatV.x += st.x; seatV.z += st.z;
+    c.H.position.copy(seatV); c.H.rotation.y = st.face;
+    const pose = info.v > 0.2 || Math.abs(info.u) > 0.2 ? 'wave' : st.form === 'carry' ? 'sit' : null;
+    STD.tick(c, dt, st.form === 'front' ? st.mv : 0, 1.6, pose); return seatV;
+  }
+  const stepRS = (st, dt, moving) => { st.mv += ((moving ? 1 : 0) - st.mv) * Math.min(1, dt * 7); st.cw += ((st.form === 'carry' ? 1 : 0) - st.cw) * Math.min(1, dt * 5);
+    if (st.gt >= 0) { st.gt += dt / 6; if (st.gt >= 1) st.gt = -1; } };
+  // 念力光帶那些直接放在場景裡的東西：自己不是騎士的時候要藏起來
+  const RIDER_FX = [...WK.halo, WK.core, ...WK.waves].filter(o => o && o.parent === scene);
+  A.boy.visible = false;   // 舊的小男孩不再出現：騎士就是玩家自己的標準人物
+  // 別的騎士的機器人：主畫面畫完後，把同一台機器人擺成他們的樣子再補畫一次（第 1 層只有機器人和燈）
+  R.traverse(o => o.layers.enable(1)); scene.traverse(o => { if (o.isLight) o.layers.enable(1); });
+  function update(dt) {
+    S.time += dt; const t = S.time / 6;
+    // --- 移動：搖桿或鍵盤，方向以畫面為準 ---
+    let jx = S.jx, jy = S.jy; const K = S.keys;
+    if (K.ArrowLeft || K.a) jx -= 1; if (K.ArrowRight || K.d) jx += 1; if (K.ArrowUp || K.w) jy -= 1; if (K.ArrowDown || K.s) jy += 1;
+    let jl = Math.hypot(jx, jy), wx = 0, wz = 0;
+    if (jl > 0.15) { S.goal = null; const n = Math.min(1, jl) / jl; wx = (Math.cos(ANG) * jx + Math.sin(ANG) * jy) * n; wz = (-Math.sin(ANG) * jx + Math.cos(ANG) * jy) * n; }
+    else if (S.goal) { // 點地面走路：朝目標走，到了就停；搖桿或鍵盤一動就取消
+      const me = S.ctrl === 'me', dx = S.goal.x - (me ? ME.x : S.x), dz = S.goal.z - (me ? ME.z : S.z), d = Math.hypot(dx, dz), step = (me ? 4.2 : 6.5) * dt;
+      if (d < S.goal.best - 0.01) { S.goal.best = d; S.goal.t = S.time; }   // 被擋住一陣子沒有更靠近，就不走了
+      if (d < 0.12 || S.time - S.goal.t > 0.8) S.goal = null; else { const n = Math.min(1, d / step) / d; wx = dx * n; wz = dz * n; jl = 1; } }
+    GOAL.visible = !!S.goal; if (S.goal) { GOAL.position.set(S.goal.x, 0.06, S.goal.z); const k = 1 + Math.sin(S.time * 6) * 0.12; GOAL.scale.set(k, k, k); }
+    const moving = jl > 0.15 && S.ctrl === 'robot', meMoving = jl > 0.15 && S.ctrl === 'me'; S.meMv = meMoving;
+    if (ME) { if (meMoving) { const vx = wx, vz = wz, sp = 4.2;
+        const h = collide(Math.max(-70, Math.min(70, ME.x + vx * sp * dt)), Math.max(-70, Math.min(70, ME.z + vz * sp * dt)), 0.45); ME.x = h.x; ME.z = h.z;
+        let df = Math.atan2(vx, vz) - ME.face; df = Math.atan2(Math.sin(df), Math.cos(df)); ME.face += df * Math.min(1, dt * 9); }
+      if (S.ctrl === 'me') { ME.c.H.position.set(ME.x, 0, ME.z); ME.c.H.rotation.y = ME.face; STD.tick(ME.c, dt, meMoving ? Math.min(1, jl) : 0, 1.6); } }
+    if (moving) { const vx = wx, vz = wz, sp = 6.5;
+      const h = collide(Math.max(-70, Math.min(70, S.x + vx * sp * dt)), Math.max(-70, Math.min(70, S.z + vz * sp * dt)), 1.9); S.x = h.x; S.z = h.z;
+      let df = Math.atan2(vx, vz) - S.face; df = Math.atan2(Math.sin(df), Math.cos(df)); S.face += df * Math.min(1, dt * 7);
+      S.ph += dt * sp * Math.hypot(vx, vz) / 7 * PI2; }
+    stepRS(S, dt, moving);
+    // 別的騎士：先把機器人擺成他們的樣子，算出他們的人坐在哪（機器人本身等畫面主體畫完再補畫）
+    OTH.forEach(o => { if (!o.rider) return; const st = o.rs, k = Math.min(1, dt * 9), dx = o.tx - st.x, dz = o.tz - st.z, far = Math.hypot(dx, dz);
+      if (far > 12) { st.x = o.tx; st.z = o.tz; } else { st.x += dx * k; st.z += dz * k; }
+      let df = o.tf - st.face; df = Math.atan2(Math.sin(df), Math.cos(df)); st.face += df * k;
+      const mvg = o.mv || far > 0.15; if (mvg) st.ph += dt * 6.5 / 7 * PI2; stepRS(st, dt, mvg);
+      const w = seat(o.c, st, dt, poseRobot(st, dt, t)); o.x = w.x; o.z = w.z; o.y = w.y; });
+    const RID = S.ctrl === 'robot', info = poseRobot(S, dt, t), shake = info.shake, u = info.u, v = info.v, FORM = S.form, ru = U(S.gt - 0.03);
+    R.visible = RID; RIDER_FX.forEach(o => { o.visible = RID; });
+    if (ME) { if (RID) { const w = seat(ME.c, S, dt, info); ME.x = w.x; ME.z = w.z; ME.y = w.y; ME.face = S.face; } else ME.y = 0; }
     // --- 鏡頭：固定斜角，跟著角色 ---
     const cam = (S.ctrl === 'me' ? CAM_ME : CAM)[S.zoom], asp = W / H, far = asp < 1 ? Math.pow(1 / asp, 0.75) : 1;
-    if (S.ctrl === 'me') S.camT.lerp(bp0.set(ME.x, 1.3, ME.z), Math.min(1, dt * 5));
+    if (S.ctrl === 'me') S.camT.lerp(bp0.set(ME.x, 1.3, ME.z), Math.min(1, dt * 5));   // 騎士的鏡頭看整台機器人
     else S.camT.lerp(bp0.set(S.x - 0.8, 3.6 + shake * 0.07, S.z + 3.2), Math.min(1, dt * 5));
     camera.position.set(S.camT.x + Math.sin(ANG) * cam.dist * far, cam.hgt * far, S.camT.z + Math.cos(ANG) * cam.dist * far); camera.lookAt(S.camT);
-    camera.updateMatrixWorld(); if (MYTAG) placeTag(MYTAG, ME.x, ME.z); OTH.forEach(o => placeTag(o.tag, o.x, o.z));
+    camera.updateMatrixWorld(); if (MYTAG) placeTag(MYTAG, ME.x, ME.z, ME.y + TAG_UP(ME.c)); OTH.forEach(o => placeTag(o.tag, o.x, o.z, o.y + TAG_UP(o.c)));
     { const fx = S.ctrl === 'me' ? ME.x : S.x, fz = S.ctrl === 'me' ? ME.z : S.z; sun.position.set(fx - 12, 22, fz + 18); sun.target.position.set(fx, 0, fz); }
     // --- 念力：海浪狀的光帶 ---
     scene.updateMatrixWorld(true);
@@ -847,10 +992,11 @@ const NW = (() => {
     TW.c2.position.y = 0.03 * Math.abs(Math.sin(t * PI2 * 3)); TW.c2.arms[1].rotation.x = -2.4 + 0.4 * Math.sin(t * PI2 * 6); TW.c2.head.rotation.z = 0.08 * Math.sin(t * PI2 * 2);
     TW.c3.position.y = 0.03 * Math.abs(Math.sin(t * PI2 * 3 + 1)); TW.c3.head.rotation.y = 0.2 * Math.sin(t * PI2 * 2); TW.c3.arms[0].rotation.x = -0.5 + 0.3 * Math.sin(t * PI2 * 4);
     // 別的玩家：朝伺服器給的位置補間，有在動就播走路
-    OTH.forEach(o => { const k = Math.min(1, dt * 9), dx = o.tx - o.x, dz = o.tz - o.z, far = Math.hypot(dx, dz);
+    OTH.forEach(o => { if (o.rider) return; o.y = 0; const k = Math.min(1, dt * 9), dx = o.tx - o.x, dz = o.tz - o.z, far = Math.hypot(dx, dz);
       if (far > 12) { o.x = o.tx; o.z = o.tz; } else { o.x += dx * k; o.z += dz * k; }
       let df = o.tf - o.f; df = Math.atan2(Math.sin(df), Math.cos(df)); o.f += df * k;
       o.c.H.position.set(o.x, 0, o.z); o.c.H.rotation.y = o.f; STD.tick(o.c, dt, o.mv || far > 0.08 ? 1 : 0, 1.6); });
+    if (STD) { if (ME) tickSpirit(ME.c, dt); OTH.forEach(o => tickSpirit(o.c, dt)); }
     if (STD && TW.s1) { const a2 = t * PI2 * 0.5; TW.s1.H.position.set(-7.4 + Math.sin(a2) * 2.2, 0, 6.2 + Math.cos(a2) * 1.8); TW.s1.H.rotation.y = a2 + Math.PI / 2;
       STD.tick(TW.s1, dt, 1, 1.1); STD.tick(TW.s2, dt, 0); STD.tick(TW.s3, dt, 0); }
     TW.pet.pose(t * PI2 * 4); TW.pet.position.y = 0.12 * Math.abs(Math.sin(t * PI2 * 4));
@@ -865,9 +1011,13 @@ const NW = (() => {
   window.addEventListener('resize', resize); resize(); applyQuality();
 
   // --- 迴圈：分頁藏起來就停，回來不補算 ---
-  let last = performance.now(), frames = 0, acc = 0, fps = 0, onStats = null;
+  let last = performance.now(), frames = 0, acc = 0, fps = 0, onStats = null, BG = null; renderer.info.autoReset = false;
   function loop(now) { requestAnimationFrame(loop); if (document.hidden) { last = now; return; }
-    const dt = Math.min(0.05, (now - last) / 1000); last = now; update(dt); renderer.render(scene, camera);
+    const dt = Math.min(0.05, (now - last) / 1000); last = now; update(dt); renderer.info.reset(); renderer.render(scene, camera);
+    let extra = false; OTH.forEach(o => { if (!o.rider) return;
+      if (!extra) { extra = true; BG = scene.background; scene.background = null; renderer.autoClear = false; sun.shadow.autoUpdate = false; camera.layers.set(1); R.visible = true; }
+      poseRobot(o.rs, 0, S.time / 6); renderer.render(scene, camera); });
+    if (extra) { scene.background = BG; renderer.autoClear = true; sun.shadow.autoUpdate = true; camera.layers.set(0); R.visible = S.ctrl === 'robot'; }
     frames++; acc += dt; if (acc >= 0.5) { fps = Math.round(frames / acc); frames = 0; acc = 0; if (onStats) onStats({ fps, calls: renderer.info.render.calls, tris: renderer.info.render.triangles }); } }
   requestAnimationFrame(loop);
 
@@ -875,20 +1025,27 @@ const NW = (() => {
     state: S, formName: () => FORM_NAME[S.form], qualityName: () => QUALITY[S.quality].name,
     stick: (x, y) => { S.jx = x; S.jy = y; }, key: (k, on) => { S.keys[k] = on; },
     nextForm: () => { S.form = FORMS[(FORMS.indexOf(S.form) + 1) % FORMS.length]; return FORM_NAME[S.form]; },
-    gesture: () => { if (S.gt < 0) S.gt = 0; },
+    gesture: () => { if (S.gt < 0) { S.gt = 0; S.gn = (S.gn + 1) % 1000; } },
     zoom: () => { S.zoom = 1 - S.zoom; return S.zoom ? '近' : '遠'; },
     nextQuality: () => { S.quality = (S.quality + 1) % QUALITY.length; applyQuality(); return QUALITY[S.quality].name; },
     lines: () => { S.lines = !S.lines; outlines.forEach(o => { o.visible = S.lines; }); if (STD) STD.lines(S.lines); return S.lines ? '開' : '關'; },
     // 標準人物：換操控的角色、換裝
-    hasStd: !!ME, ctrlName: () => (S.ctrl === 'me' ? '標準人物' : '機器人騎士'),
+    hasStd: !!ME, ctrlName: () => CLS_NAME[S.ctrl === 'robot' ? 'rider' : ''], isRider: () => S.ctrl === 'robot',
     walkTo: (cx, cy) => { NDC.set(cx / W * 2 - 1, -(cy / H) * 2 + 1); RAY.setFromCamera(NDC, camera);
       if (!RAY.ray.intersectPlane(GROUND, HIT)) return false;
-      S.goal = { x: Math.max(-70, Math.min(70, HIT.x)), z: Math.max(-70, Math.min(70, HIT.z)) }; return true; },
-    nextCtrl: () => { S.goal = null; if (ME) S.ctrl = S.ctrl === 'me' ? 'robot' : 'me'; return S.ctrl === 'me' ? '標準人物' : '機器人騎士'; },
+      S.goal = { x: Math.max(-70, Math.min(70, HIT.x)), z: Math.max(-70, Math.min(70, HIT.z)), best: 1e9, t: S.time }; return true; },
+    // 職業：一般、機器人騎士（之後加召喚師、陵媒）。存在造型的 cls 裡，代號跟總部的職業代號同一套
+    setClass: (cls) => { if (!ME) return ''; S.goal = null; const rider = cls === 'rider';
+      if (rider && S.ctrl !== 'robot') { S.x = ME.x; S.z = ME.z; S.face = ME.face; S.rp = null; }
+      S.ctrl = rider ? 'robot' : 'me'; STD.setLook(ME.c, { cls: cls || null }); return CLS_NAME[cls || '']; },
+    nextCtrl: () => { const i = CLS.indexOf(ME ? ME.c.look.cls || '' : ''); return NW.setClass(CLS[(i + 1) % CLS.length]); },
     look: () => (ME ? Object.assign({}, ME.c.look) : null), dress: (patch) => { if (ME) STD.setLook(ME.c, patch); return ME ? Object.assign({}, ME.c.look) : null; },
     fromAccount: (b) => (STD ? STD.fromAccount(b) : null),
     options: () => (STD ? { parts: STD.PARTS, names: STD.NAMES, swatch: STD.SWATCH } : null),
-    net: NET,
+    net: NET, emote: (face) => { if (ME) STD.emote(ME.c, face, 5); },
+    mem: () => ({ spirits: SPIRITS.size, chars: STD.all.length, lines: STD.lineCount(), geo: renderer.info.memory.geometries, tex: renderer.info.memory.textures }),   // 測試腳本用：看有沒有漏掉沒還的東西
+    debugMe: () => (ME ? ME.c.g : null),
+    debugPlace: (x, z) => { if (ME && S.ctrl === 'me') { ME.x = x; ME.z = z; S.goal = null; } },   // 測試腳本用：把人直接放到某個位置
     onStats: (fn) => { onStats = fn; },
   };
 })();

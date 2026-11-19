@@ -36,6 +36,12 @@ PAL = {
     'shoe': '#4b4a37', 'sole': '#3a3a2b', 'glasses': '#23262f', 'face_line': '#23262f',
     'nose': '#f3b49a', 'blush': '#f5ad9f', 'dress': '#f6a3b4', 'hoodie': '#f2c86a',
     'trim': '#fff8ec', 'string': '#fbf6e8', 'button': '#fff8ec',
+    # 表情用的顏色（名字都是 face_ 開頭，遊戲端當成平塗、不描邊）
+    'face_mouth': '#7a2b35', 'face_tongue': '#f48aa0', 'face_heart': '#e8384f', 'face_star': '#ffd23f', 'face_tear': '#8fd0f2', 'face_hi': '#ffffff',
+    # 召喚師：粉紅太空衣、外星觸角髮箍
+    'space': '#f7a8c4', 'space_trim': '#fff3f6', 'space_dark': '#d9698f', 'alien': '#8fe0c0',
+    # 陵媒：清宮旗裝、大拉翅、冰刀
+    'qi': '#2f6f8f', 'qi_trim': '#f2dfb8', 'qi_dark': '#1f2230', 'qi_flower': '#e2506a', 'gold': '#e6b85a', 'blade': '#dfe8ef', 'skate': '#fbfaf2',
 }
 
 def principled(mat):
@@ -270,6 +276,17 @@ def hairline(th):
     if STYLE == 'bob':                                          # 鮑伯頭：兩側和後面蓋到下巴，瀏海齊
         w = max(0.0, min(1.0, (thd - 48) / 22)); w = w * w * (3 - 2 * w)
         e = (20 + 3 * math.cos(3 * th)) * (1 - w) + (-36 + 4 * math.cos(th * 9)) * w
+    elif STYLE == 'hime':                                       # 公主切：齊瀏海、臉頰兩邊各一片直直切齊的鬢髮
+        w = max(0.0, min(1.0, (thd - 50) / 8)); w = w * w * (3 - 2 * w)
+        e = 16.0 * (1 - w) + (-22 - 14 * max(0.0, min(1.0, (thd - 74) / 8))) * w
+    elif STYLE == 'long':                                       # 長髮：中分，瀏海往兩邊撥
+        w = max(0.0, min(1.0, (thd - 38) / 30)); w = w * w * (3 - 2 * w)
+        e = (15 + 19 * math.exp(-(thd / 15) ** 2)) * (1 - w) + (-34 + 3 * math.cos(th * 9)) * w
+    elif STYLE == 'airy':                                       # 空氣瀏海：瀏海一撮一撮的、薄薄的
+        w = max(0.0, min(1.0, (thd - 46) / 24)); w = w * w * (3 - 2 * w)
+        e = (20 + 4.5 * math.cos(th * 13)) * (1 - w) + (-30 + 3 * math.cos(th * 9)) * w
+    elif STYLE == 'bun':                                        # 包包頭：頭髮往上梳，額頭露多一點
+        e = e + 9 * math.exp(-(thd / 40) ** 2) + 6 * max(0.0, -math.cos(th)) - 9 * math.sin(th) ** 2
     elif STYLE == 'buns':                                       # 丸子頭：瀏海有點波浪
         e += 3.0 * math.cos(th * 7)
     elif STYLE == 'short':                                      # 短髮：跟西瓜皮一樣的齊瀏海，整圈剪短一點，沒有缺口
@@ -436,7 +453,7 @@ def hair_rows(th):
         rows = [(e + D(2), -0.012), (e - D(0.3), 0.004), (e + D(1.5), 0.014)] + [(e + D(1.5) + (D(88) - e - D(1.5)) * i / 10, 0.017) for i in range(1, 11)]
     if STYLE == 'short': # 短髮：頭頂蓬一點
         rows = [(fe, off + 0.02 * max(0.0, math.sin(fe)) ** 2) for fe, off in rows]
-    if STYLE == 'bob':   # 鮑伯頭在耳朵那裡鼓起來，把耳朵整個包住
+    if STYLE in ('bob', 'long', 'hime', 'airy'):   # 鮑伯頭和長髮在耳朵那裡鼓起來，把耳朵整個包住
         rows = [(fe, off + 0.085 * math.exp(-((abs(thd) - 95) / 26) ** 2) * math.exp(-((math.degrees(fe) + 4) / 24) ** 2)) for fe, off in rows]
     return rows
 
@@ -447,9 +464,28 @@ def stub_rows(th):
     band *= 1 - 0.45 * math.exp(-((thd - 95) / 18) ** 2)       # 耳朵上方窄一點
     e = hairline(th)
     return [(e - band - D(1.5), -0.006), (e - band, 0.011), (e + D(4), 0.012)]
-for STYLE in ('bowl', 'bob', 'buns', 'short', 'buzz'):
+# 長頭髮垂在背後的那一片：從後腦往下到肩膀或背，兩邊短、中間長，髮尾往內收
+def back_curtain(zb, a0=100, a1=260, cols=40):
+    vs, fs = [], []
+    rows = [(1.42, 0.48), (1.30, 0.555), (1.18, 0.57), (1.05, 0.56), (zb + 0.06, 0.53), (zb, 0.47), (zb + 0.012, 0.40)]
+    rows = [r for r in rows[:4] if r[0] > zb + 0.1] + rows[4:]
+    for c in range(cols + 1):
+        a = a0 + (a1 - a0) * c / cols; th = D(a)
+        ew = max(0.0, min(1.0, min(a - a0, a1 - a) / 28)); ew = ew * ew * (3 - 2 * ew)
+        for z, r in rows:
+            zz = 1.42 - (1.42 - z) * (0.4 + 0.6 * ew); rr = r * (0.9 + 0.1 * ew)
+            vs.append(Vector((math.sin(th) * rr * 1.04, -math.cos(th) * rr + 0.0, zz)))
+    n = len(rows)
+    for c in range(cols):
+        for r in range(n - 1): fs.append([c * n + r, (c + 1) * n + r, (c + 1) * n + r + 1, c * n + r + 1])
+    return vs, fs
+for STYLE in ('bowl', 'bob', 'buns', 'short', 'buzz', 'long', 'hime', 'airy', 'bun'):
     hair = Builder()
     v, f = hair_shell(hair_rows, COLS); hair.add(v, f, 'hair', ['head'])
+    if STYLE in ('long', 'hime', 'airy'):
+        v, f = back_curtain({'long': 0.93, 'hime': 0.88, 'airy': 1.12}[STYLE]); hair.add(v, f, 'hair', ['head'])
+    if STYLE == 'bun':
+        v, f = ellipsoid(head_pt(dir_from(D(180), D(62)), 0.06), (0.25, 0.24, 0.22), 16, 10); hair.add(v, f, 'hair', ['head'])
     if STYLE == 'bowl':
         v, f = hair_shell(stub_rows, 80, D(38), D(322), closed=False, pole=False); hair.add(v, f, 'stubble', ['head'])
     if STYLE == 'buns':
@@ -519,6 +555,163 @@ for B in (fc, fd):
 PARTS += [(fc.build('Face_smile', ['face_line', 'blush', 'nose']), fc), (fd.build('Face_dot', ['face_line', 'blush', 'nose']), fd)]
 for ob in (ob_gl,): ob.visible_shadow = False   # 只影響預覽渲染：細框的影子印在臉上很髒
 
+
+# ---------------- 其他表情（跟總部的九種表情同一組名字） ----------------
+def poly_on_face(B, cx, cz, pts2d, mat, off):
+    vs = [face_pt(cx, cz, off)[0]] + [face_pt(x, z, off)[0] for x, z in pts2d]; n = len(pts2d)
+    B.add(vs, [[0, 1 + i, 1 + (i + 1) % n] for i in range(n)], mat, ['head'])
+def ell2d(cx, cz, rx, rz, n=20): return [(cx + rx * math.cos(2 * math.pi * i / n), cz + rz * math.sin(2 * math.pi * i / n)) for i in range(n)]
+def face_base(B, blush=True):
+    for k in (1, -1):
+        if blush: v, f = disc_on_face(0.37 * k, -0.17, 0.095, 0.07); B.add(v, f, 'blush', ['head'])
+    v, f = disc_on_face(0.0, -0.095, 0.05, 0.042, DO * 1.5); B.add(v, f, 'nose', ['head'])
+def eye_dot(B, k): v, f = disc_on_face(LX * k, LZ, 0.05, 0.062); B.add(v, f, 'face_line', ['head'])
+def eye_up(B, k): line_on_face(B, arc2d(LX * k, LZ - 0.035, 0.064, D(20), D(160), sy=0.95), 0.026, 'face_line')      # ^ ^
+def eye_down(B, k): line_on_face(B, arc2d(LX * k, LZ + 0.01, 0.062, D(200), D(340), sy=0.9), 0.024, 'face_line')    # 閉著的笑眼
+def mouth_smile(B): line_on_face(B, arc2d(0.0, -0.205, 0.075, D(205), D(335), sy=0.75), 0.022, 'face_line')
+def mouth_open(B):   # 張嘴笑：D 字形，裡面深色、粉紅舌頭
+    top = [(-0.088 + 0.176 * i / 8, -0.2 - 0.008 * math.sin(math.pi * i / 8)) for i in range(9)]
+    bot = [(0.088 * math.cos(a), -0.2 - 0.1 * math.sin(a)) for a in (math.pi * i / 14 for i in range(1, 14))]
+    out = top + bot
+    poly_on_face(B, 0.0, -0.245, out, 'face_mouth', DO * 1.5)
+    poly_on_face(B, 0.0, -0.268, ell2d(0.0, -0.268, 0.05, 0.026, 14), 'face_tongue', DO * 2.5)
+    line_on_face(B, out + [out[0]], 0.016, 'face_line', DO * 3)
+FACES = {}
+def new_face(name, blush=True):
+    B = Builder(); face_base(B, blush); FACES[name] = B; return B
+B = new_face('grin'); [eye_up(B, k) for k in (1, -1)]; mouth_open(B)
+B = new_face('cat'); [eye_dot(B, k) for k in (1, -1)]
+for k in (1, -1): line_on_face(B, arc2d(0.047 * k, -0.212, 0.047, D(195), D(345), sy=0.95), 0.021, 'face_line')   # ω 貓咪嘴
+B = new_face('wink'); eye_dot(B, -1); eye_up(B, 1); mouth_smile(B)
+poly_on_face(B, 0.04, -0.285, ell2d(0.04, -0.287, 0.036, 0.04, 14), 'face_tongue', DO * 2.5)                      # 吐舌頭
+line_on_face(B, [(0.04 + 0.036 * math.cos(a), -0.287 + 0.04 * math.sin(a)) for a in (D(175) + D(190) * i / 12 for i in range(13))], 0.013, 'face_line', DO * 3)
+B = new_face('wow')
+for k in (1, -1):
+    v, f = disc_on_face(LX * k, LZ, 0.056, 0.076); B.add(v, f, 'face_line', ['head'])
+    v, f = disc_on_face(LX * k - 0.018, LZ + 0.028, 0.019, 0.019, DO * 2.5, 10, 1); B.add(v, f, 'face_hi', ['head'])
+poly_on_face(B, 0.0, -0.24, ell2d(0.0, -0.24, 0.042, 0.055, 16), 'face_mouth', DO * 1.5)
+line_on_face(B, ell2d(0.0, -0.24, 0.042, 0.055, 16) + [(0.042, -0.24)], 0.015, 'face_line', DO * 3)
+B = new_face('love'); mouth_smile(B)
+for k in (1, -1):
+    ht = [(16 * math.sin(t) ** 3, 13 * math.cos(t) - 5 * math.cos(2 * t) - 2 * math.cos(3 * t) - math.cos(4 * t)) for t in (2 * math.pi * i / 28 for i in range(28))]
+    poly_on_face(B, LX * k, LZ + 0.005, [(LX * k + x * 0.0058, LZ + 0.012 + y * 0.0058) for x, y in ht], 'face_heart', DO * 1.5)
+B = new_face('star'); mouth_open(B)
+for k in (1, -1):
+    poly_on_face(B, LX * k, LZ, [(LX * k + (0.055 if i % 2 else 0.118) * math.cos(math.pi / 2 + i * math.pi / 5), LZ + (0.055 if i % 2 else 0.118) * math.sin(math.pi / 2 + i * math.pi / 5)) for i in range(10)], 'face_star', DO * 1.5)
+B = new_face('grr', blush=False); [eye_dot(B, k) for k in (1, -1)]
+for k in (1, -1): line_on_face(B, [(LX * k + 0.095 * k, LZ + 0.15), (LX * k - 0.085 * k, LZ + 0.085)], 0.03, 'face_line')   # 倒八字眉
+line_on_face(B, arc2d(0.0, -0.3, 0.075, D(35), D(145), sy=0.7), 0.022, 'face_line')                               # 嘴角往下
+B = new_face('cry'); [eye_down(B, k) for k in (1, -1)]
+for k in (1, -1):   # 眼淚
+    cx, cz = LX * k + 0.02 * k, LZ - 0.12
+    poly_on_face(B, cx, cz - 0.01, [(cx, cz + 0.055)] + [(cx + 0.034 * math.cos(a), cz - 0.012 + 0.034 * math.sin(a)) for a in (D(160) + D(220) * i / 10 for i in range(11))], 'face_tear', DO * 1.5)
+line_on_face(B, [(-0.078, -0.238), (-0.045, -0.252), (-0.012, -0.234), (0.022, -0.252), (0.05, -0.236), (0.078, -0.248)], 0.02, 'face_line')   # 抖抖嘴
+FACE_MATS = ['face_line', 'blush', 'nose', 'face_mouth', 'face_tongue', 'face_heart', 'face_star', 'face_tear', 'face_hi']
+for name, B in FACES.items(): PARTS.append((B.build('Face_' + name, FACE_MATS), B))
+
+# ---------------- 召喚師：粉紅太空衣（連身）＋外星觸角髮箍 ----------------
+sp = Builder()
+SPP = [(0, 0.335)] + [(r * 1.07 + 0.016, z) for r, z in prof[1:-1]] + [(0, 1.14)]
+v, f = lathe(SPP, 18, sy=0.92); sp.add(v, f, 'space', torso_bones)
+v, f = tube(ring(prof_r(SPP, 0.6) + 0.012, 0.6, 0.92), 0.03, 6, closed=True); sp.add(v, f, 'space_dark', torso_bones)          # 腰帶
+v, f = tube(ring(0.2, 1.1, 0.92), 0.05, 8, closed=True); sp.add(v, f, 'space_trim', ['spine'])                             # 頭盔座的圓環
+v, f = ellipsoid((0, -prof_r(SPP, 0.86) * 0.92 + 0.02, 0.86), (0.13, 0.045, 0.1), 12, 6); sp.add(v, f, 'space_trim', ['spine'])   # 胸前的控制面板
+for i, mname in enumerate(('alien', 'space_dark', 'gold')):
+    v, f = ellipsoid((-0.06 + 0.06 * i, -prof_r(SPP, 0.86) * 0.92 - 0.022, 0.87), (0.02, 0.012, 0.02), 8, 5); sp.add(v, f, mname, ['spine'])
+v, f = ellipsoid((0, 0.3, 0.86), (0.23, 0.13, 0.24), 12, 8); sp.add(v, f, 'space_trim', ['spine'])                          # 背後的氧氣背包
+v, f = ellipsoid((0, 0.42, 0.9), (0.08, 0.03, 0.08), 10, 5); sp.add(v, f, 'alien', ['spine'])
+for s_, k in (('L', 1), ('R', -1)):
+    v, f = capsule((0.29 * k, 0.0, 1.02), (0.45 * k, 0.0, 0.84), 0.155, 0.14, 10, 2, 2); sp.add(v, f, 'space', [f'upper_arm.{s_}'])
+    v, f = capsule((0.43 * k, 0.0, 0.86), (0.565 * k, -0.01, 0.655), 0.122, 0.125, 10, 2, 2); sp.add(v, f, 'space', [f'upper_arm.{s_}', f'lower_arm.{s_}'])
+    v, f = tube(ring_on_axis((0.43 * k, 0.0, 0.86), (0.565 * k, -0.01, 0.655), 0.93, 0.125), 0.028, 6, closed=True); sp.add(v, f, 'space_trim', [f'lower_arm.{s_}'])
+    R = Matrix.Rotation(D(30 * k), 3, 'Y')   # 手套：比手大一圈，整個包住
+    v, f = ellipsoid((0.62 * k, -0.015, 0.528), (0.108, 0.098, 0.15), 10, 7, R); sp.add(v, f, 'space_dark', [f'hand.{s_}'])
+    v, f = ellipsoid((0.585 * k, -0.085, 0.585), (0.048, 0.052, 0.068), 8, 5, R); sp.add(v, f, 'space_dark', [f'hand.{s_}'])
+    x = 0.2 * k
+    def hipleg2(p, s=s_):
+        t = max(0.0, min(1.0, (0.53 - p.z) / 0.12)); return {'hips': 1 - t, f'leg.{s}': t}
+    v, f = capsule((x, 0.0, 0.52), (x, 0.0, 0.39), 0.185, 0.175, 10, 2, 3); sp.add(v, f, 'space', hipleg2)
+    v, f = capsule((x, 0.0, 0.41), (x, 0.0, 0.27), 0.14, 0.13, 10, 2, 3); sp.add(v, f, 'space', [f'leg.{s_}', f'shin.{s_}'])
+    v, f = tube(ring(0.135, 0.265, 1.0, 16, x), 0.026, 6, closed=True); sp.add(v, f, 'space_trim', [f'shin.{s_}'])
+    v, f = capsule((x, 0.0, 0.27), (x, 0.0, 0.16), 0.128, 0.128, 10, 2, 1); sp.add(v, f, 'space_dark', [f'shin.{s_}', f'foot.{s_}'])     # 太空靴
+    R = Matrix.Rotation(D(-6 * k), 3, 'Z')
+    v, f = ellipsoid((x * 1.02, -0.07, 0.125), (0.168, 0.262, 0.14), 10, 7, R)
+    v = [Vector((p.x, p.y, max(p.z, 0.0) if p.z > 0.025 else 0.0)) for p in v]; sp.add(v, f, 'space_dark', [f'foot.{s_}'])
+ob_sp = sp.build('Top_space', ['space', 'space_trim', 'space_dark', 'alien', 'gold']); PARTS.append((ob_sp, sp)); SUBDIV.append(ob_sp)
+
+an = Builder()
+band = lambda a, off: head_pt(Vector((math.sin(D(a)), -0.2, math.cos(D(a)))), off)
+v, f = tube([band(a, 0.1) for a in range(-74, 75, 4)], 0.024, 6); an.add(v, f, 'space_dark', ['head'])
+for k in (1, -1):
+    b0 = band(24 * k, 0.1); tip = b0 + Vector((0.12 * k, -0.02, 0.36))
+    pts = [b0 + (tip - b0) * t + Vector((0.05 * k * math.sin(math.pi * t), 0, 0.03 * math.sin(math.pi * t))) for t in (i / 6 for i in range(7))]
+    v, f = tube(pts, 0.016, 6); an.add(v, f, 'alien', ['head'])
+    v, f = ellipsoid(tip, (0.075, 0.075, 0.075), 12, 8); an.add(v, f, 'alien', ['head'])
+    v, f = ellipsoid(b0, (0.04, 0.04, 0.03), 8, 5); an.add(v, f, 'space_dark', ['head'])
+PARTS.append((an.build('Acc_antenna', ['space_dark', 'alien']), an))
+
+# ---------------- 陵媒：清宮旗裝（長袍到腳踝）＋大拉翅＋冰刀 ----------------
+qi = Builder()
+QP = [(0.36, 0.27), (0.47, 0.2), (0.505, 0.17), (0.52, 0.2), (0.51, 0.3), (0.49, 0.45), (0.478, 0.56), (0.47, 0.62), (0.46, 0.68), (0.435, 0.78), (0.385, 0.88), (0.315, 0.97), (0.235, 1.04), (0.165, 1.10), (0, 1.135)]
+def robe_bones(p):   # 腰以上跟身體；裙襬左半跟左腳、右半跟右腳，走路時腳不會穿出來
+    if p.z >= 0.6: return torso_bones(p)
+    t = max(0.0, min(1.0, (0.58 - p.z) / 0.2)) * 0.85; sd = max(0.0, min(1.0, 0.5 + p.x / 0.3)); sd = sd * sd * (3 - 2 * sd)
+    u = max(0.0, min(1.0, (0.33 - p.z) / 0.12)) * 0.6
+    return {'hips': 1 - t, 'leg.L': t * sd * (1 - u), 'leg.R': t * (1 - sd) * (1 - u), 'shin.L': t * sd * u, 'shin.R': t * (1 - sd) * u}
+QS = 0.9
+v, f = lathe(QP, 24, sy=QS); qi.add(v, f, 'qi', robe_bones)
+v, f = tube(ring(0.522, 0.215, QS), 0.03, 6, closed=True); qi.add(v, f, 'qi_trim', robe_bones)                    # 下襬的寬滾邊
+v, f = tube(ring(0.516, 0.285, QS), 0.012, 5, closed=True); qi.add(v, f, 'gold', robe_bones)
+v, f = tube(ring(0.185, 1.1, QS), 0.038, 6, closed=True); qi.add(v, f, 'qi_trim', ['spine'])                       # 白色領巾
+qsurf = lambda x, z, o=0.012: (x, -math.sqrt(max(1e-4, (prof_r(QP, z) + o) ** 2 - x * x)) * QS, z)
+v, f = tube([qsurf(0.0, 1.07 - 0.3 * i / 6, 0.03) for i in range(7)], 0.036, 6); qi.add(v, f, 'qi_trim', ['spine'])   # 領巾垂在胸前的那一條
+# 大襟：從領口斜到右邊腋下，再沿著側邊往下到下襬
+cl = [(0.0, 1.06), (-0.1, 1.0), (-0.2, 0.93), (-0.27, 0.86)] + [(-0.3 - 0.04 * i / 8, 0.86 - 0.62 * i / 8) for i in range(1, 9)]
+v, f = tube([qsurf(x, z) for x, z in cl], 0.017, 5); qi.add(v, f, 'qi_trim', robe_bones)
+for x, z in ((-0.15, 0.965), (-0.285, 0.82), (-0.32, 0.6)):   # 盤扣
+    v, f = ellipsoid(qsurf(x, z, 0.02), (0.028, 0.02, 0.028), 8, 5); qi.add(v, f, 'gold', robe_bones)
+for s_, k in (('L', 1), ('R', -1)):   # 寬寬的馬蹄袖
+    v, f = capsule((0.29 * k, 0.0, 1.02), (0.45 * k, 0.0, 0.84), 0.15, 0.145, 10, 2, 2); qi.add(v, f, 'qi', [f'upper_arm.{s_}'])
+    v, f = capsule((0.43 * k, 0.0, 0.86), (0.57 * k, -0.01, 0.645), 0.125, 0.165, 10, 2, 3); qi.add(v, f, 'qi', [f'upper_arm.{s_}', f'lower_arm.{s_}'])
+    v, f = tube(ring_on_axis((0.43 * k, 0.0, 0.86), (0.57 * k, -0.01, 0.645), 0.99, 0.168), 0.03, 6, closed=True); qi.add(v, f, 'qi_trim', [f'lower_arm.{s_}'])
+    v, f = tube(ring_on_axis((0.43 * k, 0.0, 0.86), (0.57 * k, -0.01, 0.645), 0.78, 0.158), 0.012, 5, closed=True); qi.add(v, f, 'gold', [f'lower_arm.{s_}'])
+ob_qi = qi.build('Top_qi', ['qi', 'qi_trim', 'gold']); PARTS.append((ob_qi, qi)); SUBDIV.append(ob_qi)
+
+lb = Builder()
+TOPZ = HC.z + HCc
+v, f = ellipsoid((0, 0, 0), (1, 1, 1), 20, 12)   # 大拉翅：一片上寬下窄的黑色扇形板
+def fan(p):
+    u = math.copysign(abs(p.x) ** 0.62, p.x); w = math.copysign(abs(p.z) ** 0.7, p.z)
+    return Vector((u * 0.66 * (1 + 0.16 * w), 0.06 + p.y * 0.055, TOPZ + 0.3 + w * 0.22 - 0.035 * (1 - abs(u)) * max(0.0, w)))
+lb.add([fan(p) for p in v], f, 'qi_dark', ['head'])
+v, f = ellipsoid((0, 0.05, TOPZ + 0.05), (0.3, 0.2, 0.1), 14, 8); lb.add(v, f, 'qi_dark', ['head'])                 # 頭座
+def flower(c, r, mat):
+    for i in range(5):
+        a = 2 * math.pi * i / 5 + math.pi / 2
+        v, f = ellipsoid(Vector(c) + Vector((math.cos(a) * r * 0.62, 0, math.sin(a) * r * 0.62)), (r * 0.52, r * 0.2, r * 0.52), 10, 5); lb.add(v, f, mat, ['head'])
+    v, f = ellipsoid(Vector(c) + Vector((0, -r * 0.2, 0)), (r * 0.32, r * 0.22, r * 0.32), 8, 5); lb.add(v, f, 'gold', ['head'])
+flower((0, -0.02, TOPZ + 0.31), 0.17, 'qi_flower')
+for k in (1, -1):
+    flower((0.42 * k, -0.005, TOPZ + 0.27), 0.085, 'qi_trim')
+    top_ = Vector((0.74 * k, 0.06, TOPZ + 0.17))   # 兩邊垂下來的流蘇
+    v, f = ellipsoid(top_, (0.04, 0.04, 0.04), 8, 5); lb.add(v, f, 'gold', ['head'])
+    v, f = tube([top_ + Vector((0.012 * k * math.sin(math.pi * t), 0, -0.36 * t)) for t in (i / 5 for i in range(6))], 0.016, 5); lb.add(v, f, 'qi_flower', ['head'])
+    v, f = ellipsoid(top_ + Vector((0, 0, -0.42)), (0.04, 0.04, 0.085), 8, 6); lb.add(v, f, 'qi_flower', ['head'])
+PARTS.append((lb.build('Acc_liangbatou', ['qi_dark', 'qi_flower', 'qi_trim', 'gold']), lb))
+
+sk8 = Builder()
+BLADE = 0.11   # 冰刀比鞋底低這麼多；遊戲端要把人墊高一樣的高度
+for s_, k in (('L', 1), ('R', -1)):
+    x = 0.2 * k; R = Matrix.Rotation(D(-6 * k), 3, 'Z')
+    v, f = capsule((x, 0.0, 0.3), (x, 0.0, 0.16), 0.125, 0.125, 10, 2, 1); sk8.add(v, f, 'skate', [f'shin.{s_}', f'foot.{s_}'])      # 白色的靴筒
+    v, f = ellipsoid((x * 1.02, -0.07, 0.122), (0.162, 0.255, 0.135), 10, 7, R)
+    v = [Vector((p.x, p.y, max(p.z, 0.0) if p.z > 0.025 else 0.0)) for p in v]; sk8.add(v, f, 'skate', [f'foot.{s_}'])
+    v, f = ellipsoid((x * 1.02, -0.08, -BLADE + 0.03), (0.016, 0.3, 0.032), 8, 8, R); sk8.add(v, f, 'blade', [f'foot.{s_}'])       # 刀片
+    for yy in (-0.22, 0.06):
+        c = R @ Vector((0, yy, 0)) + Vector((x * 1.02, -0.07, 0))
+        v, f = capsule((c.x, c.y, 0.01), (c.x, c.y, -BLADE + 0.04), 0.022, 0.018, 6, 1, 1); sk8.add(v, f, 'blade', [f'foot.{s_}'])
+PARTS.append((sk8.build('Acc_skates', ['skate', 'blade']), sk8))
+
 # ---------------- 骨架 + 權重 ----------------
 arm_data = bpy.data.armatures.new('Boy_Rig')
 ob_arm = bpy.data.objects.new('Boy_Rig', arm_data); scene.collection.objects.link(ob_arm)
@@ -576,7 +769,7 @@ def make_action(name, fn):
         for pb in ob_arm.pose.bones:
             if pb.name == 'root': continue
             pb.keyframe_insert('rotation_euler', frame=fr, group=pb.name)
-            if pb.name in ('hips', 'leg.L', 'leg.R'):
+            if pb.name in ('hips', 'leg.L', 'leg.R'):   # 這三根骨頭有位移
                 pb.keyframe_insert('location', frame=fr, group=pb.name)
     act.use_frame_range = True; act.frame_start = 1; act.frame_end = 25
     return act
@@ -613,18 +806,106 @@ def walk(ph):
         P[f'upper_arm.{side}'].rotation_euler.x = -AS * sw
         P[f'lower_arm.{side}'].rotation_euler.x = -D(10) - D(6) * sw
 
+def run(ph):
+    s, c = math.sin(ph), math.cos(ph)
+    P['hips'].location.y = -0.07 * s * s + 0.02                    # 跑步彈得比較高
+    P['hips'].rotation_euler.y = D(8) * s
+    P['spine'].rotation_euler.y = D(-7) * s
+    P['spine'].rotation_euler.x = D(13)                            # 身體往前傾
+    P['head'].rotation_euler.y = D(-3) * s
+    P['head'].rotation_euler.x = D(-11)                            # 頭抬起來看前面
+    for side, k in (('L', 1), ('R', -1)):
+        sw = k * s; lift = max(0.0, k * c)
+        P[f'leg.{side}'].rotation_euler.x = D(40) * sw + D(24) * lift
+        P[f'shin.{side}'].rotation_euler.x = -D(84) * lift - D(14) * max(0.0, -sw)
+        P[f'foot.{side}'].rotation_euler.x = -D(26) * sw + D(30) * lift
+        P[f'leg.{side}'].location.y = -0.03 * lift
+        P[f'upper_arm.{side}'].rotation_euler.x = -D(46) * sw
+        P[f'lower_arm.{side}'].rotation_euler.x = D(62) + D(10) * sw   # 手肘彎著擺
+
+def sit(ph):
+    # 坐著：大腿往前平放、小腿垂下來。屁股的高度由遊戲決定（模型座標大約 z=0.36 是屁股底）
+    s = math.sin(ph)
+    P['spine'].rotation_euler.x = D(-4) + D(1.5) * s
+    P['head'].rotation_euler.z = D(3.0) * math.sin(ph + 0.6)
+    P['head'].rotation_euler.x = D(-2) - D(1.5) * s
+    for side, k in (('L', 1), ('R', -1)):
+        P[f'leg.{side}'].rotation_euler.x = D(84)
+        P[f'leg.{side}'].rotation_euler.z = D(7) * k * SIGN_OUT
+        P[f'shin.{side}'].rotation_euler.x = -D(80) + D(5) * math.sin(ph + (0.0 if k > 0 else 1.6))   # 小腿輕輕晃
+        P[f'foot.{side}'].rotation_euler.x = D(8)
+        P[f'upper_arm.{side}'].rotation_euler.x = D(16)
+        P[f'lower_arm.{side}'].rotation_euler.x = D(34)
+
+def wave(ph):
+    # 揮手：右手舉高左右擺，身體跟著微微晃
+    s = math.sin(ph * 2)
+    idle(ph)
+    P['spine'].rotation_euler.y = D(2.5) * s
+    P['head'].rotation_euler.y = D(4) * s
+    P['upper_arm.R'].rotation_euler.z = -SIGN_OUT * (D(76) + D(7) * s)   # 頭很大，手舉到斜上方就好，不然會插進頭裡
+    P['upper_arm.R'].rotation_euler.x = D(18)
+    P['lower_arm.R'].rotation_euler.z = -SIGN_OUT * (D(24) + D(30) * s)
+    P['hand.R'].rotation_euler.z = -SIGN_OUT * D(14) * s
+
+def skate(ph):
+    # 溜冰：身體前傾、膝蓋微彎，左右腳輪流往斜後方蹬，手張開一點保持平衡
+    s = math.sin(ph)
+    P['hips'].location.y = -0.03 - 0.012 * math.cos(2 * ph)
+    P['hips'].rotation_euler.y = D(7) * s
+    P['spine'].rotation_euler.x = D(13)
+    P['spine'].rotation_euler.y = D(-5) * s
+    P['head'].rotation_euler.x = D(-10)
+    P['head'].rotation_euler.y = D(-2) * s
+    for side, k in (('L', 1), ('R', -1)):
+        push = max(0.0, k * s)
+        P[f'leg.{side}'].rotation_euler.x = D(9) - D(27) * push
+        P[f'leg.{side}'].rotation_euler.z = k * SIGN_OUT * D(15) * push
+        P[f'shin.{side}'].rotation_euler.x = -D(18) - D(8) * push
+        P[f'foot.{side}'].rotation_euler.x = D(9) + D(14) * push
+        P[f'upper_arm.{side}'].rotation_euler.z = k * SIGN_OUT * D(13)
+        P[f'upper_arm.{side}'].rotation_euler.x = D(20) * k * s
+        P[f'lower_arm.{side}'].rotation_euler.x = D(14)
+
+SIGN_OUT = float(os.environ.get('SIGN_OUT', '1'))   # 手腳往外張開的旋轉方向（跟骨頭的 roll 有關）
 A_IDLE = make_action('idle', idle)
 A_WALK = make_action('walk', walk)
-# 把兩個動作都擺進 NLA（匯出器會個別輸出），骨架回到 rest pose
-for act in (A_IDLE, A_WALK):
+A_RUN = make_action('run', run)
+A_SIT = make_action('sit', sit)
+A_WAVE = make_action('wave', wave)
+A_SKATE = make_action('skate', skate)
+ACTIONS = [A_IDLE, A_WALK, A_RUN, A_SIT, A_WAVE, A_SKATE]
+# 把動作都擺進 NLA（匯出器會個別輸出），骨架回到 rest pose
+for act in ACTIONS:
     tr = ob_arm.animation_data.nla_tracks.new(); tr.name = act.name
     st = tr.strips.new(act.name, 1, act); tr.mute = True
 ob_arm.animation_data.action = None
 for pb in ob_arm.pose.bones: pb.rotation_euler = (0, 0, 0); pb.location = (0, 0, 0)
 
+# ---------------- 掛點：裝備和職業配件掛的位置（規格見 newworld/assets/MOUNTS.md） ----------------
+# 每個掛點是骨頭底下的一個空物件，匯出後在 three.js 用名字找得到；位置是 rest pose 的世界座標
+MOUNTS = [
+    ('mount_head', 'head', (0, 0, HC.z + HCc)),            # 頭頂：帽子、頭飾
+    ('mount_face', 'head', (0, -HB, HC.z)),                # 臉正前方：面具、口罩
+    ('mount_back', 'spine', (0, 0.2, 0.93)),               # 背後：背包、披風、翅膀
+    ('mount_chest', 'spine', (0, -0.21, 0.9)),             # 胸前：徽章、項鍊
+    ('mount_waist', 'hips', (0, 0, 0.6)),                  # 腰：腰帶、尾巴
+    ('mount_hand.L', 'hand.L', BMAP['hand.L'][2]),         # 左手掌心：手持物
+    ('mount_hand.R', 'hand.R', BMAP['hand.R'][2]),         # 右手掌心：手持物
+    ('mount_foot.L', 'foot.L', (BMAP['foot.L'][1][0], -0.08, 0.0)),   # 左腳底：鞋底的東西（冰刀、輪子）
+    ('mount_foot.R', 'foot.R', (BMAP['foot.R'][1][0], -0.08, 0.0)),
+]
+from mathutils import Matrix
+MOUNT_OBS = []
+for name, bone, pos in MOUNTS:
+    e = bpy.data.objects.new(name, None); scene.collection.objects.link(e)
+    e.empty_display_size = 0.05; e.parent = ob_arm; e.parent_type = 'BONE'; e.parent_bone = bone
+    bpy.context.view_layer.update(); e.matrix_world = Matrix.Translation(Vector(pos)); MOUNT_OBS.append(e)
+bpy.context.view_layer.update()
+
 # ---------------- 匯出 GLB ----------------
 bpy.ops.object.select_all(action='DESELECT')
-for ob in [ob_arm] + [p[0] for p in PARTS]: ob.select_set(True)
+for ob in [ob_arm] + [p[0] for p in PARTS] + MOUNT_OBS: ob.select_set(True)
 bpy.context.view_layer.objects.active = ob_arm
 glb = os.path.join(OUT, 'char.glb')
 kw = dict(filepath=glb, export_format='GLB', use_selection=True, export_apply=True, export_yup=True,

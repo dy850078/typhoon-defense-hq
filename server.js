@@ -1,6 +1,7 @@
 require('./env'); // 先讀 .env，後面的設定才拿得到
 const path = require('path');
 const fs = require('fs');
+const zlib = require('zlib');
 const http = require('http');
 const express = require('express');
 const { Server } = require('socket.io');
@@ -50,7 +51,8 @@ const FIREWORK_MS = 6000; // 每個人放煙火的間隔
 const CAKE_CODE = String(process.env.CAKE_CODE || 'CAKE');
 const CAKE_MS = 3 * 60 * 1000;
 const T = MAP.TILE;
-const DATA_DIR = path.join(__dirname, 'data');
+// 測試腳本（scripts/nw-test.js）會用 DATA_DIR 指到暫存資料夾，才不會把測試帳號寫進正式資料
+const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 
 // ---------------- 派對設定（管理員介面可以改） ----------------
 // 存在 data/settings.json；管理員密碼可以用 ADMIN_PASSWORD 指定，沒指定就第一次啟動時隨機產生
@@ -354,7 +356,8 @@ app.get('/api/me', (req, res) => {
 // 3D 模型檔（Blender 做的標準人物、冰龍之翼）也一樣只給管理員
 const NEWWORLD_FILES = { 'world.js': ['world.js', 'application/javascript'], 'char.glb': ['assets/char.glb', 'model/gltf-binary'], 'wing-ice.glb': ['assets/wing-ice.glb', 'model/gltf-binary'] };
 // 新世界的 3D 造型：另外存在帳號的 look3d，不會動到總部（2D）的角色
-const LOOK3D = { hair: /^[a-z]{1,12}$/, top: /^[a-z]{1,12}$/, face: /^[a-z]{1,12}$/, hairCol: /^#[0-9a-f]{6}$/i, skinCol: /^#[0-9a-f]{6}$/i, topCol: /^#[0-9a-f]{6}$/i };
+// cls 是新世界的職業，代號跟 shared/stats.js 的職業代號同一套（rider 是新世界才有的機器人騎士，先保留這個代號）
+const LOOK3D = { cls: /^(rider|summoner|skater)$/, hair: /^[a-z]{1,12}$/, top: /^[a-z]{1,12}$/, face: /^[a-z]{1,12}$/, hairCol: /^#[0-9a-f]{6}$/i, skinCol: /^#[0-9a-f]{6}$/i, topCol: /^#[0-9a-f]{6}$/i };
 function sanitizeLook3d(d) {
   if (!d || typeof d !== 'object') return null;
   const o = { glasses: !!d.glasses, wings: !!d.wings };
@@ -367,7 +370,7 @@ function newworldUser(req, res) {
   if (!u.admin) { res.status(403).json({ ok: false }); return null; }
   return u;
 }
-const lookOf = (u) => { const a = sanitizeSave(u.save); return { ok: true, base: { name: a.name, hair: a.hair, skin: a.skin, hairColor: a.hairColor, outfit: a.outfit, glasses: a.glasses !== '0' }, look3d: sanitizeLook3d(u.save.look3d) }; };
+const lookOf = (u) => { const a = sanitizeSave(u.save); return { ok: true, base: { name: a.name, hair: a.hair, skin: a.skin, hairColor: a.hairColor, outfit: a.outfit, glasses: a.glasses !== '0', face: a.face || '' }, look3d: sanitizeLook3d(u.save.look3d) }; };
 app.get('/api/newworld/look', (req, res) => { const u = newworldUser(req, res); if (u) res.json(lookOf(u)); });
 app.post('/api/newworld/look', (req, res) => {
   const u = newworldUser(req, res); if (!u) return;
@@ -387,13 +390,15 @@ function startNewworldNet() {
   });
   nw.on('connection', (socket) => {
     const u = socket.data.user, a = sanitizeSave(u.save);
-    const p = { id: socket.id, name: a.name || u.username, x: 2.5, z: 14, f: 0, mv: 0, look: sanitizeLook3d(u.save.look3d), said: 0 };
-    const pub = (q) => ({ id: q.id, name: q.name, x: q.x, z: q.z, f: q.f, look: q.look });
+    const p = { id: socket.id, name: a.name || u.username, x: 2.5, z: 14, f: 0, mv: 0, fm: 0, g: 0, look: sanitizeLook3d(u.save.look3d), said: 0 };
+    const pub = (q) => ({ id: q.id, name: q.name, x: q.x, z: q.z, f: q.f, fm: q.fm, g: q.g, look: q.look });
     socket.emit('init', { id: p.id, name: p.name, players: [...nwPlayers.values()].map(pub) });
     nwPlayers.set(p.id, p);
     socket.broadcast.emit('join', pub(p));
-    socket.on('move', (d) => { if (!d || typeof d !== 'object') return; p.x = num(d.x, -70, 70); p.z = num(d.z, -70, 70); p.f = num(d.f, -7, 7); p.mv = d.mv ? 1 : 0; });
+    socket.on('move', (d) => { if (!d || typeof d !== 'object') return; p.x = num(d.x, -70, 70); p.z = num(d.z, -70, 70); p.f = num(d.f, -7, 7); p.mv = d.mv ? 1 : 0;
+      p.fm = Math.round(num(d.fm, 0, 2)); p.g = Math.round(num(d.g, 0, 999)); });   // fm：騎士的隊形；g：揮手指揮的次數（變了就播一次）
     socket.on('look', (d) => { const l = sanitizeLook3d(d); if (!l) return; p.look = l; socket.broadcast.emit('look', { id: p.id, look: l }); });
+    socket.on('emote', (f) => { if (typeof f === 'string' && /^[a-z]{1,12}$/.test(f)) socket.broadcast.emit('emote', { id: p.id, face: f }); });
     socket.on('chat', (t) => {
       const text = String(t == null ? '' : t).replace(/\s+/g, ' ').trim().slice(0, 60), now = Date.now();
       if (!text || now - p.said < 600) return;
@@ -401,7 +406,7 @@ function startNewworldNet() {
     });
     socket.on('disconnect', () => { nwPlayers.delete(p.id); nw.emit('leave', p.id); });
   });
-  setInterval(() => { if (nwPlayers.size > 1) nw.volatile.emit('state', [...nwPlayers.values()].map(q => [q.id, q.x, q.z, q.f, q.mv])); }, 100);
+  setInterval(() => { if (nwPlayers.size > 1) nw.volatile.emit('state', [...nwPlayers.values()].map(q => [q.id, q.x, q.z, q.f, q.mv, q.fm, q.g])); }, 100);
 }
 app.get('/api/newworld/:file', (req, res) => {
   const f = NEWWORLD_FILES[req.params.file];
@@ -409,8 +414,22 @@ app.get('/api/newworld/:file', (req, res) => {
   const u = accounts.byToken(bearer(req));
   if (!u) return res.status(401).json({ ok: false });
   if (!u.admin) return res.status(403).json({ ok: false });
-  res.set('Cache-Control', 'no-cache').type(f[1]).sendFile(path.join(__dirname, 'newworld', f[0]));
+  // 壓縮後再送（模型檔大約剩三分之一），壓好的放在記憶體裡，檔案有改才重壓
+  // 瀏覽器會記住，下次只問「有沒有變」（ETag），沒變就不用重新下載
+  const file = path.join(__dirname, 'newworld', f[0]);
+  fs.stat(file, (err, st) => {
+    if (err) return res.status(404).json({ ok: false });
+    const tag = '"nw-' + st.size + '-' + Math.round(st.mtimeMs) + '"';
+    res.set({ 'Cache-Control': 'private, no-cache', ETag: tag, Vary: 'Accept-Encoding', 'X-Size': String(st.size) }).type(f[1]);
+    if (req.headers['if-none-match'] === tag) return res.status(304).end();
+    if (!/\bgzip\b/.test(req.headers['accept-encoding'] || '')) return res.sendFile(file);
+    const hit = NEWWORLD_GZ.get(file);
+    if (hit && hit.tag === tag) return res.set('Content-Encoding', 'gzip').end(hit.buf);
+    fs.readFile(file, (e2, raw) => { if (e2) return res.status(500).json({ ok: false });
+      zlib.gzip(raw, { level: 9 }, (e3, buf) => { if (e3) return res.sendFile(file); NEWWORLD_GZ.set(file, { tag, buf }); res.set('Content-Encoding', 'gzip').end(buf); }); });
+  });
 });
+const NEWWORLD_GZ = new Map();
 // 報名頁改了邀請函，或是在沒登入的時候玩過，把資料存回帳號
 app.post('/api/save', (req, res) => {
   const u = accounts.byToken(bearer(req));

@@ -659,7 +659,7 @@ const STD = (() => {
     const want = new Set(['Body', 'Shoes', 'Bottom_shorts', 'Hair_' + L.hair, 'Top_' + (kit ? kit.top : L.top), 'Face_' + (c.emote || L.face)].concat(L.glasses ? ['Glasses'] : [], kit ? kit.acc : []));
     if (kit) kit.hide.forEach(n => want.delete(n));
     c.g.position.y = kit && kit.lift ? kit.lift * HEIGHT / 2.26 : 0;   // 冰刀比鞋底低，人要墊高一點
-    c.meshes.forEach(o => { const on = want.has(o.userData.part); o.visible = on; if (o.userData.line) o.userData.line.visible = on && SHOW.lines;
+    c.meshes.forEach(o => { const on = want.has(o.userData.part); o.visible = on; if (o.userData.line) o.userData.line.visible = on && SHOW.lines && !c.far;
       const m = o.material, nm = m.userData.name; let col = null;
       if (nm === 'hair' && L.hairCol) col = L.hairCol;
       if (nm === 'skin' && L.skinCol) col = L.skinCol;
@@ -708,7 +708,8 @@ const STD = (() => {
     sk.forEach(s => s.dispose());
     if (c.H.parent) c.H.parent.remove(c.H);
   }
-  return { make: (look) => { const c = make(look); ALL.push(c); return c; }, dispose, lineCount: () => outlines.length, emote: (c, face, secs) => { c.emote = PARTS.face.indexOf(face) >= 0 ? face : null; c.emoteT = performance.now() + (secs || 5) * 1000; setLook(c); }, setLook, tick, lines, PARTS, NAMES, SWATCH, fromAccount, all: ALL };
+  return { make: (look) => { const c = make(look); ALL.push(c); return c; }, dispose, lineCount: () => outlines.length, far: (c, far) => { if (!!c.far !== far) { c.far = far; c.meshes.forEach(o => { o.castShadow = !far; }); setLook(c); } },   // 離得遠的人不畫外框、不投影子，面數少一大半
+    emote: (c, face, secs) => { c.emote = PARTS.face.indexOf(face) >= 0 ? face : null; c.emoteT = performance.now() + (secs || 5) * 1000; setLook(c); }, setLook, tick, lines, PARTS, NAMES, SWATCH, fromAccount, all: ALL };
 })();
 // 一般玩家換成標準人物；自己的角色也是標準人物，背上可以開冰龍之翼
 if (STD && TW) {
@@ -767,8 +768,9 @@ const NW = (() => {
     const tip = part(b, sph(0.08, 10, 8), '#f7a8c4', { pos: [0, 0.62, 0], line: 0.025 });
     g.scale.setScalar(1.3); scene.add(g); return { g, b, tip, x: 0, z: 0, f: 0, ph: Math.random() * 6, fresh: true }; };
   const dropSpirit = (c) => { const s = SPIRITS.get(c); if (!s) return; scene.remove(s.g); s.g.traverse(o => { if (o.isMesh) o.material.dispose(); }); SPIRITS.delete(c); };
-  const tickSpirit = (c, dt) => { if (c.look.cls !== 'summoner' || !c.H.visible) return dropSpirit(c);
-    let s = SPIRITS.get(c); if (!s) { s = makeSpirit(); SPIRITS.set(c, s); }
+  const CULL_F = new THREE.Frustum(), CULL_M = new THREE.Matrix4(), CULL_S = new THREE.Sphere(new V3(), 2.6);
+  const tickSpirit = (c, dt) => { if (c.look.cls !== 'summoner') return dropSpirit(c);
+    let s = SPIRITS.get(c); if (!s) { s = makeSpirit(); SPIRITS.set(c, s); } s.g.visible = c.H.visible; if (!c.H.visible) { s.fresh = true; return; }
     const f = c.H.rotation.y, tx = c.H.position.x - Math.sin(f) * 0.9 + Math.cos(f) * 1.25, tz = c.H.position.z - Math.cos(f) * 0.9 - Math.sin(f) * 1.25;
     if (s.fresh) { s.x = tx; s.z = tz; s.f = f; s.fresh = false; }
     const k = Math.min(1, dt * 3.2), dx = tx - s.x, dz = tz - s.z, d = Math.hypot(dx, dz); s.x += dx * k; s.z += dz * k; s.ph += dt;
@@ -779,8 +781,11 @@ const NW = (() => {
   const CAM = [{ dist: 47, hgt: 17 }, { dist: 30, hgt: 10.5 }], CAM_ME = CAM, ANG = 0.62;
   // 多人：別的玩家的標準人物，還有頭上的名字紙條和聊天泡泡（用網頁元素疊在畫面上，字才清楚）
   const OTH = new Map(), LAB = document.createElement('div'); LAB.id = 'nw-labels'; document.body.appendChild(LAB);
-  const mkTag = () => { const t = document.createElement('div'), b = document.createElement('div'), n = document.createElement('div');
-    t.className = 'nw-tag'; b.className = 'nw-bubble'; n.className = 'nw-name'; b.hidden = n.hidden = true; t.append(b, n); LAB.appendChild(t); return { t, b, n, until: 0 }; };
+  const mkTag = () => { const t = document.createElement('div'), b = document.createElement('div'), n = document.createElement('div'), i = document.createElement('img'), s = document.createElement('span');
+    t.className = 'nw-tag'; b.className = 'nw-bubble'; n.className = 'nw-name'; b.hidden = n.hidden = i.hidden = true; i.alt = ''; n.append(i, s); t.append(b, n); LAB.appendChild(t); return { t, b, n, i, s, until: 0 }; };
+  // 名字紙條上的職業徽章：用總部同一套手繪圖示
+  const setBadge = (tag, cls) => { const u = cls && window.HQ_ICONS ? window.HQ_ICONS.url('cls-' + cls) : null; tag.i.hidden = !u; if (u && tag.i.src !== u) tag.i.src = u; };
+  const HINT = document.createElement('button'); HINT.className = 'nw-hint'; HINT.type = 'button'; HINT.hidden = true; LAB.appendChild(HINT); HINT.addEventListener('click', (e) => { e.stopPropagation(); NW.use(); });
   const MYTAG = ME ? mkTag() : null, PV = new V3();
   const placeTag = (tag, x, z, y) => { PV.set(x, 2.5 + (y || 0), z).project(camera); const on = PV.z < 1 && Math.abs(PV.x) < 1.15 && Math.abs(PV.y) < 1.15;
     tag.t.style.display = on ? '' : 'none'; if (on) tag.t.style.transform = 'translate(' + ((PV.x * 0.5 + 0.5) * W).toFixed(1) + 'px,' + ((-PV.y * 0.5 + 0.5) * H).toFixed(1) + 'px) translate(-50%,-100%)';
@@ -788,17 +793,19 @@ const NW = (() => {
   const NET = {
     // 自己要同步出去的狀態：一般職業是人的位置；騎士是機器人的位置、隊形、揮手次數
     me: () => { if (!ME) return null; const r = S.ctrl === 'robot';
-      return { x: +(r ? S.x : ME.x).toFixed(2), z: +(r ? S.z : ME.z).toFixed(2), f: +(r ? S.face : ME.face).toFixed(2), mv: (r ? S.mv > 0.5 : S.meMv) ? 1 : 0, fm: FORMS.indexOf(S.form), g: S.gn }; },
-    name: (s) => { if (MYTAG) { MYTAG.n.textContent = s; MYTAG.n.hidden = !s; } },
+      return { x: +(r ? S.x : ME.x).toFixed(2), z: +(r ? S.z : ME.z).toFixed(2), f: +(r ? S.face : ME.face).toFixed(2), mv: (r ? S.mv > 0.5 : S.meMv) ? (!r && ACT.run ? 2 : 1) : 0, fm: FORMS.indexOf(S.form), g: S.gn, p: r ? 0 : POSE_ID[ACT.pose] || 0 }; },
+    name: (s) => { if (MYTAG) { MYTAG.s.textContent = s; MYTAG.n.hidden = !s; } },
     put: (id, d) => { if (!STD) return; let o = OTH.get(id);
       if (!o) { o = { c: STD.make(d.look || {}), x: d.x || 0, z: d.z || 0, y: 0, f: d.f || 0, mv: 0, g: d.g || 0, tag: mkTag() }; o.tx = o.x; o.tz = o.z; o.tf = o.f;
         o.rs = { x: o.x, z: o.z, face: o.f, mv: 0, ph: 0, form: FORMS[d.fm] || 'carry', cw: 1, gt: -1, rp: null }; OTH.set(id, o); }
       else if (d.look) STD.setLook(o.c, d.look);
       const rider = o.c.look.cls === 'rider'; if (rider !== o.rider) { o.rider = rider; o.rs.x = o.tx; o.rs.z = o.tz; o.rs.rp = null; if (!rider) { o.x = o.tx; o.z = o.tz; } }
-      if (d.name != null) { o.tag.n.textContent = d.name; o.tag.n.hidden = !d.name; } },
-    move: (id, x, z, f, mv, fm, g) => { const o = OTH.get(id); if (!o) return; o.tx = x; o.tz = z; o.tf = f; o.mv = mv; o.rs.form = FORMS[fm] || 'carry';
+      setBadge(o.tag, o.c.look.cls);
+      if (d.name != null) { o.tag.s.textContent = d.name; o.tag.n.hidden = !d.name; } },
+    move: (id, x, z, f, mv, fm, g, p) => { const o = OTH.get(id); if (!o) return; o.tx = x; o.tz = z; o.tf = f; o.mv = mv; o.p = p | 0; o.rs.form = FORMS[fm] || 'carry';
       if (g !== undefined && g !== o.g) { o.g = g; if (o.rs.gt < 0) o.rs.gt = 0; } },
     drop: (id) => { const o = OTH.get(id); if (!o) return; o.tag.t.remove(); dropSpirit(o.c); STD.dispose(o.c); OTH.delete(id); },
+    each: (fn) => { OTH.forEach(fn); },
     emote: (id, face) => { const o = id ? OTH.get(id) : ME; if (o && STD) STD.emote(o.c, face, 5); },
     clear: () => { [...OTH.keys()].forEach(NET.drop); },
     say: (id, text) => { const tag = id == null ? MYTAG : (OTH.get(id) || {}).tag; if (!tag) return; tag.b.textContent = text; tag.b.hidden = false; tag.until = S.time + 6; },
@@ -867,8 +874,34 @@ const NW = (() => {
       part(g, new THREE.BoxGeometry(1.5, 0.66, 0.09), '#f7ecd0', { pos: [0, 1.62, 0.07], rot: [0, 0, -0.04], line: 0.024, mat: [0, 1, 2, 3, 4, 5].map(i => (i === 4 ? new THREE.MeshToonMaterial({ map: t, gradientMap: RAMP }) : mat('#e5cfa0'))) });
       ROUNDS.push({ x, z, r: 0.25 }); };
     sign(5.2, 3.0, Math.atan2(PN[0], PN[1]) + Math.PI + 0.25, '往小屋'); sign(-12.5, -3.0, 0.5, '小屋');
+    // 長椅：面向小路，一張可以坐兩個人
+    const SEATS = [], bench = (s, off) => { const [x, z] = P(s, off), g = new THREE.Group(), ry = Math.atan2(-PN[0] * Math.sign(off), -PN[1] * Math.sign(off)); g.position.set(x, 0, z); g.rotation.y = ry; G.add(g);
+      part(g, new THREE.BoxGeometry(2.3, 0.12, 0.72), '#d79a61', { pos: [0, 0.55, 0], line: 0.022 });
+      part(g, new THREE.BoxGeometry(2.3, 0.5, 0.1), WOOD, { pos: [0, 1.0, -0.36], rot: [-0.12, 0, 0], line: 0.022 });
+      [[-1, -0.28], [1, -0.28], [-1, 0.28], [1, 0.28]].forEach(([a, b]) => part(g, new THREE.CylinderGeometry(0.06, 0.07, 0.55, 6), '#a8693f', { pos: [a, 0.27, b], line: 0.02 }));
+      [-1, 1].forEach(a => part(g, new THREE.BoxGeometry(0.1, 0.6, 0.1), '#a8693f', { pos: [a, 0.85, -0.34], noLine: true }));
+      WALLS.push({ x, z, hx: 1.15, hz: 0.36, ry });
+      [-0.55, 0.55].forEach(lx => SEATS.push({ x: x + lx * Math.cos(ry) + 0.05 * Math.sin(ry), z: z - lx * Math.sin(ry) + 0.05 * Math.cos(ry), f: ry })); };
+    bench(-2.5, 4.0); bench(2.2, -4.2);
+    // 點唱機：聽得到總部正在播的歌
+    const JUKE = { x: 2.0, z: 10.6 }; { const g = new THREE.Group(); g.position.set(JUKE.x, 0, JUKE.z); g.rotation.y = -0.5; G.add(g);
+      part(g, new THREE.BoxGeometry(1.2, 1.5, 0.75), '#e0604a', { pos: [0, 0.75, 0], line: 0.026 });
+      part(g, new THREE.CylinderGeometry(0.6, 0.6, 0.75, 20, 1, false, 0, Math.PI), '#e0604a', { pos: [0, 1.5, 0], rot: [Math.PI / 2, Math.PI / 2, 0], line: 0.026 });
+      part(g, new THREE.CylinderGeometry(0.4, 0.4, 0.06, 20, 1, false, 0, Math.PI), '#ffe9a8', { pos: [0, 1.52, 0.38], rot: [Math.PI / 2, Math.PI / 2, 0], noLine: true, shadow: false, mat: basic('#ffe9a8') });
+      part(g, new THREE.BoxGeometry(0.86, 0.4, 0.06), '#f7ecd0', { pos: [0, 1.05, 0.38], line: 0.018 });
+      part(g, new THREE.CylinderGeometry(0.26, 0.26, 0.06, 16), '#39435c', { pos: [0, 0.45, 0.38], rot: [Math.PI / 2, 0, 0], line: 0.018 });
+      [-0.3, 0, 0.3].forEach((a, i) => part(g, sph(0.05, 8, 6), ['#f0c75a', '#8fe0c0', '#f7a8c4'][i], { pos: [a, 1.05, 0.42], noLine: true, shadow: false }));
+      ROUNDS.push({ x: JUKE.x, z: JUKE.z, r: 0.75 }); }
+    G.userData = { SEATS, JUKE };
     return G;
   })() : null;
+  // 動作：坐下、揮手、跑步；一動就站起來
+  const ACT = { pose: null, run: false, until: 0 }, POSE_ID = { sit: 1, wave: 2 }, POSE_OF = [null, 'sit', 'wave'];
+  const SEATS = DETAIL ? DETAIL.userData.SEATS : [], JUKE = DETAIL ? DETAIL.userData.JUKE : null;
+  const sitY = (x, z) => { for (const s of SEATS) if (Math.hypot(x - s.x, z - s.z) < 0.5) return 0.2; return -0.3; };   // 坐長椅或坐地上，屁股的高度不一樣
+  // 可以互動的東西：靠近會在上面冒出一張小紙條，點紙條或按 E
+  const INTER = SEATS.map(s => ({ kind: 'bench', x: s.x, z: s.z, f: s.f, y: 1.5 })).concat(JUKE ? [{ kind: 'juke', x: JUKE.x, z: JUKE.z, y: 2.6 }] : [], [{ kind: 'door', x: -12.3, z: -2.7, y: 3.2 }]);
+  const HINT_TEXT = { bench: '坐下', juke: '聽歌', door: '敲門' }; let NEAR = null, onInteract = null;
 
   // 點地面走路的目標小圈圈
   const GOAL = new THREE.Mesh(new THREE.RingGeometry(0.42, 0.62, 32), new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.95, depthWrite: false }));
@@ -928,6 +961,11 @@ const NW = (() => {
   // 念力光帶那些直接放在場景裡的東西：自己不是騎士的時候要藏起來
   const RIDER_FX = [...WK.halo, WK.core, ...WK.waves].filter(o => o && o.parent === scene);
   A.boy.visible = false;   // 舊的小男孩不再出現：騎士就是玩家自己的標準人物
+  // 機器人的小零件不投影子（影子那一輪少畫很多次，地上的影子看不出差別）
+  { let cut = 0, all = 0; A.bot.updateMatrixWorld(true); const sc = new V3(); A.bot.traverse(o => { if (!o.isMesh || !o.castShadow) return; all++;
+      if (!o.geometry.boundingSphere) o.geometry.computeBoundingSphere(); o.getWorldScale(sc);
+      if (o.geometry.boundingSphere.radius * Math.max(Math.abs(sc.x), Math.abs(sc.y), Math.abs(sc.z)) < 0.55) { o.castShadow = false; cut++; } });
+    A.bot.userData.shadowCut = cut + '/' + all; }
   // 別的騎士的機器人：主畫面畫完後，把同一台機器人擺成他們的樣子再補畫一次（第 1 層只有機器人和燈）
   R.traverse(o => o.layers.enable(1)); scene.traverse(o => { if (o.isLight) o.layers.enable(1); });
   function update(dt) {
@@ -938,15 +976,19 @@ const NW = (() => {
     let jl = Math.hypot(jx, jy), wx = 0, wz = 0;
     if (jl > 0.15) { S.goal = null; const n = Math.min(1, jl) / jl; wx = (Math.cos(ANG) * jx + Math.sin(ANG) * jy) * n; wz = (-Math.sin(ANG) * jx + Math.cos(ANG) * jy) * n; }
     else if (S.goal) { // 點地面走路：朝目標走，到了就停；搖桿或鍵盤一動就取消
-      const me = S.ctrl === 'me', dx = S.goal.x - (me ? ME.x : S.x), dz = S.goal.z - (me ? ME.z : S.z), d = Math.hypot(dx, dz), step = (me ? 4.2 : 6.5) * dt;
+      const me = S.ctrl === 'me', dx = S.goal.x - (me ? ME.x : S.x), dz = S.goal.z - (me ? ME.z : S.z), d = Math.hypot(dx, dz), step = (me ? (ACT.run ? 7 : 4.2) : 6.5) * dt;
       if (d < S.goal.best - 0.01) { S.goal.best = d; S.goal.t = S.time; }   // 被擋住一陣子沒有更靠近，就不走了
       if (d < 0.12 || S.time - S.goal.t > 0.8) S.goal = null; else { const n = Math.min(1, d / step) / d; wx = dx * n; wz = dz * n; jl = 1; } }
     GOAL.visible = !!S.goal; if (S.goal) { GOAL.position.set(S.goal.x, 0.06, S.goal.z); const k = 1 + Math.sin(S.time * 6) * 0.12; GOAL.scale.set(k, k, k); }
     const moving = jl > 0.15 && S.ctrl === 'robot', meMoving = jl > 0.15 && S.ctrl === 'me'; S.meMv = meMoving;
-    if (ME) { if (meMoving) { const vx = wx, vz = wz, sp = 4.2;
+    if (ME) { if (meMoving) { const vx = wx, vz = wz, sp = ACT.run ? 7 : 4.2; ACT.pose = null;
         const h = collide(Math.max(-70, Math.min(70, ME.x + vx * sp * dt)), Math.max(-70, Math.min(70, ME.z + vz * sp * dt)), 0.45); ME.x = h.x; ME.z = h.z;
         let df = Math.atan2(vx, vz) - ME.face; df = Math.atan2(Math.sin(df), Math.cos(df)); ME.face += df * Math.min(1, dt * 9); }
-      if (S.ctrl === 'me') { ME.c.H.position.set(ME.x, 0, ME.z); ME.c.H.rotation.y = ME.face; STD.tick(ME.c, dt, meMoving ? Math.min(1, jl) : 0, 1.6); } }
+      if (S.ctrl === 'me') { if (ACT.pose === 'wave' && S.time > ACT.until) ACT.pose = null;
+        ME.sy = ACT.pose === 'sit' ? sitY(ME.x, ME.z) : 0; ME.c.H.position.set(ME.x, ME.sy, ME.z); ME.c.H.rotation.y = ME.face;
+        STD.tick(ME.c, dt, meMoving ? Math.min(1, jl) : 0, ACT.run ? 2.1 : 1.6, ACT.pose || (ACT.run ? 'run' : null));
+        // 最近的可以互動的東西
+        let best = null, bd = 2.4; for (const it of INTER) { const d = Math.hypot(it.x - ME.x, it.z - ME.z); if (d < bd) { bd = d; best = it; } } NEAR = best; } else { NEAR = null; ME.sy = 0; } }
     if (moving) { const vx = wx, vz = wz, sp = 6.5;
       const h = collide(Math.max(-70, Math.min(70, S.x + vx * sp * dt)), Math.max(-70, Math.min(70, S.z + vz * sp * dt)), 1.9); S.x = h.x; S.z = h.z;
       let df = Math.atan2(vx, vz) - S.face; df = Math.atan2(Math.sin(df), Math.cos(df)); S.face += df * Math.min(1, dt * 7);
@@ -960,13 +1002,15 @@ const NW = (() => {
       const w = seat(o.c, st, dt, poseRobot(st, dt, t)); o.x = w.x; o.z = w.z; o.y = w.y; });
     const RID = S.ctrl === 'robot', info = poseRobot(S, dt, t), shake = info.shake, u = info.u, v = info.v, FORM = S.form, ru = U(S.gt - 0.03);
     R.visible = RID; RIDER_FX.forEach(o => { o.visible = RID; });
-    if (ME) { if (RID) { const w = seat(ME.c, S, dt, info); ME.x = w.x; ME.z = w.z; ME.y = w.y; ME.face = S.face; } else ME.y = 0; }
+    if (ME) { if (RID) { const w = seat(ME.c, S, dt, info); ME.x = w.x; ME.z = w.z; ME.y = w.y; ME.face = S.face; } else ME.y = ME.sy || 0; }
     // --- 鏡頭：固定斜角，跟著角色 ---
     const cam = (S.ctrl === 'me' ? CAM_ME : CAM)[S.zoom], asp = W / H, far = asp < 1 ? Math.pow(1 / asp, 0.75) : 1;
     if (S.ctrl === 'me') S.camT.lerp(bp0.set(ME.x, 1.3, ME.z), Math.min(1, dt * 5));   // 騎士的鏡頭看整台機器人
     else S.camT.lerp(bp0.set(S.x - 0.8, 3.6 + shake * 0.07, S.z + 3.2), Math.min(1, dt * 5));
     camera.position.set(S.camT.x + Math.sin(ANG) * cam.dist * far, cam.hgt * far, S.camT.z + Math.cos(ANG) * cam.dist * far); camera.lookAt(S.camT);
-    camera.updateMatrixWorld(); if (MYTAG) placeTag(MYTAG, ME.x, ME.z, ME.y + TAG_UP(ME.c)); OTH.forEach(o => placeTag(o.tag, o.x, o.z, o.y + TAG_UP(o.c)));
+    camera.updateMatrixWorld(); if (NEAR) { PV.set(NEAR.x, NEAR.y, NEAR.z).project(camera); HINT.hidden = false; HINT.textContent = NEAR.kind === 'bench' && ACT.pose === 'sit' ? '站起來' : HINT_TEXT[NEAR.kind];
+      HINT.style.transform = 'translate(' + ((PV.x * 0.5 + 0.5) * W).toFixed(1) + 'px,' + ((-PV.y * 0.5 + 0.5) * H).toFixed(1) + 'px) translate(-50%,-100%)'; } else HINT.hidden = true;
+    if (MYTAG) placeTag(MYTAG, ME.x, ME.z, ME.y + TAG_UP(ME.c)); OTH.forEach(o => placeTag(o.tag, o.x, o.z, o.y + TAG_UP(o.c)));
     { const fx = S.ctrl === 'me' ? ME.x : S.x, fz = S.ctrl === 'me' ? ME.z : S.z; sun.position.set(fx - 12, 22, fz + 18); sun.target.position.set(fx, 0, fz); }
     // --- 念力：海浪狀的光帶 ---
     scene.updateMatrixWorld(true);
@@ -992,10 +1036,13 @@ const NW = (() => {
     TW.c2.position.y = 0.03 * Math.abs(Math.sin(t * PI2 * 3)); TW.c2.arms[1].rotation.x = -2.4 + 0.4 * Math.sin(t * PI2 * 6); TW.c2.head.rotation.z = 0.08 * Math.sin(t * PI2 * 2);
     TW.c3.position.y = 0.03 * Math.abs(Math.sin(t * PI2 * 3 + 1)); TW.c3.head.rotation.y = 0.2 * Math.sin(t * PI2 * 2); TW.c3.arms[0].rotation.x = -0.5 + 0.3 * Math.sin(t * PI2 * 4);
     // 別的玩家：朝伺服器給的位置補間，有在動就播走路
-    OTH.forEach(o => { if (o.rider) return; o.y = 0; const k = Math.min(1, dt * 9), dx = o.tx - o.x, dz = o.tz - o.z, far = Math.hypot(dx, dz);
+    CULL_M.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse); CULL_F.setFromProjectionMatrix(CULL_M);
+    OTH.forEach(o => { if (o.rider) { o.c.H.visible = true; return; } const ps = POSE_OF[o.p] || (o.mv === 2 ? 'run' : null); o.y = ps === 'sit' ? sitY(o.tx, o.tz) : 0; const k = Math.min(1, dt * 9), dx = o.tx - o.x, dz = o.tz - o.z, far = Math.hypot(dx, dz);
       if (far > 12) { o.x = o.tx; o.z = o.tz; } else { o.x += dx * k; o.z += dz * k; }
       let df = o.tf - o.f; df = Math.atan2(Math.sin(df), Math.cos(df)); o.f += df * k;
-      o.c.H.position.set(o.x, 0, o.z); o.c.H.rotation.y = o.f; STD.tick(o.c, dt, o.mv || far > 0.08 ? 1 : 0, 1.6); });
+      if (ME) STD.far(o.c, Math.hypot(o.x - ME.x, o.z - ME.z) > (o.c.far ? 16 : 18));
+      CULL_S.center.set(o.x, 1.3, o.z); o.c.H.visible = CULL_F.intersectsSphere(CULL_S);   // 畫面外的人整個不畫（人物的網格關掉了自動剔除，要自己來）
+      o.c.H.position.set(o.x, o.y, o.z); o.c.H.rotation.y = o.f; STD.tick(o.c, dt, o.mv || far > 0.08 ? 1 : 0, o.mv === 2 ? 2.1 : 1.6, ps); });
     if (STD) { if (ME) tickSpirit(ME.c, dt); OTH.forEach(o => tickSpirit(o.c, dt)); }
     if (STD && TW.s1) { const a2 = t * PI2 * 0.5; TW.s1.H.position.set(-7.4 + Math.sin(a2) * 2.2, 0, 6.2 + Math.cos(a2) * 1.8); TW.s1.H.rotation.y = a2 + Math.PI / 2;
       STD.tick(TW.s1, dt, 1, 1.1); STD.tick(TW.s2, dt, 0); STD.tick(TW.s3, dt, 0); }
@@ -1023,7 +1070,7 @@ const NW = (() => {
 
   return {
     state: S, formName: () => FORM_NAME[S.form], qualityName: () => QUALITY[S.quality].name,
-    stick: (x, y) => { S.jx = x; S.jy = y; }, key: (k, on) => { S.keys[k] = on; },
+    stick: (x, y) => { S.jx = x; S.jy = y; }, key: (k, on) => { if (on && k === 'e' && !S.keys.e) NW.use(); S.keys[k] = on; },
     nextForm: () => { S.form = FORMS[(FORMS.indexOf(S.form) + 1) % FORMS.length]; return FORM_NAME[S.form]; },
     gesture: () => { if (S.gt < 0) { S.gt = 0; S.gn = (S.gn + 1) % 1000; } },
     zoom: () => { S.zoom = 1 - S.zoom; return S.zoom ? '近' : '遠'; },
@@ -1037,13 +1084,21 @@ const NW = (() => {
     // 職業：一般、機器人騎士（之後加召喚師、陵媒）。存在造型的 cls 裡，代號跟總部的職業代號同一套
     setClass: (cls) => { if (!ME) return ''; S.goal = null; const rider = cls === 'rider';
       if (rider && S.ctrl !== 'robot') { S.x = ME.x; S.z = ME.z; S.face = ME.face; S.rp = null; }
-      S.ctrl = rider ? 'robot' : 'me'; STD.setLook(ME.c, { cls: cls || null }); return CLS_NAME[cls || '']; },
+      S.ctrl = rider ? 'robot' : 'me'; ACT.pose = null; STD.setLook(ME.c, { cls: cls || null }); setBadge(MYTAG, cls); return CLS_NAME[cls || '']; },
     nextCtrl: () => { const i = CLS.indexOf(ME ? ME.c.look.cls || '' : ''); return NW.setClass(CLS[(i + 1) % CLS.length]); },
     look: () => (ME ? Object.assign({}, ME.c.look) : null), dress: (patch) => { if (ME) STD.setLook(ME.c, patch); return ME ? Object.assign({}, ME.c.look) : null; },
     fromAccount: (b) => (STD ? STD.fromAccount(b) : null),
     options: () => (STD ? { parts: STD.PARTS, names: STD.NAMES, swatch: STD.SWATCH } : null),
+    // 動作：sit 坐下（再按一次站起來）、wave 揮手 3 秒、run 跑步開關；騎士坐在機器人上，不能用
+    act: (name) => { if (!ME || S.ctrl !== 'me') return null; if (name === 'run') ACT.run = !ACT.run; else if (ACT.pose === name) ACT.pose = null; else { ACT.pose = name; ACT.until = S.time + 3; S.goal = null; }
+      return { pose: ACT.pose, run: ACT.run }; },
+    acts: () => ({ pose: ACT.pose, run: ACT.run }), near: () => (NEAR ? NEAR.kind : null), onInteract: (fn) => { onInteract = fn; },
+    use: () => { const it = NEAR; if (!it || !ME || S.ctrl !== 'me') return null;
+      if (it.kind === 'bench') { if (ACT.pose === 'sit') ACT.pose = null; else { ME.x = it.x; ME.z = it.z; ME.face = it.f; ACT.pose = 'sit'; S.goal = null; } }
+      else if (it.kind === 'door') NET.say(null, '小屋還在蓋，之後這裡會通往新的總部大廳');
+      if (onInteract) onInteract(it.kind); return it.kind; },
     net: NET, emote: (face) => { if (ME) STD.emote(ME.c, face, 5); },
-    mem: () => ({ spirits: SPIRITS.size, chars: STD.all.length, lines: STD.lineCount(), geo: renderer.info.memory.geometries, tex: renderer.info.memory.textures }),   // 測試腳本用：看有沒有漏掉沒還的東西
+    mem: () => ({ robotShadowCut: A.bot.userData.shadowCut, spirits: SPIRITS.size, chars: STD.all.length, lines: STD.lineCount(), geo: renderer.info.memory.geometries, tex: renderer.info.memory.textures }),   // 測試腳本用：看有沒有漏掉沒還的東西
     debugMe: () => (ME ? ME.c.g : null),
     debugPlace: (x, z) => { if (ME && S.ctrl === 'me') { ME.x = x; ME.z = z; S.goal = null; } },   // 測試腳本用：把人直接放到某個位置
     onStats: (fn) => { onStats = fn; },

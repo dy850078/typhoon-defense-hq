@@ -379,7 +379,7 @@ app.post('/api/newworld/look', (req, res) => {
 });
 // 新世界的多人連線：自己一個頻道（/newworld），跟總部的連線、玩家資料完全分開；只有管理員連得上
 // 只同步標準人物的位置、造型、名字和聊天，聊天不跟總部互通
-const nwPlayers = new Map();
+const nwPlayers = new Map(), nwBots = [];
 function startNewworldNet() {
   const nw = io.of('/newworld');
   const num = (v, lo, hi) => Math.max(lo, Math.min(hi, Number(v) || 0));
@@ -390,12 +390,23 @@ function startNewworldNet() {
   });
   nw.on('connection', (socket) => {
     const u = socket.data.user, a = sanitizeSave(u.save);
-    const p = { id: socket.id, name: a.name || u.username, x: 2.5, z: 14, f: 0, mv: 0, fm: 0, g: 0, look: sanitizeLook3d(u.save.look3d), said: 0 };
+    const p = { id: socket.id, name: a.name || u.username, x: 2.5, z: 14, f: 0, mv: 0, fm: 0, g: 0, p: 0, look: sanitizeLook3d(u.save.look3d), said: 0 };
     const pub = (q) => ({ id: q.id, name: q.name, x: q.x, z: q.z, f: q.f, fm: q.fm, g: q.g, look: q.look });
     socket.emit('init', { id: p.id, name: p.name, players: [...nwPlayers.values()].map(pub) });
     nwPlayers.set(p.id, p);
     socket.broadcast.emit('join', pub(p));
-    socket.on('move', (d) => { if (!d || typeof d !== 'object') return; p.x = num(d.x, -70, 70); p.z = num(d.z, -70, 70); p.f = num(d.f, -7, 7); p.mv = d.mv ? 1 : 0;
+    socket.emit('music', musicState());
+    // 壓力測試用的假人：管理員要幾個就放幾個（最多 30），隨機造型、隨機亂走，所有人都看得到
+    socket.on('bots', (n) => { n = Math.round(num(n, 0, 30));
+      while (nwBots.length > n) { const b = nwBots.pop(); nwPlayers.delete(b.id); nw.emit('leave', b.id); }
+      const pick = (a) => a[Math.floor(Math.random() * a.length)];
+      while (nwBots.length < n) { const i = nwBots.length + 1;
+        const b = { id: 'bot-' + i, name: '假人' + i, x: (Math.random() - 0.5) * 30, z: 8 + (Math.random() - 0.5) * 24, f: 0, mv: 0, fm: 0, g: 0, p: 0, tx: 0, tz: 0, wait: 0,
+          look: { glasses: Math.random() < 0.4, wings: false, cls: pick([null, null, 'summoner', 'skater']), hair: pick(['short', 'bowl', 'bob', 'long', 'airy', 'hime', 'bun', 'buns', 'buzz']), top: pick(['tee', 'dress', 'hoodie']),
+            face: pick(['smile', 'dot', 'grin', 'cat']), hairCol: pick(['#2b2a33', '#6b4a32', '#c9772f', '#e6b85a']), skinCol: null, topCol: pick([null, '#4f7cc2', '#6baf7b', '#f6a3b4', '#f2c14e']) } };
+        b.tx = b.x; b.tz = b.z; nwBots.push(b); nwPlayers.set(b.id, b); nw.emit('join', pub(b)); } });
+    socket.on('move', (d) => { if (!d || typeof d !== 'object') return; p.x = num(d.x, -70, 70); p.z = num(d.z, -70, 70); p.f = num(d.f, -7, 7); p.mv = Math.round(num(d.mv, 0, 2)); p.p = Math.round(num(d.p, 0, 2));   // mv：0 站著 1 走 2 跑；p：0 沒有 1 坐下 2 揮手
+     
       p.fm = Math.round(num(d.fm, 0, 2)); p.g = Math.round(num(d.g, 0, 999)); });   // fm：騎士的隊形；g：揮手指揮的次數（變了就播一次）
     socket.on('look', (d) => { const l = sanitizeLook3d(d); if (!l) return; p.look = l; socket.broadcast.emit('look', { id: p.id, look: l }); });
     socket.on('emote', (f) => { if (typeof f === 'string' && /^[a-z]{1,12}$/.test(f)) socket.broadcast.emit('emote', { id: p.id, face: f }); });
@@ -406,7 +417,11 @@ function startNewworldNet() {
     });
     socket.on('disconnect', () => { nwPlayers.delete(p.id); nw.emit('leave', p.id); });
   });
-  setInterval(() => { if (nwPlayers.size > 1) nw.volatile.emit('state', [...nwPlayers.values()].map(q => [q.id, q.x, q.z, q.f, q.mv, q.fm, q.g])); }, 100);
+  setInterval(() => { nwBots.forEach(b => { const dx = b.tx - b.x, dz = b.tz - b.z, d = Math.hypot(dx, dz);
+    if (d < 0.3) { b.mv = 0; if ((b.wait -= 0.1) <= 0) { b.tx = Math.max(-30, Math.min(30, b.x + (Math.random() - 0.5) * 16)); b.tz = Math.max(-6, Math.min(30, b.z + (Math.random() - 0.5) * 16)); b.wait = 1 + Math.random() * 4; } }
+    else { b.x += dx / d * 0.42; b.z += dz / d * 0.42; b.f = Math.atan2(dx, dz); b.mv = 1; } });
+    if (!nw.sockets.size && nwBots.length) { nwBots.forEach(b => nwPlayers.delete(b.id)); nwBots.length = 0; }   // 沒有人在了就把假人收掉
+    if (nwPlayers.size > 1) nw.volatile.emit('state', [...nwPlayers.values()].map(q => [q.id, q.x, q.z, q.f, q.mv, q.fm, q.g, q.p || 0])); }, 100);
 }
 app.get('/api/newworld/:file', (req, res) => {
   const f = NEWWORLD_FILES[req.params.file];
@@ -715,7 +730,7 @@ function musicState() {
   });
   return out;
 }
-const emitMusic = () => io.emit('music', musicState());
+const emitMusic = () => { const st = musicState(); io.emit('music', st); io.of('/newworld').emit('music', st); };   // 新世界的點唱機聽的是同一首
 // 「3:45」「1:02:03」→ 秒數
 function lenSec(t) {
   const parts = String(t || '').split(':').map(Number);

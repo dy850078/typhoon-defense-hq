@@ -45,6 +45,14 @@
     #nw-labels { position: fixed; inset: 0; pointer-events: none; z-index: 1; overflow: hidden; }
     .nw-tag { position: absolute; left: 0; top: 0; display: flex; flex-direction: column; align-items: center; gap: 3px; will-change: transform; }
     .nw-name { font: 700 11px/1.2 inherit; font-family: inherit; color: var(--note-ink); background: #fbf5e6; border: 1.5px solid rgba(43,42,51,.5); border-radius: 7px 5px 8px 6px; padding: 2px 7px; white-space: nowrap; }
+    .nw-name img { height: 15px; width: 15px; vertical-align: -3px; margin-right: 3px; }
+    .nw-hint { position: absolute; left: 0; top: 0; pointer-events: auto; font: 700 12px/1.2 inherit; font-family: inherit; color: var(--note-ink); background: #fff3c4; border: 1.5px solid rgba(43,42,51,.55); border-radius: 8px 6px 9px 5px; padding: 6px 12px; cursor: pointer; white-space: nowrap; box-shadow: 1px 2px 0 rgba(43,42,51,.18); transform-origin: 50% 100%; }
+    .nw-hint[hidden] { display: none; }
+    #acts { display: flex; gap: 6px; padding: 8px; width: min(250px, 100%); }
+    #acts[hidden] { display: none; }
+    #acts button { flex: 1; font: 500 12px/1 inherit; font-family: inherit; color: var(--note-ink); padding: 8px 4px; border-radius: 9px 6px 10px 7px; border: 1.5px solid rgba(43,42,51,.45); background: #fff; cursor: pointer; }
+    #acts button.on { background: #ffe9a8; }
+    #music-nw { position: fixed; width: 1px; height: 1px; left: -10px; top: -10px; opacity: 0; pointer-events: none; }
     .nw-bubble { max-width: 190px; font: 500 12px/1.4 inherit; font-family: inherit; color: var(--note-ink); background: #fff; border: 1.5px solid rgba(43,42,51,.5); border-radius: 12px 10px 13px 9px; padding: 5px 9px; overflow-wrap: anywhere; }
     #chat { position: fixed; left: calc(164px + env(safe-area-inset-left)); bottom: calc(34px + env(safe-area-inset-bottom)); width: min(380px, calc(100vw - 180px)); z-index: 3; display: flex; flex-direction: column; gap: 5px; }
     #chat-log { font-size: 12px; line-height: 1.5; max-height: 92px; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; pointer-events: none; text-shadow: 0 0 3px #fbf5e6, 0 0 3px #fbf5e6, 0 0 2px #fbf5e6; }
@@ -79,14 +87,18 @@
     <button class="note" id="b-zoom">鏡頭<small id="s-zoom">遠</small></button>
     <button class="note" id="b-quality">畫質<small id="s-quality">中</small></button>
     <button class="note" id="b-lines">外框線<small id="s-lines">開</small></button>
+    <button class="note" id="b-bots" hidden>壓力測試<small id="s-bots">沒有假人</small></button>
   </div>
+  <div id="music-nw"><div id="music-yt"></div></div>
   <div id="stick" hidden><div id="knob"></div></div>
   <div id="dress" class="note" hidden></div>
-  <div id="chat" hidden><div id="chat-log"></div><div id="emotes" class="note" hidden></div><form id="chat-form"><button class="note" type="button" id="b-emote">表情</button><input id="chat-in" maxlength="60" autocomplete="off" placeholder="說點什麼"><button class="note" type="submit">送出</button></form></div>
+  <div id="chat" hidden><div id="chat-log"></div><div id="emotes" class="note" hidden></div><div id="acts" class="note" hidden><button type="button" data-act="sit">坐下</button><button type="button" data-act="wave">揮手</button><button type="button" data-act="run">跑步</button></div><form id="chat-form"><button class="note" type="button" id="b-emote">表情</button><button class="note" type="button" id="b-act">動作</button><input id="chat-in" maxlength="60" autocomplete="off" placeholder="說點什麼"><button class="note" type="submit">送出</button></form></div>
   <div id="hint" hidden>點地面就會走過去，也可以用搖桿、方向鍵或 WASD</div>
 
   <script src="/socket.io/socket.io.js"></script>
   <script src="account.js"></script>
+  <script src="crayon.js"></script>
+  <script src="icons.js"></script>
   <!-- 3D 元件：three.js 和讀模型檔的 GLTFLoader（模組版），載好之後掛到 window.THREE -->
   <script type="importmap">{ "imports": { "three": "/vendor3/three.module.js" } }</script>
   <script type="module">
@@ -162,6 +174,22 @@
       if (NW.hasStd) api().then(function (r) { if (!r) return; base = r.base; var O = NW.options(), L = r.look3d;
         if (L && (O.parts.hair.indexOf(L.hair) < 0 || O.parts.top.indexOf(L.top) < 0 || O.parts.face.indexOf(L.face) < 0)) L = null;
         NW.dress(L || NW.fromAccount(base)); showClass(NW.setClass(L && L.cls)); if (!$('dress').hidden) drawDress(); }).then(online);
+      // 點唱機：只聽不點，播的是總部正在播的那一首，跟著總部的進度
+      var music = (function () {
+        var now = null, got = 0, on = false, player = null, loading = false, cur = '';
+        function pos() { return now ? (now.at + (Date.now() - got)) / 1000 : 0; }
+        function play() { if (!on || !now) { if (player && player.stopVideo) player.stopVideo(); cur = ''; return; }
+          if (player && player.loadVideoById) { if (cur !== now.vid) { cur = now.vid; player.loadVideoById({ videoId: now.vid, startSeconds: Math.max(0, pos()) }); } return; }
+          if (loading) return; loading = true;
+          window.onYouTubeIframeAPIReady = function () { player = new YT.Player('music-yt', { width: 200, height: 120, playerVars: { playsinline: 1, controls: 0, disablekb: 1, rel: 0 },
+            events: { onReady: function () { player.setVolume(60); play(); } } }); };
+          var s = document.createElement('script'); s.src = 'https://www.youtube.com/iframe_api'; document.head.appendChild(s); }
+        return { set: function (st) { var a = st && st.all && st.all.now; var was = now && now.vid; now = a ? { vid: a.vid, title: a.title, at: a.at || 0 } : null; got = Date.now();
+            if (on && (!now || now.vid !== was)) { if (now) NW.net.say(null, '現在播：' + now.title); play(); } },
+          toggle: function () { if (!on && !now) return NW.net.say(null, '總部現在沒有人點歌'); on = !on; NW.net.say(null, on ? '現在播：' + now.title : '把音樂關掉了'); play(); },
+          state: function () { return { on: on, vid: now && now.vid }; } }; })();
+      window.NW_MUSIC = music;
+      NW.onInteract(function (kind) { if (kind === 'juke') music.toggle(); });
       // 多人：看得到其他在線的管理員，聊天只在新世界裡，不會傳到總部
       var sock = null;
       function online() {
@@ -172,15 +200,23 @@
         sock.on('join', function (p) { NW.net.put(p.id, p); });
         sock.on('leave', function (id) { NW.net.drop(id); });
         sock.on('look', function (d) { NW.net.put(d.id, { look: d.look }); });
-        sock.on('state', function (list) { list.forEach(function (a) { if (a[0] !== sock.id) NW.net.move(a[0], a[1], a[2], a[3], a[4], a[5], a[6]); }); });
+        sock.on('state', function (list) { list.forEach(function (a) { if (a[0] !== sock.id) NW.net.move(a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7]); }); });
+        sock.on('music', function (st) { music.set(st); });
         sock.on('emote', function (d) { NW.net.emote(d.id, d.face); });
         sock.on('chat', function (m) { NW.net.say(m.id === sock.id ? null : m.id, m.text); var log = $('chat-log'), row = document.createElement('div'), b = document.createElement('b');
           b.textContent = m.name + '：'; row.appendChild(b); row.appendChild(document.createTextNode(m.text)); log.appendChild(row); while (log.children.length > 5) log.removeChild(log.firstChild); });
-        setInterval(function () { var m = NW.net.me(); if (!m || !sock.connected) return; var k = m.x + ',' + m.z + ',' + m.f + ',' + m.mv + ',' + m.fm + ',' + m.g; if (k !== last) { last = k; sock.emit('move', m); } }, 100);
+        setInterval(function () { var m = NW.net.me(); if (!m || !sock.connected) return; var k = m.x + ',' + m.z + ',' + m.f + ',' + m.mv + ',' + m.fm + ',' + m.g + ',' + m.p; if (k !== last) { last = k; sock.emit('move', m); } }, 100);
         // 表情：按一下換 5 秒的臉，別人也看得到；時間到變回平常的臉
         var E = $('emotes'); NW.options().parts.face.forEach(function (k) { var b = document.createElement('button'); b.type = 'button'; b.textContent = NW.options().names[k];
           b.onclick = function () { NW.emote(k); if (sock.connected) sock.emit('emote', k); E.hidden = true; }; E.appendChild(b); });
-        $('b-emote').onclick = function () { E.hidden = !E.hidden; };
+        $('b-emote').onclick = function () { E.hidden = !E.hidden; $('acts').hidden = true; };
+        // 動作：坐下、揮手、跑步。位置同步的時候順便帶出去，別人看得到
+        function drawActs() { var a = NW.acts(); [].forEach.call($('acts').children, function (b) { var k = b.getAttribute('data-act'); b.className = (k === 'run' ? a.run : a.pose === k) ? 'on' : ''; }); }
+        [].forEach.call($('acts').children, function (b) { b.onclick = function () { NW.act(b.getAttribute('data-act')); drawActs(); if (b.getAttribute('data-act') !== 'run') $('acts').hidden = true; }; });
+        $('b-act').onclick = function () { $('acts').hidden = !$('acts').hidden; E.hidden = true; drawActs(); };
+        // 壓力測試：請伺服器放假人進來，看手機撐不撐得住（假人每個人都看得到）
+        var botN = [0, 10, 19], botI = 0; $('b-bots').hidden = false;
+        $('b-bots').onclick = function () { botI = (botI + 1) % botN.length; sock.emit('bots', botN[botI]); $('s-bots').textContent = botN[botI] ? botN[botI] + ' 個假人' : '沒有假人'; };
         $('chat-form').addEventListener('submit', function (e) { e.preventDefault(); var i = $('chat-in'), t = i.value.trim(); if (t && sock.connected) sock.emit('chat', t); i.value = ''; i.blur(); });
       }
       // 換裝面板：只改新世界的造型，會記在帳號裡，不會動到總部的角色

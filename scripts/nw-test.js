@@ -6,6 +6,7 @@
 //   node scripts/nw-test.js multi      只跑雙人
 //   node scripts/nw-test.js rider      只跑機器人騎士（兩個人，一個當騎士）
 //   node scripts/nw-test.js classes    只跑召喚師、陵媒、表情
+//   node scripts/nw-test.js live       只跑動作、長椅、徽章、點唱機、假人壓力測試
 //   OUT=some/dir 可以指定截圖要放哪裡（預設是系統暫存資料夾）
 //
 // 需要 playwright（沒有列在 package.json，本機要跑的話先 npm i -D playwright && npx playwright install chromium）
@@ -46,9 +47,11 @@ async function main() {
     await pg.goto(B + '/'); await pg.evaluate(([t, u]) => { localStorage.setItem('hq-token', t); localStorage.setItem('hq-user', u); }, [acc.token, acc.name]);
     await pg.goto(B + '/newworld.html', { waitUntil: 'domcontentloaded', timeout: 120000 });
     await pg.waitForFunction(() => document.getElementById('gate').hidden, null, { timeout: 120000 });
+    await pg.waitForTimeout(300); if (pg.errors.length) console.log('  頁面錯誤：' + pg.errors.join(' / '));
     await pg.waitForTimeout(3500); return pg;
   };
   const NW = (pg, fn, arg) => pg.evaluate(fn, arg);
+  const zoomIn = (pg) => pg.evaluate(() => document.getElementById('b-zoom').click());   // 兩個分頁同時開時，後面的分頁畫面更新很慢，用一般的點擊會等不到
   const shot = (pg, name) => pg.screenshot({ path: path.join(OUT, name + '.png') });
 
   // ---- 單人：進場造型、點地面走路、換裝存檔 ----
@@ -128,6 +131,7 @@ async function main() {
     ok(Math.hypot(p1.x - p0.x, p1.z - p0.z) > 0.5, '騎士操控機器人走路');
     await pb.waitForTimeout(2500); await shot(pb, 'rider-2-seen-by-other');
     await pb.waitForFunction(() => /繪製/.test(document.getElementById('stats').textContent), null, { timeout: 60000 }).catch(() => {});
+    console.log('  機器人不投影子的小零件：' + (await NW(pa, () => HQ_NEWWORLD.mem().robotShadowCut)));
     console.log('  自己是騎士：' + (await pa.textContent('#stats')) + '　看別人當騎士：' + (await pb.textContent('#stats')));
     await pa.click('#b-form'); await pa.waitForTimeout(2500); await shot(pa, 'rider-3-float');
     await pa.click('#b-form'); await pa.waitForTimeout(2500); await shot(pa, 'rider-4-front');
@@ -144,7 +148,7 @@ async function main() {
     console.log('classes');
     const a = await account({ name: '小召', hair: 'long', hairColor: '#6b4a32', glasses: '0', face: 'cat' }), b = await account({ name: '阿陵', hair: 'hime', glasses: '1' });
     const pa = await open(a), pb = await open(b);
-    await pa.click('#b-zoom'); await pb.click('#b-zoom');   // 鏡頭拉近，截圖才看得清楚
+    await zoomIn(pa); await zoomIn(pb);   // 鏡頭拉近，截圖才看得清楚
     const vis = (p, n) => NW(p, (n) => { let v = false; const r = HQ_NEWWORLD.debugMe().getObjectByName(n); if (r) r.traverse(o => { if (o.isMesh && o.visible && !o.material.isMeshBasicMaterial) v = true; }); return v; }, n);
     ok((await NW(pa, () => HQ_NEWWORLD.look().hair)) === 'long' && (await NW(pa, () => HQ_NEWWORLD.look().face)) === 'cat', '總部的長髮和表情有帶過來');
     await pa.click('#b-ctrl'); await pa.click('#b-ctrl'); await pa.waitForTimeout(1500);
@@ -167,10 +171,62 @@ async function main() {
     await pa.context().close(); await pb.context().close();
   };
 
+  // ---- 動作、互動、徽章、點唱機、假人壓力測試 ----
+  const live = async () => {
+    console.log('live');
+    const a = await account({ name: '小動', hair: 'airy', glasses: '0' }), b = await account({ name: '觀眾', hair: 'short' });
+    const pa = await open(a), pb = await open(b);
+    await zoomIn(pa); await zoomIn(pb);
+    const cnt = (p, n) => p.waitForFunction((k) => HQ_NEWWORLD.net.count() === k, n, { timeout: 30000 }).catch(() => {});
+    await cnt(pb, 1);
+    // 跑步比走路快
+    const run = async (on) => { const p0 = await NW(pa, () => HQ_NEWWORLD.net.me()); const t0 = await NW(pa, () => HQ_NEWWORLD.state.time);
+      await NW(pa, () => HQ_NEWWORLD.key('d', true)); await pa.waitForFunction((t) => HQ_NEWWORLD.state.time > t + 1.2, t0, { timeout: 60000 }); const p1 = await NW(pa, () => HQ_NEWWORLD.net.me()), t1 = await NW(pa, () => HQ_NEWWORLD.state.time);
+      await NW(pa, () => HQ_NEWWORLD.key('d', false)); return Math.hypot(p1.x - p0.x, p1.z - p0.z) / (t1 - t0); };
+    const v1 = await run(); await pa.click('#b-act'); await pa.click('#acts [data-act=run]'); const v2 = await run();
+    ok(v2 > v1 * 1.3, '跑步比走路快（' + v1.toFixed(1) + ' → ' + v2.toFixed(1) + '）');
+    await pa.click('#acts [data-act=run]');
+    // 走到長椅旁邊，紙條出現，坐下，別人看得到
+    await NW(pa, () => HQ_NEWWORLD.debugPlace(-7.5 + 0.479 * -2.5 + 0.878 * 5.2, 9 + 0.878 * -2.5 - 0.479 * 5.2));
+    await pa.waitForFunction(() => HQ_NEWWORLD.near() === 'bench', null, { timeout: 30000 }).catch(() => {});
+    ok((await NW(pa, () => HQ_NEWWORLD.near())) === 'bench' && !(await pa.isHidden('.nw-hint')) && (await pa.textContent('.nw-hint')) === '坐下', '靠近長椅會冒出「坐下」紙條');
+    await shot(pa, 'live-1-bench-hint');
+    await pa.click('.nw-hint'); await pa.waitForFunction(() => document.querySelector('.nw-hint').textContent === '站起來', null, { timeout: 30000 }).catch(() => {});
+    ok((await NW(pa, () => HQ_NEWWORLD.acts().pose)) === 'sit' && (await NW(pa, () => HQ_NEWWORLD.net.me().p)) === 1 && (await pa.textContent('.nw-hint')) === '站起來', '點紙條就坐到長椅上（' + JSON.stringify(await NW(pa, () => [HQ_NEWWORLD.acts(), HQ_NEWWORLD.net.me(), HQ_NEWWORLD.near()])) + '）');
+    await shot(pa, 'live-2-bench-sit');
+    await pb.waitForFunction(() => { let p = 0; HQ_NEWWORLD.net.each((o) => { p = o.p; }); return p === 1; }, null, { timeout: 30000 }).catch(() => {});
+    ok(await NW(pb, () => { let p = 0; HQ_NEWWORLD.net.each((o) => { p = o.p; }); return p === 1; }), '別人看得到坐下');
+    await NW(pa, () => HQ_NEWWORLD.key('s', true)); await pa.waitForTimeout(1200); await NW(pa, () => HQ_NEWWORLD.key('s', false));
+    ok((await NW(pa, () => HQ_NEWWORLD.acts().pose)) === null, '一走動就站起來');
+    // 職業徽章
+    for (let i = 0; i < 2; i++) await pa.click('#b-ctrl'); await pa.waitForTimeout(1200);
+    ok(await pa.evaluate(() => { const i = document.querySelector('.nw-tag .nw-name img'); return !!i && !i.hidden && /^data:image/.test(i.src); }), '名字紙條上有職業徽章');
+    await pb.waitForFunction(() => [...document.querySelectorAll('.nw-name img')].some(i => !i.hidden), null, { timeout: 30000 }).catch(() => {});
+    ok(await pb.evaluate(() => [...document.querySelectorAll('.nw-name img')].some(i => !i.hidden)), '別人也看得到徽章');
+    await shot(pb, 'live-3-badge');
+    // 點唱機：總部沒有人點歌時會說一聲
+    await NW(pa, () => HQ_NEWWORLD.debugPlace(2.0, 12.0)); await pa.waitForFunction(() => HQ_NEWWORLD.near() === 'juke', null, { timeout: 30000 }).catch(() => {});
+    await pa.click('.nw-hint'); await pa.waitForTimeout(600);
+    ok((await pa.textContent('.nw-tag .nw-bubble')).includes('沒有人點歌') && !(await pa.evaluate(() => NW_MUSIC.state().on)), '點唱機：沒有歌的時候會說一聲');
+    await shot(pa, 'live-4-jukebox');
+    // 假人：放 19 個進來，量張數
+    await pa.click('#b-bots'); await pa.click('#b-bots'); await cnt(pa, 20);
+    ok((await NW(pa, () => HQ_NEWWORLD.net.count())) === 20, '放 19 個假人進來（加上觀眾共 20 個別人）');
+    await NW(pa, () => HQ_NEWWORLD.debugPlace(0, 14)); await pa.waitForTimeout(8000);
+    await pa.waitForFunction(() => /繪製/.test(document.getElementById('stats').textContent), null, { timeout: 60000 }).catch(() => {});
+    console.log('  21 人同時在線（模擬器用軟體算圖，數字只能看繪製次數和面數）：' + (await pa.textContent('#stats')));
+    await pb.context().close(); await pa.screenshot({ path: path.join(OUT, 'live-5-crowd.png'), timeout: 180000 }).catch(() => console.log('  （21 人的截圖太慢，跳過）'));
+    await pa.click('#b-bots'); await cnt(pa, 0);
+    ok((await NW(pa, () => HQ_NEWWORLD.net.count())) === 0, '假人收掉');
+    ok(pa.errors.length + pb.errors.length === 0, '沒有主控台錯誤' + (pa.errors.concat(pb.errors).length ? '：' + pa.errors.concat(pb.errors).join(' / ') : ''));
+    await pa.context().close();
+  };
+
   if (want === 'all' || want === 'solo') await solo(false);
   if (want === 'all' || want === 'phone') await solo(true);
   if (want === 'all' || want === 'multi') await multi();
   if (want === 'all' || want === 'classes') await classes();
+  if (want === 'all' || want === 'live') await live();
   if (want === 'all' || want === 'rider') await rider();
   await browser.close();
   console.log('截圖在 ' + OUT);

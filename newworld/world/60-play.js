@@ -50,12 +50,16 @@ const NW = (() => {
   // 多人：別的玩家的標準人物，還有頭上的名字紙條和聊天泡泡（用網頁元素疊在畫面上，字才清楚）
   const OTH = new Map(), LAB = document.createElement('div'); LAB.id = 'nw-labels'; document.body.appendChild(LAB);
   const mkTag = () => { const t = document.createElement('div'), b = document.createElement('div'), n = document.createElement('div'), i = document.createElement('img'), s = document.createElement('span');
-    t.className = 'nw-tag'; b.className = 'nw-bubble'; n.className = 'nw-name'; b.hidden = n.hidden = i.hidden = true; i.alt = ''; n.append(i, s); t.append(b, n); LAB.appendChild(t); return { t, b, n, i, s, until: 0 }; };
+    t.className = 'nw-tag'; b.className = 'nw-bubble'; n.className = 'nw-name'; b.hidden = n.hidden = i.hidden = true; i.alt = ''; n.append(i, s); t.append(b); LAB.append(t, n); return { t, b, n, i, s, until: 0 }; };
   // 名字紙條上的職業徽章：用總部同一套手繪圖示
   const setBadge = (tag, cls) => { const u = cls && window.HQ_ICONS ? window.HQ_ICONS.url('cls-' + cls) : null; tag.i.hidden = !u; if (u && tag.i.src !== u) tag.i.src = u; };
   const HINT = document.createElement('button'); HINT.className = 'nw-hint'; HINT.type = 'button'; HINT.hidden = true; LAB.appendChild(HINT); HINT.addEventListener('click', (e) => { e.stopPropagation(); NW.use(); });
   const MYTAG = ME ? mkTag() : null, PV = new V3();
-  const placeTag = (tag, x, z, y) => { PV.set(x, 2.5 + (y || 0), z).project(camera); const on = PV.z < 1 && Math.abs(PV.x) < 1.15 && Math.abs(PV.y) < 1.15;
+  const hideTag = (tag) => { tag.t.style.display = tag.n.style.display = 'none'; };
+  // 名字放在腳下（沒有底色和邊框），說話的泡泡在頭上
+  const placeTag = (tag, x, z, y) => { PV.set(x, FY(x, z) - 0.12, z).project(camera); const on = PV.z < 1 && Math.abs(PV.x) < 1.15 && Math.abs(PV.y) < 1.15;
+    tag.n.style.display = on ? '' : 'none'; if (on) tag.n.style.transform = 'translate(' + ((PV.x * 0.5 + 0.5) * W).toFixed(1) + 'px,' + ((-PV.y * 0.5 + 0.5) * H).toFixed(1) + 'px) translate(-50%,0)';
+    PV.set(x, 2.5 + (y || 0), z).project(camera);
     tag.t.style.display = on ? '' : 'none'; if (on) tag.t.style.transform = 'translate(' + ((PV.x * 0.5 + 0.5) * W).toFixed(1) + 'px,' + ((-PV.y * 0.5 + 0.5) * H).toFixed(1) + 'px) translate(-50%,-100%)';
     if (tag.until && S.time > tag.until) { tag.b.hidden = true; tag.until = 0; } };
   const NET = {
@@ -72,7 +76,7 @@ const NW = (() => {
       if (d.name != null) { o.tag.s.textContent = d.name; o.tag.n.hidden = !d.name; } },
     move: (id, x, z, f, mv, fm, g, p) => { const o = OTH.get(id); if (!o) return; o.tx = x; o.tz = z; o.tf = f; o.mv = mv; o.p = p | 0; o.rs.form = FORMS[fm] || 'carry';
       if (g !== undefined && g !== o.g) { o.g = g; if (o.rs.gt < 0) o.rs.gt = 0; } },
-    drop: (id) => { const o = OTH.get(id); if (!o) return; o.tag.t.remove(); dropSpirit(o.c); STD.dispose(o.c); OTH.delete(id); },
+    drop: (id) => { const o = OTH.get(id); if (!o) return; o.tag.t.remove(); o.tag.n.remove(); dropSpirit(o.c); STD.dispose(o.c); OTH.delete(id); },
     each: (fn) => { OTH.forEach(fn); },
     emote: (id, face) => { const o = id ? OTH.get(id) : ME; if (o && STD) STD.emote(o.c, face, 5); },
     clear: () => { [...OTH.keys()].forEach(NET.drop); },
@@ -279,7 +283,7 @@ const NW = (() => {
     camera.position.set(S.camT.x + Math.sin(ANG) * cam.dist * far, cam.hgt * far, S.camT.z + Math.cos(ANG) * cam.dist * far); camera.lookAt(S.camT);
     camera.updateMatrixWorld(); if (NEAR) { PV.set(NEAR.x, NEAR.y, NEAR.z).project(camera); HINT.hidden = false; HINT.textContent = NEAR.kind === 'bench' && ACT.pose === 'sit' ? '站起來' : HINT_TEXT[NEAR.kind];
       HINT.style.transform = 'translate(' + ((PV.x * 0.5 + 0.5) * W).toFixed(1) + 'px,' + ((-PV.y * 0.5 + 0.5) * H).toFixed(1) + 'px) translate(-50%,-100%)'; } else HINT.hidden = true;
-    if (MYTAG) placeTag(MYTAG, ME.x, ME.z, ME.y + TAG_UP(ME.c)); OTH.forEach(o => { if (inLob(o.z) !== S.lob) o.tag.t.style.display = 'none'; else placeTag(o.tag, o.x, o.z, o.y + TAG_UP(o.c)); });   // 不在同一區（前院、大廳）的人不顯示
+    if (MYTAG) placeTag(MYTAG, ME.x, ME.z, ME.y + TAG_UP(ME.c));
     { const fx = S.ctrl === 'me' ? ME.x : S.x, fz = S.ctrl === 'me' ? ME.z : S.z; sun.position.set(fx - 12, 22, fz + 18); sun.target.position.set(fx, 0, fz); }
     // --- 念力：海浪狀的光帶 ---
     scene.updateMatrixWorld(true);
@@ -306,12 +310,13 @@ const NW = (() => {
     TW.c3.position.y = 0.03 * Math.abs(Math.sin(t * PI2 * 3 + 1)); TW.c3.head.rotation.y = 0.2 * Math.sin(t * PI2 * 2); TW.c3.arms[0].rotation.x = -0.5 + 0.3 * Math.sin(t * PI2 * 4);
     // 別的玩家：朝伺服器給的位置補間，有在動就播走路
     CULL_M.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse); CULL_F.setFromProjectionMatrix(CULL_M);
-    OTH.forEach(o => { if (o.rider) { o.c.H.visible = !S.lob; return; } const ps = POSE_OF[o.p] || (o.mv === 2 ? 'run' : null); o.y = (ps === 'sit' ? sitY(o.tx, o.tz) : 0) + FY(o.x, o.z); const k = Math.min(1, dt * 9), dx = o.tx - o.x, dz = o.tz - o.z, far = Math.hypot(dx, dz);
+    const tagOf = (o) => { if (inLob(o.z) !== S.lob) hideTag(o.tag); else placeTag(o.tag, o.x, o.z, o.y + TAG_UP(o.c)); };   // 不在同一區（前院、大廳）的人不顯示名字
+    OTH.forEach(o => { if (o.rider) { o.c.H.visible = !S.lob; tagOf(o); return; } const ps = POSE_OF[o.p] || (o.mv === 2 ? 'run' : null); o.y = (ps === 'sit' ? sitY(o.tx, o.tz) : 0) + FY(o.x, o.z); const k = Math.min(1, dt * 9), dx = o.tx - o.x, dz = o.tz - o.z, far = Math.hypot(dx, dz);
       if (far > 12) { o.x = o.tx; o.z = o.tz; } else { o.x += dx * k; o.z += dz * k; }
       let df = o.tf - o.f; df = Math.atan2(Math.sin(df), Math.cos(df)); o.f += df * k;
       if (ME) STD.far(o.c, Math.hypot(o.x - ME.x, o.z - ME.z) > (o.c.far ? 16 : 18));
       CULL_S.center.set(o.x, 1.3, o.z); o.c.H.visible = inLob(o.z) === S.lob && CULL_F.intersectsSphere(CULL_S);   // 畫面外的人整個不畫（人物的網格關掉了自動剔除，要自己來）
-      o.c.H.position.set(o.x, o.y, o.z); o.c.H.rotation.y = o.f; STD.tick(o.c, dt, o.mv || far > 0.08 ? 1 : 0, o.mv === 2 ? 2.1 : 1.6, ps); });
+      o.c.H.position.set(o.x, o.y, o.z); o.c.H.rotation.y = o.f; STD.tick(o.c, dt, o.mv || far > 0.08 ? 1 : 0, o.mv === 2 ? 2.1 : 1.6, ps); tagOf(o); });
     if (STD) { if (ME) tickSpirit(ME.c, dt); OTH.forEach(o => tickSpirit(o.c, dt)); }
     if (STD && TW.s1) { const a2 = t * PI2 * 0.5; TW.s1.H.position.set(-7.4 + Math.sin(a2) * 2.2, 0, 6.2 + Math.cos(a2) * 1.8); TW.s1.H.rotation.y = a2 + Math.PI / 2;
       STD.tick(TW.s1, dt, 1, 1.1); STD.tick(TW.s2, dt, 0); STD.tick(TW.s3, dt, 0); }

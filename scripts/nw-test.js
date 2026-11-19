@@ -204,7 +204,7 @@ async function main() {
     ok((await NW(pa, () => HQ_NEWWORLD.acts().pose)) === null, '一走動就站起來');
     // 職業徽章
     for (let i = 0; i < 2; i++) await pa.click('#b-ctrl'); await pa.waitForTimeout(1200);
-    ok(await pa.evaluate(() => { const i = document.querySelector('.nw-tag .nw-name img'); return !!i && !i.hidden && /^data:image/.test(i.src); }), '名字紙條上有職業徽章');
+    ok(await pa.evaluate(() => { const i = document.querySelector('.nw-name img'); return !!i && !i.hidden && /^data:image/.test(i.src); }), '名字紙條上有職業徽章');
     await pb.waitForFunction(() => [...document.querySelectorAll('.nw-name img')].some(i => !i.hidden), null, { timeout: 30000 }).catch(() => {});
     ok(await pb.evaluate(() => [...document.querySelectorAll('.nw-name img')].some(i => !i.hidden)), '別人也看得到徽章');
     await shot(pb, 'live-3-badge');
@@ -247,7 +247,7 @@ async function main() {
     await pa.waitForTimeout(1200); await shot(pa, 'lobby-1-entry-far');
     // 還在前院的人看不到大廳裡的人；自己也進來就看得到
     await pb.waitForFunction(() => { let z = 0; HQ_NEWWORLD.net.each((o) => { z = o.tz; }); return z < -40; }, null, { timeout: 30000 }).catch(() => {}); await pb.waitForTimeout(800);
-    ok(await NW(pb, () => { let v = true; HQ_NEWWORLD.net.each((o) => { v = o.c.H.visible || o.tag.t.style.display !== 'none'; }); return v === false; }), '在前院的人看不到大廳裡的人和名字');
+    ok(await NW(pb, () => { let v = true; HQ_NEWWORLD.net.each((o) => { v = o.c.H.visible || o.tag.t.style.display !== 'none' || o.tag.n.style.display !== 'none'; }); return v === false; }), '在前院的人看不到大廳裡的人和名字');
     await place(pb, L.spawn.x + 1.5, L.spawn.z); await zone(pb, 'lobby'); await pb.waitForTimeout(800);
     ok(await NW(pb, () => { let v = false; HQ_NEWWORLD.net.each((o) => { v = o.c.H.visible; }); return v; }), '兩個人都在大廳就互相看得到');
     // 往門外走會被擋住，不會掉出去

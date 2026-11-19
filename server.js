@@ -370,12 +370,143 @@ function newworldUser(req, res) {
   if (!u.admin) { res.status(403).json({ ok: false }); return null; }
   return u;
 }
-const lookOf = (u) => { const a = sanitizeSave(u.save); return { ok: true, base: { name: a.name, hair: a.hair, skin: a.skin, hairColor: a.hairColor, outfit: a.outfit, glasses: a.glasses !== '0', face: a.face || '' }, look3d: sanitizeLook3d(u.save.look3d) }; };
+const lookOf = (u) => { const a = sanitizeSave(u.save); return { ok: true, base: { name: a.name, hair: a.hair, skin: a.skin, hairColor: a.hairColor, outfit: a.outfit, glasses: a.glasses !== '0', face: a.face || '' }, look3d: sanitizeLook3d(u.save.look3d), pet: a.pet }; };
 app.get('/api/newworld/look', (req, res) => { const u = newworldUser(req, res); if (u) res.json(lookOf(u)); });
 app.post('/api/newworld/look', (req, res) => {
   const u = newworldUser(req, res); if (!u) return;
   accounts.update(u, { look3d: sanitizeLook3d((req.body || {}).look) || undefined });
   res.json(lookOf(u));
+});
+// ---- 新世界大廳裡的扭蛋機、公共花園、許願池：讀寫的是跟總部同一份資料（同一個背包、同一塊花園、同一個許願池）----
+// 這個帳號現在也在總部線上的話，直接改線上的那個角色（總部畫面會跟著更新）；不在線上就改帳號存檔
+function nwActor(u) {
+  let live = null;
+  players.forEach(q => { if (q.account && q.account.username === u.username) live = q; });
+  if (live) return { p: live, key: gardenKey(live), exp: (n) => gainExp(live, n), done: () => { LOOT.sync(live); snapshot(live); } };
+  const a = sanitizeSave(u.save), L = STATS.LEVEL;
+  const p = { name: a.name || u.username, account: u, inv: a.inv, furn: a.furn, gear: a.gear, seen: a.seen, equip: a.equip, gachaPity: a.gachaPity, level: a.level, exp: a.exp };
+  return { p, key: 'u:' + u.username.toLowerCase(),
+    exp: (n) => { if (p.level >= L.max) return; p.exp += Math.round(n); while (p.level < L.max && p.exp >= L.expFor(p.level)) { p.exp -= L.expFor(p.level); p.level++; } },
+    done: () => accounts.update(u, { inv: p.inv, gear: p.gear, owned: BAG.ownedOf(p.gear), seen: p.seen, gachaPity: p.gachaPity, level: p.level, exp: p.exp }) };
+}
+const nwLast = new Map();
+// 每個接口都是 POST { act, ... }，回 { ok, ... } 或 { ok: false, error }；同一個人 0.25 秒內只收一次
+function nwRoute(name, acts) {
+  app.post('/api/newworld/' + name, (req, res) => {
+    const u = newworldUser(req, res); if (!u) return;
+    const b = req.body && typeof req.body === 'object' ? req.body : {}, fn = Object.prototype.hasOwnProperty.call(acts, b.act) && acts[b.act], now = Date.now();
+    if (!fn) return res.json({ ok: false, error: '沒有這個動作' });
+    if (!acts.READ.includes(b.act)) { if (now - (nwLast.get(u.username) || 0) < 250) return res.json({ ok: false, error: '慢一點' }); nwLast.set(u.username, now); }
+    const A = nwActor(u), r = fn(A, b, u, req, now) || {};
+    if (r.error) return res.json({ ok: false, error: r.error });
+    if (!acts.READ.includes(b.act)) A.done();
+    res.json(Object.assign({ ok: true }, r, acts.view ? acts.view(A, u, now) : {}));
+  });
+}
+const gardenChanged = () => { const st = garden.state(); io.emit('garden', st); io.of('/newworld').emit('garden', st); };
+nwRoute('gacha', { READ: ['state'],
+  view: (A) => ({ tickets: A.p.inv[GACHA.TICKET] || 0, pity: A.p.gachaPity, pityMax: GACHA.PITY, spares: GACHA.spares(A.p.gear).length, recycle: GACHA.RECYCLE, gemTickets: GACHA.GEM_TICKETS,
+    gems: Object.keys(MAP.ITEMS).filter(k => MAP.ITEMS[k].gem).reduce((n, k) => n + (A.p.inv[k] || 0), 0) }),
+  state: () => ({}),
+  // 扭一次：新世界沒有地上掉落物，裝備區滿了就不給扭（總部是掉在腳邊）
+  spin: ({ p }) => {
+    if ((p.inv[GACHA.TICKET] || 0) < 1) return { error: '沒有扭蛋券了，打倒頭目有機會掉' };
+    if (GACHA.pool().some(id => !BAG.canAdd(p, 'gear', id))) return { error: '背包的裝備區滿了，先到總部整理一下' };
+    p.inv[GACHA.TICKET]--;
+    const r = GACHA.spin(p.gachaPity, BAG.ownedOf(p.gear)), pityHit = p.gachaPity + 1 >= GACHA.PITY;
+    p.gachaPity = r.pity;
+    const g = GEAR.GEAR[r.id], fresh = !p.gear[r.id];
+    LOOT.give(p, 'gear', r.id, true);
+    if (g.rarity === 'SSR') pushChat({ system: true, text: `${p.name} 在扭蛋機扭到了【SSR】${g.name}！`, t: Date.now() });
+    return { item: r.id, name: g.name, rarity: g.rarity, fresh, pityHit };
+  },
+  recycle: ({ p }) => {
+    const sp = GACHA.spares(p.gear).slice(0, GACHA.RECYCLE);
+    if (sp.length < GACHA.RECYCLE) return { error: `要有 ${GACHA.RECYCLE} 件重複的扭蛋裝備才能換` };
+    if ((p.inv[GACHA.TICKET] || 0) >= INV_MAX) return { error: '扭蛋券已經滿了' };
+    sp.forEach(id => { p.gear[id]--; });
+    p.inv[GACHA.TICKET] = (p.inv[GACHA.TICKET] || 0) + 1;
+    return { used: sp.map(id => GEAR.GEAR[id].name) };
+  },
+  gem: ({ p }) => {
+    const gem = Object.keys(MAP.ITEMS).filter(k => MAP.ITEMS[k].gem && p.inv[k] > 0).sort((a, b) => p.inv[b] - p.inv[a])[0];
+    if (!gem) return { error: '沒有寶石，花園收成時有機會挖到' };
+    if ((p.inv[GACHA.TICKET] || 0) + GACHA.GEM_TICKETS > INV_MAX) return { error: '扭蛋券快滿了，先扭掉一些' };
+    p.inv[gem]--;
+    p.inv[GACHA.TICKET] = (p.inv[GACHA.TICKET] || 0) + GACHA.GEM_TICKETS;
+    return { gem: MAP.ITEMS[gem].name };
+  },
+});
+const nwPlot = (b) => { const i = Math.floor(Number(b.i)); return MAP.PLOTS[i] ? i : -1; };
+nwRoute('garden', { READ: ['state', 'info'],
+  view: (A, u, now) => ({ plots: garden.state(), daily: garden.hasDaily(A.key, now), stages: G.STAGES,
+    seeds: Object.keys(G.PLANTS).map(k => ({ kind: k, name: G.PLANTS[k].name, item: G.seedOf(k), n: A.p.inv[G.seedOf(k)] || 0, hours: G.PLANTS[k].hours })) }),
+  state: () => ({}),
+  info: (A, b) => { const i = nwPlot(b); return i < 0 ? { error: '這裡不能種' } : { i, info: garden.info(i) }; },
+  plant: ({ p, key }, b) => {
+    const i = nwPlot(b), kind = String(b.kind), seed = G.PLANTS[kind] && G.seedOf(kind);
+    if (i < 0) return { error: '這裡不能種' };
+    if (!seed || !(p.inv[seed] > 0)) return { error: '沒有這種種子' };
+    const r = garden.plant(i, kind, key, p.name);
+    if (r.error) return r;
+    p.inv[seed]--;
+    gardenChanged();
+    return { i, info: garden.info(i), text: `種下了${G.PLANTS[kind].name}` };
+  },
+  water: (A, b, u, req, now) => {
+    const i = nwPlot(b), r = i < 0 ? { error: '這裡不能種' } : garden.water(i, A.key, A.p.name, now);
+    if (r.error) return r;
+    if (r.exp) A.exp(r.exp);
+    gardenChanged();
+    return { i, info: garden.info(i), text: r.exp ? `澆好水了，經驗 +${r.exp}` : '澆好水了' };
+  },
+  harvest: ({ p, key }, b) => {
+    const i = nwPlot(b), r = i < 0 ? { error: '這裡不能種' } : garden.peekHarvest(i);
+    if (r.error) return r;
+    const fruit = r.kind;
+    if (!fits(p, fruit)) return { error: '背包滿了，先用掉一些再來收' };
+    const h = garden.harvest(i);
+    p.inv[fruit] = Math.min(INV_MAX, (p.inv[fruit] || 0) + r.n);
+    if (h.gem) p.inv[h.gem] = Math.min(INV_MAX, (p.inv[h.gem] || 0) + 1);
+    players.forEach(q => {
+      if (q === p || !h.helpers.includes(gardenKey(q))) return;
+      gainExp(q, G.THANKS_EXP);
+      io.to(q.id).emit('gardenNote', { text: `${p.name} 收成了你幫忙澆過水的${G.PLANTS[fruit].name}，經驗 +${G.THANKS_EXP}`, icon: 'item-' + fruit });
+    });
+    gardenChanged();
+    return { i, info: garden.info(i), item: fruit, text: `收成了 ${r.n} 顆${G.PLANTS[fruit].name}` + (h.gem ? `，還挖到一顆${MAP.ITEMS[h.gem].name}！` : '') };
+  },
+  clear: ({ p }, b) => {
+    const i = nwPlot(b), r = i < 0 ? { error: '這裡不能種' } : garden.clear(i);
+    if (r.error) return r;
+    const twig = fits(p, 'twig');
+    if (twig) p.inv.twig++;
+    gardenChanged();
+    return { i, info: garden.info(i), text: twig ? '清乾淨了，撿到一根枯枝' : '清乾淨了' };
+  },
+  // 種子認養箱：每人每天一包，跟總部的是同一份（在總部領過，這裡就不能再領）
+  seed: ({ p, key }, b, u, req, now) => {
+    if (!garden.hasDaily(key, now)) return { error: '今天已經領過了，明天再來' };
+    const k = GARDEN.rollSeed();
+    if (!fits(p, k)) return { error: '背包滿了，先用掉一些再來領' };
+    garden.claimDaily(key, now);
+    p.inv[k]++;
+    return { item: k, text: `領到一包${MAP.ITEMS[k].name}` };
+  },
+});
+nwRoute('wishes', { READ: ['list', 'get'],
+  list: (A, b, u) => Object.assign(wishes.query(b, 'u:' + u.username.toLowerCase(), u.username),
+    { left: wishes.left(u.username), perDay: wishes.PER_DAY, titleLen: wishes.TITLE_LEN, bodyLen: wishes.BODY_LEN, cats: WISH_CAT, statuses: WISH_STATUS }),
+  get: (A, b, u) => { const w = wishes.get(Number(b.id), 'u:' + u.username.toLowerCase(), u.username); return w ? { wish: w, cats: WISH_CAT, statuses: WISH_STATUS } : { error: '這個願望已經不在了' }; },
+  add: ({ p }, b, u, req) => {
+    const r = wishes.add(u.username, p.name, b);
+    if (r.error) return r;
+    pushChat({ system: true, text: `${p.name} 在許願池許了一個願：【${WISH_CAT[r.wish.cat]}】${r.wish.title}`, t: Date.now() });
+    newWishMail(r.wish, { handshake: { headers: req.headers } });
+    io.emit('wishes');
+    return { id: r.wish.id };
+  },
+  like: (A, b, u) => { const r = wishes.like(Number(b.id), 'u:' + u.username.toLowerCase()); if (!r.error) io.emit('wishes'); return r; },
 });
 // 新世界的多人連線：自己一個頻道（/newworld），跟總部的連線、玩家資料完全分開；只有管理員連得上
 // 只同步標準人物的位置、造型、名字和聊天，聊天不跟總部互通
@@ -396,6 +527,7 @@ function startNewworldNet() {
     nwPlayers.set(p.id, p);
     socket.broadcast.emit('join', pub(p));
     socket.emit('music', musicState());
+    socket.emit('garden', garden.state());
     // 壓力測試用的假人：管理員要幾個就放幾個（最多 30），隨機造型、隨機亂走，所有人都看得到
     socket.on('bots', (n) => { n = Math.round(num(n, 0, 30));
       while (nwBots.length > n) { const b = nwBots.pop(); nwPlayers.delete(b.id); nw.emit('leave', b.id); }
@@ -1693,7 +1825,7 @@ const GARDEN_NOTE = {
   dead: (n) => `你種的${n}太久沒澆水，枯掉了…`,
   rot: (n) => `你種的${n}熟太久沒人收，爛掉了`,
 };
-garden.start((st) => io.emit('garden', st), (note) => {
+garden.start((st) => { io.emit('garden', st); io.of('/newworld').emit('garden', st); }, (note) => {
   const pl = garden.state()[note.i];
   if (!pl) return;
   players.forEach(q => {
@@ -2194,7 +2326,7 @@ io.on('connection', (socket) => {
     const r = fn(p, i, m, now);
     ack(r.error ? { ok: false, error: r.error } : Object.assign({ ok: true, inv: p.inv }, r));
   });
-  const changed = () => io.emit('garden', garden.state());
+  const changed = gardenChanged;
   onGarden('gardenInfo', (p, i) => ({ info: garden.info(i) }));
   onGarden('gardenPlant', (p, i, m) => {
     const kind = String(m.kind), seed = G.PLANTS[kind] && G.seedOf(kind);

@@ -14,3 +14,5 @@
 | `60-play.js` | 操作、多人同步、職業、召喚物、場景細節、互動、鏡頭、對外的介面 |
 
 新功能加在最接近的那一個檔案；要加新檔案就取一個排在中間的編號（例如 `55-xxx.js`）。
+
+大廳的功能（導師轉職、扭蛋機、公共花園、種子箱、前院的許願池、寵物）：3D 的東西在 `55-lobby.js`（花箱、種子箱、`wishWell`、`setGarden`）和 `60-play.js`（可以互動的點、導師、寵物），面板在 `public/newworld-panels.js`，伺服器接口是 `server.js` 的 `/api/newworld/gacha|garden|wishes`。扭蛋、花園、許願池讀寫的是跟總部同一份資料；職業和造型存在帳號的 `look3d`，跟總部分開。測試：`GARDEN_SPEED=600 node scripts/nw-test.js home`。

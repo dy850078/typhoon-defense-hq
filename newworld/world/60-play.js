@@ -45,6 +45,33 @@ const NW = (() => {
     let df = (d > 0.25 ? Math.atan2(dx, dz) : f) - s.f; df = Math.atan2(Math.sin(df), Math.cos(df)); s.f += df * Math.min(1, dt * 6);
     s.g.position.set(s.x, 1.35 + FY(s.x, s.z) + 0.14 * Math.sin(s.ph * 2.4), s.z); s.g.rotation.y = s.f; s.b.rotation.z = 0.12 * Math.sin(s.ph * 1.7); s.b.rotation.x = Math.min(0.35, d * 0.25);
     s.tip.scale.setScalar(1 + 0.18 * Math.sin(s.ph * 5)); };
+  // 寵物：帳號在總部領養的那一隻（貓、狗、小馬，毛色照帳號的），在新世界跟在主人腳邊；主人坐下牠也趴下
+  let PET = null;
+  const makePet3 = (pet) => { const g = new THREE.Group(), b = new THREE.Group(); g.add(b); const k = pet.kind, hs = k === 'horse', fur = pet.fur, mk = pet.pattern !== 'none' ? pet.mark : fur, wh = pet.white !== 'none' ? '#fbf7ee' : fur;
+    const by = hs ? 0.66 : 0.36, hy = hs ? 1.2 : 0.66, hz = hs ? 0.46 : 0.26, ink = (r, pos, sc) => part(b, sph(r, 8, 6), INK, { pos, scale: sc, noLine: true, shadow: false, mat: basic(INK) });
+    part(b, sph(0.3), fur, { pos: [0, by, -0.05], scale: hs ? [0.8, 0.82, 1.35] : [0.85, 0.8, 1.15] });
+    if (pet.white !== 'none') part(b, sph(0.2), wh, { pos: [0, by - 0.07, 0.17], scale: [0.9, 0.8, 0.8], noLine: true, shadow: false });
+    if (pet.pattern !== 'none') [[0, 0.21, -0.02, 0.14], [0.1, 0.17, -0.2, 0.1], [-0.11, 0.16, 0.1, 0.09]].forEach(([x, y, z, r]) => part(b, sph(r, 8, 6), mk, { pos: [x, by + y, z], scale: [1, 0.35, 1], noLine: true, shadow: false }));
+    if (hs) { part(b, sph(0.17), fur, { pos: [0, 0.95, 0.26], scale: [0.75, 1.6, 0.85], rot: [0.55, 0, 0] }); [0, 1, 2, 3].forEach(i => part(b, sph(0.09, 8, 6), pet.mark, { pos: [0, 1.4 - i * 0.14, 0.26 - i * 0.07], scale: [0.6, 1, 0.9], noLine: true, shadow: false })); }
+    part(b, sph(0.27), fur, { pos: [0, hy, hz], scale: hs ? [0.82, 0.86, 0.95] : [1, 1, 1] });
+    part(b, sph(0.1), wh, { pos: [0, hy - 0.07, hz + (hs ? 0.26 : 0.22)], scale: hs ? [1.25, 1.2, 1.7] : [1.2, 0.8, 1] });
+    part(b, sph(0.04, 8, 6), pet.nose, { pos: [0, hy - 0.03, hz + (hs ? 0.44 : 0.315)], noLine: true, shadow: false, mat: basic(pet.nose) });
+    [-1, 1].forEach(a => { ink(0.034, [0.1 * a, hy + 0.04, hz + 0.24], [1, 1.2, 0.6]);
+      if (k === 'dog') part(b, sph(0.11), pet.earc || mk, { pos: [0.22 * a, hy + 0.12, hz - 0.06], scale: [0.6, 1.3, 0.8], rot: [0, 0, -0.5 * a] });
+      else if (pet.ears === 'fold') part(b, sph(0.09), fur, { pos: [0.17 * a, hy + 0.2, hz + 0.02], scale: [1, 0.5, 0.8], rot: [0.3, 0, -0.4 * a] });
+      else part(b, new THREE.ConeGeometry(hs ? 0.06 : 0.1, hs ? 0.18 : 0.2, 4), fur, { pos: [(hs ? 0.11 : 0.15) * a, hy + (hs ? 0.28 : 0.25), hz - 0.03], rot: [0, 0.6 * a, -0.2 * a], line: 0.016 }); });
+    g.legs = [[-1, 1], [1, 1], [-1, -1], [1, -1]].map(([a, c]) => part(b, sph(0.09), pet.white === 'socks' ? '#fbf7ee' : fur, { pos: [0.15 * a, hs ? 0.22 : 0.1, 0.2 * c - 0.05], scale: [1, hs ? 2.6 : 1.3, 1] }));
+    g.tail = part(b, sph(0.08), hs ? pet.mark : fur, { pos: [0, by + (hs ? 0.02 : 0.14), hs ? -0.46 : -0.4], scale: k === 'dog' ? [0.8, 1.5, 0.8] : hs ? [0.8, 2.6, 0.8] : [0.6, 2.6, 0.6], rot: [hs ? 0.25 : -0.6, 0, 0] });
+    g.b = b; g.legY = hs ? 0.22 : 0.1; g.scale.setScalar(0.95); scene.add(g); return g; };
+  const setPet = (pet) => { if (PET) { scene.remove(PET.g); PET.g.traverse(o => { if (o.isMesh) { o.geometry.dispose(); } }); PET.tag.t.remove(); PET.tag.n.remove(); PET = null; }
+    if (!pet || !ME) return; const tag = mkTag(); tag.s.textContent = pet.name; tag.n.hidden = false; tag.n.classList.add('pet'); PET = { g: makePet3(pet), tag, pet, x: ME.x - 1, z: ME.z + 0.6, f: 0, ph: 0, mv: 0, lie: 0 }; };
+  const tickPet = (dt) => { if (!PET || !ME) return; const P = PET, f = ME.face, tx = ME.x + Math.sin(f) * 0.25 - Math.cos(f) * 1.3, tz = ME.z + Math.cos(f) * 0.25 + Math.sin(f) * 1.3;   // 走在主人左手邊、稍微前面一點（不會被主人擋住）
+    let dx = tx - P.x, dz = tz - P.z, d = Math.hypot(dx, dz); if (d > 14) { P.x = tx; P.z = tz; d = 0; }
+    const go = d > (P.mv > 0.5 ? 0.25 : 0.9), sp = Math.min(9, 2.2 + d * 2.2); if (go) { P.x += dx / d * Math.min(d, sp * dt); P.z += dz / d * Math.min(d, sp * dt); let df = Math.atan2(dx, dz) - P.f; df = Math.atan2(Math.sin(df), Math.cos(df)); P.f += df * Math.min(1, dt * 10); P.ph += dt * (6 + sp); }
+    P.mv += ((go ? 1 : 0) - P.mv) * Math.min(1, dt * 8); P.lie += ((!go && ACT.pose === 'sit' ? 1 : 0) - P.lie) * Math.min(1, dt * 4);
+    P.g.position.set(P.x, FY(P.x, P.z) + P.mv * 0.06 * Math.abs(Math.sin(P.ph)) - P.lie * P.g.legY * 0.8, P.z); P.g.rotation.y = P.f; P.g.b.rotation.x = -P.lie * 0.12;
+    P.g.legs.forEach((l, i) => { l.position.y = P.g.legY + P.mv * Math.max(0, Math.sin(P.ph + (i % 3 ? 0 : Math.PI))) * 0.08; }); P.g.tail.rotation.z = Math.sin(S.time * 7) * 0.45;
+    placeTag(P.tag, P.x, P.z, -1.2); };
   const FORMS = ['carry', 'float', 'front'], FORM_NAME = { carry: '單手捧著', float: '漂浮操控', front: '走在前面' };
   const CAM = [{ dist: 47, hgt: 17 }, { dist: 30, hgt: 10.5 }], CAM_ME = CAM, ANG = 0.62;
   // 多人：別的玩家的標準人物，還有頭上的名字紙條和聊天泡泡（用網頁元素疊在畫面上，字才清楚）
@@ -98,11 +125,13 @@ const NW = (() => {
   }
   // ===== 場景細節：草叢、小花、踏腳石（一次畫一整批，不多花繪製次數）、木柵欄、路燈、路牌 =====
   // 小路的中心線：P(s) = (-7.5 + 0.479 s, 9 + 0.878 s)，s 從 -20 到 20；n 是路的右手邊
+  const WELL = { x: 3.0, z: 4.0, y: 4.0 };
   const DETAIL = TW ? (() => {
     const r = rnd(77), PA = [0.479, 0.878], PN = [0.878, -0.479], P = (s, off) => [-7.5 + PA[0] * s + PN[0] * off, 9 + PA[1] * s + PN[1] * off];
     const offPath = (x, z) => { const dx = x + 7.5, dz = z - 9; return Math.abs(dx * PN[0] + dz * PN[1]); };
     const free = (x, z, m) => offPath(x, z) > 2.1 + m && collide(x, z, m).x === x && Math.hypot(x - 7.6, z - 9.5) > 4.5;   // 不要長在路上、屋子和樹裡面、香菇怪腳下
     const G = new THREE.Group(); scene.add(G);
+    if (LOBBY) { ROUNDS.push({ x: WELL.x, z: WELL.z, r: 1.55 }); wishWell(WELL.x, WELL.z); }   // 許願池在前院（草和花會避開它）
     const batch = (geo, material, list, shadow) => { const im = new THREE.InstancedMesh(geo, material, list.length), o = new THREE.Object3D(), c = new THREE.Color();
       list.forEach((d, i) => { o.position.set(d.x, d.y || 0, d.z); o.rotation.set(d.rx || 0, d.ry || 0, d.rz || 0); o.scale.set(d.sx || d.s || 1, d.sy || d.s || 1, d.sz || d.s || 1); o.updateMatrix(); im.setMatrixAt(i, o.matrix); if (d.col) im.setColorAt(i, c.set(d.col)); });
       im.castShadow = !!shadow; im.receiveShadow = true; im.frustumCulled = false; G.add(im); return im; };
@@ -145,7 +174,7 @@ const NW = (() => {
       part(g, new THREE.CylinderGeometry(0.08, 0.1, 1.9, 7), '#a8693f', { pos: [0, 0.95, 0], line: 0.022 });
       part(g, new THREE.BoxGeometry(1.5, 0.66, 0.09), '#f7ecd0', { pos: [0, 1.62, 0.07], rot: [0, 0, -0.04], line: 0.024, mat: [0, 1, 2, 3, 4, 5].map(i => (i === 4 ? new THREE.MeshToonMaterial({ map: t, gradientMap: RAMP }) : mat('#e5cfa0'))) });
       ROUNDS.push({ x, z, r: 0.25 }); };
-    sign(5.2, 3.0, Math.atan2(PN[0], PN[1]) + Math.PI + 0.25, '往總部'); sign(-12.5, -3.0, 0.5, '總部');
+    sign(5.2, 3.0, Math.atan2(PN[0], PN[1]) + Math.PI + 0.25, '往總部'); sign(-12.5, -3.0, 0.5, '總部'); if (LOBBY) sign(3.0, 12.4, 0.2, '許願池');
     // 長椅：面向小路，一張可以坐兩個人
     const SEATS = [], bench = (s, off) => { const [x, z] = P(s, off), g = new THREE.Group(), ry = Math.atan2(-PN[0] * Math.sign(off), -PN[1] * Math.sign(off)); g.position.set(x, 0, z); g.rotation.y = ry; G.add(g);
       part(g, new THREE.BoxGeometry(2.3, 0.12, 0.72), '#d79a61', { pos: [0, 0.55, 0], line: 0.022 });
@@ -169,8 +198,12 @@ const NW = (() => {
   const sitY = (x, z) => { for (const s of SEATS) if (Math.hypot(x - s.x, z - s.z) < 0.5) return s.h ?? 0.2; return -0.3; };   // 坐椅子或坐地上，屁股的高度不一樣
   // 可以互動的東西：靠近會在上面冒出一張小紙條，點紙條或按 E
   const YARD_DOOR = { x: -11.8, z: -1.6, f: 0.5 };
-  const INTER = SEATS.map(s => ({ kind: 'bench', x: s.x, z: s.z, f: s.f, y: 1.3 + (s.h ?? 0.2) + FY(s.x, s.z) })).concat(JUKE ? [{ kind: 'juke', x: JUKE.x, z: JUKE.z, y: JUKE.y }] : [], [{ kind: 'door', x: -12.3, z: -2.7, y: 3.2 }], LOBBY ? [{ kind: 'exit', x: LOBBY.EXIT.x, z: LOBBY.EXIT.z, y: LOBBY.EXIT.y }] : []);
-  const HINT_TEXT = { bench: '坐下', juke: '聽歌', door: LOBBY ? '進大廳' : '敲門', exit: '到前院' }; let NEAR = null, onInteract = null;
+  const INTER = SEATS.map(s => ({ kind: 'bench', x: s.x, z: s.z, f: s.f, y: 1.3 + (s.h ?? 0.2) + FY(s.x, s.z) })).concat(JUKE ? [{ kind: 'juke', x: JUKE.x, z: JUKE.z, y: JUKE.y }] : [], [{ kind: 'door', x: -12.3, z: -2.7, y: 3.2 }], LOBBY ? [{ kind: 'exit', x: LOBBY.EXIT.x, z: LOBBY.EXIT.z, y: LOBBY.EXIT.y }, { kind: 'well', ...WELL }, { kind: 'mentor', ...LOBBY.SPOTS.mentor }, { kind: 'gacha', ...LOBBY.SPOTS.gacha }, { kind: 'seedbox', ...LOBBY.SPOTS.seedbox }, ...LOBBY.SPOTS.plots.map((q, i) => ({ kind: 'plot', i, ...q }))] : []);
+  const HINT_TEXT = { bench: '坐下', juke: '聽歌', door: LOBBY ? '進大廳' : '敲門', exit: '到前院', well: '許願', mentor: '轉職', gacha: '扭蛋', seedbox: '領種子' }; let NEAR = null, onInteract = null;
+  // 公共花園：12 格的狀態（伺服器送來的，跟總部同一塊）；紙條上的字照那一格現在能做什麼
+  let PLOTS = [];
+  const plotHint = (i) => { const q = PLOTS[i]; return !q ? '種東西' : q.stage === 4 ? '收成' : q.stage === 5 ? '清掉' : q.wet <= 0 ? '澆水' : '看看'; };
+  const hintOf = (it) => (it.kind === 'bench' && ACT.pose === 'sit' ? '站起來' : it.kind === 'plot' ? plotHint(it.i) : HINT_TEXT[it.kind]);
 
   // 點地面走路的目標小圈圈
   const GOAL = new THREE.Mesh(new THREE.RingGeometry(0.42, 0.62, 32), new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.95, depthWrite: false }));
@@ -230,8 +263,11 @@ const NW = (() => {
   // 念力光帶那些直接放在場景裡的東西：自己不是騎士的時候要藏起來
   const RIDER_FX = [...WK.halo, WK.core, ...WK.waves].filter(o => o && o.parent === scene);
   // 前院和大廳是分開的兩區：人在哪一區就只畫那一區（另一區整個藏起來，省效能）
+  // 職業導師：坐在大廳後牆的桌子後面（只有在大廳才畫）
+  const MENTOR = LOBBY && STD ? STD.make({ hair: 'bun', top: 'hoodie', face: 'smile', glasses: true, hairCol: '#9a96a0', topCol: '#7d6a9c' }) : null, LOBX = [];
+  if (MENTOR) { const q = LOBBY.SPOTS.mentorSeat; MENTOR.H.position.set(q.x, q.h, q.z); MENTOR.H.rotation.y = 0; MENTOR.H.visible = false; LOBX.push(MENTOR.H); }
   const YARD = LOBBY ? scene.children.filter(o => o.visible && !o.isLight && o !== sun.target && o !== R && o !== GOAL && o !== LOBBY.G && !(ME && o === ME.c.H) && !RIDER_FX.includes(o)) : [], SKY = scene.background;
-  const setZone = (lob) => { S.lob = lob; YARD.forEach(o => { o.visible = !lob; }); LOBBY.G.visible = lob; scene.background = lob ? LOBBY.bg : SKY; S.goal = null; S.camT.set(ME.x, 1.3 + FY(ME.x, ME.z), ME.z); };
+  const setZone = (lob) => { S.lob = lob; YARD.forEach(o => { o.visible = !lob; }); LOBBY.G.visible = lob; LOBX.forEach(o => { o.visible = lob; }); scene.background = lob ? LOBBY.bg : SKY; S.goal = null; S.camT.set(ME.x, 1.3 + FY(ME.x, ME.z), ME.z); };
   A.boy.visible = false;   // 舊的小男孩不再出現：騎士就是玩家自己的標準人物
   // 機器人的小零件不投影子（影子那一輪少畫很多次，地上的影子看不出差別）
   { let cut = 0, all = 0; A.bot.updateMatrixWorld(true); const sc = new V3(); A.bot.traverse(o => { if (!o.isMesh || !o.castShadow) return; all++;
@@ -281,7 +317,7 @@ const NW = (() => {
     if (S.ctrl === 'me') S.camT.lerp(bp0.set(ME.x, 1.3 + FY(ME.x, ME.z), ME.z), Math.min(1, dt * 5));   // 騎士的鏡頭看整台機器人
     else S.camT.lerp(bp0.set(S.x - 0.8, 3.6 + shake * 0.07, S.z + 3.2), Math.min(1, dt * 5));
     camera.position.set(S.camT.x + Math.sin(ANG) * cam.dist * far, cam.hgt * far, S.camT.z + Math.cos(ANG) * cam.dist * far); camera.lookAt(S.camT);
-    camera.updateMatrixWorld(); if (NEAR) { PV.set(NEAR.x, NEAR.y, NEAR.z).project(camera); HINT.hidden = false; HINT.textContent = NEAR.kind === 'bench' && ACT.pose === 'sit' ? '站起來' : HINT_TEXT[NEAR.kind];
+    camera.updateMatrixWorld(); if (NEAR) { PV.set(NEAR.x, NEAR.y, NEAR.z).project(camera); HINT.hidden = false; HINT.textContent = hintOf(NEAR);
       HINT.style.transform = 'translate(' + ((PV.x * 0.5 + 0.5) * W).toFixed(1) + 'px,' + ((-PV.y * 0.5 + 0.5) * H).toFixed(1) + 'px) translate(-50%,-100%)'; } else HINT.hidden = true;
     if (MYTAG) placeTag(MYTAG, ME.x, ME.z, ME.y + TAG_UP(ME.c));
     { const fx = S.ctrl === 'me' ? ME.x : S.x, fz = S.ctrl === 'me' ? ME.z : S.z; sun.position.set(fx - 12, 22, fz + 18); sun.target.position.set(fx, 0, fz); }
@@ -318,6 +354,8 @@ const NW = (() => {
       CULL_S.center.set(o.x, 1.3, o.z); o.c.H.visible = inLob(o.z) === S.lob && CULL_F.intersectsSphere(CULL_S);   // 畫面外的人整個不畫（人物的網格關掉了自動剔除，要自己來）
       o.c.H.position.set(o.x, o.y, o.z); o.c.H.rotation.y = o.f; STD.tick(o.c, dt, o.mv || far > 0.08 ? 1 : 0, o.mv === 2 ? 2.1 : 1.6, ps); tagOf(o); });
     if (STD) { if (ME) tickSpirit(ME.c, dt); OTH.forEach(o => tickSpirit(o.c, dt)); }
+    if (MENTOR && S.lob) STD.tick(MENTOR, dt, 0, 1, 'sit');
+    tickPet(dt);
     if (STD && TW.s1) { const a2 = t * PI2 * 0.5; TW.s1.H.position.set(-7.4 + Math.sin(a2) * 2.2, 0, 6.2 + Math.cos(a2) * 1.8); TW.s1.H.rotation.y = a2 + Math.PI / 2;
       STD.tick(TW.s1, dt, 1, 1.1); STD.tick(TW.s2, dt, 0); STD.tick(TW.s3, dt, 0); }
     TW.pet.pose(t * PI2 * 4); TW.pet.position.y = 0.12 * Math.abs(Math.sin(t * PI2 * 4));
@@ -373,12 +411,15 @@ const NW = (() => {
       if (it.kind === 'bench') { if (ACT.pose === 'sit') ACT.pose = null; else { ME.x = it.x; ME.z = it.z; ME.face = it.f; ACT.pose = 'sit'; S.goal = null; } }
       else if (it.kind === 'door' && LOBBY) { ME.x = LOBBY.SPAWN.x + (Math.random() - 0.5) * 2; ME.z = LOBBY.SPAWN.z; ME.face = Math.PI; ACT.pose = null; S.goal = null; }   // 進門：直接換到大廳的門口
       else if (it.kind === 'exit') { ME.x = YARD_DOOR.x + (Math.random() - 0.5); ME.z = YARD_DOOR.z; ME.face = YARD_DOOR.f; ACT.pose = null; S.goal = null; }
-      if (onInteract) onInteract(it.kind); return it.kind; },
+      if (onInteract) onInteract(it.kind, it); return it.kind; },
     net: NET, emote: (face) => { if (ME) STD.emote(ME.c, face, 5); },
     mem: () => ({ robotShadowCut: A.bot.userData.shadowCut, spirits: SPIRITS.size, chars: STD.all.length, lines: STD.lineCount(), geo: renderer.info.memory.geometries, tex: renderer.info.memory.textures }),   // 測試腳本用：看有沒有漏掉沒還的東西
     debugMe: () => (ME ? ME.c.g : null), zone: () => (S.lob ? 'lobby' : 'yard'), height: () => (ME ? ME.y : 0), lobby: () => (LOBBY ? { tris: LOBBY.tris(), ms: LOBBY.ms, seats: LOBBY.seats.length, spawn: LOBBY.SPAWN, exit: LOBBY.EXIT, juke: LOBBY.JUKE } : null),
     debugPlace: (x, z) => { if (ME && S.ctrl === 'me') { ME.x = x; ME.z = z; S.goal = null; } },   // 測試腳本用：把人直接放到某個位置
     onStats: (fn) => { onStats = fn; },
+    // 大廳第二、三期：花園的狀態、寵物、可以互動的點（測試腳本用 spots 找位置）
+    garden: (st) => { PLOTS = Array.isArray(st) ? st : []; if (LOBBY) LOBBY.setGarden(PLOTS); }, plots: () => PLOTS, setPet, pet: () => (PET ? { name: PET.pet.name, kind: PET.pet.kind, x: PET.x, z: PET.z } : null),
+    spots: () => (LOBBY ? { well: WELL, ...LOBBY.SPOTS } : null), hint: () => (HINT.hidden ? '' : HINT.textContent), CLS, CLS_NAME,
   };
 })();
 window.HQ_NEWWORLD = NW;

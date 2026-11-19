@@ -34,6 +34,24 @@ function hqHouse(x, z) {
   part(g, B(0.5, 0.21, 0.04), '#f7ecd0', { pos: [-0.12, 1.15, 1.18], line: 0.014, shadow: false, mat: [0, 1, 2, 3, 4, 5].map(i => (i === 4 ? new THREE.MeshToonMaterial({ map: t, gradientMap: RAMP }) : mat('#e5cfa0'))) });
 }
 
+// 前院的許願池：一口石頭井，有小屋頂和水桶；跟總部的許願池是同一個（同一批願望）
+function wishWell(x, z) {
+  const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = 0.35; scene.add(g);
+  const STONE = ['#cfc6b4', '#bdb3a0', '#d9d1c0'], r = rnd(61), WOOD = '#a8693f';
+  part(g, new THREE.CylinderGeometry(1.5, 1.6, 0.14, 20), '#e3d9bf', { pos: [0, 0.07, 0], line: 0.03, shadow: false });
+  part(g, new THREE.LatheGeometry([[0.86, 0], [1.14, 0], [1.2, 0.5], [1.14, 0.98], [1.22, 1.0], [1.22, 1.12], [0.86, 1.12], [0.86, 0]].map(([a, b]) => new THREE.Vector2(a, b)), 20), STONE[0], { pos: [0, 0.1, 0], line: 0.035 });
+  for (let i = 0; i < 16; i++) { const a = i / 16 * 6.283 + (r() - 0.5) * 0.2, y = 0.3 + (i % 3) * 0.26 + r() * 0.06; part(g, sph(0.2, 7, 5), STONE[1 + (i % 2)], { pos: [Math.sin(a) * 1.13, y, Math.cos(a) * 1.13], scale: [1.2, 0.7, 0.45], rot: [0, a, 0], noLine: true, shadow: false }); }
+  part(g, new THREE.CircleGeometry(0.9, 20), '#7fc3d8', { pos: [0, 0.95, 0], rot: [-Math.PI / 2, 0, 0], noLine: true, shadow: false, mat: basic('#8fd0e0') });
+  [[0.3, 0.2, 0.2], [-0.35, -0.1, 0.14], [0.05, -0.45, 0.17]].forEach(([a, b, s]) => part(g, new THREE.RingGeometry(s, s + 0.03, 16), '#ffffff', { pos: [a, 0.96, b], rot: [-Math.PI / 2, 0, 0], noLine: true, shadow: false, mat: basic('#e6f7fb') }));
+  [[0.45, -0.25], [-0.2, 0.4], [-0.5, -0.3]].forEach(([a, b]) => part(g, new THREE.CylinderGeometry(0.07, 0.07, 0.02, 10), '#f2c14e', { pos: [a, 0.965, b], noLine: true, shadow: false, mat: basic('#ffd86a') }));
+  [-1, 1].forEach(k => part(g, new THREE.BoxGeometry(0.16, 2.5, 0.16), WOOD, { pos: [1.2 * k, 1.35, 0], line: 0.026 }));
+  part(g, new THREE.CylinderGeometry(0.07, 0.07, 2.5, 8), '#8a5f3d', { pos: [0, 2.2, 0], rot: [0, 0, Math.PI / 2], line: 0.02 });
+  part(g, new THREE.CylinderGeometry(0.014, 0.014, 0.8, 4), '#e5d6b4', { pos: [0.2, 1.8, 0], noLine: true, shadow: false });
+  part(g, new THREE.CylinderGeometry(0.2, 0.16, 0.3, 10), '#c98a52', { pos: [0.2, 1.3, 0], line: 0.022 }); part(g, new THREE.TorusGeometry(0.19, 0.02, 5, 12), '#8d9aa0', { pos: [0.2, 1.38, 0], rot: [Math.PI / 2, 0, 0], noLine: true, shadow: false });
+  [-1, 1].forEach(k => part(g, new THREE.BoxGeometry(3.2, 0.1, 1.2), k > 0 ? '#c9604a' : '#b8433c', { pos: [0, 2.95, 0.48 * k], rot: [0.62 * k, 0, 0], line: 0.03 }));
+  part(g, new THREE.BoxGeometry(3.3, 0.12, 0.16), '#8a3a30', { pos: [0, 3.3, 0], noLine: true });
+  return g;
+}
 const LOBBY = TW ? (() => {
   const OZ = -55, HW = 20, HD = 12, WH = 6.4, PH = 1.0, PI = Math.PI, T0 = performance.now();
   const G = new THREE.Group(); G.position.set(0, 0, OZ); G.visible = false; scene.add(G);
@@ -348,11 +366,16 @@ const LOBBY = TW ? (() => {
   [3, 7].forEach(z => p(box(0.2, 1.3, 0.2), STEEL, { pos: [HW, 0.65, z], line: 0.02 }));
   rail(20.2, -1.5, 27, -1.5, 0, 1.1, WALNUT); rail(27, -1.5, 27, 11.5, 0, 1.1, WALNUT); rail(27, 11.5, 20.2, 11.5, 0, 1.1, WALNUT);
   wall(23.6, -6.9, 3.6, 5.3);   // 陽台北邊（作戰角東邊外面）是空的，擋起來
-  // 花箱：之後的共用花園會放在這裡
-  [[26.2, 1.2], [26.2, 4.4], [26.2, 7.6]].forEach(([x, z], n) => { p(box(1.0, 0.6, 2.6), '#c99a66', { pos: [x, 0.3, z], line: 0.024 }); p(box(0.84, 0.05, 2.44), '#6b4a32', { pos: [x, 0.6, z], noLine: true, shadow: false });
-    const r = rnd(40 + n); for (let i = 0; i < 5; i++) { const zz = z - 1.0 + i * 0.5, hh = 0.3 + r() * 0.35; p(sph(0.24, 8, 6), i % 2 ? LEAF2 : LEAF, { pos: [x + (r() - 0.5) * 0.3, 0.7 + hh * 0.4, zz], scale: [1, 1 + hh, 1], line: 0.018 }); if (r() < 0.6) p(sph(0.09, 6, 5), [RED, MUST, '#f6b3c0', '#fffdf2'][i % 4], { pos: [x - 0.12, 0.95 + hh * 0.5, zz + 0.1], noLine: true, shadow: false }); }
-    wall(x, z, 0.55, 1.35); });
-  // 大水缸：之後的許願池
+  // 花箱：公共花園的 12 格（跟總部的公共花園是同一塊，一箱 4 格）。植物是照花園的狀態另外畫的，看下面的 setGarden
+  const PLOTS_L = [];
+  [[26.2, 1.2], [26.2, 4.4], [26.2, 7.6]].forEach(([x, z]) => { p(box(1.0, 0.6, 2.6), '#c99a66', { pos: [x, 0.3, z], line: 0.024 }); p(box(0.84, 0.05, 2.44), '#6b4a32', { pos: [x, 0.6, z], noLine: true, shadow: false });
+    [-0.9, -0.3, 0.3, 0.9].forEach(d => PLOTS_L.push([x, z + d])); wall(x, z, 0.55, 1.35); });
+  // 種子認養箱：木箱裡插著幾包種子
+  grp([25.5, 0, 10.5], 0.45, () => { p(box(1.0, 0.62, 0.74), '#c98a52', { pos: [0, 0.31, 0], line: 0.024 }); p(box(0.86, 0.04, 0.6), '#5b4636', { pos: [0, 0.6, 0], noLine: true, shadow: false });
+    [[-0.26, RED], [0, MUST], [0.26, SAGE]].forEach(([a, c2], i) => { p(box(0.2, 0.34, 0.03), '#f7ecd0', { pos: [a, 0.74, 0.05 - i * 0.07], rot: [-0.2, 0, (i - 1) * 0.12], line: 0.012, shadow: false }); p(sph(0.06, 6, 5), c2, { pos: [a, 0.78, 0.075 - i * 0.07], scale: [1, 1, 0.3], noLine: true, shadow: false }); });
+    sign('種子箱', 0.84, { pos: [0, 0.3, 0.376] }); });
+  round(25.5, 10.5, 0.65);
+  // 大水缸：裝澆花的水（許願池在前院）
   p(new THREE.LatheGeometry([[0, 0], [0.55, 0], [0.92, 0.45], [0.98, 0.8], [0.8, 1.12], [0.86, 1.2], [0.7, 1.2]].map(([a, b]) => new THREE.Vector2(a, b)), 20), '#7d5a44', { pos: [23.3, 0, 9.6] });
   p(cyl(0.74, 0.74, 0.04, 20), '#8fc7d6', { pos: [23.3, 1.1, 9.6], noLine: true, shadow: false }); [[0.25, 0.1], [-0.3, -0.15], [0.05, -0.4]].forEach(([a, b]) => p(cyl(0.17, 0.17, 0.02, 10), LEAF2, { pos: [23.3 + a, 1.13, 9.6 + b], noLine: true, shadow: false })); p(sph(0.07, 6, 5), '#f6b3c0', { pos: [23.05, 1.17, 9.45], noLine: true, shadow: false }); round(23.3, 9.6, 1.0);
   // 寵物的軟墊和碗
@@ -378,9 +401,40 @@ const LOBBY = TW ? (() => {
     vertexShader: 'attribute float th; void main(){ float k = 0.75 + 0.45*sin(dot(position, vec3(13.0,17.0,11.0))); vec3 p = position + normalize(normal)*th*k; gl_Position = projectionMatrix*modelViewMatrix*vec4(p,1.0); }',
     fragmentShader: 'uniform vec3 col; void main(){ gl_FragColor = vec4(col,1.0); }' }), false, false, true);
 
+  // ---- 公共花園的植物：照花園的狀態（12 格）重畫，全部併成一塊，花園有變才重做 ----
+  const FRUIT = { tomato: '#e2503f', guava: '#a9cf6b', apple: '#d8473d', pineapple: '#e5b03a' }, BLOOM = { tomato: '#f6d76a', guava: '#fffdf2', apple: '#f6b3c0', pineapple: '#c98ad0' };
+  const lineMat = G.children[G.children.length - 1].material;
+  const GARD = new THREE.Group(); G.add(GARD);
+  const setGarden = (plots) => {
+    GARD.children.slice().forEach(m => { m.geometry.dispose(); GARD.remove(m); });
+    const keep = [BK.cast, BK.flat, BK.line]; BK.cast = BK.flat = mkB(); BK.line = mkB();
+    PLOTS_L.forEach(([x, z], i) => { const pl = plots && plots[i], r = rnd(90 + i), Y = 0.625;
+      p(cyl(0.25, 0.27, 0.05, 10), pl && pl.wet > 0 ? '#4b3324' : '#8a6c4c', { pos: [x, Y, z], noLine: true });   // 土：澆過水顏色比較深
+      if (!pl) return; const st = pl.stage, k = pl.kind, dry = pl.wet <= 0, L1 = st === 5 ? '#9a7a52' : dry ? '#b5bd62' : LEAF, L2 = st === 5 ? '#86663f' : dry ? '#a3ab55' : LEAF2, STEM = st === 5 ? '#7a5a3a' : '#6f9a4c';
+      grp([x, Y, z], r() * 6.28, () => {
+        if (st === 0) { p(sph(0.13, 8, 6), '#6b4a32', { pos: [0, 0.03, 0], scale: [1, 0.5, 1], noLine: true }); p(sph(0.035, 6, 5), '#f4e9d2', { pos: [0.03, 0.1, 0.02], noLine: true, shadow: false }); return; }
+        if (st === 1) { p(cyl(0.018, 0.022, 0.2, 5), STEM, { pos: [0, 0.1, 0], noLine: true }); [-1, 1].forEach(a => p(sph(0.07, 7, 5), L1, { pos: [0.07 * a, 0.21, 0], scale: [1.2, 0.35, 0.7], rot: [0, 0, 0.5 * a], line: 0.012 })); return; }
+        if (st === 5) { p(cyl(0.02, 0.03, 0.42, 5), STEM, { pos: [0.05, 0.2, 0], rot: [0, 0, -0.25], noLine: true }); [[0.16, 0.36, 0.9], [-0.06, 0.26, -0.8], [0.2, 0.2, 1.3]].forEach(([a, b, c2]) => p(sph(0.09, 7, 5), L1, { pos: [a, b, 0], scale: [1.3, 0.3, 0.7], rot: [0, 0, -c2], line: 0.012 })); p(sph(0.1, 7, 5), L2, { pos: [-0.1, 0.03, 0.08], scale: [1.2, 0.3, 0.9], noLine: true }); return; }
+        const big = st >= 3 ? 1.3 : 0.95, dots = (col, n, rad, y0, sp) => { for (let j = 0; j < n; j++) { const a = j / n * 6.28 + 0.5, d = sp * (0.75 + 0.25 * r()); p(sph(rad, 8, 6), col, { pos: [Math.cos(a) * d, y0 + (r() - 0.5) * 0.16, Math.sin(a) * d], line: rad > 0.06 ? 0.012 : 0, noLine: rad <= 0.06, shadow: false }); } };
+        if (k === 'pineapple') { for (let j = 0; j < 9; j++) { const a = j / 9 * 6.28, tilt = 0.55 + (j % 2) * 0.3; p(new THREE.ConeGeometry(0.05, 0.5 * big, 4), j % 2 ? L2 : L1, { pos: [Math.sin(a) * 0.13, 0.2 * big, Math.cos(a) * 0.13], rot: [Math.cos(a) * tilt, 0, -Math.sin(a) * tilt], line: 0.012 }); }
+          if (st === 3) p(sph(0.07, 8, 6), BLOOM[k], { pos: [0, 0.3, 0], line: 0.012, shadow: false });
+          if (st === 4) { p(sph(0.15, 10, 8), FRUIT[k], { pos: [0, 0.42, 0], scale: [1, 1.3, 1], line: 0.016 }); for (let j = 0; j < 5; j++) { const a = j / 5 * 6.28; p(new THREE.ConeGeometry(0.035, 0.2, 4), LEAF2, { pos: [Math.sin(a) * 0.04, 0.68, Math.cos(a) * 0.04], rot: [Math.cos(a) * 0.4, 0, -Math.sin(a) * 0.4], noLine: true, shadow: false }); } }
+          return; }
+        if (k === 'tomato') { p(cyl(0.016, 0.016, 0.8 * big, 4), '#c9a36b', { pos: [0.09, 0.4 * big, -0.06], noLine: true });   // 小番茄：一根支架，旁邊一叢葉子
+          p(cyl(0.02, 0.026, 0.5 * big, 5), STEM, { pos: [0, 0.25 * big, 0], noLine: true }); [[0, 0.5, 0, 0.2], [0.12, 0.33, 0.06, 0.15], [-0.12, 0.38, -0.04, 0.15], [0.02, 0.24, -0.12, 0.13]].forEach(([a, b, c2, rr], j) => p(sph(rr * big, 9, 7), j % 2 ? L2 : L1, { pos: [a * big, b * big, c2 * big], scale: [1, 0.85, 1], line: 0.016 }));
+          if (st === 3) dots(BLOOM[k], 5, 0.05, 0.56, 0.25); if (st === 4) dots(FRUIT[k], 6, 0.075, 0.46, 0.26); return; }
+        // 芭樂、蘋果：一棵小樹
+        p(cyl(0.03, 0.045, 0.42 * big, 6), '#8a5f3d', { pos: [0, 0.21 * big, 0], line: 0.012 }); p(sph(0.26 * big, 10, 8), L1, { pos: [0, 0.58 * big, 0], scale: [1, 0.9, 1], line: 0.018 }); p(sph(0.17 * big, 8, 6), L2, { pos: [0.13 * big, 0.72 * big, 0.06], line: 0.016 });
+        if (st === 3) dots(BLOOM[k], 6, 0.05, 0.78, 0.32); if (st === 4) dots(FRUIT[k], k === 'guava' ? 4 : 5, 0.085, 0.66, 0.33); });
+    });
+    const a1 = add(BK.cast, toon, true, true), a2 = add(BK.line, lineMat, false, false, true); [a1, a2].forEach(m => { if (m) GARD.add(m); });
+    BK.cast = keep[0]; BK.flat = keep[1]; BK.line = keep[2]; };
+  setGarden(null);
+  const W3 = (x, z, y) => ({ x, z: z + OZ, y });
+  const SPOTS = { mentor: W3(-8.6, -7.7, 2.6), mentorSeat: { x: -8.7, z: -10.4 + OZ, h: 0.47 }, gacha: W3(-9.35, 4.7, 3.5), seedbox: W3(25.5, 10.5, 1.5), plots: PLOTS_L.map(([x, z]) => W3(x, z, 1.7)), petBed: W3(21.6, 9.9, 0.26) };
   // 地板高度：作戰角高一階，樓梯是斜的
   const floorY = (x, z) => { const lz = z - OZ; if (z > -40) return 0; if (x > 8 && lz < -3) return PH; if (x > 10 && x < 13 && lz < -0.6 && lz >= -3) return PH * (-0.6 - lz) / 2.4; return 0; };
   const ms = Math.round(performance.now() - T0);
-  return { G, OZ, PH, ms, walls, rounds, seats, floorY, JUKE, EXIT, SPAWN, isIn: (z) => z < -40, bg: new THREE.Color('#40343a'),
+  return { G, OZ, PH, ms, walls, rounds, seats, floorY, JUKE, EXIT, SPAWN, SPOTS, setGarden, isIn: (z) => z < -40, bg: new THREE.Color('#40343a'),
     min: [-HW + 0.5, OZ - HD + 0.5], max: [26.6, OZ + HD - 0.4], tris: () => Object.values(BK).reduce((a, b) => a + b.i.length / 3, 0) };
 })() : null;

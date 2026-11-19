@@ -8,6 +8,7 @@
 //   node scripts/nw-test.js classes    只跑召喚師、陵媒、表情
 //   node scripts/nw-test.js live       只跑動作、長椅、徽章、點唱機、假人壓力測試
 //   node scripts/nw-test.js lobby      只跑總部大廳（進門、出門、坐沙發、作戰角的高度、點唱機）
+//   node scripts/nw-test.js home       只跑大廳的功能（導師轉職、扭蛋機、公共花園、種子箱、許願池、寵物）；加 GARDEN_SPEED=600 會連收成一起測
 //   OUT=some/dir 可以指定截圖要放哪裡（預設是系統暫存資料夾）
 //
 // 需要 playwright（沒有列在 package.json，本機要跑的話先 npm i -D playwright && npx playwright install chromium）
@@ -309,6 +310,80 @@ async function main() {
     ok(pp.errors.length === 0, '手機沒有主控台錯誤'); await pp.context().close();
   };
 
+  // ---- 大廳第二、三期：導師轉職、扭蛋機、公共花園、種子箱、許願池、寵物（都是讀寫總部同一份資料）----
+  const home = async () => {
+    console.log('home');
+    const a = await account({ name: '阿福', hair: 'bob', inv: { gachaTicket: 3, seedTomato: 2, gemRuby: 1 }, pet: { kind: 'cat', name: '麻糬', fur: '#f0a456', pattern: 'mackerel', white: 'socks' } });
+    const api = (name, body) => post('/api/newworld/' + name, body, { Authorization: 'Bearer ' + a.token });
+    const pa = await open(a), OZ = -55;
+    const near = (k) => pa.waitForFunction((v) => HQ_NEWWORLD.near() === v, k, { timeout: 30000 }).catch(() => {});
+    const place = async (x, z) => { await NW(pa, ([x, z]) => HQ_NEWWORLD.debugPlace(x, z), [x, z]); await pa.waitForTimeout(900); };
+    const panel = (k) => pa.waitForFunction((v) => { const p = document.getElementById('panel'); return !p.hidden && p.dataset.kind === v && !/讀取中/.test(p.textContent); }, k, { timeout: 30000 }).catch(() => {});
+    const toast = () => pa.evaluate(() => (document.getElementById('toast').hidden ? '' : document.getElementById('toast').textContent));
+    const S = await NW(pa, () => HQ_NEWWORLD.spots());
+    await zoomIn(pa);
+    // 寵物
+    const pet = await NW(pa, () => HQ_NEWWORLD.pet());
+    ok(pet && pet.name === '麻糬' && pet.kind === 'cat', '帳號的寵物跟在身邊（' + JSON.stringify(pet) + '）');
+    await place(2.5, 12); await pa.waitForFunction(() => { const q = HQ_NEWWORLD.pet(); return Math.hypot(q.x - 2.5, q.z - 12) < 2.5; }, null, { timeout: 30000 }).catch(() => {}); const pet2 = await NW(pa, () => HQ_NEWWORLD.pet());
+    ok(Math.hypot(pet2.x - 2.5, pet2.z - 12) < 2.5, '人換位置，寵物會跟上來'); await shot(pa, 'home-1-pet');
+    // 前院的許願池
+    await place(S.well.x - 0.4, S.well.z + 2.3); await near('well');
+    ok((await pa.textContent('.nw-hint')) === '許願', '前院的許願池冒出「許願」紙條'); await shot(pa, 'home-2-well');
+    await pa.click('.nw-hint'); await panel('well');
+    ok(/還沒有人許願/.test(await pa.textContent('#panel')), '許願池面板打開，一開始是空的');
+    await pa.click('#wish-add'); await pa.fill('#wish-title', '想要在大廳養魚'); await pa.click('#panel [data-cat="feature"]'); await pa.fill('#wish-body', '陽台的水缸可以放幾隻魚'); await pa.click('#wish-send');
+    await pa.waitForFunction(() => /想要在大廳養魚/.test(document.getElementById('panel').textContent) && !!document.querySelector('#panel .wish'), null, { timeout: 30000 }).catch(() => {});
+    ok(/想要在大廳養魚/.test(await pa.textContent('#panel')), '許了一個願，清單上看得到'); await shot(pa, 'home-3-well-list');
+    await pa.click('#panel .wish'); await pa.waitForSelector('#wish-like', { timeout: 30000 }).catch(() => {}); await pa.click('#wish-like');
+    await pa.waitForFunction(() => /收回讚（1）/.test(document.getElementById('panel').textContent), null, { timeout: 30000 }).catch(() => {});
+    const wl = await api('wishes', { act: 'list' });
+    ok(wl.ok && wl.items.length === 1 && wl.items[0].likes === 1 && wl.items[0].liked, '按讚有記到（跟總部同一個許願池）');
+    // 職業導師
+    await place(S.mentor.x, S.mentor.z + 0.4); await pa.waitForFunction(() => HQ_NEWWORLD.zone() === 'lobby', null, { timeout: 30000 }).catch(() => {}); await near('mentor');
+    ok((await pa.textContent('.nw-hint')) === '轉職' && (await pa.isHidden('#panel')), '進大廳，走遠了許願池面板自己收起來；導師桌前冒出「轉職」');
+    await pa.click('.nw-hint'); await panel('mentor'); await pa.waitForTimeout(600); await shot(pa, 'home-4-mentor');
+    await pa.click('#panel [data-cls="summoner"]'); await pa.waitForTimeout(600);
+    ok((await NW(pa, () => HQ_NEWWORLD.look().cls)) === 'summoner' && (await pa.textContent('#s-ctrl')) === '召喚師' && /轉職成召喚師/.test(await toast()), '跟導師轉職成召喚師');
+    await pa.waitForTimeout(900); const lk = await (await fetch(B + '/api/newworld/look', { headers: { Authorization: 'Bearer ' + a.token } })).json();
+    ok(lk.look3d && lk.look3d.cls === 'summoner', '轉職有存進帳號');
+    // 扭蛋機
+    await place(S.gacha.x, S.gacha.z + 0.9); await near('gacha');
+    ok((await pa.textContent('.nw-hint')) === '扭蛋', '扭蛋機前冒出「扭蛋」');
+    await pa.click('.nw-hint'); await panel('gacha');
+    ok((await pa.getAttribute('#gacha-tickets', 'data-tickets')) === '3', '扭蛋機面板讀到帳號的 3 張扭蛋券');
+    await pa.click('#gacha-spin'); await pa.waitForSelector('#panel .result', { timeout: 30000 }).catch(() => {}); await pa.waitForTimeout(500); await shot(pa, 'home-5-gacha');
+    const g1 = await api('gacha', { act: 'state' });
+    ok(g1.tickets === 2 && g1.pity === 1 || (g1.tickets === 2 && g1.pity === 0), '扭一次：券少一張、保底往前算（券 ' + g1.tickets + '、保底 ' + g1.pity + '）');
+    ok(!!(await pa.$('#panel .result img')), '扭到的裝備有手繪圖示');
+    await pa.click('#panel .acts button:nth-child(3)'); await pa.waitForFunction(() => document.getElementById('gacha-tickets').dataset.tickets === '5', null, { timeout: 30000 }).catch(() => {});
+    ok((await api('gacha', { act: 'state' })).tickets === 5, '一顆寶石換三張券');
+    // 陽台：種子箱和公共花園
+    await place(S.seedbox.x - 1.1, S.seedbox.z - 0.6); await near('seedbox');
+    ok((await pa.textContent('.nw-hint')) === '領種子', '種子箱冒出「領種子」'); await pa.click('.nw-hint');
+    await pa.waitForFunction(() => /領到一包/.test(document.getElementById('toast').textContent), null, { timeout: 30000 }).catch(() => {});
+    ok(/領到一包/.test(await toast()), '種子箱領到今天的種子'); await pa.waitForTimeout(400); await pa.click('.nw-hint'); await pa.waitForFunction(() => /今天已經領過了/.test(document.getElementById('toast').textContent), null, { timeout: 30000 }).catch(() => {});
+    ok(/今天已經領過了/.test(await toast()), '一天只能領一次');
+    const P0 = S.plots[0]; await place(P0.x - 1.0, P0.z - 0.1); await near('plot');
+    ok((await pa.textContent('.nw-hint')) === '種東西', '空的花圃冒出「種東西」'); await pa.click('.nw-hint'); await panel('plot');
+    await pa.click('#panel [data-seed="tomato"]'); await pa.waitForFunction(() => { const q = HQ_NEWWORLD.plots()[0]; return q && q.kind === 'tomato'; }, null, { timeout: 30000 }).catch(() => {});
+    ok(((await NW(pa, () => HQ_NEWWORLD.plots()))[0] || {}).kind === 'tomato', '種下小番茄，花圃長出東西'); await pa.waitForTimeout(700); await shot(pa, 'home-6-garden-planted');
+    if (process.env.GARDEN_SPEED) {   // 花園調快的時候順便測收成（GARDEN_SPEED=600 大約 6 秒就熟）
+      await pa.waitForFunction(() => { const q = HQ_NEWWORLD.plots()[0]; return q && q.stage === 4; }, null, { timeout: 90000 }).catch(() => {});
+      await pa.waitForFunction(() => HQ_NEWWORLD.hint() === '收成', null, { timeout: 30000 }).catch(() => {});
+      ok((await NW(pa, () => HQ_NEWWORLD.hint())) === '收成', '熟了以後紙條變成「收成」'); await shot(pa, 'home-7-garden-ripe');
+      await NW(pa, () => window.NW_UI.close()); await pa.click('.nw-hint'); await panel('plot'); await pa.waitForSelector('#plot-harvest', { timeout: 30000 }).catch(() => {}); await pa.click('#plot-harvest');
+      await pa.waitForFunction(() => !HQ_NEWWORLD.plots()[0], null, { timeout: 30000 }).catch(() => {});
+      ok(!(await NW(pa, () => HQ_NEWWORLD.plots()))[0] && /收成了 3 顆小番茄/.test(await toast()), '收成 3 顆小番茄，花圃空出來');
+    }
+    await place(22.6, OZ + 5); await pa.waitForTimeout(1200); await shot(pa, 'home-8-balcony');
+    ok(pa.errors.length === 0, '沒有主控台錯誤' + (pa.errors.length ? '：' + pa.errors.join(' / ') : ''));
+    await pa.context().close();
+    const pp = await open(a, true); await NW(pp, ([x, z]) => HQ_NEWWORLD.debugPlace(x, z), [S.gacha.x, S.gacha.z + 0.9]); await pp.waitForFunction(() => HQ_NEWWORLD.near() === 'gacha', null, { timeout: 30000 }).catch(() => {});
+    await pp.click('.nw-hint'); await pp.waitForFunction(() => !!document.getElementById('gacha-spin'), null, { timeout: 30000 }).catch(() => {}); await pp.waitForTimeout(800); await shot(pp, 'home-9-phone-gacha');
+    ok(pp.errors.length === 0 && !!(await pp.$('#gacha-spin')), '手機也開得了扭蛋機面板'); await pp.context().close();
+  };
+
   if (want === 'all' || want === 'solo') await solo(false);
   if (want === 'all' || want === 'phone') await solo(true);
   if (want === 'all' || want === 'multi') await multi();
@@ -316,6 +391,7 @@ async function main() {
   if (want === 'all' || want === 'live') await live();
   if (want === 'all' || want === 'rider') await rider();
   if (want === 'all' || want === 'lobby') await lobby();
+  if (want === 'all' || want === 'home') await home();
   await browser.close();
   console.log('截圖在 ' + OUT);
   console.log(failed ? failed + ' 項沒過' : '全部通過');

@@ -40,7 +40,8 @@ const LOBBY = TW ? (() => {
   const walls = [], rounds = [], seats = [];
   const wall = (x, z, hx, hz) => walls.push({ x, z: z + OZ, hx, hz, ry: 0 });
   const round = (x, z, r) => rounds.push({ x, z: z + OZ, r });
-  const seat = (x, z, f, top) => seats.push({ x, z: z + OZ, f, h: top - 0.41 });   // top：椅面離那塊地板多高
+  // top：椅面離那塊地板多高；fwd：屁股離椅子中心往前多少（要坐在前緣，小腿才會垂在椅子外面，不會插進椅墊）
+  const seat = (x, z, f, top, fwd = 0.27) => seats.push({ x: x + Math.sin(f) * fwd, z: z + Math.cos(f) * fwd + OZ, f, h: top - 0.41 });
 
   // ---- 把同一種畫法的零件併成一塊：整個大廳的家具只要畫幾次，不會因為東西多就變慢 ----
   const mkB = () => ({ p: [], n: [], u: [], c: [], t: [], i: [], nv: 0 }), BK = { cast: mkB(), flat: mkB(), glow: mkB(), pool: mkB(), line: mkB() };
@@ -146,7 +147,7 @@ const LOBBY = TW ? (() => {
       const cw = (w - 0.7) / n; for (let i = 0; i < n; i++) p(rbox(cw - 0.06, 0.2, 1.08, 0.09), col, { pos: [-(w - 0.7) / 2 + cw * (i + 0.5), 0.63, 0.14], line: 0.02, shadow: false });
       [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([a, b]) => p(cyl(0.06, 0.05, 0.16, 6), WALNUT, { pos: [a * (w / 2 - 0.25), 0.08, b * 0.55], noLine: true }));
       (pillows || []).forEach(([px, pc, rz]) => p(rbox(0.56, 0.56, 0.2, 0.09), pc, { pos: [px, 0.98, -0.3], rot: [-0.28, 0, rz || 0], line: 0.02 })); });
-    const cs = Math.cos(ry), sn = Math.sin(ry), cw = (w - 0.7) / n; for (let i = 0; i < n; i++) { const lx = -(w - 0.7) / 2 + cw * (i + 0.5), lz = 0.2; seat(x + lx * cs + lz * sn, z - lx * sn + lz * cs, ry, 0.72); }
+    const cs = Math.cos(ry), sn = Math.sin(ry), cw = (w - 0.7) / n; for (let i = 0; i < n; i++) { const lx = -(w - 0.7) / 2 + cw * (i + 0.5); seat(x + lx * cs, z - lx * sn, ry, 0.74, 0.62); }
     walls.push({ x, z: z + OZ, hx: w / 2, hz: 0.75, ry }); };
   // 旋轉辦公椅
   const officeChair = (x, y, z, ry, col) => { grp([x, y, z], ry, () => { p(cyl(0.05, 0.05, 0.5, 8), STEEL, { pos: [0, 0.36, 0], noLine: true }); for (let i = 0; i < 5; i++) p(box(0.44, 0.05, 0.07), STEEL, { pos: [Math.cos(i * 1.257) * 0.2, 0.09, Math.sin(i * 1.257) * 0.2], rot: [0, -i * 1.257, 0], noLine: true });
@@ -220,22 +221,35 @@ const LOBBY = TW ? (() => {
   p(cyl(0.1, 0.08, 0.2, 10), '#f4e9d2', { pos: [-8.4, 1.26, -8.95], line: 0.012 }); [[-0.03, RED], [0.04, NAVY], [0, MUST]].forEach(([a, c2], i) => p(cyl(0.012, 0.012, 0.3, 4), c2, { pos: [-8.4 + a, 1.44, -8.95 + (i - 1) * 0.03], rot: [0.15 * (i - 1), 0, a * 4], noLine: true, shadow: false }));   // 筆筒
   sign('職業導師', 1.5, { pos: [-8.6, 0.62, -8.55] });
   wall(-8.6, -10.2, 2.15, 1.75);
-  // 扭蛋機：兩台並排
-  [[-4.9, RED, '#b8433c'], [-3.2, MUST, '#c9963a']].forEach(([x, c2, c3], n) => { grp([x, 0, -10.95], 0, () => { p(rbox(1.4, 1.45, 1.3, 0.12), c2, { pos: [0, 0.74, 0] }); p(cyl(0.72, 0.72, 0.1, 18), c3, { pos: [0, 1.5, 0], line: 0.02 });
-      p(sph(0.78, 20, 14), '#e4f2f2', { pos: [0, 2.2, 0], line: 0.03 }); p(cyl(0.34, 0.5, 0.2, 16), c2, { pos: [0, 2.98, 0], line: 0.022 });
-      const r = rnd(7 + n), cs = [RED, MUST, BLUE, '#f6b3c0', SAGE, '#b98fc0']; for (let i = 0; i < 16; i++) { const a = (r() - 0.5) * 2.2, e = (r() - 0.62) * 1.5; p(sph(0.17, 8, 6), cs[i % cs.length], { pos: [Math.sin(a) * Math.cos(e) * 0.68, 2.2 + Math.sin(e) * 0.68, Math.cos(a) * Math.cos(e) * 0.68], noLine: true, shadow: false }); }
-      p(cyl(0.17, 0.17, 0.1, 12), SILVER, { pos: [0.3, 0.95, 0.68], rot: [PI / 2, 0, 0], line: 0.016 }); p(box(0.3, 0.07, 0.06), '#8d9aa0', { pos: [0.3, 0.95, 0.75], noLine: true, shadow: false }); p(rbox(0.5, 0.36, 0.1, 0.05), STEEL, { pos: [-0.3, 0.42, 0.66], noLine: true, shadow: false }); });
-    round(x, -10.95, 0.85); });
-  sign('扭蛋', 1.1, { pos: [-4.05, 3.75, -HD + 0.03] });
+  // 扭蛋機：從牆邊搬出來，獨立一角（左前）。玻璃罩是真的透明，裡面一顆一顆的扭蛋（上半有顏色、下半米白）堆在底部
+  const GLASS = [];
+  [[-10.6, RED, '#b8433c'], [-8.1, MUST, '#c9963a']].forEach(([x, c2, c3], n) => { const gz = 3.6, R = 0.86, gy = 2.32;
+    grp([x, 0, gz], n ? -0.12 : 0.12, () => { p(rbox(1.5, 1.45, 1.3, 0.12), c2, { pos: [0, 0.74, 0] }); p(cyl(0.8, 0.8, 0.12, 20), c3, { pos: [0, 1.52, 0], line: 0.02 }); p(cyl(0.7, 0.7, 0.05, 20), '#f4e9d2', { pos: [0, 1.6, 0], noLine: true, shadow: false });
+      p(cyl(0.36, 0.52, 0.2, 16), c2, { pos: [0, gy + R - 0.02, 0], line: 0.022 }); p(sph(0.1, 8, 6), c3, { pos: [0, gy + R + 0.12, 0], noLine: true });
+      const r = rnd(7 + n * 5), cs = [RED, MUST, BLUE, '#f6b3c0', SAGE, '#b98fc0', '#e89a4f'], put2 = [], cr = 0.17;
+      for (let t = 0; t < 900 && put2.length < 26; t++) { const a = r() * 6.283, d = Math.sqrt(r()) * (R - cr - 0.04), y = -0.66 + r() * 0.75, q = [Math.cos(a) * d, y, Math.sin(a) * d];
+        if (Math.hypot(q[0], q[1], q[2]) > R - cr - 0.03 || put2.some(o => Math.hypot(o[0] - q[0], o[1] - q[1], o[2] - q[2]) < cr * 1.7)) continue; put2.push(q); }
+      put2.forEach((q, k) => { const rot = [r() * 6.283, r() * 6.283, r() * 6.283];
+        p(new THREE.SphereGeometry(cr, 12, 5, 0, PI * 2, 0, PI / 2), cs[k % cs.length], { pos: [q[0], gy + q[1], q[2]], rot, noLine: true, shadow: false });
+        p(new THREE.SphereGeometry(cr, 12, 5, 0, PI * 2, PI / 2, PI / 2), '#fbf5e6', { pos: [q[0], gy + q[1], q[2]], rot, noLine: true, shadow: false });
+        p(cyl(cr * 1.03, cr * 1.03, 0.02, 12), '#e5d6b4', { pos: [q[0], gy + q[1], q[2]], rot, noLine: true, shadow: false }); });
+      p(cyl(0.18, 0.18, 0.1, 12), SILVER, { pos: [0.32, 0.98, 0.68], rot: [PI / 2, 0, 0], line: 0.016 }); p(box(0.32, 0.07, 0.06), '#8d9aa0', { pos: [0.32, 0.98, 0.75], noLine: true, shadow: false });
+      p(rbox(0.54, 0.4, 0.1, 0.05), STEEL, { pos: [-0.3, 0.42, 0.66], noLine: true, shadow: false }); p(box(0.5, 0.26, 0.04), '#f7ecd0', { pos: [-0.3, 1.05, 0.67], line: 0.012, shadow: false });
+      GLASS.push([sph(R, 24, 16), local({ pos: [0, gy, 0] })]);
+      p(sph(0.09, 8, 6), '#ffffff', { glow: true, pos: [-0.4, gy + 0.46, 0.63], scale: [1, 2.2, 0.25], rot: [0, 0, 0.6] }); });
+    round(x, gz, 0.9); });
+  p(new THREE.CircleGeometry(2.5, 32), '#e9d3b0', { pos: [-9.35, 0.014, 3.7], rot: FLOOR, scale: [1, 0.72, 1], noLine: true, shadow: false }); p(new THREE.RingGeometry(2.1, 2.22, 32), SAGE, { pos: [-9.35, 0.018, 3.7], rot: FLOOR, scale: [1, 0.72, 1], noLine: true, shadow: false });
+  p(box(0.1, 1.3, 0.1), WALNUT, { pos: [-12.3, 0.65, 4.2], noLine: true }); p(box(1.26, 0.56, 0.08), '#e5cfa0', { pos: [-12.3, 1.5, 4.2], line: 0.02 }); sign('扭蛋', 1.16, { pos: [-12.3, 1.5, 4.25] }); round(-12.3, 4.2, 0.3);
+  plant(-4.6, -11.0, 1.25);
 
   // ================= 客廳（中間） =================
   T(plane(10, 7.5), rugTex, { pos: [1, 0.016, -3.4], rot: FLOOR });
   sofa(1, -7.0, 0, 4.6, 3, LINEN, [[-1.5, BLUE, 0.15], [1.4, MUST, -0.1]]); sofa(-4.4, -3.2, PI / 2, 3.4, 2, CARAMEL, [[-0.9, '#f4e9d2', 0.1]]);
   // 右邊兩張單人椅
   [[6.5, -4.6, SAGE], [6.5, -2.0, MUST]].forEach(([x, z, c2]) => { grp([x, 0, z], -PI / 2, () => { p(rbox(1.5, 0.42, 1.4, 0.14), c2, { pos: [0, 0.36, 0] }); p(rbox(1.5, 0.9, 0.4, 0.16), c2, { pos: [0, 0.8, -0.52] }); [-1, 1].forEach(k => p(rbox(0.34, 0.6, 1.3, 0.14), c2, { pos: [k * 0.62, 0.6, 0.02] })); p(rbox(0.86, 0.18, 1.0, 0.08), LINEN, { pos: [0, 0.62, 0.12], line: 0.02, shadow: false }); });
-    seat(x - 0.2, z, -PI / 2, 0.7); walls.push({ x, z: z + OZ, hx: 0.7, hz: 0.75, ry: 0 }); });
+    seat(x, z, -PI / 2, 0.72, 0.58); walls.push({ x, z: z + OZ, hx: 0.7, hz: 0.75, ry: 0 }); });
   // 前面兩顆矮凳
-  [[-0.8, 0.9, NAVY], [2.9, 1.1, '#d98a5c']].forEach(([x, z, c2]) => { p(cyl(0.6, 0.62, 0.46, 18), c2, { pos: [x, 0.23, z], line: 0.026 }); p(cyl(0.61, 0.61, 0.04, 18), LINEN, { pos: [x, 0.3, z], noLine: true, shadow: false }); seat(x, z, PI, 0.48); round(x, z, 0.45); });
+  [[-0.8, 0.9, NAVY], [2.9, 1.1, '#d98a5c']].forEach(([x, z, c2]) => { p(cyl(0.6, 0.62, 0.46, 18), c2, { pos: [x, 0.23, z], line: 0.026 }); p(cyl(0.61, 0.61, 0.04, 18), LINEN, { pos: [x, 0.3, z], noLine: true, shadow: false }); seat(x, z, PI, 0.48, 0.46); round(x, z, 0.45); });
   // 淺色木頭矮桌，上面一壺茶
   p(rbox(2.9, 0.42, 1.5, 0.08), '#e8c690', { pos: [1, 0.36, -3.4] }); p(box(2.5, 0.16, 1.1), '#c99c62', { pos: [1, 0.08, -3.4], noLine: true });
   p(cyl(0.5, 0.5, 0.04, 16), TEAK, { pos: [0.4, 0.59, -3.4], noLine: true }); p(sph(0.2, 10, 8), '#f4e9d2', { pos: [0.4, 0.78, -3.4], scale: [1, 0.85, 1], line: 0.014 }); p(cyl(0.03, 0.05, 0.2, 6), '#f4e9d2', { pos: [0.62, 0.8, -3.4], rot: [0, 0, -0.9], noLine: true });
@@ -305,7 +319,7 @@ const LOBBY = TW ? (() => {
     fr(7.5, 3.5, 1.5, 1.1, WALNUT, (z, y) => { blk(z, y - 0.3, 1.5, 0.5, '#d98a5c'); dot(z + 0.3, y + 0.15, 0.22, '#fbf5e6'); blk(z - 0.4, y + 0.05, 0.3, 0.4, LEAF); });
     fr(7.2, 2.3, 0.8, 0.8, STEEL, (z, y) => { blk(z, y, 0.5, 0.5, MUST); });
     fr(9.3, 3.0, 1.0, 1.5, PALE, (z, y) => { blk(z, y + 0.3, 0.7, 0.5, '#f6b3c0'); blk(z, y - 0.35, 0.7, 0.5, NAVY); }); }
-  plant(-18.9, 10.6, 1.25); plant(-10.4, 0.4, 1.0, true);
+  plant(-18.9, 10.6, 1.25);
 
   // ================= 大長桌（右前）：黑鐵腳的共用工作桌，六張圓凳可以坐 =================
   p(box(7, 0.16, 2.0), '#d9a86c', { pos: [10.5, 1.08, 6.6], line: 0.026 }); [-3, 3].forEach(a => { [-0.8, 0.8].forEach(b => p(box(0.1, 1.0, 0.1), STEEL, { pos: [10.5 + a, 0.5, 6.6 + b], noLine: true })); p(box(0.08, 0.08, 1.6), STEEL, { pos: [10.5 + a, 0.25, 6.6], noLine: true }); }); p(box(6, 0.07, 0.07), STEEL, { pos: [10.5, 0.25, 6.6], noLine: true });
@@ -317,7 +331,7 @@ const LOBBY = TW ? (() => {
   // 展示牆前面的閱讀角：一張單人椅和小圓毯
   p(new THREE.CircleGeometry(1.9, 28), '#e9d3b0', { pos: [-16.4, 0.014, 5.6], rot: FLOOR, noLine: true, shadow: false }); p(new THREE.RingGeometry(1.5, 1.62, 28), '#d98a5c', { pos: [-16.4, 0.018, 5.6], rot: FLOOR, noLine: true, shadow: false });
   grp([-16.3, 0, 5.6], PI / 2, () => { p(rbox(1.5, 0.42, 1.4, 0.14), '#d98a5c', { pos: [0, 0.36, 0] }); p(rbox(1.5, 0.9, 0.4, 0.16), '#d98a5c', { pos: [0, 0.8, -0.52] }); [-1, 1].forEach(k => p(rbox(0.34, 0.6, 1.3, 0.14), '#d98a5c', { pos: [k * 0.62, 0.6, 0.02] })); p(rbox(0.86, 0.18, 1.0, 0.08), LINEN, { pos: [0, 0.62, 0.12], line: 0.02, shadow: false }); p(rbox(0.5, 0.5, 0.18, 0.08), BLUE, { pos: [0.1, 0.95, -0.26], rot: [-0.28, 0, 0.12], line: 0.02 }); });
-  seat(-16.1, 5.6, PI / 2, 0.7); walls.push({ x: -16.3, z: 5.6 + OZ, hx: 0.7, hz: 0.75, ry: 0 });
+  seat(-16.3, 5.6, PI / 2, 0.72, 0.58); walls.push({ x: -16.3, z: 5.6 + OZ, hx: 0.7, hz: 0.75, ry: 0 });
 
   // ================= 門口（前面中間） =================
   T(plane(6, 3), tileA([3, 1.5]), { pos: [0, 0.012, 10.5], rot: FLOOR });
@@ -344,7 +358,7 @@ const LOBBY = TW ? (() => {
   // 寵物的軟墊和碗
   p(cyl(0.8, 0.85, 0.2, 18), MUST, { pos: [21.6, 0.1, 9.9], line: 0.024 }); p(cyl(0.6, 0.6, 0.06, 18), '#f1cf7c', { pos: [21.6, 0.2, 9.9], noLine: true, shadow: false }); p(cyl(0.2, 0.15, 0.12, 10), BLUE, { pos: [21.4, 0.06, 8.6], line: 0.014 });
   // 兩張藤椅和小圓桌
-  [[22.3, 0.6, 0.5], [24.7, 0.6, -0.5]].forEach(([x, z, ry]) => { grp([x, 0, z], ry, () => { p(cyl(0.55, 0.42, 0.5, 14), '#d9b27c', { pos: [0, 0.4, 0], line: 0.022 }); p(new THREE.CylinderGeometry(0.6, 0.55, 0.75, 14, 1, true, PI * 0.5, PI), '#d9b27c', { pos: [0, 0.95, 0], line: 0.02 }); p(cyl(0.48, 0.48, 0.08, 14), LINEN, { pos: [0, 0.68, 0], noLine: true, shadow: false }); }); seat(x, z, ry, 0.72); round(x, z, 0.5); });
+  [[22.3, 0.6, 0.5], [24.7, 0.6, -0.5]].forEach(([x, z, ry]) => { grp([x, 0, z], ry, () => { p(cyl(0.55, 0.42, 0.5, 14), '#d9b27c', { pos: [0, 0.4, 0], line: 0.022 }); p(new THREE.CylinderGeometry(0.6, 0.55, 0.75, 14, 1, true, PI * 0.5, PI), '#d9b27c', { pos: [0, 0.95, 0], line: 0.02 }); p(cyl(0.48, 0.48, 0.08, 14), LINEN, { pos: [0, 0.68, 0], noLine: true, shadow: false }); }); seat(x, z, ry, 0.72, 0.4); round(x, z, 0.5); });
   p(cyl(0.45, 0.45, 0.06, 14), TEAK, { pos: [23.5, 0.7, 1.3], line: 0.018 }); p(cyl(0.05, 0.05, 0.7, 6), STEEL, { pos: [23.5, 0.35, 1.3], noLine: true }); p(cyl(0.12, 0.1, 0.2, 8), POT, { pos: [23.5, 0.83, 1.3], noLine: true }); p(sph(0.16, 8, 6), LEAF, { pos: [23.5, 1.02, 1.3], noLine: true }); round(23.5, 1.3, 0.4);
   plant(20.9, 10.7, 1.1);
 
@@ -355,6 +369,11 @@ const LOBBY = TW ? (() => {
   const add = (b, material, cast, recv, th) => { if (!b.nv) return null; const m = new THREE.Mesh(geoOf(b, th), material); m.castShadow = cast; m.receiveShadow = recv; G.add(m); return m; };
   add(BK.cast, toon, true, true); add(BK.flat, toon, false, true); add(BK.glow, new THREE.MeshBasicMaterial({ vertexColors: true }), false, false);
   const pm = add(BK.pool, new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.16, depthWrite: false, blending: THREE.AdditiveBlending }), false, false); if (pm) pm.renderOrder = 2;
+  // 扭蛋機的玻璃罩：透明的，最後才畫
+  { const gm = new THREE.ShaderMaterial({ transparent: true, depthWrite: false, uniforms: { rim: { value: new THREE.Color(Q.lc ? '#' + Q.lc : INK) } },
+      vertexShader: 'varying float f; void main(){ vec4 mv = modelViewMatrix*vec4(position,1.0); vec3 n = normalize(normalMatrix*normal); f = 1.0 - abs(dot(n, normalize(-mv.xyz))); gl_Position = projectionMatrix*mv; }',
+      fragmentShader: 'uniform vec3 rim; varying float f; void main(){ float e = smoothstep(0.72, 0.8, f); float g = 0.10 + 0.22*f*f; gl_FragColor = vec4(mix(vec3(0.93,0.98,1.0), rim, e), mix(g, 0.95, e)); }' });   // 中間幾乎透明，邊緣一圈跟外框線同色
+    GLASS.forEach(([g, m]) => { const me = new THREE.Mesh(g, gm); me.applyMatrix4(m); me.renderOrder = 3; G.add(me); }); }
   add(BK.line, new THREE.ShaderMaterial({ side: THREE.BackSide, uniforms: { col: { value: new THREE.Color(Q.lc ? '#' + Q.lc : INK) } },
     vertexShader: 'attribute float th; void main(){ float k = 0.75 + 0.45*sin(dot(position, vec3(13.0,17.0,11.0))); vec3 p = position + normalize(normal)*th*k; gl_Position = projectionMatrix*modelViewMatrix*vec4(p,1.0); }',
     fragmentShader: 'uniform vec3 col; void main(){ gl_FragColor = vec4(col,1.0); }' }), false, false, true);

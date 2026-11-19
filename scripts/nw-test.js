@@ -268,7 +268,8 @@ async function main() {
     await shot(pa, 'lobby-3-kitchen-bar');
     await NW(pa, () => HQ_NEWWORLD.act('sit'));
     // 職業導師和扭蛋機那一角
-    await place(pa, -6.2, OZ - 7.2); await shot(pa, 'lobby-4-mentor-gacha');
+    await place(pa, -6.6, OZ - 6.0); await shot(pa, 'lobby-4-mentor');
+    await place(pa, -5.9, OZ + 4.4); await shot(pa, 'lobby-4b-gacha');
     // 作戰角高一階，樓梯在中間
     await place(pa, 11.5, OZ - 1.8); await pa.waitForFunction(() => HQ_NEWWORLD.height() > 0.3, null, { timeout: 30000 }).catch(() => {}); const hs = await NW(pa, () => HQ_NEWWORLD.height());
     await place(pa, 15.2, OZ - 5.0); await pa.waitForFunction(() => HQ_NEWWORLD.height() > 0.9, null, { timeout: 30000 }).catch(() => {}); const hp = await NW(pa, () => HQ_NEWWORLD.height());

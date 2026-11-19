@@ -153,7 +153,7 @@ const NW = (() => {
       [[-1, -0.28], [1, -0.28], [-1, 0.28], [1, 0.28]].forEach(([a, b]) => part(g, new THREE.CylinderGeometry(0.06, 0.07, 0.55, 6), '#a8693f', { pos: [a, 0.27, b], line: 0.02 }));
       [-1, 1].forEach(a => part(g, new THREE.BoxGeometry(0.1, 0.6, 0.1), '#a8693f', { pos: [a, 0.85, -0.34], noLine: true }));
       WALLS.push({ x, z, hx: 1.15, hz: 0.36, ry });
-      [-0.55, 0.55].forEach(lx => SEATS.push({ x: x + lx * Math.cos(ry) + 0.05 * Math.sin(ry), z: z - lx * Math.sin(ry) + 0.05 * Math.cos(ry), f: ry })); };
+      [-0.55, 0.55].forEach(lx => SEATS.push({ x: x + lx * Math.cos(ry) + 0.2 * Math.sin(ry), z: z - lx * Math.sin(ry) + 0.2 * Math.cos(ry), f: ry })); };
     bench(-2.5, 4.0); bench(2.2, -4.2);
     G.userData = { SEATS };
     return G;

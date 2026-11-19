@@ -24,6 +24,9 @@ const post = async (u, b, h = {}) => (await fetch(B + u, { method: 'POST', heade
 async function main() {
   const { chromium, devices } = require('playwright');
   fs.mkdirSync(OUT, { recursive: true });
+  // 場景程式是好幾個檔案接起來的，先確認接起來語法沒問題
+  { const dir = path.join(__dirname, '..', 'newworld', 'world'), src = fs.readdirSync(dir).filter(n => /\.js$/.test(n)).sort().map(n => fs.readFileSync(path.join(dir, n), 'utf8')).join('');
+    try { new (require('vm').Script)(src, { filename: 'newworld/world/*.js' }); } catch (e) { console.log('  FAIL 場景程式語法：' + e.message); process.exit(1); } }
   const data = fs.mkdtempSync(path.join(os.tmpdir(), 'nw-data-'));
   const srv = spawn(process.execPath, ['server.js'], { cwd: ROOT, env: { ...process.env, PORT: String(PORT), ADMIN_PASSWORD: PW, DATA_DIR: data }, stdio: 'ignore' });
   const stop = () => { try { srv.kill('SIGKILL'); } catch (e) {} try { fs.rmSync(data, { recursive: true, force: true, maxRetries: 5 }); } catch (e) {} };

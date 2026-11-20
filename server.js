@@ -393,8 +393,8 @@ const nwWrite = (u, p) => accounts.update(u, { nw: Object.assign({}, u.save.nw, 
 const nwGearOf = (u) => nwSave(u).equip;
 function nwActor(u) {
   const p = Object.assign({ name: sanitizeSave(u.save).name || u.username, account: u }, nwSave(u));
-  // 經驗值：等級是職業那邊在管，這裡先不加（花園收成的經驗之後接過去）
-  return { p, key: 'u:' + u.username.toLowerCase(), exp: () => {}, done: () => nwWrite(u, p) };
+  // 經驗值：等級是職業那邊在管（nw-combat.js），花園收成、被感謝拿到的經驗交給它加
+  return { p, key: 'u:' + u.username.toLowerCase(), exp: (n) => { if (NW_COMBAT) NW_COMBAT.gainExp(u, n); }, done: () => nwWrite(u, p) };
 }
 const nwLast = new Map();
 // 每個接口都是 POST { act, ... }，回 { ok, ... } 或 { ok: false, error }；同一個人 0.25 秒內只收一次
@@ -636,9 +636,10 @@ function nwTier(u, cls) { return 0; }
 // 新世界的多人連線：自己一個頻道（/newworld），跟總部的連線、玩家資料完全分開；只有管理員連得上
 // 只同步標準人物的位置、造型、名字和聊天，聊天不跟總部互通
 const nwPlayers = new Map(), nwBots = [];
+let NW_COMBAT = null;   // 新世界的戰鬥（nw-combat.js），連線開起來才有
 function startNewworldNet() {
   const nw = io.of('/newworld');
-  const COMBAT = require('./nw-combat.js')(nw, { accounts, players: nwPlayers });   // 練習場的怪、普攻、技能、等級和職業
+  const COMBAT = NW_COMBAT = require('./nw-combat.js')(nw, { accounts, players: nwPlayers });   // 練習場的怪、普攻、技能、等級和職業
   const num = (v, lo, hi) => Math.max(lo, Math.min(hi, Number(v) || 0));
   nw.use((socket, next) => {
     const u = accounts.byToken(socket.handshake.auth && socket.handshake.auth.token);

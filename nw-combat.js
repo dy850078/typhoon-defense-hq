@@ -232,6 +232,11 @@ module.exports = function attach(nw, env) {
         done(fn); });
     },
     leave(p) { if (!p.cb) return; p.cb.changed = true; save(p); mobs.forEach(m => { if (m.aggro === p.id) m.aggro = null; }); p.cb = null; },
+    // 戰鬥以外拿到的經驗（花園收成、被感謝）：人在線上就直接加，不在線上就加在存檔裡
+    gainExp(u, n) { n = Math.round(Number(n) || 0); if (n <= 0 || !u) return;
+      const p = [...players.values()].find(q => q.cb && q.cbUser === u); if (p) { gain(p, n); p.cb.changed = true; tell(p); return; }
+      const d = Object.assign({}, u.save.nw); let lv = Math.max(1, d.lv | 0 || 1), exp = Math.max(0, d.exp | 0) + n; while (lv < LEVEL.max && exp >= LEVEL.expFor(lv)) { exp -= LEVEL.expFor(lv); lv++; }
+      accounts.update(u, { nw: Object.assign(d, { lv, exp }) }); },
     tierOf(u) { const d = u.save && u.save.nw, s = d && d.school && d.schools && d.schools[d.school]; return s && s.spec ? 1 : 0; },
     _mobs: mobs,
   };

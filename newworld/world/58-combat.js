@@ -117,7 +117,7 @@ function makeCombat(ctx) {
   let thN = 0;
   const drawThread = (ax, ay, az, bx, by, bz, slack) => { const segs = thread(thN++); A3.set(ax, ay, az); B3.set(bx, by, bz); const d = A3.distanceTo(B3); C3v.copy(A3).add(B3).multiplyScalar(0.5); C3v.y -= slack * Math.max(0.05, 1 - d / 9) * 1.6;
     for (let k = 0; k < SEG; k++) { const t0 = k / SEG, t1 = (k + 1) / SEG, q = (t, out) => out.set((1 - t) * (1 - t) * A3.x + 2 * (1 - t) * t * C3v.x + t * t * B3.x, (1 - t) * (1 - t) * A3.y + 2 * (1 - t) * t * C3v.y + t * t * B3.y, (1 - t) * (1 - t) * A3.z + 2 * (1 - t) * t * C3v.z + t * t * B3.z);
-      q(t0, P0); q(t1, P1); const m = segs[k], l = P0.distanceTo(P1); m.visible = true; m.position.copy(P0).add(P1).multiplyScalar(0.5); m.scale.set(0.028, l, 0.028); m.quaternion.setFromUnitVectors(UP, P1.sub(P0).normalize()); } };
+      q(t0, P0); q(t1, P1); const m = segs[k], l = P0.distanceTo(P1); m.visible = true; m.position.copy(P0).add(P1).multiplyScalar(0.5); m.scale.set(0.045, l, 0.045); m.quaternion.setFromUnitVectors(UP, P1.sub(P0).normalize()); } };
   const hand = (p, side) => { const f = p.face || 0; return [p.x + Math.sin(f) * 0.35 + Math.cos(f) * 0.42 * side, FY(p.x, p.z) + 1.25, p.z + Math.cos(f) * 0.35 - Math.sin(f) * 0.42 * side]; };
 
   // ---------- 持續一陣子的東西：星星燈、絕壁、禁錮的框、封印之匣、謝幕 ----------
@@ -130,8 +130,8 @@ function makeCombat(ctx) {
       g.tick = (t, k) => { const drop = Math.min(1, k * 5), sq = k > 0.86 ? 1 - (k - 0.86) / 0.14 : 1; [b, e].forEach(o => { o.scale.set(side * (0.6 + 0.4 * sq), 3.2 * sq + 0.05, side * (0.6 + 0.4 * sq)); o.position.y = (1 - drop) * 8 + (3.2 * sq + 0.05) / 2; }); }; return g; },
     lock: (z) => { const g = new THREE.Group(); const side = z.r * 1.6, e = new THREE.LineSegments(GEO.wire, lm('#7fb4ff')); e.scale.set(side, 2.6, side); e.position.y = 1.3; g.add(e); const f = mesh(GEO.box, bm('#7fb4ff', 0.12), g); f.scale.copy(e.scale); f.position.y = 1.3;
       g.tick = (t, k) => { const s = Math.min(1, k * 10); g.scale.set(s, 1, s); g.rotation.y = 0; }; return g; },
-    curtain: (z) => { const g = new THREE.Group(); const bar = new THREE.Group(); g.add(bar); bar.position.y = 7.5; [0, Math.PI / 2].forEach(a => { const m = mesh(GEO.box, bm('#8a5a3c'), bar); m.scale.set(z.r * 1.4, 0.16, 0.22); m.rotation.y = a; });
-      g.tick = (t, k) => { bar.rotation.y = Math.sin(t * 2) * 0.2; bar.position.y = 7.5 + k * 1.2; }; g.curtain = true; return g; },
+    curtain: (z) => { const g = new THREE.Group(); const bar = new THREE.Group(); g.add(bar); bar.position.y = 5.6; g.barY = 5.6; [0, Math.PI / 2].forEach(a => { const m = mesh(GEO.box, bm('#8a5a3c'), bar); m.scale.set(z.r * 1.1, 0.16, 0.22); m.rotation.y = a; });
+      g.tick = (t, k) => { bar.rotation.y = Math.sin(t * 2) * 0.2; g.barY = 5.6 + k * 1.0; bar.position.y = g.barY; }; g.curtain = true; return g; },
   };
   const addZone = (z) => { if (ZONES.has(z.z) || !ZONE[z.zk]) return; const g = ZONE[z.zk](z); g.position.set(z.x, FY(z.x, z.z2), z.z2); G.add(g); ZONES.set(z.z, { g, z, t: 0 }); };
   const endZone = (id, f) => { const o = ZONES.get(id); if (!o) return; G.remove(o.g); ZONES.delete(id); };
@@ -212,9 +212,10 @@ function makeCombat(ctx) {
       Object.values(m.fxo).forEach(o => { if (o.spin) o.rotation.y = t * o.spin; });
       const showBar = !dead && (m.hp < m.max || TARGET === m.id); m.bar.b.hidden = !showBar; if (showBar) { put2d(m.bar.b, m.x, FY(m.x, m.z) + m.h + 0.35 + m.lift, m.z); m.bar.i.style.width = Math.max(0, m.hp / m.max * 100).toFixed(0) + '%'; m.bar.b.classList.toggle('on', TARGET === m.id); }
       // 線：被縫住、被提線的怪連到操偶師的手上；被提線的有三條（頭和兩邊）
-      if (m.tied && !dead) { const p = posOf(m.tied); if (p) { const top = FY(m.x, m.z) + m.h + m.lift + (charm ? jerk : 0), n = charm || lift ? 3 : 1;
-        for (let i = 0; i < n; i++) { const side = i === 0 ? 0 : i === 1 ? -1 : 1, h = hand(p, i === 0 ? 1 : side); if (lift) { const z = [...ZONES.values()].find(o => o.g.curtain); drawThread(m.x + side * 0.4 * m.sc, top - (side ? 0.3 : 0), m.z, z ? z.g.position.x + (m.x - z.g.position.x) * 0.5 : m.x, FY(m.x, m.z) + 7.5, z ? z.g.position.z + (m.z - z.g.position.z) * 0.5 : m.z, 0); }
-          else drawThread(h[0], h[1] + (charm ? 0.5 : 0), h[2], m.x + side * 0.4 * m.sc, top - (side ? 0.35 : 0), m.z, charm ? 0.25 : 1); } } }
+      const top = FY(m.x, m.z) + m.h + m.lift + (charm ? jerk : 0);
+      if (lift && !dead) { const z = [...ZONES.values()].find(o => o.g.curtain), bx = z ? z.g.position.x + (m.x - z.g.position.x) * 0.45 : m.x, bz = z ? z.g.position.z + (m.z - z.g.position.z) * 0.45 : m.z, by = FY(m.x, m.z) + (z ? z.g.barY : 6);
+        [0, -1, 1].forEach(side => drawThread(m.x + side * 0.4 * m.sc, top - (side ? 0.3 : 0), m.z, bx + side * 0.25, by, bz, 0)); }
+      else if (m.tied && !dead) { const p = posOf(m.tied); if (p) [0, -1, 1].slice(0, charm ? 3 : 1).forEach(side => { const h = hand(p, side || 1); drawThread(h[0], h[1] + (charm ? 0.5 : 0), h[2], m.x + side * 0.4 * m.sc, top - (side ? 0.35 : 0), m.z, charm ? 0.25 : 1); }); }
     });
     // 被縫在一起的怪：彼此之間也有線
     { const gs = new Map(); MOBS.forEach(m => { if (m.link && !(m.fl & 256) && m.g.visible) { if (!gs.has(m.link)) gs.set(m.link, []); gs.get(m.link).push(m); } });

@@ -57,18 +57,21 @@
     function press(i) { var r = CB.cast(i); if (r === 'far') toast('附近沒有怪'); }
     window.addEventListener('keydown', function (e) { if (/INPUT|TEXTAREA/.test((e.target || {}).tagName || '')) return; var i = '1234'.indexOf(e.key); if (i >= 0 && !e.repeat) press(i); });
     var dead = el('div'); dead.id = 'cb-dead'; dead.hidden = true; var deadNote = el('div', 'note'); dead.appendChild(deadNote); document.body.appendChild(dead);
+    function staged(k) { return !!(me && me.stage && me.stage[k] > Date.now() - off); }
+    var stageSig = '';
     function drawHud() {
       me = CB.view(); if (!me) return;
       var ik = clsIcon(me); if (card.dataset.k !== ik) { card.dataset.k = ik; cIcon.src = IC.url(ik) || ''; }
       cName.textContent = 'Lv.' + me.lv + ' ' + C3.clsName(me);
       bars.hp.style.width = (me.hp / me.hpMax * 100).toFixed(0) + '%'; bars.mp.style.width = (me.mp / me.mpMax * 100).toFixed(0) + '%'; bars.xp.style.width = Math.min(100, me.exp / me.need * 100).toFixed(0) + '%';
-      btns.forEach(function (o, i) { var k = me.slots[i], s = C3.SK[k], two = s && s.next && me.stage.indexOf(k) >= 0, key = !s ? '' : two ? k + '2' : k;
+      btns.forEach(function (o, i) { var k = me.slots[i], s = C3.SK[k], two = s && s.next && staged(k), key = !s ? '' : two ? k + '2' : k;
         if (o.key !== key) { o.key = key; o.im.style.visibility = s ? '' : 'hidden'; if (s) o.im.src = IC.url('nw-' + key) || IC.url('nw-' + k) || ''; o.b.setAttribute('aria-label', s ? (two ? s.next : s.name) : '空的'); o.b.title = s ? (two ? s.next : s.name) : ''; }
         o.b.className = 'cb-sk' + (i === 3 ? ' el' : '') + (!s ? ' empty' : '') + (s && s.ult ? ' ult' : '') + (two ? ' next' : '') + (s && !two && me.mp < s.mp ? ' nomp' : ''); });
     }
     // 冷卻：一圈轉回來，中間寫剩幾秒
     setInterval(function () { if (!me) return; var now = Date.now() - off;
-      btns.forEach(function (o, i) { var k = me.slots[i], s = C3.SK[k], left = s && me.stage.indexOf(k) < 0 ? ((me.cd[k] || 0) - now) / 1000 : 0;
+      var sg = me.slots.map(function (k) { return staged(k) ? 1 : 0; }).join(''); if (sg !== stageSig) { stageSig = sg; drawHud(); }
+      btns.forEach(function (o, i) { var k = me.slots[i], s = C3.SK[k], left = s && !staged(k) ? ((me.cd[k] || 0) - now) / 1000 : 0;
         if (left > 0.05) { var p = Math.min(1, left / s.cd) * 360; o.s.style.background = 'conic-gradient(rgba(43,42,51,.55) ' + p.toFixed(0) + 'deg, transparent 0)'; o.em.textContent = left >= 1 ? String(Math.ceil(left)) : ''; } else if (o.em.textContent || o.s.style.background) { o.s.style.background = ''; o.em.textContent = ''; } });
       var d = me.dead ? (me.dead - now) / 1000 : 0; dead.hidden = !(d > 0); if (d > 0) deadNote.textContent = '倒下了，' + Math.ceil(d) + ' 秒後回到練習場入口';
     }, 100);

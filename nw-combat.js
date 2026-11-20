@@ -31,7 +31,7 @@ module.exports = function attach(nw, env) {
   const each = (fn) => players.forEach(p => { if (p.cb) fn(p, p.cb); });
   const fx = (o) => nw.emit('cb:fx', o);
   const meView = (c) => ({ lv: c.lv, exp: c.exp, need: LEVEL.expFor(c.lv), hp: Math.round(c.hp), hpMax: c.hpMax, mp: Math.round(c.mp), mpMax: c.mpMax, school: c.school, spec: c.spec, schools: c.schools, slots: c.slots, quest: c.quest,
-    cd: c.cd, stage: Object.keys(c.stage).filter(k => c.stage[k].until > now()), dead: c.dead > now() ? c.dead : 0, t: now() });
+    cd: c.cd, stage: Object.keys(c.stage).reduce((o, k) => { if (c.stage[k].until > now()) o[k] = c.stage[k].until; return o; }, {}), dead: c.dead > now() ? c.dead : 0, t: now() });
   const who = (p) => ({ id: p.id, lv: p.cb.lv, school: p.cb.school, spec: p.cb.spec, hp: Math.round(p.cb.hp), hpMax: p.cb.hpMax, fam: p.cb.fam.map(f => f.tier), mech: mechOf(p.cb) });
   const mechOf = (c) => (c.spec !== 'alchemist' ? 0 : c.buff.fear > now() ? 3 : c.buff.mech > now() ? 2 : 1);
   const tell = (p) => { p.cb.dirty = true; };
@@ -105,7 +105,8 @@ module.exports = function attach(nw, env) {
       c.buff.mech = now() + s.dur * 1000; c.buff.mechV = s.up * Math.max(0.3, pay / (c.hpMax * s.pay)); whoAll(p); return { pay }; },
     fear: (p, c, s) => { c.buff.fear = now() + s.dur * 1000; c.buff.fearV = s.up; c.fearEnd = c.buff.fear; whoAll(p); },
     stitch: (p, c, s, m) => { const t = now() + s.dur * 1000, g = seq++, ids = []; near(m.x, m.z, s.r).sort((a, b) => dist(a, m) - dist(b, m)).slice(0, s.max).forEach(o => { hurt(o, atkOf(c) * s.dmg, p, 'needle', true); if (alive(o)) { o.st.link = t; o.st.linkG = g; o.st.linkV = s.share; o.st.tied = t; o.st.tiedBy = p.id; ids.push(o.id); } }); return { ids }; },
-    string: (p, c, s, m) => { if (MOBS[m.kind].boss) return false; const t = now() + s.dur * 1000; m.st.charm = t; m.st.charmBy = p.id; m.st.tied = t; m.st.tiedBy = p.id; m.aggro = null; c.stage.string = { until: t, id: m.id }; },
+    string: (p, c, s, m) => { if (MOBS[m.kind].boss) return false; const t = now() + s.dur * 1000; m.st.charm = t; m.st.charmBy = p.id; m.st.tied = t; m.st.tiedBy = p.id; m.aggro = null; c.stage.string = { until: t, id: m.id };
+      if (c.target === m.id) { c.target = null; p.cbSock.emit('cb:tgt', null); } },   // 不要繼續打自己的人偶
     string2: (p, c, s, m) => { const g = c.stage.string, o = byId.get(g.id); g.until = 0; if (!alive(o)) return false; const to = m && m !== o ? m : near(o.x, o.z, 9, o)[0] || o;
       o.st.charm = 0; o.st.tied = 0; const x = to.x, z = to.z; o.x = x + 0.6; o.z = z; o.st.stun = now() + 1200; aoe(p, x, z, s.r, s.dmg2, 'slam'); return { m: o.id, x, z }; },
     curtain: (p, c, s) => { const t = now(); near(p.x, p.z, s.r).forEach(m => { m.st.stun = t + ctrl(m, s.lift) * 1000; m.st.lift = t + s.lift * 1000; });
@@ -120,7 +121,7 @@ module.exports = function attach(nw, env) {
     if (s.aim && !two) { if (!m) m = byId.get(c.target); if (!alive(m)) m = near(p.x, p.z, s.range).sort((a, b) => dist(a, p) - dist(b, p))[0]; if (!m || dist(m, p) > s.range + 1.5) return p.cbSock.emit('cb:no', 'far'); }
     const r = CAST[k](p, c, s, m); if (r === false) return;
     if (!two) { c.mp -= s.mp; c.cd[k0] = t + s.cd * 1000; }
-    c.fight = t + 5000; if (m && s.aim) c.target = c.target || m.id;
+    c.fight = t + 5000; if (m && s.aim && k !== 'string') c.target = c.target || m.id;
     fx(Object.assign({ k, id: p.id, x: +(m && s.aim ? m.x : p.x).toFixed(1), z: +(m && s.aim ? m.z : p.z).toFixed(1), m: m ? m.id : null }, r || {})); tell(p);
   }
   const inField = (p) => p.x > FIELD.x0 - 4 && p.z > -38;

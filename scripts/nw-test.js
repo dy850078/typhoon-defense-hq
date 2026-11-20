@@ -349,11 +349,9 @@ async function main() {
     // 職業導師
     await place(S.mentor.x, S.mentor.z + 0.4); await pa.waitForFunction(() => HQ_NEWWORLD.zone() === 'lobby', null, { timeout: 30000 }).catch(() => {}); await near('mentor');
     ok((await pa.textContent('.nw-hint')) === '轉職' && (await pa.isHidden('#panel')), '進大廳，走遠了許願池面板自己收起來；導師桌前冒出「轉職」');
-    await pa.click('.nw-hint'); await panel('mentor'); await pa.waitForTimeout(600); await shot(pa, 'home-4-mentor');
-    await pa.click('#panel [data-cls="summoner"]'); await pa.waitForTimeout(600);
-    ok((await NW(pa, () => HQ_NEWWORLD.look().cls)) === 'summoner' && (await pa.textContent('#s-ctrl')) === '召喚師' && /轉職成召喚師/.test(await toast()), '跟導師轉職成召喚師');
-    await pa.waitForTimeout(900); const lk = await (await fetch(B + '/api/newworld/look', { headers: { Authorization: 'Bearer ' + a.token } })).json();
-    ok(lk.look3d && lk.look3d.cls === 'summoner', '轉職有存進帳號');
+    await pa.click('.nw-hint'); await pa.waitForSelector('#cb-book:not([hidden])', { timeout: 30000 }).catch(() => {}); await pa.waitForTimeout(600); await shot(pa, 'home-4-mentor');
+    ok((await pa.locator('#cb-book .card').count()) === 3 && (await pa.locator('#cb-book .card:disabled').count()) === 3, '導師開的是新的職業面板：三個學門，1 等還不能選（細節在 combat 那一輪測）');
+    await pa.evaluate(() => window.NW_SK.close());
     // 扭蛋機
     await place(S.gacha.x, S.gacha.z + 0.9); await near('gacha');
     ok((await pa.textContent('.nw-hint')) === '扭蛋', '扭蛋機前冒出「扭蛋」');
@@ -489,7 +487,8 @@ async function main() {
     const hud = () => pg.evaluate(() => ({ name: document.querySelector('#cb-me b').textContent, sk: [...document.querySelectorAll('.cb-sk')].map(b => b.getAttribute('aria-label')), nums: document.querySelectorAll('.cb-num').length }));
     const rest = async () => { await pg.evaluate(() => window.HQ_NEWWORLD.debugPlace(8, 14)); await pg.waitForTimeout(400); await ask('cb:dbg', { lv: 60 }); };
     // 找一隻還活著、血最多的怪，站到牠旁邊並選牠
-    const aim = async (kind) => pg.evaluate((k) => { const NW = window.HQ_NEWWORLD, m = NW.combat.debug().mobs.filter(x => (k ? x.kind === k : x.kind !== 'boss') && !(x.fl & 256)).sort((a, b) => b.hp - a.hp)[0]; NW.debugPlace(m.x - 3.2, m.z + 1.5); NW.combat.setTarget(m.id); return m; }, kind);
+    let reach = 3.2;
+    const aim = async (kind) => pg.evaluate(([k, reach]) => { const NW = window.HQ_NEWWORLD, m = NW.combat.debug().mobs.filter(x => (k ? x.kind === k : x.kind !== 'boss') && !(x.fl & 256)).sort((a, b) => b.hp - a.hp)[0]; NW.debugPlace(m.x - reach, m.z + 1.5); NW.combat.setTarget(m.id); return m; }, [kind, reach]);
     await pg.waitForFunction(() => window.HQ_NEWWORLD.combat && window.HQ_NEWWORLD.combat.view(), null, { timeout: 20000 });
     let h = await hud();
     ok(h.name === 'Lv.1 芽' && h.sk.join() === '小火花,歪歪瞬移,空的,空的', '一進來是 1 等的芽，帶著兩招：' + h.name + ' / ' + h.sk);
@@ -505,7 +504,7 @@ async function main() {
     await pg.evaluate(() => window.NW_SK.openClass()); await pg.waitForTimeout(200); await shot('4-mentor-lv1');
     ok(await pg.locator('#cb-book .card:disabled').count() === 3, '10 等以前三個學門都還不能選');
     await rest();
-    for (const sk of Object.keys(C3.SCHOOLS)) {
+    for (const sk of Object.keys(C3.SCHOOLS).filter(k => !process.env.ONLY || process.env.ONLY === k)) {
       await pg.evaluate(() => window.NW_SK.openClass()); await pg.waitForTimeout(150);
       await pg.locator('#cb-book .card[data-k="' + sk + '"]').click(); await pg.waitForTimeout(400);
       let v = await view(); ok(v.school === sk && !v.spec, '在導師那邊進學門：' + C3.SCHOOLS[sk].name);
@@ -518,16 +517,20 @@ async function main() {
         await pg.locator('#cb-book .card[data-k="' + sp + '"]').click(); await pg.waitForTimeout(400);
         ok((await view()).quest, C3.SPECS[sp].name + '：接下三轉任務'); if (sp === 'skater') await shot('7-mentor-quest');
         await ask('cb:dbg', { quest: 1 }); await pg.waitForTimeout(300); await pg.locator('#cb-book .card[data-k="' + sp + '"]').click(); await pg.waitForTimeout(500);
+        reach = sp === 'puppeteer' ? 6 : 3.2;
         v = await view(); ok(v.spec === sp, C3.SPECS[sp].name + '：信物收齊，轉職成功'); await pg.evaluate(() => window.NW_SK.close());
         const all = C3.learned(v).filter(k => k !== 'spark' && k !== 'blink');
         for (let i = 0; i < all.length; i += 4) { await rest(); const set = all.slice(i, i + 4); await ask('cb:slots', set); await pg.waitForTimeout(200);
-          for (const k of set) { await aim(); await pg.waitForTimeout(700); const j = (await view()).slots.indexOf(k); await pg.locator('.cb-sk').nth(j).dispatchEvent('pointerdown'); await pg.waitForTimeout(C3.SK[k].ult ? 900 : 550); await shot('8-' + sp + '-' + k);
+          for (const k of set) { await aim(); await pg.waitForTimeout(700); const j = (await view()).slots.indexOf(k); await pg.locator('.cb-sk').nth(j).dispatchEvent('pointerdown');
+            if (k === 'curtain') { await pg.waitForTimeout(500); const d = await dbg(); ok(d.mobs.some(m => m.fl & 512) && d.threads >= 3, '謝幕：怪被線吊起來：' + d.threads); }
+            await pg.waitForTimeout(C3.SK[k].ult ? 900 : 550); await shot('8-' + sp + '-' + k);
             ok((await view()).cd[k], C3.SPECS[sp].name + ' ' + C3.SK[k].name);
-            if (C3.SK[k].next) { await pg.waitForTimeout(700); await shot('8-' + sp + '-' + k + '-hold'); ok((await hud()).sk[j] === C3.SK[k].next, '按鈕變成「' + C3.SK[k].next + '」'); await pg.locator('.cb-sk').nth(j).dispatchEvent('pointerdown'); await pg.waitForTimeout(300); await shot('8-' + sp + '-' + k + '2'); }
+            if (C3.SK[k].next) { ok((await hud()).sk[j] === C3.SK[k].next, '按鈕變成「' + C3.SK[k].next + '」'); if (k === 'string') { await pg.waitForTimeout(400); const d = await dbg(); ok(d.mobs.some(m => m.fl & 32) && d.threads >= 3, '被提線的怪身上有三條線：' + d.threads); } await shot('8-' + sp + '-' + k + '-hold'); await pg.locator('.cb-sk').nth(j).dispatchEvent('pointerdown'); await pg.waitForTimeout(300); await shot('8-' + sp + '-' + k + '2'); }
             if (C3.SK[k].ult) { await pg.waitForTimeout(1500); await shot('8-' + sp + '-' + k + '-b'); } } }
         await rest();
       }
     }
+    if (process.env.ONLY) { await pg.context().close(); return; }
     // 選修欄
     await pg.evaluate(() => window.NW_SK.openBook()); await pg.waitForTimeout(200);
     await pg.locator('#cb-book .slots .cell').nth(3).click(); await pg.waitForTimeout(150); await pg.locator('#cb-book .cell.el[data-sk="potion"]').click(); await pg.waitForTimeout(500); await shot('9-book-elective');

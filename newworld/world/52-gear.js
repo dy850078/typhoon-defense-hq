@@ -13,17 +13,18 @@ const GEAR3 = (() => {
   const ext = (k, shape, d = 0.05) => geo(k, () => { const g = new THREE.ExtrudeGeometry(shape(), { depth: d, bevelEnabled: true, bevelThickness: 0.012, bevelSize: 0.012, bevelSegments: 2, curveSegments: 12 }); g.translate(0, 0, -d / 2); return g; });
   const starShape = (R) => () => { const s = new THREE.Shape(); for (let i = 0; i < 10; i++) { const a = i / 10 * Math.PI * 2 + Math.PI / 2, r = i % 2 ? R * 0.46 : R; s[i ? 'lineTo' : 'moveTo'](Math.cos(a) * r, Math.sin(a) * r); } s.closePath(); return s; };
   const heartShape = (s) => () => { const h = new THREE.Shape(); h.moveTo(0, -s); h.bezierCurveTo(-s * 1.6, 0, -s, s * 1.3, 0, s * 0.4); h.bezierCurveTo(s, s * 1.3, s * 1.6, 0, 0, -s); return h; };
+  const sparkShape = (R) => () => { const s = new THREE.Shape(); s.moveTo(0, R); s.quadraticCurveTo(0, 0, R, 0); s.quadraticCurveTo(0, 0, 0, -R); s.quadraticCurveTo(0, 0, -R, 0); s.quadraticCurveTo(0, 0, 0, R); return s; };
+  const GLOW = (c, k) => ({ emissive: new THREE.Color(c), emissiveIntensity: k });
   const tube = (k, pts, r) => geo(k, () => new THREE.TubeGeometry(new THREE.CubicBezierCurve3(...pts.map(p => new V3(p[0], p[1], p[2] || 0))), 14, r, 6, false));
 
   const BUILD = {
-    // 魔法少女蓬蓬裙（SR）：淡紫上身、粉紅蓬蓬裙（裙襬一球一球、底下一圈白襯裙）、泡泡袖、金腰帶、胸前蝴蝶結和愛心寶石
+    // 魔法少女蓬蓬裙（SR）：淡紫上身、粉紅蓬蓬裙（裙襬一球一球）、粉紅鞋白襪、泡泡袖、金腰帶、胸前蝴蝶結和愛心寶石
     mgDress({ B, hang, at, top }) {
-      top({ top: 'dress', col: LAV });
+      top({ top: 'dress', col: LAV, cols: { trim: LAV, button: GOLD, shoe: ROSE, sock: WHITE, sole: '#ffd3e6' } });
       hang(B.hips, (g) => {
         const prof = [[0.3, 1.04], [0.36, 1.0], [0.5, 0.92], [0.64, 0.8], [0.72, 0.66], [0.72, 0.56], [0.6, 0.5]];
         part(g, geo('mgSkirt', () => new THREE.LatheGeometry(prof.map(p => new THREE.Vector2(p[0], p[1])), 22)), PINK, { line: 0.02 }).material.side = THREE.DoubleSide;
         for (let i = 0; i < 10; i++) { const a = i / 10 * Math.PI * 2; part(g, ball(), PINK, { pos: [Math.sin(a) * 0.62, 0.55, Math.cos(a) * 0.62], scale: [0.2, 0.15, 0.2], line: 0.02 }); }
-        for (let i = 0; i < 12; i++) { const a = (i + 0.5) / 12 * Math.PI * 2; part(g, ball(10, 8), WHITE, { pos: [Math.sin(a) * 0.55, 0.45, Math.cos(a) * 0.55], scale: [0.14, 0.1, 0.14], line: 0.014, shadow: false }); }
         part(g, geo('mgBand', () => new THREE.TorusGeometry(0.325, 0.034, 6, 22)), GOLD, { pos: [0, 1.02, 0], rot: [Math.PI / 2, 0, 0], line: 0.012, shadow: false });
         [[-0.55, 0.72], [0, 0.66], [0.6, 0.76], [-0.25, 0.86], [0.3, 0.88], [2.2, 0.7], [-2.3, 0.78], [3.1, 0.68]].forEach(([a, y], i) => { const r = 0.5 + (0.92 - y) / 0.36 * 0.24;   // 裙子上的小亮片
           part(g, ext('mgBowStar', starShape(0.07), 0.03), '#fff6c9', { pos: [Math.sin(a) * (r + 0.015), y, Math.cos(a) * (r + 0.015)], rot: [-0.55, a, i * 0.4], scale: i % 2 ? 0.6 : 0.85, noLine: true, shadow: false, extra: { emissive: new THREE.Color('#fff6c9'), emissiveIntensity: 0.5 } }); });
@@ -55,9 +56,21 @@ const GEAR3 = (() => {
         part(w, tube('mgVein', [[4 * S, 0], [12 * S, 16 * S], [25 * S, 28 * S], [33 * S, 29.5 * S]], 0.034), '#ff6fa5', { noLine: true, shadow: false });
         part(w, tube('mgRibbon', [[3 * S, -6 * S], [14 * S, -16 * S, -0.05], [20 * S, -23 * S, -0.05], [28 * S, -25 * S]], 0.035), '#ff8fb8', { line: 0.012, shadow: false });
         part(w, ext('mgWingStar', starShape(0.17), 0.05), GOLD, { pos: [29.5 * S, -27 * S, 0], rot: [0, 0, 0.3], line: 0.016, shadow: false });
-        sides.push({ piv, k }); }));
+        // 裝飾：多兩條翅脈、翅膀外緣一條金邊、上翅三顆金星星、下翅一顆愛心、翅尖一顆會閃的四角亮光
+        part(w, tube('mgVein2', [[5 * S, -1 * S], [16 * S, 9 * S], [28 * S, 17 * S], [36 * S, 20 * S]], 0.03), '#ff9ec4', { noLine: true, shadow: false });
+        part(w, tube('mgVein3', [[4 * S, -5 * S], [12 * S, -5 * S], [22 * S, -7 * S], [29 * S, -11 * S]], 0.028), '#b79cf0', { noLine: true, shadow: false });
+        part(w, tube('mgEdge', [[0, 0], [6 * S, 24 * S], [26 * S, 38 * S], [37 * S, 33 * S]], 0.04), GOLD, { noLine: true, shadow: false, extra: GLOW(GOLD, 0.35) });
+        part(w, tube('mgEdge2', [[37 * S, 33 * S], [42 * S, 22 * S], [28 * S, 6 * S], [2 * S, -4 * S]], 0.03), '#ff8fb8', { noLine: true, shadow: false });
+        [[20, 22, 0.11, 0.2], [29, 27, 0.075, -0.3], [13, 11, 0.07, 0.5]].forEach(([x, y, r, a], i) => [-1, 1].forEach(z => part(w, ext('mgWStar' + i, starShape(r), 0.03), GOLD, { pos: [x * S, y * S, z * 0.035], rot: [0, 0, a], noLine: true, shadow: false, extra: GLOW(GOLD, 0.4) })));
+        [-1, 1].forEach(z => part(w, ext('mgWHeart', heartShape(0.09), 0.03), '#ff7fae', { pos: [20 * S, -8.5 * S, -0.02 + z * 0.035], rot: [0, 0, -0.2], noLine: true, shadow: false }));
+        const tw = part(w, ext('mgTwinkle', sparkShape(0.16), 0.02), '#fff6c9', { pos: [39.5 * S, 36 * S, 0], noLine: true, shadow: false, extra: GLOW('#fff6c9', 0.8) });
+        const tw2 = part(w, ext('mgTwinkle', sparkShape(0.16), 0.02), '#fff6c9', { pos: [34 * S, -15 * S, 0], scale: 0.6, noLine: true, shadow: false, extra: GLOW('#fff6c9', 0.8) });
+        sides.push({ piv, k, tw, tw2 }); }));
+      // 兩片翅膀中間一個小蝴蝶結，蓋住接縫
+      hang(B.spine, (g) => { [-1, 1].forEach(k => part(g, ball(12, 8), ROSE, { pos: [k * 0.13, 1.1, -0.36], scale: [0.15, 0.11, 0.06], rot: [0, 0, k * 0.3], line: 0.012, shadow: false }));
+        part(g, ball(10, 8), GOLD, { pos: [0, 1.1, -0.39], scale: 0.06, noLine: true, shadow: false }); });
       let ph = Math.random() * 6;
-      tick((dt) => { ph += dt * (2.6 + c.mv * 3); const a = 0.42 + Math.sin(ph) * (0.2 + c.mv * 0.08); sides.forEach(s => { s.piv.rotation.y = s.k * a; }); });
+      tick((dt) => { ph += dt * (2.6 + c.mv * 3); const a = 0.42 + Math.sin(ph) * (0.2 + c.mv * 0.08); sides.forEach(s => { s.piv.rotation.y = s.k * a; const u = 0.75 + 0.35 * Math.sin(ph * 1.7 + s.k); s.tw.scale.setScalar(u); s.tw.rotation.z = ph * 0.4; s.tw2.scale.setScalar(0.6 * (1.5 - u)); }); });
     },
   };
 

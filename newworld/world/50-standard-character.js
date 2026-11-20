@@ -94,6 +94,7 @@ const STD = (() => {
       if (nm === 'nose' && L.skinCol) col = skinTint(L.skinCol, 0.86);
       if (nm === 'ear_inner' && L.skinCol) col = skinTint(L.skinCol, 0.88);
       if (/^(tee|dress|hoodie)$/.test(nm) && (gt ? gt.col : L.topCol)) col = gt ? gt.col : L.topCol;
+      if (gt && gt.cols && gt.cols[nm]) col = gt.cols[nm];   // 裝備連鞋子、襪子、滾邊一起換色
       // 條紋T 換顏色：白底藍條紋整件染上那個顏色，條紋還在
       if (col) m.color.set(col); else { m.color.copy(m.userData.base); if (/face_line/.test(nm)) m.color.set(INK); }
     });

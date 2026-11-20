@@ -364,7 +364,7 @@ function sanitizeLook3d(d) {
   Object.keys(LOOK3D).forEach(k => { o[k] = typeof d[k] === 'string' && LOOK3D[k].test(d[k]) ? d[k] : null; });
   return o;
 }
-const canNewworld = (u) => !!u && (!!u.admin || !!u.nw);   // 管理員，或在封測名單上的帳號
+const canNewworld = (u) => !!u && (!!u.admin || !!u.nwBeta);   // 管理員，或在封測名單上的帳號
 function newworldUser(req, res) {
   const u = accounts.byToken(bearer(req));
   if (!u) { res.status(401).json({ ok: false }); return null; }

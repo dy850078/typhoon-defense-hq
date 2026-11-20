@@ -34,6 +34,43 @@ const GEAR3 = (() => {
         [-1, 1].forEach(k => part(g, ball(12, 8), ROSE, { pos: [k * 0.13, y, z], scale: [0.14, 0.1, 0.06], rot: [0, 0, k * 0.25], line: 0.012, shadow: false }));
         part(g, ext('mgHeart', heartShape(0.07), 0.05), '#ff3f7f', { pos: [0, y, z + 0.05], line: 0.01, shadow: false }); });
     },
+    // 女僕裝（SR）：黑色洋裝、白領白袖口、白圍裙（下緣一排小荷葉）、裙襬一圈白荷葉邊、領口粉紅蝴蝶結、背後白色大蝴蝶結、白襪黑鞋
+    maid({ B, hang, at, top }) {
+      const BLK = '#2b2a33';
+      top({ top: 'tee', col: BLK, cols: { stripe: WHITE, shoe: BLK, sock: WHITE, sole: BLK } });
+      hang(B.hips, (g) => {
+        const prof = [[0.3, 1.04], [0.38, 1.0], [0.52, 0.9], [0.62, 0.77], [0.66, 0.64], [0.6, 0.58]], V = (q, d = 0) => q.map(p => new THREE.Vector2(p[0] + d, p[1]));
+        part(g, geo('maidSkirt', () => new THREE.LatheGeometry(V(prof), 22)), BLK, { line: 0.02 }).material.side = THREE.DoubleSide;
+        for (let i = 0; i < 14; i++) { const a = i / 14 * Math.PI * 2; part(g, ball(10, 8), WHITE, { pos: [Math.sin(a) * 0.61, 0.58, Math.cos(a) * 0.61], scale: [0.14, 0.085, 0.14], line: 0.014, shadow: false }); }
+        part(g, geo('maidApron', () => new THREE.LatheGeometry(V(prof.slice(1, 5), 0.025), 10, -0.75, 1.5)), WHITE, { line: 0.014, shadow: false }).material.side = THREE.DoubleSide;
+        for (let i = 0; i < 5; i++) { const a = (i - 2) * 0.36; part(g, ball(10, 8), WHITE, { pos: [Math.sin(a) * 0.69, 0.635, Math.cos(a) * 0.69], scale: [0.11, 0.07, 0.06], line: 0.012, shadow: false }); }
+        part(g, geo('maidBand', () => new THREE.TorusGeometry(0.33, 0.034, 6, 22)), WHITE, { pos: [0, 1.02, 0], rot: [Math.PI / 2, 0, 0], line: 0.012, shadow: false });
+        [-1, 1].forEach(k => { part(g, ball(12, 8), WHITE, { pos: [k * 0.2, 1.04, -0.38], scale: [0.2, 0.14, 0.07], rot: [0, 0, k * 0.3], line: 0.014, shadow: false });   // 背後的大蝴蝶結和兩條帶子
+          part(g, ball(10, 8), WHITE, { pos: [k * 0.1, 0.85, -0.5], scale: [0.07, 0.2, 0.04], rot: [0.35, 0, k * 0.2], line: 0.012, shadow: false }); });
+        part(g, ball(10, 8), WHITE, { pos: [0, 1.04, -0.4], scale: 0.07, line: 0.012, shadow: false });
+      });
+      [B.upper_armL, B.upper_armR].forEach(b => { const p = at(b); hang(b, (g) => part(g, ball(), BLK, { pos: [p.x * 1.04, p.y - 0.03, p.z], scale: [0.16, 0.14, 0.16], line: 0.016 })); });
+      hang(B.spine, (g) => { const y = at(B.upper_armL).y, z = 0.3;
+        part(g, ball(12, 8), WHITE, { pos: [0, y - 0.2, z - 0.03], scale: [0.17, 0.15, 0.06], line: 0.012, shadow: false });   // 圍裙的上片
+        [-1, 1].forEach(k => part(g, ball(10, 8), '#ff8fb8', { pos: [k * 0.09, y - 0.06, z + 0.02], scale: [0.09, 0.065, 0.045], rot: [0, 0, k * 0.25], line: 0.01, shadow: false }));
+        part(g, ball(8, 6), '#ff6b9a', { pos: [0, y - 0.06, z + 0.05], scale: 0.04, noLine: true, shadow: false }); });
+    },
+    // 執事服（SR）：黑外套黑長褲、灰背心、白襯衫、黑領結、金色懷錶鍊、白手套、背後兩片燕尾
+    butler({ B, hang, at, top }) {
+      const BLK = '#2b2a33', GRAY = '#7a8296';
+      top({ top: 'hoodie', col: BLK, cols: { string: BLK, shorts: BLK, shoe: '#131a28', sock: BLK, sole: '#131a28' } });   // 長袖上衣染黑當外套
+      hang(B.spine, (g) => { const y = at(B.upper_armL).y;
+        part(g, ball(14, 10), GRAY, { pos: [0, y - 0.29, 0.27], scale: [0.3, 0.27, 0.23], line: 0.012, shadow: false });   // 背心
+        part(g, ball(12, 8), WHITE, { pos: [0, y - 0.14, 0.29], scale: [0.13, 0.15, 0.19], noLine: true, shadow: false });   // 襯衫露出來的那一塊
+        [-1, 1].forEach(k => part(g, ext('btTie', () => { const s = new THREE.Shape(); s.moveTo(0, 0); s.lineTo(0.1, 0.055); s.lineTo(0.1, -0.055); s.closePath(); return s; }, 0.04), BLK, { pos: [0, y - 0.08, 0.455], scale: [k, 1, 1], noLine: true, shadow: false }));
+        part(g, ball(8, 6), BLK, { pos: [0, y - 0.08, 0.47], scale: 0.035, noLine: true, shadow: false });
+        [[0.31, 0.5], [0.39, 0.48]].forEach(([d, z]) => part(g, ball(8, 6), BLK, { pos: [0, y - d, z], scale: 0.024, noLine: true, shadow: false }));
+        part(g, tube('btChain', [[0, 0, 0], [0.05, -0.09, 0.01], [0.12, -0.09, -0.02], [0.17, 0, -0.07]], 0.013), GOLD, { pos: [0, y - 0.34, 0.495], noLine: true, shadow: false }); });
+      hang(B.hips, (g) => [-1, 1].forEach(k => part(g, ball(12, 8), BLK, { pos: [k * 0.14, at(B.hips).y - 0.2, -0.43], scale: [0.12, 0.21, 0.05], rot: [0.3, 0, k * 0.12], line: 0.014 })));   // 燕尾
+      [['legL', 'shinL', 'footL'], ['legR', 'shinR', 'footR']].forEach(([a, b, c]) => { const p0 = at(B[a]), p1 = at(B[b]), p2 = at(B[c]);   // 長褲：大腿、小腿各一節
+        [[B[a], p0, p1], [B[b], p1, p2]].forEach(([bone, u, v], i) => hang(bone, (g) => part(g, geo('btLeg', () => new THREE.CylinderGeometry(1, 1, 1, 10)), BLK, { pos: [(u.x + v.x) / 2, (u.y + v.y) / 2, (u.z + v.z) / 2], scale: [0.135, Math.abs(u.y - v.y) + 0.06, 0.135], line: 0.012 }))); });
+      [B.handL, B.handR].forEach(b => { const p = at(b); hang(b, (g) => part(g, ball(), WHITE, { pos: [p.x * 1.02, p.y - 0.09, p.z], scale: 0.115, line: 0.012 })); });   // 白手套
+    },
     // 星月大蝴蝶結（R）：頭頂的粉紅大蝴蝶結，中間金色的釦子，兩條短緞帶往兩邊垂
     mgBow({ B, hang }) {
       hang(B.head, (g) => { const w = new THREE.Group(); w.position.set(0, 2.52, 0.12); w.rotation.x = -0.25; w.scale.setScalar(1.15); g.add(w);

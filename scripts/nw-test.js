@@ -527,10 +527,11 @@ async function main() {
         const all = C3.learned(v).filter(k => k !== 'spark' && k !== 'blink');
         for (let i = 0; i < all.length; i += 4) { await rest(); const set = all.slice(i, i + 4); await ask('cb:slots', set); await pg.waitForTimeout(200);
           for (const k of set) { await aim(); await pg.waitForTimeout(700); const j = (await view()).slots.indexOf(k); await pg.locator('.cb-sk').nth(j).dispatchEvent('pointerdown');
+            if (C3.SK[k].next) { await pg.waitForTimeout(350); ok((await hud()).sk[j] === C3.SK[k].next, '按鈕變成「' + C3.SK[k].next + '」'); }   // 截圖很慢，先看按鈕再截
             if (k === 'curtain') { await pg.waitForTimeout(500); const d = await dbg(); ok(d.mobs.some(m => m.fl & 512) && d.threads >= 3, '謝幕：怪被線吊起來：' + d.threads); }
             await pg.waitForTimeout(C3.SK[k].ult ? 900 : 550); await shot('8-' + sp + '-' + k);
             ok((await view()).cd[k], C3.SPECS[sp].name + ' ' + C3.SK[k].name);
-            if (C3.SK[k].next) { ok((await hud()).sk[j] === C3.SK[k].next, '按鈕變成「' + C3.SK[k].next + '」'); if (k === 'string') { await pg.waitForTimeout(400); const d = await dbg(); ok(d.mobs.some(m => m.fl & 32) && d.threads >= 3, '被提線的怪身上有三條線：' + d.threads); } await shot('8-' + sp + '-' + k + '-hold'); await pg.locator('.cb-sk').nth(j).dispatchEvent('pointerdown'); await pg.waitForTimeout(300); await shot('8-' + sp + '-' + k + '2'); }
+            if (C3.SK[k].next) { if (k === 'string') { await pg.waitForTimeout(400); const d = await dbg(); ok(d.mobs.some(m => m.fl & 32) && d.threads >= 3, '被提線的怪身上有三條線：' + d.threads); } await shot('8-' + sp + '-' + k + '-hold'); await pg.locator('.cb-sk').nth(j).dispatchEvent('pointerdown'); await pg.waitForTimeout(300); await shot('8-' + sp + '-' + k + '2'); }
             if (C3.SK[k].ult) { await pg.waitForTimeout(1500); await shot('8-' + sp + '-' + k + '-b'); } } }
         await rest();
       }

@@ -27,6 +27,11 @@
         C.line(x, 24, 31, 24, 6, r, 3, '#2f6fd6');
         x.beginPath(); x.moveTo(16, 13); x.lineTo(24, 5); x.lineTo(32, 13); C.stroke(x, r, 3, '#2f6fd6');
       },
+      // 指向 Safari 工具列的箭頭：彎彎的線往下
+      'ui-arrow'(x, r) {
+        x.beginPath(); x.moveTo(20, 4); x.quadraticCurveTo(32, 18, 24, 40); C.stroke(x, r, 4, '#FF6A13');
+        x.beginPath(); x.moveTo(14, 31); x.lineTo(24, 43); x.lineTo(33, 32); C.stroke(x, r, 4, '#FF6A13');
+      },
       'ui-addhome'(x, r) {
         C.rect(x, 9, 9, 30, 30, r, 1); C.stroke(x, r, 3, '#2B2A33');
         C.line(x, 24, 16, 24, 32, r, 3); C.line(x, 16, 24, 32, 24, r, 3);
@@ -49,10 +54,26 @@
     const p = document.createElement('p');
     body.append(t, p);
     const no = document.createElement('button'); no.type = 'button'; no.className = "link-btn a2hs-x"; no.textContent = '不用了';
-    no.onclick = () => { off(); box.remove(); };
+    no.onclick = () => { off(); box.remove(); const a = document.getElementById('a2hs-arrow'); if (a) a.remove(); };
     box.append(logo, body, no);
     build(p, body, box);
     form.appendChild(box);
+  }
+
+  // iPhone Safari 的工具列在畫面下面：iOS 26 以後分享鈕收進右下角的「⋯」，之前是工具列正中間
+  // 網頁讀不到使用者有沒有改過排版（網址列放上面、經典排版），所以只是照預設猜，文字說明還是保留
+  // iPad（按鈕在右上角）和 Chrome、Firefox 等其他瀏覽器不放箭頭
+  function arrow() {
+    const ipad = /iPad/.test(ua) || navigator.platform === 'MacIntel';
+    if (ipad || /CriOS|FxiOS|EdgiOS|OPiOS/.test(ua)) return;
+    const v = +((ua.match(/Version\/(\d+)/) || [])[1] || 0);
+    const right = v >= 26;
+    const wrap = document.getElementById('join');
+    if (!wrap) return;
+    const a = document.createElement('div'); a.id = 'a2hs-arrow'; a.className = 'a2hs-arrow' + (right ? ' right' : '');
+    const t = document.createElement('span'); t.textContent = right ? '先點右下角的「⋯」，再點分享' : '點這裡的分享';
+    a.append(t, ic('ui-arrow'));
+    wrap.appendChild(a);
   }
 
   if (ios) {
@@ -64,6 +85,7 @@
       }
       const s = document.createElement('small'); s.textContent = (inApp ? '' : '找不到分享鈕的話，先按右下角的「⋯」。') + '加好之後從圖示打開要再登入一次，角色都還在。';
       p.after(s);
+      if (!inApp) arrow();
     }));
     return;
   }

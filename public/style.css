@@ -1279,3 +1279,13 @@ button.inv-item:hover { border-color: var(--accent); }
 .a2hs-ic { width: 20px; height: 20px; vertical-align: -4px; margin: 0 2px; }
 .a2hs-go { margin-top: 8px; }
 .a2hs-x { position: absolute; top: 12px; right: 14px; font-size: 12px; white-space: nowrap; }
+/* iPhone：指向 Safari 工具列分享鈕的箭頭（跟著報到畫面一起出現、一起消失） */
+.a2hs-arrow { position: fixed; z-index: 60; bottom: calc(env(safe-area-inset-bottom, 0px) + 10px); left: 50%;
+  transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; pointer-events: none;
+  animation: a2hs-bob 1.1s ease-in-out infinite; }
+.a2hs-arrow.right { left: auto; right: 10px; transform: none; align-items: flex-end; }
+.a2hs-arrow span { background: var(--note); color: var(--note-ink); border: 2.5px solid var(--note-ink); border-radius: var(--note-radius);
+  box-shadow: var(--note-shadow); padding: 4px 12px; font-size: 13px; font-weight: 700; white-space: nowrap; }
+.a2hs-arrow .a2hs-ic { width: 52px; height: 52px; margin: 0; }
+.a2hs-arrow.right .a2hs-ic { margin-right: 4px; }
+@keyframes a2hs-bob { 50% { translate: 0 -8px; } }

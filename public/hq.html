@@ -11,6 +11,12 @@
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
   <meta name="apple-mobile-web-app-title" content="這不是一個">
   <meta name="application-name" content="這不是一個">
+  <!-- 加到主畫面（PWA）：從圖示打開是全螢幕、沒有網址列 -->
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#131A28">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&family=Space+Mono:wght@400;700&display=swap">
   <link rel="stylesheet" href="style.css">
@@ -262,6 +268,7 @@
   <script src="taiwan.js"></script>
   <script src="pet-talk.js"></script>
   <script src="account.js"></script>
+  <script src="install.js"></script>
   <script src="game.js"></script>
 </body>
 </html>

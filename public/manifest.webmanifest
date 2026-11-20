@@ -1,0 +1,19 @@
+{
+  "name": "這不是一個單純的派對",
+  "short_name": "這不是一個",
+  "description": "這不是一個單純的派對：大家的總部",
+  "lang": "zh-Hant",
+  "id": "/hq.html",
+  "start_url": "/hq.html",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#131A28",
+  "theme_color": "#131A28",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

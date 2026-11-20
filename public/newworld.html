@@ -46,7 +46,7 @@
     .nw-tag { position: absolute; left: 0; top: 0; display: flex; flex-direction: column; align-items: center; gap: 3px; will-change: transform; }
     .nw-name { position: absolute; left: 0; top: 0; will-change: transform; font-weight: 700; font-size: 13px; line-height: 1.2; color: var(--note-ink); white-space: nowrap; pointer-events: none; text-shadow: 0 0 2px #fffaf0, 1px 1px 0 #fffaf0, -1px 1px 0 #fffaf0, 1px -1px 0 #fffaf0, -1px -1px 0 #fffaf0, 0 2px 3px rgba(43,42,51,.25); }
     .nw-name[hidden] { display: none; }
-    .nw-name img { height: 15px; width: 15px; vertical-align: -3px; margin-right: 3px; }
+    .nw-name img { height: 20px; width: 20px; vertical-align: -5px; margin-right: 3px; }
     .nw-hint { position: absolute; left: 0; top: 0; pointer-events: auto; font: 700 12px/1.2 inherit; font-family: inherit; color: var(--note-ink); background: #fff3c4; border: 1.5px solid rgba(43,42,51,.55); border-radius: 8px 6px 9px 5px; padding: 6px 12px; cursor: pointer; white-space: nowrap; box-shadow: 1px 2px 0 rgba(43,42,51,.18); transform-origin: 50% 100%; }
     .nw-hint[hidden] { display: none; }
     /* 手繪版的紙條（newworld-hint.js 畫的圖）：外框和底色都在圖裡，按鈕本身透明；字留著給報讀和測試用 */
@@ -99,6 +99,15 @@
     #panel .title { font-size: 15px; font-weight: 700; } #panel .text { white-space: pre-wrap; overflow-wrap: anywhere; background: #fff; border-radius: 8px; padding: 8px 10px; -webkit-user-select: text; user-select: text; }
     #panel .cmt { font-size: 12px; border-left: 3px solid #e5cfa0; padding-left: 8px; overflow-wrap: anywhere; }
     #panel input, #panel textarea { all: unset; display: block; box-sizing: border-box; width: 100%; margin: 6px 0; font: 500 14px/1.5 inherit; font-family: inherit; color: var(--note-ink); background: #fff; border: 1.5px solid rgba(43,42,51,.45); border-radius: 10px 8px 11px 7px; padding: 8px 10px; -webkit-user-select: text; user-select: text; white-space: pre-wrap; overflow-wrap: anywhere; }
+    #panel .tabs { display: flex; gap: 6px; margin: 4px 0 8px; } #panel .tabs .opt { flex: 1; justify-content: center; flex-direction: column; align-items: center; gap: 0; padding: 6px 4px; }
+    #panel .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(62px, 1fr)); gap: 6px; }
+    #panel .cell { all: unset; box-sizing: border-box; position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 2px 4px; border-radius: 9px 6px 10px 7px; border: 1.5px solid rgba(43,42,51,.35); background: #fff; cursor: pointer; font-size: 11px; line-height: 1.25; text-align: center; }
+    #panel .cell .ic { width: 34px; height: 34px; } #panel .cell i { position: absolute; right: 4px; top: 2px; font-style: normal; font-weight: 700; font-size: 11px; }
+    #panel .cell.on { background: #f3d27a; border-color: rgba(43,42,51,.8); } #panel .cell.worn { border-style: dashed; border-color: #B84300; }
+    #panel .cell.r-SR { background: #fff6dc; } #panel .cell.r-SSR { background: #ffe9fb; } #panel .cell.r-XR { background: #e3f4ff; } #panel .cell.on.r-SR, #panel .cell.on.r-SSR, #panel .cell.on.r-XR { background: #f3d27a; }
+    #panel .worn-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 6px 0 10px; } #panel .worn-row .cell { cursor: default; min-height: 62px; justify-content: center; } #panel .worn-row .cell small { opacity: .6; }
+    #panel .bar { height: 10px; border-radius: 6px; border: 1.5px solid rgba(43,42,51,.6); background: #fff; overflow: hidden; margin: 4px 0 8px; } #panel .bar b { display: block; height: 100%; background: #ff9db0; }
+    #panel .song { display: flex; align-items: center; gap: 8px; padding: 5px 0; border-bottom: 1px dashed rgba(43,42,51,.25); } #panel .song span { flex: 1; min-width: 0; overflow-wrap: anywhere; } #panel .song .opt { flex: none; padding: 5px 9px; font-size: 12px; }
     #toast { position: fixed; left: 50%; top: calc(14px + env(safe-area-inset-top)); transform: translateX(-50%); max-width: min(360px, calc(100vw - 150px)); padding: 8px 14px; font-size: 13px; font-weight: 700; z-index: 6; pointer-events: none; text-align: center; }
     @media (max-width: 520px) { #btns button { min-width: 92px; padding: 8px 10px; font-size: 12px; } #hint { display: none; } }
   </style>
@@ -106,12 +115,14 @@
 <body>
   <div id="gate"><div class="note"><h1>新世界測試頁</h1><p id="gate-msg">確認身分中…</p><div id="gate-bar" hidden><i></i></div><p id="gate-link" hidden></p></div></div>
 
-  <div id="top" class="note" hidden><b>新世界測試頁</b>　管理員限定<br><span id="stats">量測中…</span><br><a href="hq.html">回總部</a></div>
+  <div id="top" class="note" hidden><b>新世界測試頁</b>　封測中<br><span id="stats">量測中…</span><br><a href="hq.html">回總部</a></div>
   <div id="btns" hidden>
     <button class="note" id="b-ctrl" hidden>職業<small id="s-ctrl">一般</small></button>
     <button class="note" id="b-dress" hidden>換裝<small>髮型、衣服、翅膀</small></button>
     <button class="note" id="b-form" hidden>隊形<small id="s-form">單手捧著</small></button>
     <button class="note" id="b-gesture" hidden>揮手指揮<small>機器人照做</small></button>
+    <button class="note" id="b-bag" hidden>背包<small>補品、雜物、裝備</small></button>
+    <button class="note" id="b-pet" hidden>寵物<small id="s-pet">摸摸、餵點心</small></button>
     <button class="note" id="b-zoom">鏡頭<small id="s-zoom">遠</small></button>
     <button class="note" id="b-quality">畫質<small id="s-quality">中</small></button>
     <button class="note" id="b-lines">外框線<small id="s-lines">開</small></button>
@@ -134,6 +145,7 @@
   <script src="/shared/avatar.js"></script>
   <script src="/shared/gear.js"></script>
   <script src="gacha-art.js"></script>
+  <script src="mastery-art.js"></script>
   <script src="newworld-hint.js"></script>
   <script src="newworld-panels.js"></script>
   <!-- 3D 元件：three.js 和讀模型檔的 GLTFLoader（模組版），載好之後掛到 window.THREE -->
@@ -154,7 +166,7 @@
     function get(name, kind) {
       return fetch('/api/newworld/' + name, { headers: { Authorization: 'Bearer ' + token } }).then(function (r) {
         if (r.status === 401) { say('登入過期了，請重新登入。', '<a href="./">去登入</a>'); return null; }
-        if (r.status === 403) { say('新世界還在施工，目前只開放管理員進來看。', '<a href="hq.html">回總部</a>'); return null; }
+        if (r.status === 403) { say('新世界還在施工，目前只開放封測名單上的帳號進來。', '<a href="hq.html">回總部</a>'); return null; }
         if (!r.ok) { say('載入失敗，等等再試。'); return null; }
         return read(r, name).then(function (buf) { return kind === 'text' ? new TextDecoder().decode(buf) : buf; });
       }, function () { say('連不上伺服器，等等再試。'); return null; });
@@ -210,8 +222,8 @@
       function saveLook() { if (sock) sock.emit('look', NW.look()); clearTimeout(saveT); saveT = setTimeout(function () { api({ look: NW.look() }); }, 600); }
       if (NW.hasStd) api().then(function (r) { if (!r) return; base = r.base; var O = NW.options(), L = r.look3d;
         if (L && (O.parts.hair.indexOf(L.hair) < 0 || O.parts.top.indexOf(L.top) < 0 || O.parts.face.indexOf(L.face) < 0)) L = null;
-        NW.dress(L || NW.fromAccount(base)); showClass(NW.setClass(L && L.cls)); NW.setPet(r.pet); if (!$('dress').hidden) drawDress(); document.body.dataset.look = '1'; }).then(online);
-      // 點唱機：只聽不點，播的是總部正在播的那一首，跟著總部的進度
+        NW.dress(L || NW.fromAccount(base)); showClass(NW.setClass(L && L.cls)); NW.setPet(r.pet); $('b-pet').hidden = !r.pet; if (r.pet) $('s-pet').textContent = r.pet.name; if (!$('dress').hidden) drawDress(); document.body.dataset.look = '1'; }).then(online);
+      // 點唱機：播的是總部正在播的那一首，跟著總部的進度；點歌在面板裡（newworld-panels.js）
       var music = (function () {
         var now = null, got = 0, on = false, player = null, loading = false, cur = '';
         function pos() { return now ? (now.at + (Date.now() - got)) / 1000 : 0; }
@@ -223,26 +235,28 @@
           var s = document.createElement('script'); s.src = 'https://www.youtube.com/iframe_api'; document.head.appendChild(s); }
         return { set: function (st) { var a = st && st.all && st.all.now; var was = now && now.vid; now = a ? { vid: a.vid, title: a.title, at: a.at || 0 } : null; got = Date.now();
             if (on && (!now || now.vid !== was)) { if (now) NW.net.say(null, '現在播：' + now.title); play(); } },
-          toggle: function () { if (!on && !now) return NW.net.say(null, '總部現在沒有人點歌'); on = !on; NW.net.say(null, on ? '現在播：' + now.title : '把音樂關掉了'); play(); },
+          toggle: function () { on = !on; if (now || !on) NW.net.say(null, on ? '現在播：' + now.title : '把音樂關掉了'); play(); return on; },
           state: function () { return { on: on, vid: now && now.vid }; } }; })();
       window.NW_MUSIC = music;
       // 大廳的導師、扭蛋機、花圃、種子箱和前院的許願池：點紙條開面板
-      var panels = window.NW_PANELS ? NW_PANELS(NW, token, { curClass: function () { return (NW.look() || {}).cls || ''; }, setClass: function (c) { var n = NW.setClass(c); showClass(n); saveLook(); return n; } }) : null;
+      var panels = window.NW_PANELS ? NW_PANELS(NW, token, { music: music, curClass: function () { return (NW.look() || {}).cls || ''; }, setClass: function (c) { var n = NW.setClass(c); showClass(n); saveLook(); return n; } }) : null;
       window.NW_UI = panels;
       var GREEK = ['噓…願望說出來就不靈了，寫下來吧', '把硬幣丟進池子裡，再把願望寫清楚一點', '遇到 Bug 也可以來這裡說，我會偷偷轉告管理員', '先看看有沒有人許過一樣的願，幫他按個讚吧'];
-      NW.onInteract(function (kind, it) { if (kind === 'juke') music.toggle(); if (kind === 'greek' && panels) { panels.toast('希臘少女：「' + GREEK[Math.floor(Math.random() * GREEK.length)] + '」'); kind = 'well'; } if (panels) { $('dress').hidden = true; panels.open(kind, it); } });
-      // 多人：看得到其他在線的管理員，聊天只在新世界裡，不會傳到總部
+      NW.onInteract(function (kind, it) { if (kind === 'greek' && panels) { panels.toast('希臘少女：「' + GREEK[Math.floor(Math.random() * GREEK.length)] + '」'); kind = 'well'; } if (panels) { $('dress').hidden = true; panels.open(kind, it); } });
+      if (panels) { $('b-bag').hidden = false; $('b-bag').onclick = function () { $('dress').hidden = true; panels.open('bag'); }; $('b-pet').onclick = function () { $('dress').hidden = true; panels.open('pet'); }; }
+      // 多人：看得到其他在線的人，聊天只在新世界裡，不會傳到總部
       var sock = null;
       function online() {
         if (!window.io || sock) return;
         sock = io('/newworld', { auth: { token: token } });
         var last = '';
-        sock.on('init', function (d) { NW.net.clear(); NW.net.name(d.name); d.players.forEach(function (p) { NW.net.put(p.id, p); }); sock.emit('look', NW.look()); last = ''; $('chat').hidden = false; });
+        sock.on('init', function (d) { NW.net.clear(); NW.net.name(d.name); NW.tier(d.tier); $('b-bots').hidden = !d.admin; d.players.forEach(function (p) { NW.net.put(p.id, p); }); sock.emit('look', NW.look()); last = ''; $('chat').hidden = false; });
         sock.on('join', function (p) { NW.net.put(p.id, p); });
         sock.on('leave', function (id) { NW.net.drop(id); });
-        sock.on('look', function (d) { NW.net.put(d.id, { look: d.look }); });
+        sock.on('look', function (d) { NW.net.put(d.id, { look: d.look, tier: d.tier }); });
+        sock.on('tier', function (n) { NW.tier(n); });
         sock.on('state', function (list) { list.forEach(function (a) { if (a[0] !== sock.id) NW.net.move(a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7]); }); });
-        sock.on('music', function (st) { music.set(st); });
+        sock.on('music', function (st) { music.set(st); if (panels) panels.music(); });
         sock.on('garden', function (st) { NW.garden(st); if (panels) panels.garden(); });
         sock.on('emote', function (d) { NW.net.emote(d.id, d.face); });
         sock.on('chat', function (m) { NW.net.say(m.id === sock.id ? null : m.id, m.text); var log = $('chat-log'), row = document.createElement('div'), b = document.createElement('b');
@@ -257,7 +271,7 @@
         [].forEach.call($('acts').children, function (b) { b.onclick = function () { NW.act(b.getAttribute('data-act')); drawActs(); if (b.getAttribute('data-act') !== 'run') $('acts').hidden = true; }; });
         $('b-act').onclick = function () { $('acts').hidden = !$('acts').hidden; E.hidden = true; drawActs(); };
         // 壓力測試：請伺服器放假人進來，看手機撐不撐得住（假人每個人都看得到）
-        var botN = [0, 10, 19], botI = 0; $('b-bots').hidden = false;
+        var botN = [0, 10, 19], botI = 0;
         $('b-bots').onclick = function () { botI = (botI + 1) % botN.length; sock.emit('bots', botN[botI]); $('s-bots').textContent = botN[botI] ? botN[botI] + ' 個假人' : '沒有假人'; };
         $('chat-form').addEventListener('submit', function (e) { e.preventDefault(); var i = $('chat-in'), t = i.value.trim(); if (t && sock.connected) sock.emit('chat', t); i.value = ''; i.blur(); });
       }

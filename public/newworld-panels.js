@@ -1,6 +1,7 @@
 // 新世界大廳的小面板：職業導師（轉職）、扭蛋機、公共花園、種子箱、前院的許願池
 // 扭蛋、花園、許願池讀寫的都是跟總部同一份資料（同一個背包、同一塊花園、同一批願望），只是換一個地方操作
-// 用法：NW_PANELS(NW, token, { setClass(cls), curClass() })，回傳 { open(kind, it), close(), toast(text) }
+// 背包和裝備、寵物的摸和餵、點唱機點歌也在這裡（階段一第一批），一樣是總部同一份資料
+// 用法：NW_PANELS(NW, token, { setClass(cls), curClass(), music })，回傳 { open(kind, it), close(), toast(text) }
 window.NW_PANELS = function (NW, token, opt) {
   var P = document.getElementById('panel'), TOAST = document.getElementById('toast'), toastT = 0, cur = null;
   function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
@@ -150,14 +151,101 @@ window.NW_PANELS = function (NW, token, opt) {
     acts.appendChild(send); acts.appendChild(btn('先不要', well)); body.appendChild(acts);
   }
 
-  // 走遠了就把面板收起來
-  setInterval(function () { if (!cur) return; var k = NW.near(); if (k === 'greek') k = 'well'; if (k !== cur) close(); }, 500);
+  // ---------- 背包和裝備：跟總部同一個背包 ----------
+  var bagTab = 'food', bagSel = null;
+  function bag() { var body = frame('bag', '背包', '跟總部是同一個背包。補品要等新世界有戰鬥才能吃，現在先看和整理。'); wait(body); post('bag', { act: 'state' }).then(function (r) { if (cur === 'bag') drawBag(body, r); }); }
+  function bagDo(body, req, done) { post('bag', req).then(function (x) { if (cur !== 'bag') return;
+    if (!x.ok) return post('bag', { act: 'state' }).then(function (s) { s.error = x.error; if (cur === 'bag') drawBag(body, s); });
+    toast(x.text); bagSel = null; if (done) done(x); drawBag(body, x); }); }
+  function cell(iconKey, name, n, cls) { var c = el('button', 'cell' + (cls ? ' ' + cls : '')); c.type = 'button'; var i = icon(iconKey, 34); if (i) c.appendChild(i); c.appendChild(el('span', '', name)); if (n > 1) c.appendChild(el('i', '', '×' + n)); return c; }
+  function drawBag(body, r) {
+    if (!r.sections) return fail(body, r);
+    body.innerHTML = '';
+    var lv = el('p', 'dim', '等級 ' + r.level + (r.level >= r.levelMax ? '（滿級）' : '')); lv.id = 'bag-level'; body.appendChild(lv);
+    var tabs = el('div', 'tabs');
+    ['food', 'misc', 'gear'].forEach(function (s) { var S = r.sections[s], b = btn('', function () { bagTab = s; bagSel = null; drawBag(body, r); }, bagTab === s ? 'on' : ''); b.appendChild(el('b', '', S.name)); b.appendChild(el('small', '', S.used + ' / ' + S.slots + ' 格')); b.dataset.tab = s; tabs.appendChild(b); });
+    body.appendChild(tabs);
+    if (r.error) body.appendChild(el('p', 'err', r.error));
+    if (bagTab === 'gear') return drawGear(body, r);
+    var list = r.items.filter(function (x) { return bagTab === 'food' ? x.sec === 'food' : x.sec !== 'food'; });
+    if (!list.length) return body.appendChild(el('p', 'dim', bagTab === 'food' ? '沒有補品。花園收成、打怪都會拿到。' : '沒有雜物。'));
+    var grid = el('div', 'grid');
+    list.forEach(function (x) { var key = x.kind + ':' + x.k, c = cell(x.icon, x.name, x.n, bagSel === key ? 'on' : ''); c.dataset.item = x.k; c.onclick = function () { bagSel = bagSel === key ? null : key; drawBag(body, r); }; grid.appendChild(c); });
+    body.appendChild(grid);
+    var sel = list.filter(function (x) { return x.kind + ':' + x.k === bagSel; })[0];
+    if (sel) { var acts = el('div', 'acts'); acts.appendChild(el('b', '', sel.name + ' ×' + sel.n)); var t = btn('丟掉一個', function () { bagDo(body, { act: 'trash', kind: sel.kind, k: sel.k }); }); t.id = 'bag-trash'; acts.appendChild(t); body.appendChild(acts);
+      body.appendChild(el('p', 'dim', '丟掉就不見了，撿不回來。')); }
+  }
+  function drawGear(body, r) {
+    var row = el('div', 'worn-row');
+    Object.keys(r.slots).forEach(function (s) { var id = r.equip[s], g = id && r.gear.filter(function (x) { return x.id === id; })[0];
+      var c = g ? cell('gear-' + g.id, g.name, 0, 'worn r-' + g.rarity) : el('div', 'cell'); if (!g) c.appendChild(el('small', '', '沒穿')); c.insertBefore(el('small', '', r.slots[s]), c.firstChild); c.dataset.slot = s; c.dataset.worn = id || '';
+      if (g) { c.style.cursor = 'pointer'; c.onclick = function () { bagSel = bagSel === g.id ? null : g.id; drawBag(body, r); }; } row.appendChild(c); });
+    body.appendChild(row);
+    if (!r.gear.length) return body.appendChild(el('p', 'dim', '還沒有裝備。大廳的扭蛋機、打怪和副本都會拿到。'));
+    var grid = el('div', 'grid');
+    r.gear.forEach(function (g) { var c = cell('gear-' + g.id, g.name, g.n, 'r-' + g.rarity + (g.on ? ' worn' : '') + (bagSel === g.id ? ' on' : '')); c.dataset.gear = g.id; c.onclick = function () { bagSel = bagSel === g.id ? null : g.id; drawBag(body, r); }; grid.appendChild(c); });
+    body.appendChild(grid);
+    var g = r.gear.filter(function (x) { return x.id === bagSel; })[0];
+    if (g) { var acts = el('div', 'acts'); acts.appendChild(el('b', '', '【' + g.rarity + '】' + g.name + '　' + r.slots[g.slot]));
+      var e = btn(g.on ? '脫下' : '穿上', function () { bagDo(body, { act: 'equip', slot: g.slot, id: g.on ? null : g.id }); }, 'main'); e.id = 'gear-equip'; acts.appendChild(e);
+      var t = btn('丟掉一件', function () { bagDo(body, { act: 'trash', kind: 'gear', k: g.id }); }); t.disabled = g.on && g.n < 2; acts.appendChild(t); body.appendChild(acts); }
+    body.appendChild(el('p', 'dim', '在這裡穿脫，總部的角色會跟著換。裝備的 3D 樣子還在做，新世界的角色暫時看不出來。'));
+  }
+
+  // ---------- 寵物：摸摸和餵點心（感情值跟總部共用）----------
+  function pet() { var body = frame('pet', '寵物', '摸摸和餵點心加的感情，跟總部是同一份，每天的次數也算在一起。'); wait(body); post('pet', { act: 'state' }).then(function (r) { if (cur === 'pet') drawPet(body, r); }); }
+  function drawPet(body, r) {
+    if (r.pet === undefined) return fail(body, r);
+    body.innerHTML = '';
+    if (!r.pet) return body.appendChild(el('p', 'dim', '還沒有寵物。先到總部的可愛生物休息區領養一隻，牠就會跟著你來新世界。'));
+    var p = r.pet, go = function (req) { return function () { post('pet', req).then(function (x) { if (cur !== 'pet') return;
+      if (!x.ok) return post('pet', { act: 'state' }).then(function (s) { s.error = x.error; if (cur === 'pet') drawPet(body, s); });
+      toast(x.text); if (x.happy) NW.petJoy(req.act === 'pat' ? '好舒服' : '好吃'); drawPet(body, x); }); }; };
+    var row = el('div', 'line'); var t = el('span'); t.appendChild(el('b', '', p.name + '　' + p.levelName)); t.appendChild(el('small', '', '感情 ' + p.bond + (p.next ? ' / ' + p.next : '（滿了）'))); row.appendChild(t); row.id = 'pet-bond'; row.dataset.bond = p.bond; body.appendChild(row);
+    var bar = el('div', 'bar'), fill = el('b'); fill.style.width = (p.next ? Math.min(100, Math.round(p.bond / p.next * 100)) : 100) + '%'; bar.appendChild(fill); body.appendChild(bar);
+    if (r.error) body.appendChild(el('p', 'err', r.error));
+    var acts = el('div', 'acts'); var pat = btn('摸摸' + (p.patLeft > 0 ? '（今天還能加 ' + p.patLeft + ' 次感情）' : '（今天的感情加滿了）'), go({ act: 'pat' }), 'main'); pat.id = 'pet-pat'; acts.appendChild(pat); body.appendChild(acts);
+    body.appendChild(el('p', '', p.feedLeft > 0 ? '餵點心（今天還能餵 ' + p.feedLeft + ' 次）：' : '今天吃飽了，明天再餵。'));
+    if (p.feedLeft > 0) { var fs = el('div', 'acts');
+      r.foods.forEach(function (f) { var b = btn(f.name + ' ×' + f.n + '（感情 +' + f.gain + '）', go({ act: 'feed', item: f.k })), ic = icon(f.icon, 24); if (ic) b.insertBefore(ic, b.firstChild); b.dataset.food = f.k; fs.appendChild(b); });
+      body.appendChild(fs); if (!r.foods.length) body.appendChild(el('p', 'dim', '背包裡沒有牠愛吃的。花園種的水果牠最喜歡。')); }
+  }
+
+  // ---------- 點唱機：聽歌、點歌（排進總部同一份歌單）----------
+  var jukeBody = null, jukeFound = null;
+  function juke() { var body = frame('juke', '點唱機', '跟總部放的是同一份歌單，在這裡點的歌總部也聽得到。'); jukeBody = body; jukeFound = null; wait(body); jukePost({ act: 'state' }); }
+  function jukePost(req) { var body = jukeBody; return post('music', req).then(function (r) { if (cur !== 'juke' || body !== jukeBody) return r; if (r.list) jukeFound = r.list; if (r.ok && r.text) { toast(r.text); if (req.act === 'add') jukeFound = null; } drawJuke(body, r); return r; }); }
+  function drawJuke(body, r) {
+    if (!r.queue) return fail(body, r);
+    body.innerHTML = '';
+    var on = opt.music.state().on, row = el('div', 'line'), ic = icon('btn-song', 30); if (ic) row.appendChild(ic);
+    var t = el('span'); t.appendChild(el('b', '', r.now ? r.now.title : '現在沒有歌')); t.appendChild(el('small', '', r.now ? r.now.byName + ' 點的' : '點一首就會開始放')); row.appendChild(t); row.id = 'juke-now'; body.appendChild(row);
+    var acts = el('div', 'acts'); var lis = btn(on ? '先不聽' : '我要聽', function () { opt.music.toggle(); drawJuke(body, r); }, on ? 'on' : 'main'); lis.id = 'juke-listen'; acts.appendChild(lis);
+    if (r.now && r.now.mine) acts.appendChild(btn('切掉我點的這首', function () { jukePost({ act: 'skip' }); }));
+    body.appendChild(acts);
+    if (r.error) body.appendChild(el('p', 'err', r.error));
+    var q = el('input'); q.type = 'text'; q.maxLength = 200; q.placeholder = '打歌名搜尋，或貼 YouTube 連結'; q.id = 'juke-q'; body.appendChild(q);
+    var a2 = el('div', 'acts'), go = btn('點歌', function () { var v = q.value.trim(); if (!v) return; go.disabled = true; jukePost(/youtu\.?be|^[\w-]{11}$/.test(v) ? { act: 'add', vid: v } : { act: 'search', q: v }); }, 'main'); go.id = 'juke-go'; a2.appendChild(go);
+    a2.appendChild(el('span', 'dim', '排隊 ' + r.queue.length + ' / ' + r.max + ' 首')); body.appendChild(a2);
+    q.addEventListener('keydown', function (e) { e.stopPropagation(); if (e.key === 'Enter') go.click(); }); q.addEventListener('keyup', function (e) { e.stopPropagation(); });
+    if (jukeFound) { if (!jukeFound.length) body.appendChild(el('p', 'dim', '找不到，換個關鍵字試試。'));
+      jukeFound.forEach(function (s) { var li = el('div', 'song found'); li.appendChild(el('span', '', s.title)); li.appendChild(btn('點這首', function () { jukePost({ act: 'add', vid: s.vid, title: s.title }); })); body.appendChild(li); }); }
+    if (r.queue.length) body.appendChild(el('p', 'sub', '接下來：'));
+    r.queue.forEach(function (s) { var li = el('div', 'song'); li.appendChild(el('span', '', (s.i + 1) + '. ' + s.title + '　' + s.byName)); if (s.mine) li.appendChild(btn('拿掉', function () { jukePost({ act: 'remove', i: s.i }); })); body.appendChild(li); });
+  }
+
+  // 走遠了就把面板收起來（背包和寵物是按鈕開的，不會自己收）
+  setInterval(function () { if (!cur || cur === 'bag' || cur === 'pet') return; var k = NW.near(); if (k === 'greek') k = 'well'; if (k !== cur) close(); }, 500);
   // 一進來先拿一次花園的狀態（之後有變伺服器會推過來）
   post('garden', { act: 'state' }).then(gardenSync);
   return { close: close, toast: toast,
+    // 歌單有變（換歌了、別人點歌了）：開著的點唱機面板跟著更新；輸入框裡正在打字就先不動
+    music: function () { if (cur !== 'juke' || (document.activeElement && document.activeElement.id === 'juke-q') || (document.getElementById('juke-q') || {}).value) return; jukePost({ act: 'state' }); },
     // 花園有變（長大了、別人澆水了）：開著的花圃面板跟著更新
     garden: function () { if (cur !== 'plot') return; var i = plotI, body = plotBody; post('garden', { act: 'info', i: i }).then(function (r) { if (cur === 'plot' && plotI === i && r.info) drawPlot(body, i, r); }); },
     open: function (kind, it) {
-      if (kind === 'mentor') mentor(); else if (kind === 'gacha') gacha(); else if (kind === 'plot') plot(it.i); else if (kind === 'seedbox') seedbox(); else if (kind === 'well') { wishPage = 1; well(); } else if (cur) close();
+      if (kind === 'mentor') mentor(); else if (kind === 'gacha') gacha(); else if (kind === 'plot') plot(it.i); else if (kind === 'seedbox') seedbox(); else if (kind === 'well') { wishPage = 1; well(); } else if (kind === 'juke') juke();
+      else if (kind === 'bag') { if (cur === 'bag') close(); else bag(); } else if (kind === 'pet') { if (cur === 'pet') close(); else pet(); } else if (cur) close();
     } };
 };

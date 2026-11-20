@@ -69,7 +69,8 @@ const NW = (() => {
     let dx = tx - P.x, dz = tz - P.z, d = Math.hypot(dx, dz); if (d > 14) { P.x = tx; P.z = tz; d = 0; }
     const go = d > (P.mv > 0.5 ? 0.25 : 0.9), sp = Math.min(9, 2.2 + d * 2.2); if (go) { P.x += dx / d * Math.min(d, sp * dt); P.z += dz / d * Math.min(d, sp * dt); let df = Math.atan2(dx, dz) - P.f; df = Math.atan2(Math.sin(df), Math.cos(df)); P.f += df * Math.min(1, dt * 10); P.ph += dt * (6 + sp); }
     P.mv += ((go ? 1 : 0) - P.mv) * Math.min(1, dt * 8); P.lie += ((!go && ACT.pose === 'sit' ? 1 : 0) - P.lie) * Math.min(1, dt * 4);
-    P.g.position.set(P.x, FY(P.x, P.z) + P.mv * 0.06 * Math.abs(Math.sin(P.ph)) - P.lie * P.g.legY * 0.8, P.z); P.g.rotation.y = P.f; P.g.b.rotation.x = -P.lie * 0.12;
+    if (P.joy > 0) P.joy = Math.max(0, P.joy - dt);   // 被摸、被餵：開心地跳幾下
+    P.g.position.set(P.x, FY(P.x, P.z) + P.mv * 0.06 * Math.abs(Math.sin(P.ph)) - P.lie * P.g.legY * 0.8 + (P.joy > 0 ? Math.abs(Math.sin(P.joy * 9)) * 0.28 : 0), P.z); P.g.rotation.y = P.f; P.g.b.rotation.x = -P.lie * 0.12;
     P.g.legs.forEach((l, i) => { l.position.y = P.g.legY + P.mv * Math.max(0, Math.sin(P.ph + (i % 3 ? 0 : Math.PI))) * 0.08; }); P.g.tail.rotation.z = Math.sin(S.time * 7) * 0.45;
     placeTag(P.tag, P.x, P.z, -1.2); };
   const FORMS = ['carry', 'float', 'front'], FORM_NAME = { carry: '單手捧著', float: '漂浮操控', front: '走在前面' };
@@ -79,7 +80,10 @@ const NW = (() => {
   const mkTag = () => { const t = document.createElement('div'), b = document.createElement('div'), n = document.createElement('div'), i = document.createElement('img'), s = document.createElement('span');
     t.className = 'nw-tag'; b.className = 'nw-bubble'; n.className = 'nw-name'; b.hidden = n.hidden = i.hidden = true; i.alt = ''; n.append(i, s); t.append(b); LAB.append(t, n); return { t, b, n, i, s, until: 0 }; };
   // 名字紙條上的職業徽章：用總部同一套手繪圖示
-  const setBadge = (tag, cls) => { const u = cls && window.HQ_ICONS ? window.HQ_ICONS.url('cls-' + cls) : null; tag.i.hidden = !u; if (u && tag.i.src !== u) tag.i.src = u; };
+  // 外圈是那個職業的熟練度階級（跟總部同一套：0 階沒有圈，越高越亮）
+  const setBadge = (tag, cls, tier) => { const A = window.HQ_MASTERY_ART, u = !cls || !window.HQ_ICONS ? null : A ? A.badgeUrl(cls, tier | 0) : window.HQ_ICONS.url('cls-' + cls);
+    tag.i.hidden = !u; tag.n.dataset.tier = cls ? (tier | 0) : ''; if (u && tag.i.src !== u) tag.i.src = u; };
+  let MYTIER = 0;
   const HINT = document.createElement('button'); HINT.className = 'nw-hint'; HINT.type = 'button'; HINT.hidden = true; LAB.appendChild(HINT); HINT.addEventListener('click', (e) => { e.stopPropagation(); NW.use(); });
   const MYTAG = ME ? mkTag() : null, PV = new V3();
   const hideTag = (tag) => { tag.t.style.display = tag.n.style.display = 'none'; };
@@ -99,7 +103,8 @@ const NW = (() => {
         o.rs = { x: o.x, z: o.z, face: o.f, mv: 0, ph: 0, form: FORMS[d.fm] || 'carry', cw: 1, gt: -1, rp: null }; OTH.set(id, o); }
       else if (d.look) STD.setLook(o.c, d.look);
       const rider = o.c.look.cls === 'rider'; if (rider !== o.rider) { o.rider = rider; o.rs.x = o.tx; o.rs.z = o.tz; o.rs.rp = null; if (!rider) { o.x = o.tx; o.z = o.tz; } }
-      setBadge(o.tag, o.c.look.cls);
+      if (d.tier != null) o.tier = d.tier | 0;
+      setBadge(o.tag, o.c.look.cls, o.tier);
       if (d.name != null) { o.tag.s.textContent = d.name; o.tag.n.hidden = !d.name; } },
     move: (id, x, z, f, mv, fm, g, p) => { const o = OTH.get(id); if (!o) return; o.tx = x; o.tz = z; o.tf = f; o.mv = mv; o.p = p | 0; o.rs.form = FORMS[fm] || 'carry';
       if (g !== undefined && g !== o.g) { o.g = g; if (o.rs.gt < 0) o.rs.gt = 0; } },
@@ -430,7 +435,7 @@ const NW = (() => {
     setClass: (cls) => { if (!ME) return ''; S.goal = null; const rider = cls === 'rider';
       if (rider && S.ctrl !== 'robot') { if (S.lob) { ME.x = YARD_DOOR.x + 2; ME.z = YARD_DOOR.z + 4; }   // 機器人太大，進不了大廳，回前院再騎
         S.x = ME.x; S.z = ME.z; S.face = ME.face; S.rp = null; }
-      S.ctrl = rider ? 'robot' : 'me'; ACT.pose = null; STD.setLook(ME.c, { cls: cls || null }); setBadge(MYTAG, cls); return CLS_NAME[cls || '']; },
+      S.ctrl = rider ? 'robot' : 'me'; ACT.pose = null; STD.setLook(ME.c, { cls: cls || null }); setBadge(MYTAG, cls, MYTIER); return CLS_NAME[cls || '']; },
     nextCtrl: () => { const i = CLS.indexOf(ME ? ME.c.look.cls || '' : ''); return NW.setClass(CLS[(i + 1) % CLS.length]); },
     look: () => (ME ? Object.assign({}, ME.c.look) : null), dress: (patch) => { if (ME) STD.setLook(ME.c, patch); return ME ? Object.assign({}, ME.c.look) : null; },
     fromAccount: (b) => (STD ? STD.fromAccount(b) : null),
@@ -450,6 +455,8 @@ const NW = (() => {
     debugPlace: (x, z) => { if (ME && S.ctrl === 'me') { ME.x = x; ME.z = z; S.goal = null; } },   // 測試腳本用：把人直接放到某個位置
     onStats: (fn) => { onStats = fn; },
     // 大廳第二、三期：花園的狀態、寵物、可以互動的點（測試腳本用 spots 找位置）
+    tier: (n) => { MYTIER = n | 0; if (MYTAG && ME) setBadge(MYTAG, ME.c.look.cls, MYTIER); }, myTier: () => MYTIER,
+    petJoy: (text) => { if (!PET) return; PET.joy = 1.4; if (text) { PET.tag.b.textContent = text; PET.tag.b.hidden = false; PET.tag.until = S.time + 3; } },
     garden: (st) => { PLOTS = Array.isArray(st) ? st : []; if (LOBBY) LOBBY.setGarden(PLOTS); }, plots: () => PLOTS, setPet, pet: () => (PET ? { name: PET.pet.name, kind: PET.pet.kind, x: PET.x, z: PET.z } : null),
     spots: () => (LOBBY ? { well: WELL, greek: GREEK_AT, ...LOBBY.SPOTS } : null), hint: () => (HINT.hidden ? '' : HINT.textContent), CLS, CLS_NAME,
   };

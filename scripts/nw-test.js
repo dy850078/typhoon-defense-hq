@@ -8,6 +8,7 @@
 //   node scripts/nw-test.js classes    只跑召喚師、陵媒、表情
 //   node scripts/nw-test.js live       只跑動作、長椅、徽章、點唱機、假人壓力測試
 //   node scripts/nw-test.js lobby      只跑總部大廳（進門、出門、坐沙發、作戰角的高度、點唱機）
+//   node scripts/nw-test.js stay       階段一第一批：封測名單、背包、裝備、熟練度徽章、寵物摸和餵、點歌
 //   node scripts/nw-test.js home       只跑大廳的功能（導師轉職、扭蛋機、公共花園、種子箱、許願池、寵物）；加 GARDEN_SPEED=600 會連收成一起測
 //   OUT=some/dir 可以指定截圖要放哪裡（預設是系統暫存資料夾）
 //
@@ -211,8 +212,8 @@ async function main() {
     await shot(pb, 'live-3-badge');
     // 點唱機：總部沒有人點歌時會說一聲
     await NW(pa, () => { const j = HQ_NEWWORLD.lobby().juke; HQ_NEWWORLD.debugPlace(j.x, j.z + 1.6); }); await pa.waitForFunction(() => HQ_NEWWORLD.near() === 'juke', null, { timeout: 30000 }).catch(() => {});
-    await pa.click('.nw-hint'); await pa.waitForTimeout(600);
-    ok((await pa.textContent('.nw-tag .nw-bubble')).includes('沒有人點歌') && !(await pa.evaluate(() => NW_MUSIC.state().on)), '點唱機：沒有歌的時候會說一聲');
+    await pa.click('.nw-hint'); await pa.waitForFunction(() => !!document.getElementById('juke-now'), null, { timeout: 30000 }).catch(() => {});
+    ok(/現在沒有歌/.test(await pa.textContent('#panel')) && !(await pa.evaluate(() => NW_MUSIC.state().on)), '點唱機：打開面板，沒有歌的時候會說一聲');
     await shot(pa, 'live-4-jukebox');
     // 假人：放 19 個進來，量張數
     await pa.click('#b-bots'); await pa.click('#b-bots'); await cnt(pa, 20);
@@ -389,6 +390,93 @@ async function main() {
     ok(pp.errors.length === 0 && !!(await pp.$('#gacha-spin')), '手機也開得了扭蛋機面板'); await pp.context().close();
   };
 
+  // ---- 階段一第一批：封測名單、背包、裝備、熟練度徽章、寵物摸和餵、點歌 ----
+  const stay = async () => {
+    console.log('stay');
+    // 封測名單：不是管理員的帳號預設進不來，開放後才拿得到場景
+    const b = await account({ name: '小測' }, false), hb = { Authorization: 'Bearer ' + b.token };
+    const code = async () => (await fetch(B + '/api/newworld/world.js', { headers: hb })).status;
+    ok((await code()) === 403, '不在封測名單的帳號拿不到新世界');
+    const on = await post('/api/admin/newworld', { username: b.name, on: true }, { 'x-admin-token': ad.token });
+    ok(on.ok && on.nw && (await code()) === 200, '管理頁開放之後就進得來');
+    const list = await (await fetch(B + '/api/admin/accounts', { headers: { 'x-admin-token': ad.token } })).json().catch(() => null);
+    const row = list && (list.accounts || list.list || list).find && (list.accounts || list.list || list).find(x => x.username === b.name);
+    ok(!row || row.nw === true, '管理頁的帳號清單看得到封測狀態');
+    await post('/api/admin/newworld', { username: b.name, on: false }, { 'x-admin-token': ad.token });
+    ok((await code()) === 403, '收回之後又進不來');
+    await post('/api/admin/newworld', { username: b.name, on: true }, { 'x-admin-token': ad.token });
+
+    // 用封測帳號（不是管理員）開頁面
+    const a = await account({ name: '阿福', hair: 'bob', level: 12, inv: { apple: 2, water: 3, gachaTicket: 1 }, gear: { mgDress: 1, mgBow: 2, mgWings: 1 }, owned: ['mgDress', 'mgBow', 'mgWings'], pet: { kind: 'dog', name: '麻糬' } }, false);
+    await post('/api/admin/newworld', { username: a.name, on: true }, { 'x-admin-token': ad.token });
+    const api = (name, body) => post('/api/newworld/' + name, body, { Authorization: 'Bearer ' + a.token });
+    await api('look', { look: { hair: 'bob', top: 'tee', face: 'smile', hairCol: '#2b2a33', skinCol: '#fde6d4', topCol: '#ff7a2f', cls: 'summoner' } });
+    const pa = await open(a);
+    const panel = (k) => pa.waitForFunction((v) => { const p = document.getElementById('panel'); return !p.hidden && p.dataset.kind === v && !/讀取中/.test(p.textContent); }, k, { timeout: 30000 }).catch(() => {});
+    const toast = () => pa.evaluate(() => (document.getElementById('toast').hidden ? '' : document.getElementById('toast').textContent));
+    const place = async (x, z) => { await NW(pa, ([x, z]) => HQ_NEWWORLD.debugPlace(x, z), [x, z]); await pa.waitForTimeout(900); };
+    await zoomIn(pa);
+    ok(await pa.evaluate(() => document.getElementById('b-bots').hidden), '封測帳號看不到壓力測試按鈕');
+    // 名字旁的徽章：新帳號的召喚師熟練度是 0 階（熟練度只能在總部打怪累積，測試帳號灌不進去）；階級變了徽章跟著換
+    ok((await NW(pa, () => HQ_NEWWORLD.myTier())) === 0 && !!(await pa.$('.nw-name[data-tier="0"] img')), '名字旁的職業徽章用總部的熟練度徽章（新帳號 0 階）');
+    const b0 = await pa.getAttribute('.nw-name[data-tier="0"] img', 'src'); await NW(pa, () => HQ_NEWWORLD.tier(4)); await pa.waitForTimeout(300);
+    ok(!!(await pa.$('.nw-name[data-tier="4"] img')) && (await pa.getAttribute('.nw-name[data-tier="4"] img', 'src')) !== b0, '階級升上去，徽章換成那一階的外圈'); await shot(pa, 'stay-1-badge');
+    // 背包
+    await pa.click('#b-bag'); await panel('bag'); await pa.waitForTimeout(400); await shot(pa, 'stay-2-bag');
+    ok(/等級 12/.test(await pa.textContent('#bag-level')), '背包面板看得到等級');
+    ok(!!(await pa.$('#panel [data-item="apple"] img')) && /×2/.test(await pa.textContent('#panel [data-item="apple"]')), '補品那一頁有 2 顆蘋果，有手繪圖示');
+    await pa.click('#panel [data-item="water"]'); await pa.click('#bag-trash'); await pa.waitForFunction(() => /×2/.test((document.querySelector('#panel [data-item="water"]') || {}).textContent || ''), null, { timeout: 30000 }).catch(() => {});
+    ok((await api('bag', { act: 'state' })).items.find(x => x.k === 'water').n === 2, '丟掉一瓶水，帳號的背包少一瓶');
+    // 裝備
+    await pa.click('#panel [data-tab="gear"]'); await pa.waitForSelector('#panel [data-gear="mgDress"]'); await pa.waitForTimeout(300);
+    ok((await pa.locator('#panel .grid [data-gear]').count()) === 3 && !!(await pa.$('#panel [data-gear="mgWings"] img')), '裝備那一頁有三件魔法少女裝備');
+    ok((await pa.getAttribute('#panel .grid .cell', 'data-gear')) === 'mgWings', '稀有度高的排前面');
+    await pa.click('#panel [data-gear="mgDress"]'); await pa.click('#gear-equip'); await pa.waitForFunction(() => (document.querySelector('#panel [data-slot="outfit"]') || { dataset: {} }).dataset.worn === 'mgDress', null, { timeout: 30000 }).catch(() => {});
+    ok((await api('bag', { act: 'state' })).equip.outfit === 'mgDress', '穿上蓬蓬裙，帳號記下來了'); await pa.waitForTimeout(400); await shot(pa, 'stay-3-gear');
+    const bad = await api('bag', { act: 'trash', kind: 'gear', k: 'mgDress' });
+    ok(!bad.ok, '正在穿的最後一件不能丟（' + bad.error + '）');
+    await new Promise(r => setTimeout(r, 300));
+    ok(!(await api('bag', { act: 'equip', slot: 'head', id: 'mgDress' })).ok, '裝備不能穿到別的部位');
+    await pa.click('#panel [data-slot="outfit"]'); await pa.click('#gear-equip'); await pa.waitForFunction(() => (document.querySelector('#panel [data-slot="outfit"]') || { dataset: {} }).dataset.worn === '', null, { timeout: 30000 }).catch(() => {});
+    ok(!(await api('bag', { act: 'state' })).equip.outfit, '脫下來也記得');
+    // 寵物
+    await pa.click('#b-pet'); await panel('pet');
+    ok((await pa.getAttribute('#pet-bond', 'data-bond')) === '0', '寵物面板讀到感情值');
+    await pa.click('#pet-pat'); await pa.waitForFunction(() => document.getElementById('pet-bond').dataset.bond === '1', null, { timeout: 30000 }).catch(() => {});
+    ok(/感情 \+1/.test(await toast()), '摸一下感情 +1'); await pa.waitForTimeout(300); await shot(pa, 'stay-4-pet');
+    await pa.click('#panel [data-food="apple"]'); await pa.waitForFunction(() => document.getElementById('pet-bond').dataset.bond === '5', null, { timeout: 30000 }).catch(() => {});
+    const p1 = await api('pet', { act: 'state' });
+    ok(p1.pet.bond === 5 && p1.foods.find(f => f.k === 'apple').n === 1 && p1.pet.feedLeft === 2, '餵一顆蘋果：感情 +4、蘋果少一顆、今天還能餵 2 次');
+    for (let i = 0; i < 6; i++) { await new Promise(r => setTimeout(r, 300)); await api('pet', { act: 'pat' }); }
+    const p2 = await api('pet', { act: 'state' });
+    ok(p2.pet.bond === 9 && p2.pet.patLeft === 0, '摸的感情一天最多加 5 次（感情 ' + p2.pet.bond + '）');
+    await NW(pa, () => window.NW_UI.close());
+    // 點唱機
+    const j = await NW(pa, () => HQ_NEWWORLD.lobby().juke);
+    await place(j.x, j.z + 1.6); await pa.waitForFunction(() => HQ_NEWWORLD.near() === 'juke', null, { timeout: 30000 }).catch(() => {});
+    await pa.click('.nw-hint'); await panel('juke');
+    ok(/現在沒有歌/.test(await pa.textContent('#juke-now')), '點唱機面板：還沒有歌');
+    await pa.fill('#juke-q', 'https://youtu.be/dQw4w9WgXcQ'); await pa.click('#juke-go');
+    await pa.waitForFunction(() => !/現在沒有歌/.test(document.getElementById('juke-now').textContent), null, { timeout: 30000 }).catch(() => {});
+    const m1 = await api('music', { act: 'state' });
+    ok(m1.now && m1.now.vid === 'dQw4w9WgXcQ' && m1.now.mine, '貼連結點歌，馬上開始放（' + (m1.now && m1.now.title) + '）');
+    await new Promise(r => setTimeout(r, 300)); await api('music', { act: 'add', vid: 'https://www.youtube.com/watch?v=9bZkp7q19f0' });
+    await pa.waitForFunction(() => document.querySelectorAll('#panel .song').length === 1, null, { timeout: 30000 }).catch(() => {}); await pa.waitForTimeout(300); await shot(pa, 'stay-5-jukebox');
+    ok((await pa.locator('#panel .song').count()) === 1, '第二首排進歌單，面板自己更新');
+    const m2 = await api('music', { act: 'remove', i: 0 });
+    ok(m2.ok && m2.queue.length === 0, '可以拿掉自己點的歌');
+    const m3 = await api('music', { act: 'skip' });
+    ok(m3.ok && !m3.now, '可以切掉自己點的這首');
+    ok(!(await api('music', { act: 'add', vid: '不是連結' })).ok, '亂貼的東西點不了歌');
+    ok(pa.errors.length === 0, '沒有主控台錯誤' + (pa.errors.length ? '：' + pa.errors.join(' / ') : ''));
+    await pa.context().close();
+    // 手機
+    const pp = await open(a, true); await pp.click('#b-bag'); await pp.waitForFunction(() => !!document.getElementById('bag-level'), null, { timeout: 30000 }).catch(() => {});
+    await pp.click('#panel [data-tab="gear"]'); await pp.waitForTimeout(600); await shot(pp, 'stay-6-phone-gear');
+    ok(pp.errors.length === 0 && (await pp.locator('#panel .grid [data-gear]').count()) === 3, '手機也開得了背包和裝備'); await pp.context().close();
+  };
+
+  if (want === 'all' || want === 'stay') await stay();
   if (want === 'all' || want === 'solo') await solo(false);
   if (want === 'all' || want === 'phone') await solo(true);
   if (want === 'all' || want === 'multi') await multi();

@@ -353,6 +353,7 @@ const NW = (() => {
     if (S.ctrl === 'me') S.camT.lerp(bp0.set(ME.x, 1.3 + FY(ME.x, ME.z), ME.z), Math.min(1, dt * 5));   // 騎士的鏡頭看整台機器人
     else S.camT.lerp(bp0.set(S.x - 0.8, 3.6 + shake * 0.07, S.z + 3.2), Math.min(1, dt * 5));
     camera.position.set(S.camT.x + Math.sin(ANG) * cam.dist * far, cam.hgt * far, S.camT.z + Math.cos(ANG) * cam.dist * far); camera.lookAt(S.camT);
+    if (S.dbgCam) { const d = S.dbgCam; camera.position.set(ME.x + Math.sin(d.ang) * d.dist, d.hgt, ME.z + Math.cos(d.ang) * d.dist); camera.lookAt(ME.x, d.look ?? 1.1, ME.z); }   // 測試截圖用的近鏡頭
     camera.updateMatrixWorld(); if (NEAR) { PV.set(NEAR.x, NEAR.y, NEAR.z).project(camera); HINT.hidden = false; showHint(NEAR);
       HINT.style.transform = 'translate(' + ((PV.x * 0.5 + 0.5) * W).toFixed(1) + 'px,' + ((-PV.y * 0.5 + 0.5) * H).toFixed(1) + 'px) translate(-50%,-100%)'; } else HINT.hidden = true;
     placeNpcs();
@@ -452,6 +453,8 @@ const NW = (() => {
     net: NET, emote: (face) => { if (ME) STD.emote(ME.c, face, 5); },
     mem: () => ({ robotShadowCut: A.bot.userData.shadowCut, spirits: SPIRITS.size, chars: STD.all.length, lines: STD.lineCount(), geo: renderer.info.memory.geometries, tex: renderer.info.memory.textures }),   // 測試腳本用：看有沒有漏掉沒還的東西
     debugMe: () => (ME ? ME.c.g : null), zone: () => (S.lob ? 'lobby' : 'yard'), height: () => (ME ? ME.y : 0), lobby: () => (LOBBY ? { tris: LOBBY.tris(), ms: LOBBY.ms, seats: LOBBY.seats.length, spawn: LOBBY.SPAWN, exit: LOBBY.EXIT, juke: LOBBY.JUKE } : null),
+    gear: (equip) => { if (ME && GEAR3) GEAR3.apply(ME.c, equip); }, gearIds: () => (GEAR3 ? GEAR3.ids() : []),
+    debugCam: (o) => { S.dbgCam = o || null; }, debugFace: (f) => { if (ME) ME.face = f; },
     debugPlace: (x, z) => { if (ME && S.ctrl === 'me') { ME.x = x; ME.z = z; S.goal = null; } },   // 測試腳本用：把人直接放到某個位置
     onStats: (fn) => { onStats = fn; },
     // 大廳第二、三期：花園的狀態、寵物、可以互動的點（測試腳本用 spots 找位置）

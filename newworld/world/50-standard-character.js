@@ -83,8 +83,8 @@ const STD = (() => {
 
   function setLook(c, patch) {
     Object.assign(c.look, patch || {}); const L = c.look;
-    const kit = CLS_KIT[L.cls] || null;
-    const want = new Set(['Body', 'Shoes', 'Bottom_shorts', 'Hair_' + L.hair, 'Top_' + (kit ? kit.top : L.top), 'Face_' + (c.emote || L.face)].concat(L.glasses ? ['Glasses'] : [], kit ? kit.acc : []));
+    const kit = CLS_KIT[L.cls] || null, gt = c.gearTop || null;   // gt：身上的服裝裝備（52-gear.js）要換的上衣和顏色
+    const want = new Set(['Body', 'Shoes', 'Bottom_shorts', 'Hair_' + L.hair, 'Top_' + (gt ? gt.top : kit ? kit.top : L.top), 'Face_' + (c.emote || L.face)].concat(L.glasses ? ['Glasses'] : [], kit ? kit.acc : []));
     if (kit) kit.hide.forEach(n => want.delete(n));
     c.g.position.y = kit && kit.lift ? kit.lift * HEIGHT / 2.26 : 0;   // 冰刀比鞋底低，人要墊高一點
     c.meshes.forEach(o => { const on = want.has(o.userData.part); o.visible = on; if (o.userData.line) o.userData.line.visible = on && SHOW.lines && !c.far;
@@ -93,7 +93,7 @@ const STD = (() => {
       if (nm === 'skin' && L.skinCol) col = L.skinCol;
       if (nm === 'nose' && L.skinCol) col = skinTint(L.skinCol, 0.86);
       if (nm === 'ear_inner' && L.skinCol) col = skinTint(L.skinCol, 0.88);
-      if (/^(tee|dress|hoodie)$/.test(nm) && L.topCol) col = L.topCol;
+      if (/^(tee|dress|hoodie)$/.test(nm) && (gt ? gt.col : L.topCol)) col = gt ? gt.col : L.topCol;
       // 條紋T 換顏色：白底藍條紋整件染上那個顏色，條紋還在
       if (col) m.color.set(col); else { m.color.copy(m.userData.base); if (/face_line/.test(nm)) m.color.set(INK); }
     });
@@ -118,6 +118,7 @@ const STD = (() => {
     const k = Math.min(1, dt * 9);
     for (const n in tg) { const a = c.acts[n]; if (!a) continue; c.wt[n] += (tg[n] - c.wt[n]) * k; a.setEffectiveWeight(c.wt[n]); }
     c.acts.walk.timeScale = speed; if (c.acts.run) c.acts.run.timeScale = speed * 0.8; if (c.acts.skate) c.acts.skate.timeScale = speed * 0.55; c.mixer.update(dt);
+    if (c.gearTick) c.gearTick(dt);
     if (!c.look.wings) return;
     c.flap = (c.flap + dt / (c.mv > 0.5 ? 1.1 : 1.8)) % 1;
     c.H.updateMatrixWorld(true);

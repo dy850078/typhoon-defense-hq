@@ -20,7 +20,7 @@ const GEAR3 = (() => {
   const BUILD = {
     // 魔法少女蓬蓬裙（SR）：淡紫上身、粉紅蓬蓬裙（裙襬一球一球）、粉紅鞋白襪、泡泡袖、金腰帶、胸前蝴蝶結和愛心寶石
     mgDress({ B, hang, at, top }) {
-      top({ top: 'dress', col: LAV, cols: { trim: LAV, button: GOLD, shoe: ROSE, sock: WHITE, sole: '#ffd3e6' } });
+      top({ top: 'tee', col: LAV, cols: { stripe: WHITE, shoe: ROSE, sock: WHITE, sole: '#ffd3e6' } });   // 用短上衣當底，裙子下面才不會露出洋裝的下襬
       hang(B.hips, (g) => {
         const prof = [[0.3, 1.04], [0.36, 1.0], [0.5, 0.92], [0.64, 0.8], [0.72, 0.66], [0.72, 0.56], [0.6, 0.5]];
         part(g, geo('mgSkirt', () => new THREE.LatheGeometry(prof.map(p => new THREE.Vector2(p[0], p[1])), 22)), PINK, { line: 0.02 }).material.side = THREE.DoubleSide;

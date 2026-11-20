@@ -53,6 +53,15 @@
       C.line(x, 15, 35, 15, 40, r, 1.8); C.line(x, 36, 35, 36, 40, r, 1.8);
       x.beginPath(); x.moveTo(6, 40); x.lineTo(42, 40); x.quadraticCurveTo(45, 40, 44, 37); C.stroke(x, r, 3, '#8a93a6'); C.stroke(x, r, 1.4);
     },
+    // 機器人騎士（新世界的職業）：橘色機器人頭，一顆發亮的眼睛
+    'cls-rider'(x, r) {
+      C.line(x, 24, 4, 24, 11, r, 2); C.blob(x, 24, 4, 2.6, 2.6, r, 0.08); C.fill(x, '#ffd23f', r, null); C.stroke(x, r, 1.6);
+      x.beginPath(); x.moveTo(9, 13); x.lineTo(39, 12); x.quadraticCurveTo(43, 13, 43, 18); x.lineTo(42, 34); x.quadraticCurveTo(41, 39, 36, 39); x.lineTo(12, 40); x.quadraticCurveTo(6, 39, 6, 34); x.lineTo(5, 18); x.quadraticCurveTo(5, 13, 9, 13); x.closePath();
+      C.fill(x, '#ee8a43', r, [5, 12, 38, 28]); C.stroke(x, r, 2.4);
+      C.blob(x, 24, 25, 12, 8, r, 0.04); C.fill(x, '#2f3340', r, null); C.stroke(x, r, 1.6);
+      C.blob(x, 24, 25, 4.2, 4.2, r, 0.06); C.fill(x, '#8fe0f0', r, null);
+      C.line(x, 3, 22, 3, 30, r, 2.6); C.line(x, 45, 22, 45, 30, r, 2.6);
+    },
     // 召喚師：飛碟
     'cls-summoner'(x, r) {
       C.blob(x, 24, 20, 10, 9, r, 0.05); C.fill(x, '#bfe9ff', r, [14, 11, 20, 18]); C.stroke(x, r, 2.2);

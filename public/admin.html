@@ -155,7 +155,7 @@ label.switch input:checked::after { left: 25px; }
     </form>
     <section class="card">
       <h2 style="margin: 0">新世界測試頁</h2>
-      <p class="note" style="margin: 4px 0 0">3D 淡黑線版的試玩場景，跟總部分開，只有設為管理員的帳號進得去（要先用那個帳號登入）。<a href="newworld.html" target="_blank" rel="noopener">打開新世界測試頁</a></p>
+      <p class="note" style="margin: 4px 0 0">3D 淡黑線版的試玩場景，跟總部分開。管理員，還有在帳號清單按了「開放新世界」的帳號才進得去（要先用那個帳號登入）。<a href="newworld.html" target="_blank" rel="noopener">打開新世界測試頁</a></p>
     </section>
     <section class="card">
       <h2 style="margin: 0">公共花園</h2>
@@ -354,7 +354,17 @@ label.switch input:checked::after { left: 25px; }
           if (r.ok) load();
         });
       };
-      act.appendChild(reset); act.appendChild(ren); act.appendChild(lv); act.appendChild(role); act.appendChild(del);
+      var nw = document.createElement('button'); nw.type = 'button'; nw.className = 'small'; nw.style.marginLeft = '6px';
+      nw.textContent = a.admin ? '新世界：管理員可進' : a.nw ? '收回新世界' : '開放新世界';
+      nw.title = '新世界封測名單：開放後這個帳號可以進 3D 新世界測試頁（管理員本來就可以進）';
+      nw.disabled = !!a.admin;
+      nw.onclick = function () {
+        api('/api/admin/newworld', { username: a.username, on: !a.nw }).then(function (r) {
+          say('acct-msg', r.ok ? '「' + a.username + '」' + (r.nw ? '可以進新世界了' : '不能進新世界了') : (r.error || '失敗了'), r.ok);
+          if (r.ok) load();
+        });
+      };
+      act.appendChild(reset); act.appendChild(ren); act.appendChild(lv); act.appendChild(role); act.appendChild(nw); act.appendChild(del);
       tr.appendChild(act);
       tb.appendChild(tr);
     });

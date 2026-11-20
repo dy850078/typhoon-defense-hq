@@ -44,7 +44,23 @@
     /* 換裝面板：一張紙條，從下面跳出來 */
     #nw-labels { position: fixed; inset: 0; pointer-events: none; z-index: 1; overflow: hidden; }
     .nw-tag { position: absolute; left: 0; top: 0; display: flex; flex-direction: column; align-items: center; gap: 3px; will-change: transform; }
-    .nw-name { font: 700 11px/1.2 inherit; font-family: inherit; color: var(--note-ink); background: #fbf5e6; border: 1.5px solid rgba(43,42,51,.5); border-radius: 7px 5px 8px 6px; padding: 2px 7px; white-space: nowrap; }
+    .nw-name { position: absolute; left: 0; top: 0; will-change: transform; font-weight: 700; font-size: 13px; line-height: 1.2; color: var(--note-ink); white-space: nowrap; pointer-events: none; text-shadow: 0 0 2px #fffaf0, 1px 1px 0 #fffaf0, -1px 1px 0 #fffaf0, 1px -1px 0 #fffaf0, -1px -1px 0 #fffaf0, 0 2px 3px rgba(43,42,51,.25); }
+    .nw-name[hidden] { display: none; }
+    .nw-name img { height: 20px; width: 20px; vertical-align: -5px; margin-right: 3px; }
+    .nw-hint { position: absolute; left: 0; top: 0; pointer-events: auto; font: 700 12px/1.2 inherit; font-family: inherit; color: var(--note-ink); background: #fff3c4; border: 1.5px solid rgba(43,42,51,.55); border-radius: 8px 6px 9px 5px; padding: 6px 12px; cursor: pointer; white-space: nowrap; box-shadow: 1px 2px 0 rgba(43,42,51,.18); transform-origin: 50% 100%; }
+    .nw-hint[hidden] { display: none; }
+    /* 手繪版的紙條（newworld-hint.js 畫的圖）：外框和底色都在圖裡，按鈕本身透明；字留著給報讀和測試用 */
+    .nw-hint.art { background: none; border: 0; padding: 0; box-shadow: none; border-radius: 0; }
+    .nw-hint.art img { display: block; animation: nw-pop .16s ease-out, nw-bob 2s ease-in-out .16s infinite; transform-origin: 50% 100%; }
+    .nw-hint.art span { position: absolute; left: 0; top: 0; width: 1px; height: 1px; overflow: hidden; opacity: 0; }
+    .nw-npc { position: absolute; left: 0; top: 0; will-change: transform; pointer-events: none; }
+    @keyframes nw-pop { from { transform: scale(.6); } to { transform: scale(1); } }
+    @keyframes nw-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+    #acts { display: flex; gap: 6px; padding: 8px; width: min(250px, 100%); }
+    #acts[hidden] { display: none; }
+    #acts button { flex: 1; font: 500 12px/1 inherit; font-family: inherit; color: var(--note-ink); padding: 8px 4px; border-radius: 9px 6px 10px 7px; border: 1.5px solid rgba(43,42,51,.45); background: #fff; cursor: pointer; }
+    #acts button.on { background: #ffe9a8; }
+    #music-nw { position: fixed; width: 1px; height: 1px; left: -10px; top: -10px; opacity: 0; pointer-events: none; }
     .nw-bubble { max-width: 190px; font: 500 12px/1.4 inherit; font-family: inherit; color: var(--note-ink); background: #fff; border: 1.5px solid rgba(43,42,51,.5); border-radius: 12px 10px 13px 9px; padding: 5px 9px; overflow-wrap: anywhere; }
     #chat { position: fixed; left: calc(164px + env(safe-area-inset-left)); bottom: calc(34px + env(safe-area-inset-bottom)); width: min(380px, calc(100vw - 180px)); z-index: 3; display: flex; flex-direction: column; gap: 5px; }
     #chat-log { font-size: 12px; line-height: 1.5; max-height: 92px; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; pointer-events: none; text-shadow: 0 0 3px #fbf5e6, 0 0 3px #fbf5e6, 0 0 2px #fbf5e6; }
@@ -64,29 +80,77 @@
     #dress .opt.on { background: #f3d27a; border-color: rgba(43,42,51,.8); font-weight: 700; }
     #dress .sw { width: 26px; height: 26px; border-radius: 50%; border: 1.5px solid rgba(43,42,51,.45); cursor: pointer; padding: 0; }
     #dress .sw.on { outline: 2.5px solid #2B2A33; outline-offset: 2px; }
+    .nw-name.pet { font-size: 11px; font-weight: 500; opacity: .9; }
+    /* 大廳的小面板：導師、扭蛋機、花圃、許願池共用一張紙條 */
+    #panel { position: fixed; left: 50%; bottom: calc(14px + env(safe-area-inset-bottom)); transform: translateX(-50%); width: min(400px, calc(100vw - 24px)); max-height: 64vh; overflow: auto; padding: 12px 14px 14px; z-index: 4; font-size: 13px; line-height: 1.6; touch-action: pan-y; -webkit-overflow-scrolling: touch; }
+    #panel h2 { font-size: 15px; margin: 0 0 6px; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+    #panel h2 button { font: 700 12px/1 inherit; font-family: inherit; color: var(--note-ink); padding: 6px 10px; cursor: pointer; flex: none; }
+    #panel p { margin: 6px 0; } #panel .sub, #panel .dim { font-size: 12px; opacity: .72; } #panel .err { color: #B84300; font-weight: 700; }
+    #panel .opt { font: 500 13px/1.3 inherit; font-family: inherit; color: var(--note-ink); padding: 8px 11px; border-radius: 9px 6px 10px 7px; border: 1.5px solid rgba(43,42,51,.45); background: #fff; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; text-align: left; }
+    #panel .opt.main { background: #ffe9a8; font-weight: 700; } #panel .opt.on { background: #f3d27a; border-color: rgba(43,42,51,.8); font-weight: 700; } #panel .opt:disabled { opacity: .45; cursor: default; }
+    #panel .opt.big { display: flex; width: 100%; margin: 6px 0; } #panel .opt span, #panel .line span, #panel .result span { display: flex; flex-direction: column; } #panel small { font-size: 11px; font-weight: 500; opacity: .72; }
+    #panel .ic { width: 24px; height: 24px; flex: none; }
+    #panel .acts { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; align-items: center; }
+    #panel .line { display: flex; align-items: center; gap: 8px; margin: 6px 0; } #panel .line .dim { margin-left: auto; }
+    #panel .result { display: flex; align-items: center; gap: 10px; margin: 8px 0; padding: 8px 10px; border-radius: 10px 8px 11px 7px; border: 1.5px dashed rgba(43,42,51,.5); background: #fffaf0; }
+    #panel .result.r-SR { background: #fff1cc; } #panel .result.r-SSR { background: #ffe0fa; }
+    #panel .wishes { display: flex; flex-direction: column; gap: 6px; }
+    #panel .wish { all: unset; display: flex; flex-direction: column; padding: 7px 10px; border-radius: 9px 6px 10px 7px; border: 1.5px solid rgba(43,42,51,.35); background: #fff; cursor: pointer; }
+    #panel .title { font-size: 15px; font-weight: 700; } #panel .text { white-space: pre-wrap; overflow-wrap: anywhere; background: #fff; border-radius: 8px; padding: 8px 10px; -webkit-user-select: text; user-select: text; }
+    #panel .cmt { font-size: 12px; border-left: 3px solid #e5cfa0; padding-left: 8px; overflow-wrap: anywhere; }
+    #panel input, #panel textarea { all: unset; display: block; box-sizing: border-box; width: 100%; margin: 6px 0; font: 500 14px/1.5 inherit; font-family: inherit; color: var(--note-ink); background: #fff; border: 1.5px solid rgba(43,42,51,.45); border-radius: 10px 8px 11px 7px; padding: 8px 10px; -webkit-user-select: text; user-select: text; white-space: pre-wrap; overflow-wrap: anywhere; }
+    #panel .tabs { display: flex; gap: 6px; margin: 4px 0 8px; } #panel .tabs .opt { flex: 1; justify-content: center; flex-direction: column; align-items: center; gap: 0; padding: 6px 4px; }
+    #panel .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(62px, 1fr)); gap: 6px; }
+    #panel .cell { all: unset; box-sizing: border-box; position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 2px 4px; border-radius: 9px 6px 10px 7px; border: 1.5px solid rgba(43,42,51,.35); background: #fff; cursor: pointer; font-size: 11px; line-height: 1.25; text-align: center; }
+    #panel .cell .ic { width: 34px; height: 34px; } #panel .cell i { position: absolute; right: 4px; top: 2px; font-style: normal; font-weight: 700; font-size: 11px; }
+    #panel .cell.on { background: #f3d27a; border-color: rgba(43,42,51,.8); } #panel .cell.worn { border-style: dashed; border-color: #B84300; }
+    #panel .cell.r-SR { background: #fff6dc; } #panel .cell.r-SSR { background: #ffe9fb; } #panel .cell.r-XR { background: #e3f4ff; } #panel .cell.on.r-SR, #panel .cell.on.r-SSR, #panel .cell.on.r-XR { background: #f3d27a; }
+    #panel .worn-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 6px 0 10px; } #panel .worn-row .cell { cursor: default; min-height: 62px; justify-content: center; } #panel .worn-row .cell small { opacity: .6; }
+    #panel .bar { height: 10px; border-radius: 6px; border: 1.5px solid rgba(43,42,51,.6); background: #fff; overflow: hidden; margin: 4px 0 8px; } #panel .bar b { display: block; height: 100%; background: #ff9db0; }
+    #panel .song { display: flex; align-items: center; gap: 8px; padding: 5px 0; border-bottom: 1px dashed rgba(43,42,51,.25); } #panel .song span { flex: 1; min-width: 0; overflow-wrap: anywhere; } #panel .song .opt { flex: none; padding: 5px 9px; font-size: 12px; }
+    #toast { position: fixed; left: 50%; top: calc(14px + env(safe-area-inset-top)); transform: translateX(-50%); max-width: min(360px, calc(100vw - 150px)); padding: 8px 14px; font-size: 13px; font-weight: 700; z-index: 6; pointer-events: none; text-align: center; }
     @media (max-width: 520px) { #btns button { min-width: 92px; padding: 8px 10px; font-size: 12px; } #hint { display: none; } }
   </style>
 </head>
 <body>
   <div id="gate"><div class="note"><h1>新世界測試頁</h1><p id="gate-msg">確認身分中…</p><div id="gate-bar" hidden><i></i></div><p id="gate-link" hidden></p></div></div>
 
-  <div id="top" class="note" hidden><b>新世界測試頁</b>　管理員限定<br><span id="stats">量測中…</span><br><a href="hq.html">回總部</a></div>
+  <div id="top" class="note" hidden><b>新世界測試頁</b>　封測中<br><span id="stats">量測中…</span><br><a href="hq.html">回總部</a></div>
   <div id="btns" hidden>
     <button class="note" id="b-ctrl" hidden>職業<small id="s-ctrl">一般</small></button>
     <button class="note" id="b-dress" hidden>換裝<small>髮型、衣服、翅膀</small></button>
     <button class="note" id="b-form" hidden>隊形<small id="s-form">單手捧著</small></button>
     <button class="note" id="b-gesture" hidden>揮手指揮<small>機器人照做</small></button>
+    <button class="note" id="b-bag" hidden>背包<small>補品、雜物、裝備</small></button>
+    <button class="note" id="b-pet" hidden>寵物<small id="s-pet">摸摸、餵點心</small></button>
     <button class="note" id="b-zoom">鏡頭<small id="s-zoom">遠</small></button>
     <button class="note" id="b-quality">畫質<small id="s-quality">中</small></button>
     <button class="note" id="b-lines">外框線<small id="s-lines">開</small></button>
+    <button class="note" id="b-bots" hidden>壓力測試<small id="s-bots">沒有假人</small></button>
   </div>
+  <div id="music-nw"><div id="music-yt"></div></div>
   <div id="stick" hidden><div id="knob"></div></div>
   <div id="dress" class="note" hidden></div>
-  <div id="chat" hidden><div id="chat-log"></div><div id="emotes" class="note" hidden></div><form id="chat-form"><button class="note" type="button" id="b-emote">表情</button><input id="chat-in" maxlength="60" autocomplete="off" placeholder="說點什麼"><button class="note" type="submit">送出</button></form></div>
+  <div id="panel" class="note" hidden></div>
+  <div id="toast" class="note" hidden></div>
+  <div id="chat" hidden><div id="chat-log"></div><div id="emotes" class="note" hidden></div><div id="acts" class="note" hidden><button type="button" data-act="sit">坐下</button><button type="button" data-act="wave">揮手</button><button type="button" data-act="run">跑步</button></div><form id="chat-form"><button class="note" type="button" id="b-emote">表情</button><button class="note" type="button" id="b-act">動作</button><input id="chat-in" maxlength="60" autocomplete="off" placeholder="說點什麼"><button class="note" type="submit">送出</button></form></div>
   <div id="hint" hidden>點地面就會走過去，也可以用搖桿、方向鍵或 WASD</div>
 
   <script src="/socket.io/socket.io.js"></script>
   <script src="account.js"></script>
+  <script src="crayon.js"></script>
+  <script src="icons.js"></script>
+  <script src="icons-more.js"></script>
+  <script src="icons-garden.js"></script>
+  <script src="/shared/avatar.js"></script>
+  <script src="/shared/gear.js"></script>
+  <script src="gacha-art.js"></script>
+  <script src="mastery-art.js"></script>
+  <script src="newworld-hint.js"></script>
+  <script src="newworld-panels.js"></script>
+  <script src="/shared/classes3d.js"></script>
+  <script src="icons-nw.js"></script>
+  <script src="newworld-skills.js"></script>
   <!-- 3D 元件：three.js 和讀模型檔的 GLTFLoader（模組版），載好之後掛到 window.THREE -->
   <script type="importmap">{ "imports": { "three": "/vendor3/three.module.js" } }</script>
   <script type="module">
@@ -105,7 +169,7 @@
     function get(name, kind) {
       return fetch('/api/newworld/' + name, { headers: { Authorization: 'Bearer ' + token } }).then(function (r) {
         if (r.status === 401) { say('登入過期了，請重新登入。', '<a href="./">去登入</a>'); return null; }
-        if (r.status === 403) { say('新世界還在施工，目前只開放管理員進來看。', '<a href="hq.html">回總部</a>'); return null; }
+        if (r.status === 403) { say('新世界還在施工，目前只開放封測名單上的帳號進來。', '<a href="hq.html">回總部</a>'); return null; }
         if (!r.ok) { say('載入失敗，等等再試。'); return null; }
         return read(r, name).then(function (buf) { return kind === 'text' ? new TextDecoder().decode(buf) : buf; });
       }, function () { say('連不上伺服器，等等再試。'); return null; });
@@ -154,33 +218,66 @@
       if (NW.hasStd) { $('b-ctrl').hidden = false; $('b-dress').hidden = false; }
       function showClass(name) { $('s-ctrl').textContent = name; $('b-form').hidden = $('b-gesture').hidden = !NW.isRider(); }
       $('b-ctrl').onclick = function () { showClass(NW.nextCtrl()); saveLook(); };
-      $('b-dress').onclick = function () { var d = $('dress'); d.hidden = !d.hidden; if (!d.hidden) drawDress(); };
+      $('b-dress').onclick = function () { var d = $('dress'); d.hidden = !d.hidden; if (!d.hidden) { if (window.NW_UI) NW_UI.close(); drawDress(); } };
       // 自己的角色：存過新世界造型就用存的，沒有就照總部的角色（髮型、膚色、髮色、衣服顏色、眼鏡）
       var base = null, saveT = 0;
       function api(body) { return fetch('/api/newworld/look', body ? { method: 'POST', headers: { Authorization: 'Bearer ' + token, 'content-type': 'application/json' }, body: JSON.stringify(body) } : { headers: { Authorization: 'Bearer ' + token } }).then(function (r) { return r.ok ? r.json() : null; }, function () { return null; }); }
       function saveLook() { if (sock) sock.emit('look', NW.look()); clearTimeout(saveT); saveT = setTimeout(function () { api({ look: NW.look() }); }, 600); }
       if (NW.hasStd) api().then(function (r) { if (!r) return; base = r.base; var O = NW.options(), L = r.look3d;
         if (L && (O.parts.hair.indexOf(L.hair) < 0 || O.parts.top.indexOf(L.top) < 0 || O.parts.face.indexOf(L.face) < 0)) L = null;
-        NW.dress(L || NW.fromAccount(base)); showClass(NW.setClass(L && L.cls)); if (!$('dress').hidden) drawDress(); }).then(online);
-      // 多人：看得到其他在線的管理員，聊天只在新世界裡，不會傳到總部
+        NW.dress(L || NW.fromAccount(base)); showClass(NW.setClass(L && L.cls)); NW.setPet(r.pet); NW.gear(r.equip); $('b-pet').hidden = !r.pet; if (r.pet) $('s-pet').textContent = r.pet.name; if (!$('dress').hidden) drawDress(); document.body.dataset.look = '1'; }).then(online);
+      // 點唱機：播的是總部正在播的那一首，跟著總部的進度；點歌在面板裡（newworld-panels.js）
+      var music = (function () {
+        var now = null, got = 0, on = false, player = null, loading = false, cur = '';
+        function pos() { return now ? (now.at + (Date.now() - got)) / 1000 : 0; }
+        function play() { if (!on || !now) { if (player && player.stopVideo) player.stopVideo(); cur = ''; return; }
+          if (player && player.loadVideoById) { if (cur !== now.vid) { cur = now.vid; player.loadVideoById({ videoId: now.vid, startSeconds: Math.max(0, pos()) }); } return; }
+          if (loading) return; loading = true;
+          window.onYouTubeIframeAPIReady = function () { player = new YT.Player('music-yt', { width: 200, height: 120, playerVars: { playsinline: 1, controls: 0, disablekb: 1, rel: 0 },
+            events: { onReady: function () { player.setVolume(60); play(); } } }); };
+          var s = document.createElement('script'); s.src = 'https://www.youtube.com/iframe_api'; document.head.appendChild(s); }
+        return { set: function (st) { var a = st && st.all && st.all.now; var was = now && now.vid; now = a ? { vid: a.vid, title: a.title, at: a.at || 0 } : null; got = Date.now();
+            if (on && (!now || now.vid !== was)) { if (now) NW.net.say(null, '現在播：' + now.title); play(); } },
+          toggle: function () { on = !on; if (now || !on) NW.net.say(null, on ? '現在播：' + now.title : '把音樂關掉了'); play(); return on; },
+          state: function () { return { on: on, vid: now && now.vid }; } }; })();
+      window.NW_MUSIC = music;
+      // 大廳的導師、扭蛋機、花圃、種子箱和前院的許願池：點紙條開面板
+      var panels = window.NW_PANELS ? NW_PANELS(NW, token, { music: music, curClass: function () { return (NW.look() || {}).cls || ''; }, setClass: function (c) { var n = NW.setClass(c); showClass(n); saveLook(); return n; } }) : null;
+      window.NW_UI = panels;
+      var GREEK = ['噓…願望說出來就不靈了，寫下來吧', '把硬幣丟進池子裡，再把願望寫清楚一點', '遇到 Bug 也可以來這裡說，我會偷偷轉告管理員', '先看看有沒有人許過一樣的願，幫他按個讚吧'];
+      NW.onInteract(function (kind, it) { if (kind === 'greek' && panels) { panels.toast('希臘少女：「' + GREEK[Math.floor(Math.random() * GREEK.length)] + '」'); kind = 'well'; } if (window.NW_SK) NW_SK.close(); if (panels) { $('dress').hidden = true; panels.open(kind, it); } });
+      if (panels) { $('b-bag').hidden = false; $('b-bag').onclick = function () { $('dress').hidden = true; panels.open('bag'); }; $('b-pet').onclick = function () { $('dress').hidden = true; panels.open('pet'); }; }
+      // 多人：看得到其他在線的人，聊天只在新世界裡，不會傳到總部
       var sock = null;
       function online() {
         if (!window.io || sock) return;
         sock = io('/newworld', { auth: { token: token } });
+        window.NW_SK = window.NW_SKILLS ? NW_SKILLS.start(NW, sock, panels) : null;   // 戰鬥介面：技能鈕、技能書、轉職
         var last = '';
-        sock.on('init', function (d) { NW.net.clear(); NW.net.name(d.name); d.players.forEach(function (p) { NW.net.put(p.id, p); }); sock.emit('look', NW.look()); last = ''; $('chat').hidden = false; });
+        sock.on('init', function (d) { NW.net.clear(); NW.net.name(d.name); NW.tier(d.tier); $('b-bots').hidden = !d.admin; d.players.forEach(function (p) { NW.net.put(p.id, p); }); sock.emit('look', NW.look()); last = ''; $('chat').hidden = false; });
         sock.on('join', function (p) { NW.net.put(p.id, p); });
         sock.on('leave', function (id) { NW.net.drop(id); });
-        sock.on('look', function (d) { NW.net.put(d.id, { look: d.look }); });
-        sock.on('state', function (list) { list.forEach(function (a) { if (a[0] !== sock.id) NW.net.move(a[0], a[1], a[2], a[3], a[4], a[5], a[6]); }); });
+        sock.on('look', function (d) { NW.net.put(d.id, { look: d.look, tier: d.tier }); });
+        sock.on('tier', function (n) { NW.tier(n); });
+        sock.on('gear', function (d) { if (d.id !== sock.id) NW.net.put(d.id, { gear: d.gear }); });
+        sock.on('state', function (list) { list.forEach(function (a) { if (a[0] !== sock.id) NW.net.move(a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7]); }); });
+        sock.on('music', function (st) { music.set(st); if (panels) panels.music(); });
+        sock.on('garden', function (st) { NW.garden(st); if (panels) panels.garden(); });
         sock.on('emote', function (d) { NW.net.emote(d.id, d.face); });
         sock.on('chat', function (m) { NW.net.say(m.id === sock.id ? null : m.id, m.text); var log = $('chat-log'), row = document.createElement('div'), b = document.createElement('b');
           b.textContent = m.name + '：'; row.appendChild(b); row.appendChild(document.createTextNode(m.text)); log.appendChild(row); while (log.children.length > 5) log.removeChild(log.firstChild); });
-        setInterval(function () { var m = NW.net.me(); if (!m || !sock.connected) return; var k = m.x + ',' + m.z + ',' + m.f + ',' + m.mv + ',' + m.fm + ',' + m.g; if (k !== last) { last = k; sock.emit('move', m); } }, 100);
+        setInterval(function () { var m = NW.net.me(); if (!m || !sock.connected) return; var k = m.x + ',' + m.z + ',' + m.f + ',' + m.mv + ',' + m.fm + ',' + m.g + ',' + m.p; if (k !== last) { last = k; sock.emit('move', m); } }, 100);
         // 表情：按一下換 5 秒的臉，別人也看得到；時間到變回平常的臉
         var E = $('emotes'); NW.options().parts.face.forEach(function (k) { var b = document.createElement('button'); b.type = 'button'; b.textContent = NW.options().names[k];
           b.onclick = function () { NW.emote(k); if (sock.connected) sock.emit('emote', k); E.hidden = true; }; E.appendChild(b); });
-        $('b-emote').onclick = function () { E.hidden = !E.hidden; };
+        $('b-emote').onclick = function () { E.hidden = !E.hidden; $('acts').hidden = true; };
+        // 動作：坐下、揮手、跑步。位置同步的時候順便帶出去，別人看得到
+        function drawActs() { var a = NW.acts(); [].forEach.call($('acts').children, function (b) { var k = b.getAttribute('data-act'); b.className = (k === 'run' ? a.run : a.pose === k) ? 'on' : ''; }); }
+        [].forEach.call($('acts').children, function (b) { b.onclick = function () { NW.act(b.getAttribute('data-act')); drawActs(); if (b.getAttribute('data-act') !== 'run') $('acts').hidden = true; }; });
+        $('b-act').onclick = function () { $('acts').hidden = !$('acts').hidden; E.hidden = true; drawActs(); };
+        // 壓力測試：請伺服器放假人進來，看手機撐不撐得住（假人每個人都看得到）
+        var botN = [0, 10, 19], botI = 0;
+        $('b-bots').onclick = function () { botI = (botI + 1) % botN.length; sock.emit('bots', botN[botI]); $('s-bots').textContent = botN[botI] ? botN[botI] + ' 個假人' : '沒有假人'; };
         $('chat-form').addEventListener('submit', function (e) { e.preventDefault(); var i = $('chat-in'), t = i.value.trim(); if (t && sock.connected) sock.emit('chat', t); i.value = ''; i.blur(); });
       }
       // 換裝面板：只改新世界的造型，會記在帳號裡，不會動到總部的角色
@@ -220,7 +317,7 @@
       cv.addEventListener('pointerdown', function (e) { if (e.button) return; tap = { id: e.pointerId, x: e.clientX, y: e.clientY }; });
       cv.addEventListener('pointerup', function (e) { if (tap && tap.id === e.pointerId && Math.hypot(e.clientX - tap.x, e.clientY - tap.y) < 12) NW.walkTo(e.clientX, e.clientY); tap = null; });
       cv.addEventListener('pointercancel', function () { tap = null; });
-      window.addEventListener('keydown', function (e) { if (e.target && e.target.tagName === 'INPUT') return; NW.key(e.key.length === 1 ? e.key.toLowerCase() : e.key, true); });
+      window.addEventListener('keydown', function (e) { if (e.target && /^(INPUT|TEXTAREA)$/.test(e.target.tagName)) return; NW.key(e.key.length === 1 ? e.key.toLowerCase() : e.key, true); });
       window.addEventListener('keyup', function (e) { NW.key(e.key.length === 1 ? e.key.toLowerCase() : e.key, false); });
       window.addEventListener('blur', function () { ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'a', 'd', 'w', 's'].forEach(function (k) { NW.key(k, false); }); });
     }

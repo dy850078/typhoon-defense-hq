@@ -364,71 +364,355 @@ function sanitizeLook3d(d) {
   Object.keys(LOOK3D).forEach(k => { o[k] = typeof d[k] === 'string' && LOOK3D[k].test(d[k]) ? d[k] : null; });
   return o;
 }
+const canNewworld = (u) => !!u && (!!u.admin || !!u.nwBeta);   // 管理員，或在封測名單上的帳號
 function newworldUser(req, res) {
   const u = accounts.byToken(bearer(req));
   if (!u) { res.status(401).json({ ok: false }); return null; }
-  if (!u.admin) { res.status(403).json({ ok: false }); return null; }
+  if (!canNewworld(u)) { res.status(403).json({ ok: false }); return null; }
   return u;
 }
-const lookOf = (u) => { const a = sanitizeSave(u.save); return { ok: true, base: { name: a.name, hair: a.hair, skin: a.skin, hairColor: a.hairColor, outfit: a.outfit, glasses: a.glasses !== '0', face: a.face || '' }, look3d: sanitizeLook3d(u.save.look3d) }; };
+const lookOf = (u) => { const a = sanitizeSave(u.save); return { ok: true, base: { name: a.name, hair: a.hair, skin: a.skin, hairColor: a.hairColor, outfit: a.outfit, glasses: a.glasses !== '0', face: a.face || '' }, look3d: sanitizeLook3d(u.save.look3d), pet: nwSave(u).pet, equip: nwGearOf(u) }; };
 app.get('/api/newworld/look', (req, res) => { const u = newworldUser(req, res); if (u) res.json(lookOf(u)); });
 app.post('/api/newworld/look', (req, res) => {
   const u = newworldUser(req, res); if (!u) return;
   accounts.update(u, { look3d: sanitizeLook3d((req.body || {}).look) || undefined });
   res.json(lookOf(u));
 });
+// ---- 新世界自己的存檔 ----
+// ZS 2026-11-21 的決定：3D 新世界從頭開始（1 等、背包和裝備是空的、沒有寵物），不沿用總部（2D）的進度，在 3D 做的事也不會動到 2D。
+// 存在帳號的 save.nw 裡：這裡管 bag（補品、雜物）、gear（裝備、圖鑑、穿著、扭蛋保底）、pet；
+// 等級、職業、技能那些是別的檔案在管的鍵，寫回去的時候要整包帶著，不能蓋掉。
+// 公共花園、許願池、點唱機是大家共用的設施，還是跟總部同一份。
+function nwSave(u) {
+  const n = u.save.nw && typeof u.save.nw === 'object' ? u.save.nw : {}, b = n.bag || {}, g = n.gear || {};
+  const a = sanitizeSave({ inv: b.inv, furn: b.furn, gear: g.own || {}, seen: g.seen, equip: g.equip, gachaPity: g.pity, pet: n.pet });
+  return { inv: a.inv, furn: a.furn, gear: a.gear, seen: a.seen, equip: a.equip, gachaPity: a.gachaPity, pet: a.pet, level: Math.max(1, Math.floor(Number(n.lv)) || 1) };
+}
+const nwWrite = (u, p) => accounts.update(u, { nw: Object.assign({}, u.save.nw, { bag: { inv: p.inv, furn: p.furn }, gear: { own: p.gear, seen: p.seen, equip: p.equip, pity: p.gachaPity }, pet: p.pet || null }) });
+// 身上穿的裝備裡，有 3D 樣子、別人看得到的那幾件
+const nwGearOf = (u) => nwSave(u).equip;
+function nwActor(u) {
+  const p = Object.assign({ name: sanitizeSave(u.save).name || u.username, account: u }, nwSave(u));
+  // 經驗值：等級是職業那邊在管（nw-combat.js），花園收成、被感謝拿到的經驗交給它加
+  return { p, key: 'u:' + u.username.toLowerCase(), exp: (n) => { if (NW_COMBAT) NW_COMBAT.gainExp(u, n); }, done: () => nwWrite(u, p) };
+}
+const nwLast = new Map();
+// 每個接口都是 POST { act, ... }，回 { ok, ... } 或 { ok: false, error }；同一個人 0.25 秒內只收一次
+function nwRoute(name, acts) {
+  app.post('/api/newworld/' + name, (req, res) => {
+    const u = newworldUser(req, res); if (!u) return;
+    const b = req.body && typeof req.body === 'object' ? req.body : {}, fn = Object.prototype.hasOwnProperty.call(acts, b.act) && acts[b.act], now = Date.now();
+    if (!fn) return res.json({ ok: false, error: '沒有這個動作' });
+    if (!acts.READ.includes(b.act)) { if (now - (nwLast.get(u.username) || 0) < 250) return res.json({ ok: false, error: '慢一點' }); nwLast.set(u.username, now); }
+    const A = nwActor(u), r = fn(A, b, u, req, now) || {};
+    if (r.error) return res.json({ ok: false, error: r.error });
+    if (!acts.READ.includes(b.act)) A.done();
+    res.json(Object.assign({ ok: true }, r, acts.view ? acts.view(A, u, now) : {}));
+  });
+}
+const gardenChanged = () => { const st = garden.state(); io.emit('garden', st); io.of('/newworld').emit('garden', st); };
+nwRoute('gacha', { READ: ['state'],
+  view: (A) => ({ tickets: A.p.inv[GACHA.TICKET] || 0, pity: A.p.gachaPity, pityMax: GACHA.PITY, spares: GACHA.spares(A.p.gear).length, recycle: GACHA.RECYCLE, gemTickets: GACHA.GEM_TICKETS,
+    gems: Object.keys(MAP.ITEMS).filter(k => MAP.ITEMS[k].gem).reduce((n, k) => n + (A.p.inv[k] || 0), 0) }),
+  state: () => ({}),
+  // 扭一次：新世界沒有地上掉落物，裝備區滿了就不給扭（總部是掉在腳邊）
+  spin: ({ p }) => {
+    if ((p.inv[GACHA.TICKET] || 0) < 1) return { error: '沒有扭蛋券了，打倒頭目有機會掉' };
+    if (GACHA.pool().some(id => !BAG.canAdd(p, 'gear', id))) return { error: '背包的裝備區滿了，先丟掉一些再來' };
+    p.inv[GACHA.TICKET]--;
+    const r = GACHA.spin(p.gachaPity, BAG.ownedOf(p.gear)), pityHit = p.gachaPity + 1 >= GACHA.PITY;
+    p.gachaPity = r.pity;
+    const g = GEAR.GEAR[r.id], fresh = !p.gear[r.id];
+    LOOT.give(p, 'gear', r.id, true);
+    if (g.rarity === 'SSR') pushChat({ system: true, text: `${p.name} 在扭蛋機扭到了【SSR】${g.name}！`, t: Date.now() });
+    return { item: r.id, name: g.name, rarity: g.rarity, fresh, pityHit };
+  },
+  recycle: ({ p }) => {
+    const sp = GACHA.spares(p.gear).slice(0, GACHA.RECYCLE);
+    if (sp.length < GACHA.RECYCLE) return { error: `要有 ${GACHA.RECYCLE} 件重複的扭蛋裝備才能換` };
+    if ((p.inv[GACHA.TICKET] || 0) >= INV_MAX) return { error: '扭蛋券已經滿了' };
+    sp.forEach(id => { p.gear[id]--; });
+    p.inv[GACHA.TICKET] = (p.inv[GACHA.TICKET] || 0) + 1;
+    return { used: sp.map(id => GEAR.GEAR[id].name) };
+  },
+  gem: ({ p }) => {
+    const gem = Object.keys(MAP.ITEMS).filter(k => MAP.ITEMS[k].gem && p.inv[k] > 0).sort((a, b) => p.inv[b] - p.inv[a])[0];
+    if (!gem) return { error: '沒有寶石，花園收成時有機會挖到' };
+    if ((p.inv[GACHA.TICKET] || 0) + GACHA.GEM_TICKETS > INV_MAX) return { error: '扭蛋券快滿了，先扭掉一些' };
+    p.inv[gem]--;
+    p.inv[GACHA.TICKET] = (p.inv[GACHA.TICKET] || 0) + GACHA.GEM_TICKETS;
+    return { gem: MAP.ITEMS[gem].name };
+  },
+});
+const nwPlot = (b) => { const i = Math.floor(Number(b.i)); return MAP.PLOTS[i] ? i : -1; };
+nwRoute('garden', { READ: ['state', 'info'],
+  view: (A, u, now) => ({ plots: garden.state(), daily: garden.hasDaily(A.key, now), stages: G.STAGES,
+    seeds: Object.keys(G.PLANTS).map(k => ({ kind: k, name: G.PLANTS[k].name, item: G.seedOf(k), n: A.p.inv[G.seedOf(k)] || 0, hours: G.PLANTS[k].hours })) }),
+  state: () => ({}),
+  info: (A, b) => { const i = nwPlot(b); return i < 0 ? { error: '這裡不能種' } : { i, info: garden.info(i) }; },
+  plant: ({ p, key }, b) => {
+    const i = nwPlot(b), kind = String(b.kind), seed = G.PLANTS[kind] && G.seedOf(kind);
+    if (i < 0) return { error: '這裡不能種' };
+    if (!seed || !(p.inv[seed] > 0)) return { error: '沒有這種種子' };
+    const r = garden.plant(i, kind, key, p.name);
+    if (r.error) return r;
+    p.inv[seed]--;
+    gardenChanged();
+    return { i, info: garden.info(i), text: `種下了${G.PLANTS[kind].name}` };
+  },
+  water: (A, b, u, req, now) => {
+    const i = nwPlot(b), r = i < 0 ? { error: '這裡不能種' } : garden.water(i, A.key, A.p.name, now);
+    if (r.error) return r;
+    if (r.exp) A.exp(r.exp);
+    gardenChanged();
+    return { i, info: garden.info(i), text: r.exp ? `澆好水了，經驗 +${r.exp}` : '澆好水了' };
+  },
+  harvest: ({ p, key }, b) => {
+    const i = nwPlot(b), r = i < 0 ? { error: '這裡不能種' } : garden.peekHarvest(i);
+    if (r.error) return r;
+    const fruit = r.kind;
+    if (!fits(p, fruit)) return { error: '背包滿了，先用掉一些再來收' };
+    const h = garden.harvest(i);
+    p.inv[fruit] = Math.min(INV_MAX, (p.inv[fruit] || 0) + r.n);
+    if (h.gem) p.inv[h.gem] = Math.min(INV_MAX, (p.inv[h.gem] || 0) + 1);
+    players.forEach(q => {
+      if (q === p || !h.helpers.includes(gardenKey(q))) return;
+      gainExp(q, G.THANKS_EXP);
+      io.to(q.id).emit('gardenNote', { text: `${p.name} 收成了你幫忙澆過水的${G.PLANTS[fruit].name}，經驗 +${G.THANKS_EXP}`, icon: 'item-' + fruit });
+    });
+    gardenChanged();
+    return { i, info: garden.info(i), item: fruit, text: `收成了 ${r.n} 顆${G.PLANTS[fruit].name}` + (h.gem ? `，還挖到一顆${MAP.ITEMS[h.gem].name}！` : '') };
+  },
+  clear: ({ p }, b) => {
+    const i = nwPlot(b), r = i < 0 ? { error: '這裡不能種' } : garden.clear(i);
+    if (r.error) return r;
+    const twig = fits(p, 'twig');
+    if (twig) p.inv.twig++;
+    gardenChanged();
+    return { i, info: garden.info(i), text: twig ? '清乾淨了，撿到一根枯枝' : '清乾淨了' };
+  },
+  // 種子認養箱：每人每天一包，跟總部的是同一份（在總部領過，這裡就不能再領）
+  seed: ({ p, key }, b, u, req, now) => {
+    if (!garden.hasDaily(key, now)) return { error: '今天已經領過了，明天再來' };
+    const k = GARDEN.rollSeed();
+    if (!fits(p, k)) return { error: '背包滿了，先用掉一些再來領' };
+    garden.claimDaily(key, now);
+    p.inv[k]++;
+    return { item: k, text: `領到一包${MAP.ITEMS[k].name}` };
+  },
+});
+nwRoute('wishes', { READ: ['list', 'get'],
+  list: (A, b, u) => Object.assign(wishes.query(b, 'u:' + u.username.toLowerCase(), u.username),
+    { left: wishes.left(u.username), perDay: wishes.PER_DAY, titleLen: wishes.TITLE_LEN, bodyLen: wishes.BODY_LEN, cats: WISH_CAT, statuses: WISH_STATUS }),
+  get: (A, b, u) => { const w = wishes.get(Number(b.id), 'u:' + u.username.toLowerCase(), u.username); return w ? { wish: w, cats: WISH_CAT, statuses: WISH_STATUS } : { error: '這個願望已經不在了' }; },
+  add: ({ p }, b, u, req) => {
+    const r = wishes.add(u.username, p.name, b);
+    if (r.error) return r;
+    pushChat({ system: true, text: `${p.name} 在許願池許了一個願：【${WISH_CAT[r.wish.cat]}】${r.wish.title}`, t: Date.now() });
+    newWishMail(r.wish, { handshake: { headers: req.headers } });
+    io.emit('wishes');
+    return { id: r.wish.id };
+  },
+  like: (A, b, u) => { const r = wishes.like(Number(b.id), 'u:' + u.username.toLowerCase()); if (!r.error) io.emit('wishes'); return r; },
+});
+// ---- 新世界：背包、裝備、寵物（讀寫 3D 自己的存檔）、點歌（跟總部同一份歌單）----
+const nwItemName = (k) => (MAP.ITEMS[k] && MAP.ITEMS[k].name) || k;
+nwRoute('bag', { READ: ['state'],
+  view: ({ p }) => {
+    const owned = BAG.ownedOf(p.gear), order = GEAR.RARITY_ORDER;
+    return {
+      sections: Object.fromEntries(['food', 'misc', 'gear'].map(s => [s, { name: BAG.SECTIONS[s].name, slots: BAG.SECTIONS[s].slots, used: BAG.used(p, s) }])),
+      items: Object.keys(p.inv).filter(k => p.inv[k] > 0).map(k => ({ kind: 'food', k, name: nwItemName(k), n: p.inv[k], sec: BAG.invSec(k), icon: 'item-' + k }))
+        .concat(Object.keys(p.furn).filter(k => p.furn[k] > 0).map(k => ({ kind: 'decor', k, name: DECOR.DECOR[k].name, n: p.furn[k], sec: 'misc', icon: 'dec-' + k }))),
+      gear: owned.map(id => ({ id, name: GEAR.GEAR[id].name, rarity: GEAR.GEAR[id].rarity, slot: GEAR.GEAR[id].slot, n: p.gear[id], on: p.equip[GEAR.GEAR[id].slot] === id }))
+        .sort((a, b) => order.indexOf(b.rarity) - order.indexOf(a.rarity) || a.name.localeCompare(b.name, 'zh-Hant')),
+      slots: GEAR.SLOTS, equip: p.equip, level: p.level, levelMax: STATS.LEVEL.max,
+    };
+  },
+  state: () => ({}),
+  // 丟掉：直接不見（新世界沒有地上掉落物）；正在穿的最後一件不能丟
+  trash: ({ p }, b) => {
+    const kind = String(b.kind), k = String(b.k);
+    if (!['food', 'decor', 'gear'].includes(kind)) return { error: '沒有這種東西' };
+    const r = LOOT.trash(p, kind, k);
+    return r.ok ? { text: '丟掉了' } : { error: r.error };
+  },
+  // 穿脫裝備：只動 3D 自己的那一份
+  equip: ({ p }, b, u) => {
+    const slot = String(b.slot), id = b.id == null ? null : String(b.id);
+    if (!GEAR.SLOTS[slot]) return { error: '沒有這個部位' };
+    if (id == null) delete p.equip[slot];
+    else if (BAG.ownedOf(p.gear).includes(id) && GEAR.GEAR[id].slot === slot) p.equip[slot] = id;
+    else return { error: '身上沒有這件' };
+    nwPlayers.forEach(q => { if (q.user === u.username) { q.gear = Object.assign({}, p.equip); io.of('/newworld').emit('gear', { id: q.id, gear: q.gear }); } });   // 在線上的話，別人馬上看到換裝
+    return { text: id ? `穿上${GEAR.GEAR[id].name}` : `脫下${GEAR.SLOTS[slot]}` };
+  },
+});
+// 寵物：摸和餵，感情值和每天的上限照總部的規則，存在 3D 自己的寵物上
+const nwToday = () => new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
+const nwPetLog = (pet) => { if (!pet.bd || pet.bd.d !== nwToday()) pet.bd = { d: nwToday(), pat: 0, feed: 0, walk: 0, fight: 0 }; return pet.bd; };
+function nwBond(p, kind, amt) {
+  const pet = p.pet, log = nwPetLog(pet);
+  if (log[kind] >= PETS.BOND_CAPS[kind]) return 0;
+  log[kind]++;
+  const before = PETS.bondLevel(pet.bond);
+  pet.bond = Math.min(PETS.BOND_MAX, (pet.bond || 0) + amt);
+  const level = PETS.bondLevel(pet.bond);
+  return amt;
+}
+nwRoute('pet', { READ: ['state'],
+  view: ({ p }) => {
+    if (!p.pet) return { pet: null };
+    const log = nwPetLog(p.pet), lv = PETS.bondLevel(p.pet.bond), next = PETS.BOND_LEVELS[lv + 1];
+    return { pet: { name: p.pet.name, kind: p.pet.kind, bond: p.pet.bond || 0, level: lv, levelName: PETS.BOND_LEVELS[lv].name, next: next ? next.at : null,
+        patLeft: PETS.BOND_CAPS.pat - log.pat, feedLeft: PETS.BOND_CAPS.feed - log.feed },
+      foods: Object.keys(PETS.FEED).filter(k => p.inv[k] > 0).map(k => ({ k, name: nwItemName(k), n: p.inv[k], gain: PETS.FEED[k], icon: 'item-' + k })) };
+  },
+  state: () => ({}),
+  pat: ({ p }) => {
+    if (!p.pet) return { error: '新世界的寵物領養還沒開放' };
+    const g = nwBond(p, 'pat', 1);
+    return { happy: true, text: g ? `摸了摸${p.pet.name}，感情 +${g}` : `摸了摸${p.pet.name}（今天摸夠了，感情明天再加）` };
+  },
+  feed: ({ p }, b) => {
+    if (!p.pet) return { error: '新世界的寵物領養還沒開放' };
+    const item = String(b.item), gain = PETS.FEED[item];
+    if (!gain) return { error: '牠不吃這個' };
+    if (!(p.inv[item] >= 1)) return { error: '背包裡沒有這個了' };
+    if (nwPetLog(p.pet).feed >= PETS.BOND_CAPS.feed) return { error: `${p.pet.name}今天吃飽了，明天再餵` };
+    p.inv[item]--;
+    const g = nwBond(p, 'feed', gain);
+    return { happy: true, text: `${p.pet.name}吃了${nwItemName(item)}，感情 +${g}` };
+  },
+});
+// 點歌：排進總部「全區」的同一份歌單（新世界聽的就是那一份）
+app.post('/api/newworld/music', async (req, res) => {
+  const u = newworldUser(req, res); if (!u) return;
+  const b = req.body && typeof req.body === 'object' ? req.body : {}, me = 'nw:' + u.username.toLowerCase(), m = musicOf('all'), now = Date.now();
+  const name = sanitizeSave(u.save).name || u.username;
+  const out = (o) => res.json(Object.assign({ ok: !o.error }, o, { me, now: m.now ? { vid: m.now.vid, title: m.now.title, byName: m.now.byName, mine: m.now.by === me } : null,
+    queue: m.queue.map((q, i) => ({ i, title: q.title, byName: q.byName, mine: q.by === me })), max: MUSIC_MAX_QUEUE }));
+  try {
+    if (b.act === 'state') return out({});
+    if (b.act === 'search') {
+      const q = clean(b.q, 60);
+      if (!q) return out({ error: '打幾個字再搜' });
+      if (now - (nwLast.get('s:' + u.username) || 0) < 2000) return out({ error: '慢一點，等一下再搜' });
+      nwLast.set('s:' + u.username, now);
+      try { return out({ list: await youtubeSearch(q) }); }
+      catch (e) { console.error('YouTube 搜尋失敗', e.message); return out({ error: '搜尋暫時壞了，可以先貼 YouTube 連結點歌' }); }
+    }
+    if (b.act === 'add') {
+      const vid = youtubeId(b.vid);
+      if (!vid) return out({ error: '貼 YouTube 的影片連結，例如 https://youtu.be/…' });
+      if (m.queue.length >= MUSIC_MAX_QUEUE) return out({ error: '已經排了太多首，等等再點' });
+      const info = await youtubeInfo(vid);
+      if (info.error) return out({ error: info.error });
+      if (info.title === 'YouTube 影片' && b.title) info.title = clean(b.title, 80);
+      const len = cachedLen(vid);
+      m.queue.push({ vid, title: info.title, by: me, byName: name, len: len > 0 && len <= MUSIC_MAX_LEN ? len : 0 });
+      if (!m.now) musicNext('all'); else emitMusic();
+      io.emit('toastArea', { area: 'all', text: `🎵 ${name} 點了「${info.title}」` });
+      return out({ text: `點了「${info.title}」` });
+    }
+    if (b.act === 'skip') {
+      if (!m.now) return out({ error: '現在沒有在放歌' });
+      if (m.now.by !== me) return out({ error: '只有點這首歌的人可以直接切，要投票切歌請到總部' });
+      musicNext('all');
+      return out({ text: '切到下一首了' });
+    }
+    if (b.act === 'remove') {
+      const q = m.queue[Math.floor(Number(b.i))];
+      if (!q || q.by !== me) return out({ error: '只能拿掉自己點的歌' });
+      m.queue.splice(m.queue.indexOf(q), 1);
+      emitMusic();
+      return out({ text: '拿掉了' });
+    }
+    out({ error: '沒有這個動作' });
+  } catch (e) { console.error('新世界點歌失敗', e.message); res.json({ ok: false, error: '出了點問題，等等再試' }); }
+});
+// 新世界名字旁的職業徽章外圈：熟練度階級。3D 的熟練度從 0 開始、還沒接上，先一律 0 階（之後由 3D 的職業系統提供）
+function nwTier(u, cls) { return 0; }
 // 新世界的多人連線：自己一個頻道（/newworld），跟總部的連線、玩家資料完全分開；只有管理員連得上
 // 只同步標準人物的位置、造型、名字和聊天，聊天不跟總部互通
-const nwPlayers = new Map();
+const nwPlayers = new Map(), nwBots = [];
+let NW_COMBAT = null;   // 新世界的戰鬥（nw-combat.js），連線開起來才有
 function startNewworldNet() {
   const nw = io.of('/newworld');
+  const COMBAT = NW_COMBAT = require('./nw-combat.js')(nw, { accounts, players: nwPlayers });   // 練習場的怪、普攻、技能、等級和職業
   const num = (v, lo, hi) => Math.max(lo, Math.min(hi, Number(v) || 0));
   nw.use((socket, next) => {
     const u = accounts.byToken(socket.handshake.auth && socket.handshake.auth.token);
-    if (!u || !u.admin) return next(new Error('forbidden'));
+    if (!canNewworld(u)) return next(new Error('forbidden'));
     socket.data.user = u; next();
   });
   nw.on('connection', (socket) => {
     const u = socket.data.user, a = sanitizeSave(u.save);
-    const p = { id: socket.id, name: a.name || u.username, x: 2.5, z: 14, f: 0, mv: 0, fm: 0, g: 0, look: sanitizeLook3d(u.save.look3d), said: 0 };
-    const pub = (q) => ({ id: q.id, name: q.name, x: q.x, z: q.z, f: q.f, fm: q.fm, g: q.g, look: q.look });
-    socket.emit('init', { id: p.id, name: p.name, players: [...nwPlayers.values()].map(pub) });
+    const p = { id: socket.id, name: a.name || u.username, x: 2.5, z: 14, f: 0, mv: 0, fm: 0, g: 0, p: 0, look: sanitizeLook3d(u.save.look3d), said: 0, tier: 0, user: u.username, gear: nwGearOf(u) };
+    p.tier = nwTier(u, p.look && p.look.cls);
+    const pub = (q) => ({ id: q.id, name: q.name, x: q.x, z: q.z, f: q.f, fm: q.fm, g: q.g, look: q.look, tier: q.tier || 0, gear: q.gear || null });
+    socket.emit('init', { id: p.id, name: p.name, tier: p.tier, admin: !!u.admin, players: [...nwPlayers.values()].map(pub) });
     nwPlayers.set(p.id, p);
     socket.broadcast.emit('join', pub(p));
-    socket.on('move', (d) => { if (!d || typeof d !== 'object') return; p.x = num(d.x, -70, 70); p.z = num(d.z, -70, 70); p.f = num(d.f, -7, 7); p.mv = d.mv ? 1 : 0;
+    socket.emit('music', musicState());
+    socket.emit('garden', garden.state());
+    COMBAT.join(socket, u, p);
+    // 壓力測試用的假人：管理員要幾個就放幾個（最多 30），隨機造型、隨機亂走，所有人都看得到
+    socket.on('bots', (n) => { if (!u.admin) return; n = Math.round(num(n, 0, 30));
+      while (nwBots.length > n) { const b = nwBots.pop(); nwPlayers.delete(b.id); nw.emit('leave', b.id); }
+      const pick = (a) => a[Math.floor(Math.random() * a.length)];
+      while (nwBots.length < n) { const i = nwBots.length + 1;
+        const b = { id: 'bot-' + i, name: '假人' + i, x: (Math.random() - 0.5) * 30, z: 8 + (Math.random() - 0.5) * 24, f: 0, mv: 0, fm: 0, g: 0, p: 0, tx: 0, tz: 0, wait: 0,
+          look: { glasses: Math.random() < 0.4, wings: false, cls: pick([null, null, 'summoner', 'skater']), hair: pick(['short', 'bowl', 'bob', 'long', 'airy', 'hime', 'bun', 'buns', 'buzz']), top: pick(['tee', 'dress', 'hoodie']),
+            face: pick(['smile', 'dot', 'grin', 'cat']), hairCol: pick(['#2b2a33', '#6b4a32', '#c9772f', '#e6b85a']), skinCol: null, topCol: pick([null, '#4f7cc2', '#6baf7b', '#f6a3b4', '#f2c14e']) } };
+        b.tx = b.x; b.tz = b.z; nwBots.push(b); nwPlayers.set(b.id, b); nw.emit('join', pub(b)); } });
+    socket.on('move', (d) => { if (!d || typeof d !== 'object') return; p.x = num(d.x, -70, 70); p.z = num(d.z, -70, 70); p.f = num(d.f, -7, 7); p.mv = Math.round(num(d.mv, 0, 2)); p.p = Math.round(num(d.p, 0, 2));   // mv：0 站著 1 走 2 跑；p：0 沒有 1 坐下 2 揮手
+     
       p.fm = Math.round(num(d.fm, 0, 2)); p.g = Math.round(num(d.g, 0, 999)); });   // fm：騎士的隊形；g：揮手指揮的次數（變了就播一次）
-    socket.on('look', (d) => { const l = sanitizeLook3d(d); if (!l) return; p.look = l; socket.broadcast.emit('look', { id: p.id, look: l }); });
+    socket.on('look', (d) => { const l = sanitizeLook3d(d); if (!l) return; p.look = l; p.tier = nwTier(u, l.cls); socket.emit('tier', p.tier); socket.broadcast.emit('look', { id: p.id, look: l, tier: p.tier }); });
     socket.on('emote', (f) => { if (typeof f === 'string' && /^[a-z]{1,12}$/.test(f)) socket.broadcast.emit('emote', { id: p.id, face: f }); });
     socket.on('chat', (t) => {
       const text = String(t == null ? '' : t).replace(/\s+/g, ' ').trim().slice(0, 60), now = Date.now();
       if (!text || now - p.said < 600) return;
       p.said = now; nw.emit('chat', { id: p.id, name: p.name, text });
     });
-    socket.on('disconnect', () => { nwPlayers.delete(p.id); nw.emit('leave', p.id); });
+    socket.on('disconnect', () => { COMBAT.leave(p); nwPlayers.delete(p.id); nw.emit('leave', p.id); });
   });
-  setInterval(() => { if (nwPlayers.size > 1) nw.volatile.emit('state', [...nwPlayers.values()].map(q => [q.id, q.x, q.z, q.f, q.mv, q.fm, q.g])); }, 100);
+  setInterval(() => { nwBots.forEach(b => { const dx = b.tx - b.x, dz = b.tz - b.z, d = Math.hypot(dx, dz);
+    if (d < 0.3) { b.mv = 0; if ((b.wait -= 0.1) <= 0) { b.tx = Math.max(-30, Math.min(30, b.x + (Math.random() - 0.5) * 16)); b.tz = Math.max(-6, Math.min(30, b.z + (Math.random() - 0.5) * 16)); b.wait = 1 + Math.random() * 4; } }
+    else { b.x += dx / d * 0.42; b.z += dz / d * 0.42; b.f = Math.atan2(dx, dz); b.mv = 1; } });
+    if (!nw.sockets.size && nwBots.length) { nwBots.forEach(b => nwPlayers.delete(b.id)); nwBots.length = 0; }   // 沒有人在了就把假人收掉
+    if (nwPlayers.size > 1) nw.volatile.emit('state', [...nwPlayers.values()].map(q => [q.id, q.x, q.z, q.f, q.mv, q.fm, q.g, q.p || 0])); }, 100);
 }
 app.get('/api/newworld/:file', (req, res) => {
   const f = NEWWORLD_FILES[req.params.file];
   if (!f) return res.status(404).json({ ok: false });
   const u = accounts.byToken(bearer(req));
   if (!u) return res.status(401).json({ ok: false });
-  if (!u.admin) return res.status(403).json({ ok: false });
+  if (!canNewworld(u)) return res.status(403).json({ ok: false });
   // 壓縮後再送（模型檔大約剩三分之一），壓好的放在記憶體裡，檔案有改才重壓
   // 瀏覽器會記住，下次只問「有沒有變」（ETag），沒變就不用重新下載
-  const file = path.join(__dirname, 'newworld', f[0]);
-  fs.stat(file, (err, st) => {
+  nwSource(f[0], (err, src) => {
     if (err) return res.status(404).json({ ok: false });
-    const tag = '"nw-' + st.size + '-' + Math.round(st.mtimeMs) + '"';
-    res.set({ 'Cache-Control': 'private, no-cache', ETag: tag, Vary: 'Accept-Encoding', 'X-Size': String(st.size) }).type(f[1]);
-    if (req.headers['if-none-match'] === tag) return res.status(304).end();
-    if (!/\bgzip\b/.test(req.headers['accept-encoding'] || '')) return res.sendFile(file);
-    const hit = NEWWORLD_GZ.get(file);
-    if (hit && hit.tag === tag) return res.set('Content-Encoding', 'gzip').end(hit.buf);
-    fs.readFile(file, (e2, raw) => { if (e2) return res.status(500).json({ ok: false });
-      zlib.gzip(raw, { level: 9 }, (e3, buf) => { if (e3) return res.sendFile(file); NEWWORLD_GZ.set(file, { tag, buf }); res.set('Content-Encoding', 'gzip').end(buf); }); });
+    res.set({ 'Cache-Control': 'private, no-cache', ETag: src.tag, Vary: 'Accept-Encoding', 'X-Size': String(src.size) }).type(f[1]);
+    if (req.headers['if-none-match'] === src.tag) return res.status(304).end();
+    const gz = /\bgzip\b/.test(req.headers['accept-encoding'] || '');
+    const hit = NEWWORLD_GZ.get(f[0]);
+    if (hit && hit.tag === src.tag) return gz ? res.set('Content-Encoding', 'gzip').end(hit.gz) : res.end(hit.raw);
+    src.read((e2, raw) => { if (e2) return res.status(500).json({ ok: false });
+      zlib.gzip(raw, { level: 9 }, (e3, buf) => { if (e3) return res.end(raw); NEWWORLD_GZ.set(f[0], { tag: src.tag, gz: buf, raw }); if (gz) res.set('Content-Encoding', 'gzip').end(buf); else res.end(raw); }); });
   });
 });
+// 場景程式拆成 newworld/world/ 裡的好幾個檔案，照檔名順序接起來當成一支送出去；模型檔就是單一個檔案
+function nwSource(rel, cb) {
+  const full = path.join(__dirname, 'newworld', rel);
+  if (rel !== 'world.js') return fs.stat(full, (err, st) => (err ? cb(err) : cb(null, { tag: '"nw-' + st.size + '-' + Math.round(st.mtimeMs) + '"', size: st.size, read: (done) => fs.readFile(full, done) })));
+  const dir = path.join(__dirname, 'newworld', 'world');
+  fs.readdir(dir, (err, names) => { if (err) return cb(err);
+    try { const files = names.filter(n => /\.js$/.test(n)).sort().map(n => path.join(dir, n)), st = files.map(p => fs.statSync(p));
+      const size = st.reduce((a, x) => a + x.size, 0), mt = Math.round(Math.max(...st.map(x => x.mtimeMs)));
+      cb(null, { tag: '"nw-' + files.length + '-' + size + '-' + mt + '"', size, read: (done) => { try { done(null, Buffer.concat(files.map(p => fs.readFileSync(p)))); } catch (e) { done(e); } } }); } catch (e) { cb(e); } });
+}
 const NEWWORLD_GZ = new Map();
 // 報名頁改了邀請函，或是在沒登入的時候玩過，把資料存回帳號
 app.post('/api/save', (req, res) => {
@@ -591,6 +875,25 @@ app.post('/api/admin/role', (req, res) => {
   if (r.error) return res.status(400).json({ ok: false, error: r.error });
   res.json(r);
 });
+// 新世界封測名單：讓某個帳號可以進 3D 新世界
+app.post('/api/admin/newworld', (req, res) => {
+  if (!isAdmin(req)) return res.status(401).json({ ok: false });
+  const b = req.body || {}, r = accounts.setNewworld(b.username, !!b.on);
+  if (r.error) return res.status(400).json({ ok: false, error: r.error });
+  res.json(r);
+});
+// 發東西到某個帳號的 3D 存檔（封測時補發、測試用）：inv / furn / gear 都是 { id: 數量 }，pet 是寵物資料
+app.post('/api/admin/newworld-give', (req, res) => {
+  if (!isAdmin(req)) return res.status(401).json({ ok: false });
+  const b = req.body || {}, u = accounts.get(b.username);
+  if (!u) return res.status(400).json({ ok: false, error: '找不到這個帳號' });
+  const p = nwSave(u), add = (to, from, ok, max) => { if (from && typeof from === 'object') Object.keys(from).forEach(k => { const n = Math.floor(Number(from[k])) || 0; if (ok(k) && n > 0) to[k] = Math.min(max, (to[k] || 0) + n); }); };
+  add(p.inv, b.inv, k => !!MAP.ITEMS[k], INV_MAX); add(p.furn, b.furn, k => !!DECOR.DECOR[k], 50); add(p.gear, b.gear, k => !!GEAR.GEAR[k], 99);
+  Object.keys(p.gear).forEach(id => { if (!p.seen.includes(id)) p.seen.push(id); });
+  if (b.pet) p.pet = PETS.withTemper(PETS.sanitize(b.pet));
+  nwWrite(u, p);
+  res.json({ ok: true });
+});
 // 改帳號名稱（登入用的那個）：許願池、花園跟著換；在總部裡的人可以繼續玩，下次要用新名稱登入
 app.post('/api/admin/rename', (req, res) => {
   if (!isAdmin(req)) return res.status(401).json({ ok: false });
@@ -715,7 +1018,7 @@ function musicState() {
   });
   return out;
 }
-const emitMusic = () => io.emit('music', musicState());
+const emitMusic = () => { const st = musicState(); io.emit('music', st); io.of('/newworld').emit('music', st); };   // 新世界的點唱機聽的是同一首
 // 「3:45」「1:02:03」→ 秒數
 function lenSec(t) {
   const parts = String(t || '').split(':').map(Number);
@@ -1670,7 +1973,7 @@ const GARDEN_NOTE = {
   dead: (n) => `你種的${n}太久沒澆水，枯掉了…`,
   rot: (n) => `你種的${n}熟太久沒人收，爛掉了`,
 };
-garden.start((st) => io.emit('garden', st), (note) => {
+garden.start((st) => { io.emit('garden', st); io.of('/newworld').emit('garden', st); }, (note) => {
   const pl = garden.state()[note.i];
   if (!pl) return;
   players.forEach(q => {
@@ -2171,7 +2474,7 @@ io.on('connection', (socket) => {
     const r = fn(p, i, m, now);
     ack(r.error ? { ok: false, error: r.error } : Object.assign({ ok: true, inv: p.inv }, r));
   });
-  const changed = () => io.emit('garden', garden.state());
+  const changed = gardenChanged;
   onGarden('gardenInfo', (p, i) => ({ info: garden.info(i) }));
   onGarden('gardenPlant', (p, i, m) => {
     const kind = String(m.kind), seed = G.PLANTS[kind] && G.seedOf(kind);

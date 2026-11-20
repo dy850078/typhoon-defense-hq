@@ -220,7 +220,7 @@ function create(dataDir) {
     get(username) { return db.users[key(username)] || null; },
     list() {
       return Object.values(db.users).map(u => ({ username: u.username, name: (u.save && u.save.name) || '', cls: (u.save && u.save.cls) || 'staff',
-        level: (u.save && u.save.level) || 1, vip: !!(u.save && u.save.vip), admin: !!u.admin, created: u.created, seen: u.seen,
+        level: (u.save && u.save.level) || 1, vip: !!(u.save && u.save.vip), admin: !!u.admin, nw: !!u.nwBeta, created: u.created, seen: u.seen,
         email: u.email || '', emailOk: !!u.emailOk, emailNew: u.emailNew || '', oldName: !!validName(u.username),
         pet: (u.save && u.save.pet && typeof u.save.pet === 'object' && u.save.pet) || null })); // 寵物：管理頁看誰領養了、長什麼樣子
     },
@@ -231,6 +231,14 @@ function create(dataDir) {
       if (on) u.admin = true; else delete u.admin;
       save();
       return { ok: true, admin: !!u.admin };
+    },
+    // 新世界封測名單：可以進 3D 新世界測試頁的帳號（管理員本來就可以進）
+    setNewworld(username, on) {
+      const u = db.users[key(username)];
+      if (!u) return { error: '找不到這個帳號' };
+      if (on) u.nwBeta = true; else delete u.nwBeta;
+      save();
+      return { ok: true, nw: !!u.nwBeta };
     },
     remove(username) {
       const k = key(username);

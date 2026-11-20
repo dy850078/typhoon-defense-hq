@@ -38,11 +38,13 @@ async function main() {
 
   const ad = await post('/api/admin/login', { password: PW });
   let seq = 0;
-  const account = async (save, admin = true) => {
+  const account = async (save, admin = true, give = null) => {
     const name = 'nwt' + (Date.now() % 100000) + (seq++);
     const reg = await post('/api/register', { username: name, password: 'pw123456', email: name + '@example.com', save });
     if (!reg.token) throw new Error('註冊失敗：' + JSON.stringify(reg));
     if (admin) await post('/api/admin/role', { username: name, admin: true }, { 'x-admin-token': ad.token });
+    // 新世界的背包、裝備、寵物是 3D 自己的存檔，註冊帶不進去，用管理頁的補發接口放進去
+    if (give) await post('/api/admin/newworld-give', { username: name, ...give }, { 'x-admin-token': ad.token });
     return { name, token: reg.token };
   };
   const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
@@ -314,7 +316,7 @@ async function main() {
   // ---- 大廳第二、三期：導師轉職、扭蛋機、公共花園、種子箱、許願池、寵物（都是讀寫總部同一份資料）----
   const home = async () => {
     console.log('home');
-    const a = await account({ name: '阿福', hair: 'bob', inv: { gachaTicket: 3, seedTomato: 2, gemRuby: 1 }, pet: { kind: 'cat', name: '麻糬', fur: '#f0a456', pattern: 'mackerel', white: 'socks' } });
+    const a = await account({ name: '阿福', hair: 'bob' }, true, { inv: { gachaTicket: 3, seedTomato: 2, gemRuby: 1 }, pet: { kind: 'cat', name: '麻糬', fur: '#f0a456', pattern: 'mackerel', white: 'socks' } });
     const api = (name, body) => post('/api/newworld/' + name, body, { Authorization: 'Bearer ' + a.token });
     const pa = await open(a), OZ = -55;
     const near = (k) => pa.waitForFunction((v) => HQ_NEWWORLD.near() === v, k, { timeout: 30000 }).catch(() => {});
@@ -407,7 +409,7 @@ async function main() {
     await post('/api/admin/newworld', { username: b.name, on: true }, { 'x-admin-token': ad.token });
 
     // 用封測帳號（不是管理員）開頁面
-    const a = await account({ name: '阿福', hair: 'bob', level: 12, inv: { apple: 2, water: 3, gachaTicket: 1 }, gear: { mgDress: 1, mgBow: 2, mgWings: 1 }, owned: ['mgDress', 'mgBow', 'mgWings'], pet: { kind: 'dog', name: '麻糬' } }, false);
+    const a = await account({ name: '阿福', hair: 'bob', level: 12, inv: { apple: 9 }, gear: { wzHat: 1 } }, false, { inv: { apple: 2, water: 3, gachaTicket: 1 }, gear: { mgDress: 1, mgBow: 2, mgWings: 1 }, pet: { kind: 'dog', name: '麻糬' } });
     await post('/api/admin/newworld', { username: a.name, on: true }, { 'x-admin-token': ad.token });
     const api = (name, body) => post('/api/newworld/' + name, body, { Authorization: 'Bearer ' + a.token });
     await api('look', { look: { hair: 'bob', top: 'tee', face: 'smile', hairCol: '#2b2a33', skinCol: '#fde6d4', topCol: '#ff7a2f', cls: 'summoner' } });
@@ -423,7 +425,7 @@ async function main() {
     ok(!!(await pa.$('.nw-name[data-tier="4"] img')) && (await pa.getAttribute('.nw-name[data-tier="4"] img', 'src')) !== b0, '階級升上去，徽章換成那一階的外圈'); await shot(pa, 'stay-1-badge');
     // 背包
     await pa.click('#b-bag'); await panel('bag'); await pa.waitForTimeout(400); await shot(pa, 'stay-2-bag');
-    ok(/等級 12/.test(await pa.textContent('#bag-level')), '背包面板看得到等級');
+    ok(/等級 1$/.test((await pa.textContent('#bag-level')).trim()), '背包面板看得到等級，新世界從 1 等開始（總部的 12 等沒有帶過來）');
     ok(!!(await pa.$('#panel [data-item="apple"] img')) && /×2/.test(await pa.textContent('#panel [data-item="apple"]')), '補品那一頁有 2 顆蘋果，有手繪圖示');
     await pa.click('#panel [data-item="water"]'); await pa.click('#bag-trash'); await pa.waitForFunction(() => /×2/.test((document.querySelector('#panel [data-item="water"]') || {}).textContent || ''), null, { timeout: 30000 }).catch(() => {});
     ok((await api('bag', { act: 'state' })).items.find(x => x.k === 'water').n === 2, '丟掉一瓶水，帳號的背包少一瓶');
@@ -432,13 +434,16 @@ async function main() {
     ok((await pa.locator('#panel .grid [data-gear]').count()) === 3 && !!(await pa.$('#panel [data-gear="mgWings"] img')), '裝備那一頁有三件魔法少女裝備');
     ok((await pa.getAttribute('#panel .grid .cell', 'data-gear')) === 'mgWings', '稀有度高的排前面');
     await pa.click('#panel [data-gear="mgDress"]'); await pa.click('#gear-equip'); await pa.waitForFunction(() => (document.querySelector('#panel [data-slot="outfit"]') || { dataset: {} }).dataset.worn === 'mgDress', null, { timeout: 30000 }).catch(() => {});
-    ok((await api('bag', { act: 'state' })).equip.outfit === 'mgDress', '穿上蓬蓬裙，帳號記下來了'); await pa.waitForTimeout(400); await shot(pa, 'stay-3-gear');
+    const st1 = await api('bag', { act: 'state' });
+    ok(st1.equip.outfit === 'mgDress', '穿上蓬蓬裙，帳號記下來了');
+    ok(!st1.gear.some(g => g.id === 'wzHat') && st1.items.find(x => x.k === 'apple').n === 2, '總部的裝備和補品沒有帶過來，是 3D 自己的一份');
+    ok((await NW(pa, () => HQ_NEWWORLD.gearOn())) === 'mgDress,,,', '蓬蓬裙穿到 3D 身上了'); await pa.waitForTimeout(400); await shot(pa, 'stay-3-gear');
     const bad = await api('bag', { act: 'trash', kind: 'gear', k: 'mgDress' });
     ok(!bad.ok, '正在穿的最後一件不能丟（' + bad.error + '）');
     await new Promise(r => setTimeout(r, 300));
     ok(!(await api('bag', { act: 'equip', slot: 'head', id: 'mgDress' })).ok, '裝備不能穿到別的部位');
     await pa.click('#panel [data-slot="outfit"]'); await pa.click('#gear-equip'); await pa.waitForFunction(() => (document.querySelector('#panel [data-slot="outfit"]') || { dataset: {} }).dataset.worn === '', null, { timeout: 30000 }).catch(() => {});
-    ok(!(await api('bag', { act: 'state' })).equip.outfit, '脫下來也記得');
+    ok(!(await api('bag', { act: 'state' })).equip.outfit && (await NW(pa, () => HQ_NEWWORLD.gearOn())) === ',,,', '脫下來也記得，身上也換回來');
     // 寵物
     await pa.click('#b-pet'); await panel('pet');
     ok((await pa.getAttribute('#pet-bond', 'data-bond')) === '0', '寵物面板讀到感情值');

@@ -638,6 +638,7 @@ function nwTier(u, cls) {
 const nwPlayers = new Map(), nwBots = [];
 function startNewworldNet() {
   const nw = io.of('/newworld');
+  const COMBAT = require('./nw-combat.js')(nw, { accounts, players: nwPlayers });   // 練習場的怪、普攻、技能、等級和職業
   const num = (v, lo, hi) => Math.max(lo, Math.min(hi, Number(v) || 0));
   nw.use((socket, next) => {
     const u = accounts.byToken(socket.handshake.auth && socket.handshake.auth.token);
@@ -654,6 +655,7 @@ function startNewworldNet() {
     socket.broadcast.emit('join', pub(p));
     socket.emit('music', musicState());
     socket.emit('garden', garden.state());
+    COMBAT.join(socket, u, p);
     // 壓力測試用的假人：管理員要幾個就放幾個（最多 30），隨機造型、隨機亂走，所有人都看得到
     socket.on('bots', (n) => { if (!u.admin) return; n = Math.round(num(n, 0, 30));
       while (nwBots.length > n) { const b = nwBots.pop(); nwPlayers.delete(b.id); nw.emit('leave', b.id); }
@@ -673,7 +675,7 @@ function startNewworldNet() {
       if (!text || now - p.said < 600) return;
       p.said = now; nw.emit('chat', { id: p.id, name: p.name, text });
     });
-    socket.on('disconnect', () => { nwPlayers.delete(p.id); nw.emit('leave', p.id); });
+    socket.on('disconnect', () => { COMBAT.leave(p); nwPlayers.delete(p.id); nw.emit('leave', p.id); });
   });
   setInterval(() => { nwBots.forEach(b => { const dx = b.tx - b.x, dz = b.tz - b.z, d = Math.hypot(dx, dz);
     if (d < 0.3) { b.mv = 0; if ((b.wait -= 0.1) <= 0) { b.tx = Math.max(-30, Math.min(30, b.x + (Math.random() - 0.5) * 16)); b.tz = Math.max(-6, Math.min(30, b.z + (Math.random() - 0.5) * 16)); b.wait = 1 + Math.random() * 4; } }

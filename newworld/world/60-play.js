@@ -312,8 +312,12 @@ const NW = (() => {
     A.bot.userData.shadowCut = cut + '/' + all; }
   // 別的騎士的機器人：主畫面畫完後，把同一台機器人擺成他們的樣子再補畫一次（第 1 層只有機器人和燈）
   R.traverse(o => o.layers.enable(1)); scene.traverse(o => { if (o.isLight) o.layers.enable(1); });
+  // 練習場的戰鬥（58-combat.js）：怪、招式特效、使魔；這裡把自己和別人的位置交給它
+  const CB = ME && typeof makeCombat === 'function' ? makeCombat({ ME, S, OTH, FY, LAB,
+    moveMe: (x, z) => { const c = collide(LIMX(x, ME.z), LIMZ(z, ME.z), 0.4); ME.x = c.x; ME.z = c.z; }, faceMe: (f) => { ME.face = f; },
+    moving: () => Math.hypot(S.jx, S.jy) > 0.15 || !!(S.keys.ArrowLeft || S.keys.ArrowRight || S.keys.ArrowUp || S.keys.ArrowDown || S.keys.a || S.keys.d || S.keys.w || S.keys.s) || !!(S.goal && !S.goal.auto) }) : null;
   function update(dt) {
-    S.time += dt; const t = S.time / 6;
+    S.time += dt; const t = S.time / 6; if (CB) CB.tick(dt);
     // --- 移動：搖桿或鍵盤，方向以畫面為準 ---
     let jx = S.jx, jy = S.jy; const K = S.keys;
     if (K.ArrowLeft || K.a) jx -= 1; if (K.ArrowRight || K.d) jx += 1; if (K.ArrowUp || K.w) jy -= 1; if (K.ArrowDown || K.s) jy += 1;
@@ -428,7 +432,7 @@ const NW = (() => {
     lines: () => { S.lines = !S.lines; outlines.forEach(o => { o.visible = S.lines; }); if (STD) STD.lines(S.lines); return S.lines ? '開' : '關'; },
     // 標準人物：換操控的角色、換裝
     hasStd: !!ME, ctrlName: () => CLS_NAME[S.ctrl === 'robot' ? 'rider' : ''], isRider: () => S.ctrl === 'robot',
-    walkTo: (cx, cy) => { NDC.set(cx / W * 2 - 1, -(cy / H) * 2 + 1); RAY.setFromCamera(NDC, camera);
+    walkTo: (cx, cy) => { if (CB && S.ctrl === 'me' && CB.tap(cx, cy)) return true; NDC.set(cx / W * 2 - 1, -(cy / H) * 2 + 1); RAY.setFromCamera(NDC, camera);
       if (!RAY.ray.intersectPlane(GROUND, HIT)) return false;
       if (S.lob && RAY.ray.intersectPlane(GROUND_UP, HIT2) && FY(HIT2.x, HIT2.z) > LOBBY.PH - 0.01) HIT.copy(HIT2);   // 點在高起來的作戰角上
       const z0 = S.ctrl === 'me' ? ME.z : S.z; S.goal = { x: LIMX(HIT.x, z0), z: LIMZ(HIT.z, z0), best: 1e9, t: S.time }; return true; },
@@ -452,6 +456,7 @@ const NW = (() => {
       if (onInteract) onInteract(it.kind, it); return it.kind; },
     net: NET, emote: (face) => { if (ME) STD.emote(ME.c, face, 5); },
     mem: () => ({ robotShadowCut: A.bot.userData.shadowCut, spirits: SPIRITS.size, chars: STD.all.length, lines: STD.lineCount(), geo: renderer.info.memory.geometries, tex: renderer.info.memory.textures }),   // 測試腳本用：看有沒有漏掉沒還的東西
+    combat: CB,
     debugMe: () => (ME ? ME.c.g : null), zone: () => (S.lob ? 'lobby' : 'yard'), height: () => (ME ? ME.y : 0), lobby: () => (LOBBY ? { tris: LOBBY.tris(), ms: LOBBY.ms, seats: LOBBY.seats.length, spawn: LOBBY.SPAWN, exit: LOBBY.EXIT, juke: LOBBY.JUKE } : null),
     gear: (equip) => { if (ME && GEAR3) GEAR3.apply(ME.c, equip); }, gearIds: () => (GEAR3 ? GEAR3.ids() : []),
     debugCam: (o) => { S.dbgCam = o || null; }, debugFace: (f) => { if (ME) ME.face = f; },

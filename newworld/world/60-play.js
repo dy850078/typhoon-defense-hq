@@ -104,6 +104,7 @@ const NW = (() => {
       else if (d.look) STD.setLook(o.c, d.look);
       const rider = o.c.look.cls === 'rider'; if (rider !== o.rider) { o.rider = rider; o.rs.x = o.tx; o.rs.z = o.tz; o.rs.rp = null; if (!rider) { o.x = o.tx; o.z = o.tz; } }
       if (d.tier != null) o.tier = d.tier | 0;
+      if (d.gear !== undefined && GEAR3) GEAR3.apply(o.c, d.gear);
       setBadge(o.tag, o.c.look.cls, o.tier);
       if (d.name != null) { o.tag.s.textContent = d.name; o.tag.n.hidden = !d.name; } },
     move: (id, x, z, f, mv, fm, g, p) => { const o = OTH.get(id); if (!o) return; o.tx = x; o.tz = z; o.tf = f; o.mv = mv; o.p = p | 0; o.rs.form = FORMS[fm] || 'carry';
@@ -458,7 +459,7 @@ const NW = (() => {
     mem: () => ({ robotShadowCut: A.bot.userData.shadowCut, spirits: SPIRITS.size, chars: STD.all.length, lines: STD.lineCount(), geo: renderer.info.memory.geometries, tex: renderer.info.memory.textures }),   // 測試腳本用：看有沒有漏掉沒還的東西
     combat: CB,
     debugMe: () => (ME ? ME.c.g : null), zone: () => (S.lob ? 'lobby' : 'yard'), height: () => (ME ? ME.y : 0), lobby: () => (LOBBY ? { tris: LOBBY.tris(), ms: LOBBY.ms, seats: LOBBY.seats.length, spawn: LOBBY.SPAWN, exit: LOBBY.EXIT, juke: LOBBY.JUKE } : null),
-    gear: (equip) => { if (ME && GEAR3) GEAR3.apply(ME.c, equip); }, gearIds: () => (GEAR3 ? GEAR3.ids() : []),
+    gear: (equip) => { if (ME && GEAR3) GEAR3.apply(ME.c, equip); }, gearIds: () => (GEAR3 ? GEAR3.ids() : []), gearOn: () => (ME && ME.c.gearKey) || ',,,',
     debugCam: (o) => { S.dbgCam = o || null; }, debugFace: (f) => { if (ME) ME.face = f; },
     debugPlace: (x, z) => { if (ME && S.ctrl === 'me') { ME.x = x; ME.z = z; S.goal = null; } },   // 測試腳本用：把人直接放到某個位置
     onStats: (fn) => { onStats = fn; },

@@ -39,7 +39,7 @@ window.NW_PANELS = function (NW, token, opt) {
 
   // ---------- 扭蛋機 ----------
   function gacha(last) {
-    var body = frame('gacha', '扭蛋機', '跟總部的扭蛋機是同一台：同一疊扭蛋券、同一個保底，扭到的裝備放進總部的背包。');
+    var body = frame('gacha', '扭蛋機', '用新世界的扭蛋券，扭到的裝備放進新世界的背包。');
     wait(body);
     post('gacha', { act: 'state' }).then(function (r) { if (cur === 'gacha') drawGacha(body, r, last); });
   }
@@ -83,7 +83,7 @@ window.NW_PANELS = function (NW, token, opt) {
       var any = false, acts = el('div', 'acts');
       r.seeds.forEach(function (s) { if (!s.n) return; any = true; var b = btn(s.name + ' ×' + s.n + '（約 ' + s.hours + ' 小時）', act('plant', { kind: s.kind })), ic = icon('item-' + s.item, 24); if (ic) b.insertBefore(ic, b.firstChild); b.dataset.seed = s.kind; acts.appendChild(b); });
       body.appendChild(acts);
-      if (!any) body.appendChild(el('p', 'dim', '身上沒有種子。陽台角落的種子箱每天可以領一包，打怪也有機會掉。'));
+      if (!any) body.appendChild(el('p', 'dim', '身上沒有種子。陽台角落的種子箱每天可以領一包。'));
       return;
     }
     var name = (r.seeds.filter(function (s) { return s.kind === f.kind; })[0] || {}).name || f.kind;
@@ -154,10 +154,10 @@ window.NW_PANELS = function (NW, token, opt) {
 
   // ---------- 背包和裝備：跟總部同一個背包 ----------
   var bagTab = 'food', bagSel = null;
-  function bag() { var body = frame('bag', '背包', '跟總部是同一個背包。補品要等新世界有戰鬥才能吃，現在先看和整理。'); wait(body); post('bag', { act: 'state' }).then(function (r) { if (cur === 'bag') drawBag(body, r); }); }
+  function bag() { var body = frame('bag', '背包', '新世界自己的背包，跟總部的分開。補品要等新世界有戰鬥才能吃，現在先看和整理。'); wait(body); post('bag', { act: 'state' }).then(function (r) { if (cur === 'bag') drawBag(body, r); }); }
   function bagDo(body, req, done) { post('bag', req).then(function (x) { if (cur !== 'bag') return;
     if (!x.ok) return post('bag', { act: 'state' }).then(function (s) { s.error = x.error; if (cur === 'bag') drawBag(body, s); });
-    toast(x.text); bagSel = null; if (done) done(x); drawBag(body, x); }); }
+    toast(x.text); bagSel = null; if (x.equip) NW.gear(x.equip); if (done) done(x); drawBag(body, x); }); }
   function cell(iconKey, name, n, cls) { var c = el('button', 'cell' + (cls ? ' ' + cls : '')); c.type = 'button'; var i = icon(iconKey, 34); if (i) c.appendChild(i); c.appendChild(el('span', '', name)); if (n > 1) c.appendChild(el('i', '', '×' + n)); return c; }
   function drawBag(body, r) {
     if (!r.sections) return fail(body, r);
@@ -191,15 +191,15 @@ window.NW_PANELS = function (NW, token, opt) {
     if (g) { var acts = el('div', 'acts'); acts.appendChild(el('b', '', '【' + g.rarity + '】' + g.name + '　' + r.slots[g.slot]));
       var e = btn(g.on ? '脫下' : '穿上', function () { bagDo(body, { act: 'equip', slot: g.slot, id: g.on ? null : g.id }); }, 'main'); e.id = 'gear-equip'; acts.appendChild(e);
       var t = btn('丟掉一件', function () { bagDo(body, { act: 'trash', kind: 'gear', k: g.id }); }); t.disabled = g.on && g.n < 2; acts.appendChild(t); body.appendChild(acts); }
-    body.appendChild(el('p', 'dim', '在這裡穿脫，總部的角色會跟著換。裝備的 3D 樣子還在做，新世界的角色暫時看不出來。'));
+    body.appendChild(el('p', 'dim', '有些裝備的 3D 樣子還在做，穿上去暫時看不出來。'));
   }
 
   // ---------- 寵物：摸摸和餵點心（感情值跟總部共用）----------
-  function pet() { var body = frame('pet', '寵物', '摸摸和餵點心加的感情，跟總部是同一份，每天的次數也算在一起。'); wait(body); post('pet', { act: 'state' }).then(function (r) { if (cur === 'pet') drawPet(body, r); }); }
+  function pet() { var body = frame('pet', '寵物', '摸摸和餵點心可以加感情，每天有次數上限。'); wait(body); post('pet', { act: 'state' }).then(function (r) { if (cur === 'pet') drawPet(body, r); }); }
   function drawPet(body, r) {
     if (r.pet === undefined) return fail(body, r);
     body.innerHTML = '';
-    if (!r.pet) return body.appendChild(el('p', 'dim', '還沒有寵物。先到總部的可愛生物休息區領養一隻，牠就會跟著你來新世界。'));
+    if (!r.pet) return body.appendChild(el('p', 'dim', '還沒有寵物。新世界的寵物領養還沒開放。'));
     var p = r.pet, go = function (req) { return function () { post('pet', req).then(function (x) { if (cur !== 'pet') return;
       if (!x.ok) return post('pet', { act: 'state' }).then(function (s) { s.error = x.error; if (cur === 'pet') drawPet(body, s); });
       toast(x.text); if (x.happy) NW.petJoy(req.act === 'pat' ? '好舒服' : '好吃'); drawPet(body, x); }); }; };

@@ -371,24 +371,30 @@ function newworldUser(req, res) {
   if (!canNewworld(u)) { res.status(403).json({ ok: false }); return null; }
   return u;
 }
-const lookOf = (u) => { const a = sanitizeSave(u.save); return { ok: true, base: { name: a.name, hair: a.hair, skin: a.skin, hairColor: a.hairColor, outfit: a.outfit, glasses: a.glasses !== '0', face: a.face || '' }, look3d: sanitizeLook3d(u.save.look3d), pet: a.pet }; };
+const lookOf = (u) => { const a = sanitizeSave(u.save); return { ok: true, base: { name: a.name, hair: a.hair, skin: a.skin, hairColor: a.hairColor, outfit: a.outfit, glasses: a.glasses !== '0', face: a.face || '' }, look3d: sanitizeLook3d(u.save.look3d), pet: nwSave(u).pet, equip: nwGearOf(u) }; };
 app.get('/api/newworld/look', (req, res) => { const u = newworldUser(req, res); if (u) res.json(lookOf(u)); });
 app.post('/api/newworld/look', (req, res) => {
   const u = newworldUser(req, res); if (!u) return;
   accounts.update(u, { look3d: sanitizeLook3d((req.body || {}).look) || undefined });
   res.json(lookOf(u));
 });
-// ---- 新世界大廳裡的扭蛋機、公共花園、許願池：讀寫的是跟總部同一份資料（同一個背包、同一塊花園、同一個許願池）----
-// 這個帳號現在也在總部線上的話，直接改線上的那個角色（總部畫面會跟著更新）；不在線上就改帳號存檔
+// ---- 新世界自己的存檔 ----
+// ZS 2026-11-21 的決定：3D 新世界從頭開始（1 等、背包和裝備是空的、沒有寵物），不沿用總部（2D）的進度，在 3D 做的事也不會動到 2D。
+// 存在帳號的 save.nw 裡：這裡管 bag（補品、雜物）、gear（裝備、圖鑑、穿著、扭蛋保底）、pet；
+// 等級、職業、技能那些是別的檔案在管的鍵，寫回去的時候要整包帶著，不能蓋掉。
+// 公共花園、許願池、點唱機是大家共用的設施，還是跟總部同一份。
+function nwSave(u) {
+  const n = u.save.nw && typeof u.save.nw === 'object' ? u.save.nw : {}, b = n.bag || {}, g = n.gear || {};
+  const a = sanitizeSave({ inv: b.inv, furn: b.furn, gear: g.own || {}, seen: g.seen, equip: g.equip, gachaPity: g.pity, pet: n.pet });
+  return { inv: a.inv, furn: a.furn, gear: a.gear, seen: a.seen, equip: a.equip, gachaPity: a.gachaPity, pet: a.pet, level: Math.max(1, Math.floor(Number(n.lv)) || 1) };
+}
+const nwWrite = (u, p) => accounts.update(u, { nw: Object.assign({}, u.save.nw, { bag: { inv: p.inv, furn: p.furn }, gear: { own: p.gear, seen: p.seen, equip: p.equip, pity: p.gachaPity }, pet: p.pet || null }) });
+// 身上穿的裝備裡，有 3D 樣子、別人看得到的那幾件
+const nwGearOf = (u) => nwSave(u).equip;
 function nwActor(u) {
-  let live = null;
-  players.forEach(q => { if (q.account && q.account.username === u.username) live = q; });
-  if (live) return { p: live, key: gardenKey(live), exp: (n) => gainExp(live, n), done: () => { LOOT.sync(live); snapshot(live); } };
-  const a = sanitizeSave(u.save), L = STATS.LEVEL;
-  const p = { name: a.name || u.username, account: u, inv: a.inv, furn: a.furn, gear: a.gear, seen: a.seen, equip: a.equip, gachaPity: a.gachaPity, level: a.level, exp: a.exp, pet: a.pet };
-  return { p, key: 'u:' + u.username.toLowerCase(),
-    exp: (n) => { if (p.level >= L.max) return; p.exp += Math.round(n); while (p.level < L.max && p.exp >= L.expFor(p.level)) { p.exp -= L.expFor(p.level); p.level++; } },
-    done: () => accounts.update(u, { inv: p.inv, furn: p.furn, gear: p.gear, owned: BAG.ownedOf(p.gear), seen: p.seen, equip: p.equip, gachaPity: p.gachaPity, level: p.level, exp: p.exp, ...(p.pet ? { pet: p.pet } : {}) }) };
+  const p = Object.assign({ name: sanitizeSave(u.save).name || u.username, account: u }, nwSave(u));
+  // 經驗值：等級是職業那邊在管，這裡先不加（花園收成的經驗之後接過去）
+  return { p, key: 'u:' + u.username.toLowerCase(), exp: () => {}, done: () => nwWrite(u, p) };
 }
 const nwLast = new Map();
 // 每個接口都是 POST { act, ... }，回 { ok, ... } 或 { ok: false, error }；同一個人 0.25 秒內只收一次
@@ -412,7 +418,7 @@ nwRoute('gacha', { READ: ['state'],
   // 扭一次：新世界沒有地上掉落物，裝備區滿了就不給扭（總部是掉在腳邊）
   spin: ({ p }) => {
     if ((p.inv[GACHA.TICKET] || 0) < 1) return { error: '沒有扭蛋券了，打倒頭目有機會掉' };
-    if (GACHA.pool().some(id => !BAG.canAdd(p, 'gear', id))) return { error: '背包的裝備區滿了，先到總部整理一下' };
+    if (GACHA.pool().some(id => !BAG.canAdd(p, 'gear', id))) return { error: '背包的裝備區滿了，先丟掉一些再來' };
     p.inv[GACHA.TICKET]--;
     const r = GACHA.spin(p.gachaPity, BAG.ownedOf(p.gear)), pityHit = p.gachaPity + 1 >= GACHA.PITY;
     p.gachaPity = r.pity;
@@ -509,7 +515,7 @@ nwRoute('wishes', { READ: ['list', 'get'],
   },
   like: (A, b, u) => { const r = wishes.like(Number(b.id), 'u:' + u.username.toLowerCase()); if (!r.error) io.emit('wishes'); return r; },
 });
-// ---- 新世界：背包、裝備、寵物、點歌（階段一第一批），一樣是讀寫總部同一份資料 ----
+// ---- 新世界：背包、裝備、寵物（讀寫 3D 自己的存檔）、點歌（跟總部同一份歌單）----
 const nwItemName = (k) => (MAP.ITEMS[k] && MAP.ITEMS[k].name) || k;
 nwRoute('bag', { READ: ['state'],
   view: ({ p }) => {
@@ -531,18 +537,18 @@ nwRoute('bag', { READ: ['state'],
     const r = LOOT.trash(p, kind, k);
     return r.ok ? { text: '丟掉了' } : { error: r.error };
   },
-  // 穿脫裝備：跟總部同一份，總部那邊的角色也會跟著換
-  equip: ({ p }, b) => {
+  // 穿脫裝備：只動 3D 自己的那一份
+  equip: ({ p }, b, u) => {
     const slot = String(b.slot), id = b.id == null ? null : String(b.id);
     if (!GEAR.SLOTS[slot]) return { error: '沒有這個部位' };
     if (id == null) delete p.equip[slot];
     else if (BAG.ownedOf(p.gear).includes(id) && GEAR.GEAR[id].slot === slot) p.equip[slot] = id;
     else return { error: '身上沒有這件' };
-    if (p.id) { io.emit('playerGear', { id: p.id, equip: p.equip }); sendStats(p); }
+    nwPlayers.forEach(q => { if (q.user === u.username) { q.gear = Object.assign({}, p.equip); io.of('/newworld').emit('gear', { id: q.id, gear: q.gear }); } });   // 在線上的話，別人馬上看到換裝
     return { text: id ? `穿上${GEAR.GEAR[id].name}` : `脫下${GEAR.SLOTS[slot]}` };
   },
 });
-// 寵物：摸和餵，感情值和每天的上限跟總部共用（存在帳號的寵物上）
+// 寵物：摸和餵，感情值和每天的上限照總部的規則，存在 3D 自己的寵物上
 const nwToday = () => new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
 const nwPetLog = (pet) => { if (!pet.bd || pet.bd.d !== nwToday()) pet.bd = { d: nwToday(), pat: 0, feed: 0, walk: 0, fight: 0 }; return pet.bd; };
 function nwBond(p, kind, amt) {
@@ -552,7 +558,6 @@ function nwBond(p, kind, amt) {
   const before = PETS.bondLevel(pet.bond);
   pet.bond = Math.min(PETS.BOND_MAX, (pet.bond || 0) + amt);
   const level = PETS.bondLevel(pet.bond);
-  if (p.id) io.to(p.id).emit('petBond', { bond: pet.bond, gain: amt, level, up: level > before });
   return amt;
 }
 nwRoute('pet', { READ: ['state'],
@@ -565,12 +570,12 @@ nwRoute('pet', { READ: ['state'],
   },
   state: () => ({}),
   pat: ({ p }) => {
-    if (!p.pet) return { error: '還沒有寵物，先到總部的可愛生物休息區領養' };
+    if (!p.pet) return { error: '新世界的寵物領養還沒開放' };
     const g = nwBond(p, 'pat', 1);
     return { happy: true, text: g ? `摸了摸${p.pet.name}，感情 +${g}` : `摸了摸${p.pet.name}（今天摸夠了，感情明天再加）` };
   },
   feed: ({ p }, b) => {
-    if (!p.pet) return { error: '還沒有寵物，先到總部的可愛生物休息區領養' };
+    if (!p.pet) return { error: '新世界的寵物領養還沒開放' };
     const item = String(b.item), gain = PETS.FEED[item];
     if (!gain) return { error: '牠不吃這個' };
     if (!(p.inv[item] >= 1)) return { error: '背包裡沒有這個了' };
@@ -626,13 +631,8 @@ app.post('/api/newworld/music', async (req, res) => {
     out({ error: '沒有這個動作' });
   } catch (e) { console.error('新世界點歌失敗', e.message); res.json({ ok: false, error: '出了點問題，等等再試' }); }
 });
-// 新世界名字旁的職業徽章外圈：這個帳號在那個職業的熟練度階級（機器人騎士還沒有熟練度，算 0）
-function nwTier(u, cls) {
-  let live = null;
-  players.forEach(q => { if (q.account && q.account.username === u.username) live = q; });
-  const m = live ? live.mastery : cleanMastery(u.save.mastery);
-  return STATS.CLASSES[cls] ? STATS.MASTERY.tierOf(m && m[cls]) : 0;
-}
+// 新世界名字旁的職業徽章外圈：熟練度階級。3D 的熟練度從 0 開始、還沒接上，先一律 0 階（之後由 3D 的職業系統提供）
+function nwTier(u, cls) { return 0; }
 // 新世界的多人連線：自己一個頻道（/newworld），跟總部的連線、玩家資料完全分開；只有管理員連得上
 // 只同步標準人物的位置、造型、名字和聊天，聊天不跟總部互通
 const nwPlayers = new Map(), nwBots = [];
@@ -647,9 +647,9 @@ function startNewworldNet() {
   });
   nw.on('connection', (socket) => {
     const u = socket.data.user, a = sanitizeSave(u.save);
-    const p = { id: socket.id, name: a.name || u.username, x: 2.5, z: 14, f: 0, mv: 0, fm: 0, g: 0, p: 0, look: sanitizeLook3d(u.save.look3d), said: 0, tier: 0 };
+    const p = { id: socket.id, name: a.name || u.username, x: 2.5, z: 14, f: 0, mv: 0, fm: 0, g: 0, p: 0, look: sanitizeLook3d(u.save.look3d), said: 0, tier: 0, user: u.username, gear: nwGearOf(u) };
     p.tier = nwTier(u, p.look && p.look.cls);
-    const pub = (q) => ({ id: q.id, name: q.name, x: q.x, z: q.z, f: q.f, fm: q.fm, g: q.g, look: q.look, tier: q.tier || 0 });
+    const pub = (q) => ({ id: q.id, name: q.name, x: q.x, z: q.z, f: q.f, fm: q.fm, g: q.g, look: q.look, tier: q.tier || 0, gear: q.gear || null });
     socket.emit('init', { id: p.id, name: p.name, tier: p.tier, admin: !!u.admin, players: [...nwPlayers.values()].map(pub) });
     nwPlayers.set(p.id, p);
     socket.broadcast.emit('join', pub(p));
@@ -880,6 +880,18 @@ app.post('/api/admin/newworld', (req, res) => {
   const b = req.body || {}, r = accounts.setNewworld(b.username, !!b.on);
   if (r.error) return res.status(400).json({ ok: false, error: r.error });
   res.json(r);
+});
+// 發東西到某個帳號的 3D 存檔（封測時補發、測試用）：inv / furn / gear 都是 { id: 數量 }，pet 是寵物資料
+app.post('/api/admin/newworld-give', (req, res) => {
+  if (!isAdmin(req)) return res.status(401).json({ ok: false });
+  const b = req.body || {}, u = accounts.get(b.username);
+  if (!u) return res.status(400).json({ ok: false, error: '找不到這個帳號' });
+  const p = nwSave(u), add = (to, from, ok, max) => { if (from && typeof from === 'object') Object.keys(from).forEach(k => { const n = Math.floor(Number(from[k])) || 0; if (ok(k) && n > 0) to[k] = Math.min(max, (to[k] || 0) + n); }); };
+  add(p.inv, b.inv, k => !!MAP.ITEMS[k], INV_MAX); add(p.furn, b.furn, k => !!DECOR.DECOR[k], 50); add(p.gear, b.gear, k => !!GEAR.GEAR[k], 99);
+  Object.keys(p.gear).forEach(id => { if (!p.seen.includes(id)) p.seen.push(id); });
+  if (b.pet) p.pet = PETS.withTemper(PETS.sanitize(b.pet));
+  nwWrite(u, p);
+  res.json({ ok: true });
 });
 // 改帳號名稱（登入用的那個）：許願池、花園跟著換；在總部裡的人可以繼續玩，下次要用新名稱登入
 app.post('/api/admin/rename', (req, res) => {

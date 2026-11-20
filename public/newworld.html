@@ -225,7 +225,7 @@
       function saveLook() { if (sock) sock.emit('look', NW.look()); clearTimeout(saveT); saveT = setTimeout(function () { api({ look: NW.look() }); }, 600); }
       if (NW.hasStd) api().then(function (r) { if (!r) return; base = r.base; var O = NW.options(), L = r.look3d;
         if (L && (O.parts.hair.indexOf(L.hair) < 0 || O.parts.top.indexOf(L.top) < 0 || O.parts.face.indexOf(L.face) < 0)) L = null;
-        NW.dress(L || NW.fromAccount(base)); showClass(NW.setClass(L && L.cls)); NW.setPet(r.pet); $('b-pet').hidden = !r.pet; if (r.pet) $('s-pet').textContent = r.pet.name; if (!$('dress').hidden) drawDress(); document.body.dataset.look = '1'; }).then(online);
+        NW.dress(L || NW.fromAccount(base)); showClass(NW.setClass(L && L.cls)); NW.setPet(r.pet); NW.gear(r.equip); $('b-pet').hidden = !r.pet; if (r.pet) $('s-pet').textContent = r.pet.name; if (!$('dress').hidden) drawDress(); document.body.dataset.look = '1'; }).then(online);
       // 點唱機：播的是總部正在播的那一首，跟著總部的進度；點歌在面板裡（newworld-panels.js）
       var music = (function () {
         var now = null, got = 0, on = false, player = null, loading = false, cur = '';
@@ -259,6 +259,7 @@
         sock.on('leave', function (id) { NW.net.drop(id); });
         sock.on('look', function (d) { NW.net.put(d.id, { look: d.look, tier: d.tier }); });
         sock.on('tier', function (n) { NW.tier(n); });
+        sock.on('gear', function (d) { if (d.id !== sock.id) NW.net.put(d.id, { gear: d.gear }); });
         sock.on('state', function (list) { list.forEach(function (a) { if (a[0] !== sock.id) NW.net.move(a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7]); }); });
         sock.on('music', function (st) { music.set(st); if (panels) panels.music(); });
         sock.on('garden', function (st) { NW.garden(st); if (panels) panels.garden(); });

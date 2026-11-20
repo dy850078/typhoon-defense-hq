@@ -148,6 +148,9 @@
   <script src="mastery-art.js"></script>
   <script src="newworld-hint.js"></script>
   <script src="newworld-panels.js"></script>
+  <script src="/shared/classes3d.js"></script>
+  <script src="icons-nw.js"></script>
+  <script src="newworld-skills.js"></script>
   <!-- 3D 元件：three.js 和讀模型檔的 GLTFLoader（模組版），載好之後掛到 window.THREE -->
   <script type="importmap">{ "imports": { "three": "/vendor3/three.module.js" } }</script>
   <script type="module">
@@ -242,13 +245,14 @@
       var panels = window.NW_PANELS ? NW_PANELS(NW, token, { music: music, curClass: function () { return (NW.look() || {}).cls || ''; }, setClass: function (c) { var n = NW.setClass(c); showClass(n); saveLook(); return n; } }) : null;
       window.NW_UI = panels;
       var GREEK = ['噓…願望說出來就不靈了，寫下來吧', '把硬幣丟進池子裡，再把願望寫清楚一點', '遇到 Bug 也可以來這裡說，我會偷偷轉告管理員', '先看看有沒有人許過一樣的願，幫他按個讚吧'];
-      NW.onInteract(function (kind, it) { if (kind === 'greek' && panels) { panels.toast('希臘少女：「' + GREEK[Math.floor(Math.random() * GREEK.length)] + '」'); kind = 'well'; } if (panels) { $('dress').hidden = true; panels.open(kind, it); } });
+      NW.onInteract(function (kind, it) { if (kind === 'greek' && panels) { panels.toast('希臘少女：「' + GREEK[Math.floor(Math.random() * GREEK.length)] + '」'); kind = 'well'; } if (window.NW_SK) NW_SK.close(); if (panels) { $('dress').hidden = true; panels.open(kind, it); } });
       if (panels) { $('b-bag').hidden = false; $('b-bag').onclick = function () { $('dress').hidden = true; panels.open('bag'); }; $('b-pet').onclick = function () { $('dress').hidden = true; panels.open('pet'); }; }
       // 多人：看得到其他在線的人，聊天只在新世界裡，不會傳到總部
       var sock = null;
       function online() {
         if (!window.io || sock) return;
         sock = io('/newworld', { auth: { token: token } });
+        window.NW_SK = window.NW_SKILLS ? NW_SKILLS.start(NW, sock, panels) : null;   // 戰鬥介面：技能鈕、技能書、轉職
         var last = '';
         sock.on('init', function (d) { NW.net.clear(); NW.net.name(d.name); NW.tier(d.tier); $('b-bots').hidden = !d.admin; d.players.forEach(function (p) { NW.net.put(p.id, p); }); sock.emit('look', NW.look()); last = ''; $('chat').hidden = false; });
         sock.on('join', function (p) { NW.net.put(p.id, p); });

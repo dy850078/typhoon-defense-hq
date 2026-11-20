@@ -10,6 +10,7 @@
 //   node scripts/nw-test.js lobby      只跑總部大廳（進門、出門、坐沙發、作戰角的高度、點唱機）
 //   node scripts/nw-test.js stay       階段一第一批：封測名單、背包、裝備、熟練度徽章、寵物摸和餵、點歌
 //   node scripts/nw-test.js home       只跑大廳的功能（導師轉職、扭蛋機、公共花園、種子箱、許願池、寵物）；加 GARDEN_SPEED=600 會連收成一起測
+//   node scripts/nw-test.js combat     戰鬥和新職業（芽、學門、專精、每一招、技能書、選修欄）；combat-phone 是手機版面
 //   OUT=some/dir 可以指定截圖要放哪裡（預設是系統暫存資料夾）
 //
 // 需要 playwright（沒有列在 package.json，本機要跑的話先 npm i -D playwright && npx playwright install chromium）
@@ -350,11 +351,9 @@ async function main() {
     // 職業導師
     await place(S.mentor.x, S.mentor.z + 0.4); await pa.waitForFunction(() => HQ_NEWWORLD.zone() === 'lobby', null, { timeout: 30000 }).catch(() => {}); await near('mentor');
     ok((await pa.textContent('.nw-hint')) === '轉職' && (await pa.isHidden('#panel')), '進大廳，走遠了許願池面板自己收起來；導師桌前冒出「轉職」');
-    await pa.click('.nw-hint'); await panel('mentor'); await pa.waitForTimeout(600); await shot(pa, 'home-4-mentor');
-    await pa.click('#panel [data-cls="summoner"]'); await pa.waitForTimeout(600);
-    ok((await NW(pa, () => HQ_NEWWORLD.look().cls)) === 'summoner' && (await pa.textContent('#s-ctrl')) === '召喚師' && /轉職成召喚師/.test(await toast()), '跟導師轉職成召喚師');
-    await pa.waitForTimeout(900); const lk = await (await fetch(B + '/api/newworld/look', { headers: { Authorization: 'Bearer ' + a.token } })).json();
-    ok(lk.look3d && lk.look3d.cls === 'summoner', '轉職有存進帳號');
+    await pa.click('.nw-hint'); await pa.waitForSelector('#cb-book:not([hidden])', { timeout: 30000 }).catch(() => {}); await pa.waitForTimeout(600); await shot(pa, 'home-4-mentor');
+    ok((await pa.locator('#cb-book .card').count()) === 3 && (await pa.locator('#cb-book .card:disabled').count()) === 3, '導師開的是新的職業面板：三個學門，1 等還不能選（細節在 combat 那一輪測）');
+    await pa.evaluate(() => window.NW_SK.close());
     // 扭蛋機
     await place(S.gacha.x, S.gacha.z + 0.9); await near('gacha');
     ok((await pa.textContent('.nw-hint')) === '扭蛋', '扭蛋機前冒出「扭蛋」');
@@ -481,6 +480,74 @@ async function main() {
     ok(pp.errors.length === 0 && (await pp.locator('#panel .grid [data-gear]').count()) === 3, '手機也開得了背包和裝備'); await pp.context().close();
   };
 
+  // 戰鬥和新職業：等級血條、四顆技能鈕、技能書、選修欄、導師轉職、每個職業的招式都放一遍並截圖
+  const combat = async (phone) => {
+    console.log('combat' + (phone ? '（手機）' : ''));
+    const C3 = require('../shared/classes3d.js');
+    const pg = await open(await account({ name: '小芽' }), phone), tag = phone ? 'combat-phone-' : 'combat-';
+    const shot = (n) => pg.screenshot({ path: path.join(OUT, tag + n + '.png') });
+    const ask = (ev, arg) => pg.evaluate(([e, a]) => window.NW_SK.ask(e, a), [ev, arg]);
+    const view = () => pg.evaluate(() => window.HQ_NEWWORLD.combat.view());
+    const dbg = () => pg.evaluate(() => window.HQ_NEWWORLD.combat.debug());
+    const hud = () => pg.evaluate(() => ({ name: document.querySelector('#cb-me b').textContent, sk: [...document.querySelectorAll('.cb-sk')].map(b => b.getAttribute('aria-label')), nums: document.querySelectorAll('.cb-num').length }));
+    const rest = async () => { await pg.evaluate(() => window.HQ_NEWWORLD.debugPlace(8, 14)); await pg.waitForTimeout(400); await ask('cb:dbg', { lv: 60 }); };
+    // 找一隻還活著、血最多的怪，站到牠旁邊並選牠
+    let reach = 3.2;
+    const aim = async (kind) => pg.evaluate(([k, reach]) => { const NW = window.HQ_NEWWORLD, m = NW.combat.debug().mobs.filter(x => (k ? x.kind === k : x.kind !== 'boss') && !(x.fl & 256)).sort((a, b) => b.hp - a.hp)[0]; NW.debugPlace(m.x - reach, m.z + 1.5); NW.combat.setTarget(m.id); return m; }, [kind, reach]);
+    await pg.waitForFunction(() => window.HQ_NEWWORLD.combat && window.HQ_NEWWORLD.combat.view(), null, { timeout: 20000 });
+    let h = await hud();
+    ok(h.name === 'Lv.1 芽' && h.sk.join() === '小火花,歪歪瞬移,空的,空的', '一進來是 1 等的芽，帶著兩招：' + h.name + ' / ' + h.sk);
+    ok((await dbg()).mobs.length > 30, '練習場有怪');
+    await zoomIn(pg);
+    const m0 = await aim('slime'); await pg.waitForTimeout(2500); await shot('1-sprout');
+    h = await hud(); ok(h.nums > 0, '選了怪會自動普攻，看得到傷害數字');
+    await pg.locator('.cb-sk').nth(0).dispatchEvent('pointerdown'); await pg.waitForTimeout(450); await shot('2-spark');
+    ok((await view()).cd.spark, '按技能鈕放得出小火花，進入冷卻');
+    // 技能書、導師
+    await pg.evaluate(() => window.NW_SK.openBook()); await pg.waitForTimeout(200); await shot('3-book-sprout');
+    ok(await pg.locator('#cb-book .grid .cell').count() === 2, '技能書裡有芽的兩招');
+    await pg.evaluate(() => window.NW_SK.openClass()); await pg.waitForTimeout(200); await shot('4-mentor-lv1');
+    ok(await pg.locator('#cb-book .card:disabled').count() === 3, '10 等以前三個學門都還不能選');
+    await rest();
+    for (const sk of Object.keys(C3.SCHOOLS).filter(k => !process.env.ONLY || process.env.ONLY === k)) {
+      await pg.evaluate(() => window.NW_SK.openClass()); await pg.waitForTimeout(150);
+      await pg.locator('#cb-book .card[data-k="' + sk + '"]').click(); await pg.waitForTimeout(400);
+      let v = await view(); ok(v.school === sk && !v.spec, '在導師那邊進學門：' + C3.SCHOOLS[sk].name);
+      if (sk === 'pm') await shot('5-mentor-school');
+      await pg.evaluate(() => window.NW_SK.close());
+      for (const b of C3.SCHOOLS[sk].basics) { await aim(); await pg.waitForTimeout(500); const i = (await view()).slots.indexOf(b); await pg.locator('.cb-sk').nth(i).dispatchEvent('pointerdown'); await pg.waitForTimeout(550); await shot('6-' + sk + '-' + b); ok((await view()).cd[b], '見習生 ' + C3.SK[b].name); }
+      await rest();
+      for (const sp of C3.SCHOOLS[sk].specs) {
+        await ask('cb:dbg', { m: C3.GATE.mastery }); await pg.evaluate(() => window.NW_SK.openClass()); await pg.waitForTimeout(150);
+        await pg.locator('#cb-book .card[data-k="' + sp + '"]').click(); await pg.waitForTimeout(400);
+        ok((await view()).quest, C3.SPECS[sp].name + '：接下三轉任務'); if (sp === 'skater') await shot('7-mentor-quest');
+        await ask('cb:dbg', { quest: 1 }); await pg.waitForTimeout(300); await pg.locator('#cb-book .card[data-k="' + sp + '"]').click(); await pg.waitForTimeout(500);
+        reach = sp === 'puppeteer' ? 6 : 3.2;
+        v = await view(); ok(v.spec === sp, C3.SPECS[sp].name + '：信物收齊，轉職成功'); await pg.evaluate(() => window.NW_SK.close());
+        const all = C3.learned(v).filter(k => k !== 'spark' && k !== 'blink');
+        for (let i = 0; i < all.length; i += 4) { await rest(); const set = all.slice(i, i + 4); await ask('cb:slots', set); await pg.waitForTimeout(200);
+          for (const k of set) { await aim(); await pg.waitForTimeout(700); const j = (await view()).slots.indexOf(k); await pg.locator('.cb-sk').nth(j).dispatchEvent('pointerdown');
+            if (C3.SK[k].next) { await pg.waitForTimeout(350); ok((await hud()).sk[j] === C3.SK[k].next, '按鈕變成「' + C3.SK[k].next + '」'); }   // 截圖很慢，先看按鈕再截
+            if (k === 'curtain') { await pg.waitForTimeout(500); const d = await dbg(); ok(d.mobs.some(m => m.fl & 512) && d.threads >= 3, '謝幕：怪被線吊起來：' + d.threads); }
+            await pg.waitForTimeout(C3.SK[k].ult ? 900 : 550); await shot('8-' + sp + '-' + k);
+            ok((await view()).cd[k], C3.SPECS[sp].name + ' ' + C3.SK[k].name);
+            if (C3.SK[k].next) { if (k === 'string') { await pg.waitForTimeout(400); const d = await dbg(); ok(d.mobs.some(m => m.fl & 32) && d.threads >= 3, '被提線的怪身上有三條線：' + d.threads); } await shot('8-' + sp + '-' + k + '-hold'); await pg.locator('.cb-sk').nth(j).dispatchEvent('pointerdown'); await pg.waitForTimeout(300); await shot('8-' + sp + '-' + k + '2'); }
+            if (C3.SK[k].ult) { await pg.waitForTimeout(1500); await shot('8-' + sp + '-' + k + '-b'); } } }
+        await rest();
+      }
+    }
+    if (process.env.ONLY) { await pg.context().close(); return; }
+    // 選修欄
+    await pg.evaluate(() => window.NW_SK.openBook()); await pg.waitForTimeout(200);
+    await pg.locator('#cb-book .slots .cell').nth(3).click(); await pg.waitForTimeout(150); await pg.locator('#cb-book .cell.el[data-sk="potion"]').click(); await pg.waitForTimeout(500); await shot('9-book-elective');
+    ok((await view()).slots[3] === 'potion', '第四格可以放別的學門的基礎招（選修）');
+    await pg.locator('#cb-book .cell[data-sk="bubble"]').click(); await pg.waitForTimeout(150); await pg.locator('#cb-book .slots .cell').nth(0).click(); await pg.waitForTimeout(400);
+    ok((await view()).slots[0] !== 'bubble', '選修的招不能放前三格');
+    ok(!pg.errors.length, '沒有頁面錯誤' + (pg.errors.length ? '：' + pg.errors.join(' / ') : ''));
+    await pg.context().close();
+  };
+  if (want === 'combat') await combat(false);
+  if (want === 'combat-phone') await combat(true);
   if (want === 'all' || want === 'stay') await stay();
   if (want === 'all' || want === 'solo') await solo(false);
   if (want === 'all' || want === 'phone') await solo(true);

@@ -26,6 +26,7 @@ window.NW_PANELS = function (NW, token, opt) {
   // ---------- 職業導師：轉職 ----------
   var CLS_NOTE = { '': '什麼都不帶，輕鬆走走', rider: '坐在大機器人上，用念力指揮它', summoner: '身邊跟著一隻召喚出來的小外星人', skater: '梳著大拉翅，跟陵寢裡的靈打交道' };
   function mentor() {
+    if (window.NW_SK) { close(); return window.NW_SK.openClass(); }   // 新的職業（芽、學門、專精）在 newworld-skills.js
     var body = frame('mentor', '職業導師', '想換什麼職業？選了馬上換，之後隨時可以再來改。');
     var now = opt.curClass();
     NW.CLS.forEach(function (c) {

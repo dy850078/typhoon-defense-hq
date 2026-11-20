@@ -1266,3 +1266,16 @@ button.inv-item:hover { border-color: var(--accent); }
   color: #fff; font-size: 11px; font-style: normal; font-weight: 700; line-height: 17px; text-align: center; border: 1.5px solid var(--paper, #fbf6e9); }
 .modal-icon.up .hq-icon { border-radius: 50%; background: radial-gradient(circle, #fff3c4 40%, rgba(255,210,63,.3) 72%, transparent 74%);
   box-shadow: 0 0 0 2.5px #e0a92a, 0 0 12px rgba(255,201,60,.7); }
+
+/* 加到主畫面的提示紙條（install.js），放在報到卡片最下面 */
+.a2hs { display: flex; gap: 12px; align-items: flex-start; margin: 18px auto 0; max-width: 460px; position: relative;
+  background: var(--note); color: var(--note-ink); border: 2.5px solid var(--note-ink); border-radius: var(--note-radius);
+  box-shadow: var(--note-shadow); padding: 12px 14px; text-align: left; font-size: 14px; line-height: 1.6; }
+.a2hs-logo { width: 44px; height: 44px; border-radius: 10px; flex-shrink: 0; }
+.a2hs-body { flex: 1; min-width: 0; }
+.a2hs-body b { display: block; font-size: 15px; padding-right: 52px; }
+.a2hs-body p { margin: 2px 0 0; }
+.a2hs-body small { display: block; margin-top: 4px; color: var(--muted); font-size: 12px; }
+.a2hs-ic { width: 20px; height: 20px; vertical-align: -4px; margin: 0 2px; }
+.a2hs-go { margin-top: 8px; }
+.a2hs-x { position: absolute; top: 12px; right: 14px; font-size: 12px; white-space: nowrap; }

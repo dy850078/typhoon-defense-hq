@@ -12,6 +12,7 @@
 //   node scripts/nw-test.js home       只跑大廳的功能（導師轉職、扭蛋機、公共花園、種子箱、許願池、寵物）；加 GARDEN_SPEED=600 會連收成一起測
 //   node scripts/nw-test.js combat     戰鬥和新職業（芽、學門、專精、每一招、技能書、選修欄）；combat-phone 是手機版面
 //   node scripts/nw-test.js hotbar     快捷列和技能書（拖移換招、點選換招、按鍵提示、自訂按鍵）；hotbar-phone 是手機版面
+//   node scripts/nw-test.js loot       掉落物（一份、點一下撿、進背包、會消失）、名字前的職業徽章、點人看等級
 //   node scripts/nw-test.js puppet     操偶師的手、提線、謝幕（主要是拍圖）；fam 是三隻使魔排在一起拍一張
 //   OUT=some/dir 可以指定截圖要放哪裡（預設是系統暫存資料夾）
 //
@@ -359,7 +360,7 @@ async function main() {
     await place(S.mentor.x, S.mentor.z + 0.4); await pa.waitForFunction(() => HQ_NEWWORLD.zone() === 'lobby', null, { timeout: 30000 }).catch(() => {}); await near('mentor');
     ok((await pa.textContent('.nw-hint')) === '轉職' && (await pa.isHidden('#panel')), '進大廳，走遠了許願池面板自己收起來；導師桌前冒出「轉職」');
     await pa.click('.nw-hint'); await pa.waitForSelector('#cb-book:not([hidden])', { timeout: 30000 }).catch(() => {}); await pa.waitForTimeout(600); await shot(pa, 'home-4-mentor');
-    ok((await pa.locator('#cb-book .card').count()) === 3 && (await pa.locator('#cb-book .card:disabled').count()) === 3, '導師開的是新的職業面板：三個學門，1 等還不能選（細節在 combat 那一輪測）');
+    ok((await pa.locator('#cb-book .nd').count()) === 10 && (await pa.locator('#cb-book .nd.lock').count()) === 9, '導師開的是職業樹：芽、三個學門、六個專精，1 等只有芽是亮的（細節在 combat 那一輪測）');
     await pa.evaluate(() => window.NW_SK.close());
     // 扭蛋機
     await place(S.gacha.x, S.gacha.z + 0.9); await near('gacha');
@@ -514,11 +515,12 @@ async function main() {
     await pg.evaluate(() => window.NW_SK.openBook()); await pg.waitForTimeout(200); await shot('3-book-sprout');
     ok(await pg.locator('#cb-book .card.sk').count() === 2, '技能書裡有芽的兩招');
     await pg.evaluate(() => window.NW_SK.openClass()); await pg.waitForTimeout(200); await shot('4-mentor-lv1');
-    ok(await pg.locator('#cb-book .card:disabled').count() === 3, '10 等以前三個學門都還不能選');
+    ok(await pg.locator('#cb-book .nd.lock').count() === 9 && await pg.locator('#cb-book .det .go').count() === 0, '10 等以前三個學門都還不能選');
+    const press = async (k) => { await pg.locator('#cb-book .nd[data-k="' + k + '"]').click(); await pg.waitForTimeout(150); await pg.locator('#cb-book .det .go').first().click(); await pg.waitForTimeout(150); await pg.locator('#cb-book .det .go.sure').click(); await pg.waitForTimeout(450); };
     await rest();
     for (const sk of Object.keys(C3.SCHOOLS).filter(k => !process.env.ONLY || process.env.ONLY === k)) {
       await pg.evaluate(() => window.NW_SK.openClass()); await pg.waitForTimeout(150);
-      await pg.locator('#cb-book .card[data-k="' + sk + '"]').click(); await pg.waitForTimeout(400);
+      await press(sk);
       let v = await view(); ok(v.school === sk && !v.spec, '在導師那邊進學門：' + C3.SCHOOLS[sk].name);
       if (sk === 'pm') await shot('5-mentor-school');
       await pg.evaluate(() => window.NW_SK.close());
@@ -526,9 +528,9 @@ async function main() {
       await rest();
       for (const sp of C3.SCHOOLS[sk].specs.filter(x => !process.env.SPEC || process.env.SPEC === x)) {
         await ask('cb:dbg', { m: C3.GATE.mastery }); await pg.evaluate(() => window.NW_SK.openClass()); await pg.waitForTimeout(150);
-        await pg.locator('#cb-book .card[data-k="' + sp + '"]').click(); await pg.waitForTimeout(400);
+        await press(sp);
         ok((await view()).quest, C3.SPECS[sp].name + '：接下三轉任務'); if (sp === 'skater') await shot('7-mentor-quest');
-        await ask('cb:dbg', { quest: 1 }); await pg.waitForTimeout(300); await pg.locator('#cb-book .card[data-k="' + sp + '"]').click(); await pg.waitForTimeout(500);
+        ok(await pg.locator('#cb-quest:not([hidden]) .qi').count() === 5, '任務紙條列出五樣信物'); await ask('cb:dbg', { quest: 1 }); await pg.waitForTimeout(400); if (sp === 'skater') await shot('7-mentor-ready'); await press(sp);
         reach = sp === 'puppeteer' ? 6 : 3.2;
         v = await view(); ok(v.spec === sp, C3.SPECS[sp].name + '：信物收齊，轉職成功'); await pg.evaluate(() => window.NW_SK.close());
         const all = C3.learned(v).filter(k => k !== 'spark' && k !== 'blink');
@@ -633,6 +635,34 @@ async function main() {
     await pg.context().close();
   };
   if (want === 'fam') await fam();
+  // 掉落物、名字前的職業徽章、點人看等級
+  const loot = async () => {
+    console.log('loot');
+    const accA = await account({ name: '小撿' }), pa = await open(accA, false), pb = await open(await account({ name: '小看' }), false);
+    const ask = (pg, ev, arg) => pg.evaluate(([e, a]) => window.NW_SK.ask(e, a), [ev, arg]);
+    const dbg = (pg) => pg.evaluate(() => window.HQ_NEWWORLD.combat.debug());
+    for (const pg of [pa, pb]) await pg.waitForFunction(() => window.HQ_NEWWORLD.combat && window.HQ_NEWWORLD.combat.view(), null, { timeout: 30000 });
+    await ask(pa, 'cb:dbg', { lv: 60 }); await ask(pa, 'cb:school', 'pm'); await pa.waitForTimeout(1800);
+    const badge = (pg) => pg.evaluate(() => [...document.querySelectorAll('.nw-name img')].filter(i => !i.hidden).map(i => i.src === window.HQ_ICONS.url('nwc-pm') ? 'pm' : i.src === window.HQ_ICONS.url('nwc-sprout') ? 'sprout' : '?').sort().join());
+    ok(await badge(pa) === 'pm,sprout' && await badge(pb) === 'pm,sprout', '名字前面有職業徽章，自己和別人都看得到：' + await badge(pb));
+    await pa.evaluate(() => window.HQ_NEWWORLD.debugPlace(22, 14)); await pb.evaluate(() => window.HQ_NEWWORLD.debugPlace(23.5, 15.5)); await pa.waitForTimeout(900);
+    const at = (pg, x, z, y) => pg.evaluate(([x, z, y]) => { const NW = window.HQ_NEWWORLD; return NW.debugScreen ? NW.debugScreen(x, y, z) : null; }, [x, z, y == null ? 1.4 : y]);
+    const sp = await at(pb, 22, 14);
+    if (sp) { await pb.mouse.click(sp.x, sp.y); await pb.waitForTimeout(300); ok(await pb.evaluate(() => { const c = document.querySelector('.cb-who'); return c && !c.hidden ? c.textContent : ''; }) === 'Lv.60 見習生', '點別人，頭上跳出等級和職業'); await pb.screenshot({ path: path.join(OUT, 'loot-1-card.png') }); }
+    else ok(false, '沒有 debugScreen，點不到人');
+    // 一份掉落物，兩個人都看得到，先撿先贏
+    await pa.evaluate(() => window.HQ_NEWWORLD.debugPlace(22, 14)); await pb.evaluate(() => window.HQ_NEWWORLD.debugPlace(26, 17)); await pa.waitForTimeout(800); await ask(pa, 'cb:dbg', { drop: 'noodle' }); await pa.waitForTimeout(900);
+    const da = (await dbg(pa)).drops, db = (await dbg(pb)).drops; ok(da.length === 1 && db.length === 1 && da[0].id === db[0].id, '怪掉的東西在地上，兩個人看到的是同一份'); await pa.screenshot({ path: path.join(OUT, 'loot-2-ground.png') });
+    const dp = await at(pa, da[0].x, da[0].z, 0.3); await pa.mouse.click(dp.x, dp.y); await pa.waitForTimeout(900);
+    ok((await dbg(pa)).drops.length === 0 && (await dbg(pb)).drops.length === 0, '點一下就撿起來，別人那邊也跟著消失');
+    const bag = await post('/api/newworld/bag', { act: 'state' }, { Authorization: 'Bearer ' + accA.token });
+    ok(JSON.stringify(bag).includes('noodle'), '撿到的泡麵進了 3D 的背包');
+    const r2 = await ask(pb, 'cb:pick', da[0].id); ok(r2 && r2.error, '被撿走的東西別人撿不到：' + (r2 && r2.error));
+    await ask(pa, 'cb:dbg', { drop: 'water', ms: 1500 }); await pa.waitForTimeout(5000); ok((await dbg(pa)).drops.length === 0, '沒人撿的東西過一陣子會消失');
+    ok(!pa.errors.length && !pb.errors.length, '沒有頁面錯誤' + [...pa.errors, ...pb.errors].slice(0, 3).join(' / '));
+    await pa.context().close(); await pb.context().close();
+  };
+  if (want === 'loot') await loot();
   if (want === 'puppet') await puppet();
   if (want === 'hotbar') await hotbar(false);
   if (want === 'hotbar-phone') await hotbar(true);

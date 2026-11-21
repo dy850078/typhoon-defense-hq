@@ -396,6 +396,11 @@ function nwActor(u) {
   // 經驗值：等級是職業那邊在管（nw-combat.js），花園收成、被感謝拿到的經驗交給它加
   return { p, key: 'u:' + u.username.toLowerCase(), exp: (n) => { if (NW_COMBAT) NW_COMBAT.gainExp(u, n); }, done: () => nwWrite(u, p) };
 }
+// 練習場撿到的東西放進新世界的背包（nw-combat.js 用）：放得下就回這樣東西的名字，放不下回 null
+function nwGive(u, k) {
+  const it = MAP.ITEMS[k]; if (!it) return null; const A = nwActor(u);
+  if (!BAG.canAdd(A.p, 'food', k)) return null; LOOT.give(A.p, 'food', k, true); A.done(); return it.name;
+}
 const nwLast = new Map();
 // 每個接口都是 POST { act, ... }，回 { ok, ... } 或 { ok: false, error }；同一個人 0.25 秒內只收一次
 function nwRoute(name, acts) {
@@ -639,7 +644,7 @@ const nwPlayers = new Map(), nwBots = [];
 let NW_COMBAT = null;   // 新世界的戰鬥（nw-combat.js），連線開起來才有
 function startNewworldNet() {
   const nw = io.of('/newworld');
-  const COMBAT = NW_COMBAT = require('./nw-combat.js')(nw, { accounts, players: nwPlayers });   // 練習場的怪、普攻、技能、等級和職業
+  const COMBAT = NW_COMBAT = require('./nw-combat.js')(nw, { accounts, players: nwPlayers, give: nwGive });   // 練習場的怪、普攻、技能、等級和職業
   const num = (v, lo, hi) => Math.max(lo, Math.min(hi, Number(v) || 0));
   nw.use((socket, next) => {
     const u = accounts.byToken(socket.handshake.auth && socket.handshake.auth.token);

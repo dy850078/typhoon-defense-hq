@@ -73,9 +73,31 @@ function makeCombat(ctx) {
   const setTarget = (id, quiet) => { TARGET = id && MOBS.get(id) && !(MOBS.get(id).fl & 256) ? id : null; if (!quiet) SEND('cb:target', TARGET); onChange(); };
   const RAY = new THREE.Raycaster(), NDC = new THREE.Vector2(), GP = new THREE.Plane(new V3(0, 1, 0), 0), HP3 = new V3();
   // 點到怪：選牠當目標（走過去自動打）；回傳有沒有點到
-  function tap(cx, cy) { if (S.lob || !MEV) return false; NDC.set(cx / W * 2 - 1, -(cy / H) * 2 + 1); RAY.setFromCamera(NDC, camera); let best = null, bd = 1e9;
-    MOBS.forEach(m => { if (m.fl & 256 || !m.g.visible) return; PV.set(m.x, FY(m.x, m.z) + m.h * 0.5, m.z); const d = RAY.ray.distanceToPoint(PV); if (d < Math.max(0.9, m.h * 0.6) && d < bd) { bd = d; best = m; } });
-    if (!best) { if (TARGET && RAY.ray.intersectPlane(GP, HP3)) setTarget(null); return false; } HOLD = false; setTarget(best.id); S.goal = null; return true; }
+  // 點別人（或自己）：頭上跳一張小紙條寫等級和職業，幾秒後收起來
+  const CARD = { el: null, id: null, until: 0 };
+  const showCard = (id) => { const w = WHO.get(id); if (!w) return false; if (!CARD.el) { CARD.el = document.createElement('div'); CARD.el.className = 'cb-who note'; LAB.appendChild(CARD.el); }
+    CARD.el.textContent = 'Lv.' + w.lv + ' ' + C3.clsName(w); CARD.el.hidden = false; CARD.id = id; CARD.until = S.time + 3.5; return true; };
+  const tickCard = () => { if (!CARD.el || CARD.el.hidden) return; const p = CARD.id === MYID ? ME : OTH.get(CARD.id); if (!p || S.time > CARD.until) { CARD.el.hidden = true; return; } put2d(CARD.el, p.x, FY(p.x, p.z) + 4.5, p.z); };
+  // 點畫面：怪、地上的東西、人都可能被點到，挑離手指最近的那一個（地上的東西小，讓它優先一點）
+  function tap(cx, cy) { if (!MEV) return false; NDC.set(cx / W * 2 - 1, -(cy / H) * 2 + 1); RAY.setFromCamera(NDC, camera); let kind = '', hit = null, bs = 1;
+    const see = (k, o, x, y, z, r) => { PV.set(x, y, z); const sc = RAY.ray.distanceToPoint(PV) / r; if (sc < bs) { bs = sc; kind = k; hit = o; } };
+    const who = (id, p, c) => { if (c && c.H.visible !== false && WHO.has(id)) see('who', id, p.x, FY(p.x, p.z) + 1.4, p.z, 1.2); };
+    OTH.forEach((o, id) => who(id, o, o.c)); if (ME && MYID) who(MYID, ME, ME.c);
+    if (!S.lob) { MOBS.forEach(m => { if (!(m.fl & 256) && m.g.visible) see('mob', m, m.x, FY(m.x, m.z) + m.h * 0.5, m.z, Math.max(0.9, m.h * 0.6)); }); DROPS.forEach(o => see('drop', o, o.x, FY(o.x, o.z) + 0.3, o.z, 1.1)); }
+    if (kind === 'who') return showCard(hit);
+    if (kind === 'drop') { WANT = hit.id; if (Math.hypot(hit.x - ME.x, hit.z - ME.z) <= C3.PICK_R) { pick(hit); return true; } return false; }   // 遠的話先讓人走過去，走到旁邊就撿
+    WANT = null; if (S.lob) return false;
+    if (kind !== 'mob') { if (TARGET && RAY.ray.intersectPlane(GP, HP3)) setTarget(null); return false; } HOLD = false; setTarget(hit.id); S.goal = null; return true; }
+  // ---------- 地上的掉落物：一個小束口袋（補品粉紅、雜物牛皮色），快消失的時候會閃 ----------
+  const DROPS = new Map(); let WANT = null;
+  const addDrop = (d) => { if (DROPS.has(d.id)) return; const g = new THREE.Group(), misc = /^(seed|twig)/.test(d.k), c1 = misc ? '#c9a06a' : '#f6a9c0', c2 = misc ? '#8a5a3c' : '#d2364a'; G.add(g);
+    part(g, sph(0.26, 10, 8), c1, { pos: [0, 0.24, 0], scale: [1, 0.86, 1] }); part(g, GEO.cyl, c1, { pos: [0, 0.5, 0], scale: [0.1, 0.12, 0.1], noLine: true }); part(g, GEO.cyl, c2, { pos: [0, 0.44, 0], scale: [0.115, 0.04, 0.115], noLine: true });
+    const glow = flat(mesh(GEO.ring, bm('#ffe9a8', 0.8).clone(), g)); glow.position.y = 0.05; DROPS.set(d.id, { id: d.id, k: d.k, x: d.x, z: d.z, g, glow, t: 0, left: (d.left || C3.DROP_MS) / 1000, asked: 0 }); };
+  const dropGone = (e) => { const o = DROPS.get(e.id); if (!o) return; if (e.by) burst(o.x, FY(o.x, o.z) + 0.4, o.z, '#ffe9a8', 6, 2, 0.08, 0.35, GEO.star); G.remove(o.g); o.glow.material.dispose(); DROPS.delete(e.id); if (WANT === e.id) WANT = null; };
+  const pick = (o) => { if (o.asked > S.time) return; o.asked = S.time + 1; WANT = null; SEND('cb:pick', o.id, (r) => { if (r && r.error) onToast(r.error); else if (r && r.name) onToast('撿到 ' + r.name); }); };
+  const tickDrops = (dt) => { DROPS.forEach(o => { o.t += dt; o.left -= dt; if (o.left < -3) return dropGone({ id: o.id }); const pop = Math.min(1, o.t * 4), y = FY(o.x, o.z) + Math.sin(Math.min(1, o.t * 2.5) * Math.PI) * 0.7 + Math.abs(Math.sin(o.t * 2.4)) * 0.08;
+      o.g.position.set(o.x, y, o.z); o.g.rotation.y = o.t * 1.2; o.g.scale.setScalar(pop * 1.5); o.g.visible = o.left > 10 || Math.floor(o.t * 6) % 2 === 0; const gs = 0.42 + Math.sin(o.t * 4) * 0.05; o.glow.scale.setScalar(gs); o.glow.position.y = 0.05 - (y - FY(o.x, o.z));
+      if (WANT === o.id && ME && Math.hypot(o.x - ME.x, o.z - ME.z) <= C3.PICK_R) pick(o); }); };
   const nearest = (r) => { let best = null, bd = r; MOBS.forEach(m => { if (m.fl & 256) return; const d = Math.hypot(m.x - ME.x, m.z - ME.z); if (d < bd) { bd = d; best = m; } }); return best; };
 
   // ---------- 使魔（繪師的聖誕外星人）和夢魘機甲 ----------
@@ -147,7 +169,10 @@ function makeCombat(ctx) {
     [-1, 1].forEach(k => part(g, GEO.box, c1, { pos: [0.42 * k, 0.55, 0], scale: [0.5, 1.1, 0.6] }));
     g.aura = flat(mesh(GEO.ring, bm('#e2506a', 0.8).clone(), g)); g.aura.position.y = 0.08; g.aura.scale.setScalar(1.6); g.aura.visible = false; return g; };
   const follow = (o, tx, tz, dt, sp) => { const dx = tx - o.x, dz = tz - o.z, d = Math.hypot(dx, dz); if (d > 20) { o.x = tx; o.z = tz; return 0; } const k = Math.min(1, dt * sp); o.x += dx * k; o.z += dz * k; if (d > 0.3) { let df = Math.atan2(dx, dz) - o.f; df = Math.atan2(Math.sin(df), Math.cos(df)); o.f += df * Math.min(1, dt * 8); } return d; };
-  function setWho(d) { let w = WHO.get(d.id); if (!w) { w = { id: d.id, fam: [], famG: [], mech: 0 }; WHO.set(d.id, w); } Object.assign(w, { lv: d.lv, school: d.school, spec: d.spec, hp: d.hp, hpMax: d.hpMax });
+  // 名字前面的職業徽章（芽、學門、專精各一個手繪圖示）；名牌是 60-play.js 的，這裡只把圖交過去
+  const badge = (w) => { const IC = window.HQ_ICONS, u = IC ? IC.url('nwc-' + (w.spec || w.school || 'sprout')) : null; if (u && ctx.badge) ctx.badge(w.id === MYID, w.id, u); };
+  let badgeT = 0;
+  function setWho(d) { let w = WHO.get(d.id); if (!w) { w = { id: d.id, fam: [], famG: [], mech: 0 }; WHO.set(d.id, w); } Object.assign(w, { lv: d.lv, school: d.school, spec: d.spec, hp: d.hp, hpMax: d.hpMax }); badge(w);
     const p = posOf(d.id) || { x: 0, z: 0 };
     if (d.fam.join() !== w.fam.join()) { w.famG.forEach(f => { burst(f.x, 1, f.z, '#ffe9a8', 6, 1.5, 0.1, 0.4); G.remove(f.g); }); w.fam = d.fam.slice();
       w.famG = d.fam.map((tier) => { const g = new THREE.Group(); FAM[tier](g); G.add(g); circle(p.x, p.z + 1, tier === 3 ? 2.6 : 1.3, '#9fdc9a', 0.9); return { g, tier, x: p.x + 1.6, z: p.z + 1, f: 0, ph: Math.random() * 6, hit: 0 }; }); }
@@ -277,6 +302,7 @@ function makeCombat(ctx) {
     const t = S.time, lob = !!S.lob; G.visible = !lob;
     for (let i = NUMS.length - 1; i >= 0; i--) { const n = NUMS[i]; n.t += dt; if (n.t > 0.9 || lob) { n.el.remove(); NUMS.splice(i, 1); continue; } if (put2d(n.el, n.x, n.y + n.t * 1.6, n.z)) n.el.style.opacity = String(Math.min(1, (0.9 - n.t) * 3)); }
     if (lob) { MOBS.forEach(m => { m.bar.b.hidden = true; }); return; }
+    tickDrops(dt); tickCard(); badgeT -= dt; if (badgeT < 0) { badgeT = 1.5; WHO.forEach(badge); }   // 別人的名牌可能比職業資料晚到，隔一下再補一次
     for (let i = FX.length - 1; i >= 0; i--) { const f = FX[i]; f.t += dt; const k = f.t / f.dur; if (k >= 1) { if (f.o.parent) f.o.parent.remove(f.o); if (f.done) f.done(f.o); FX.splice(i, 1); } else f.step(k, f.o); }
     thN = 0;
     // 怪
@@ -340,10 +366,10 @@ function makeCombat(ctx) {
   return {
     tick, tap, shake: () => (SHAKE > 0 ? SHAKE : 0),
     // 連線那邊接過來的事件
-    init: (d, id, send) => { MYID = id; SEND = send; MEV = d.me; MOBS.forEach(m => { G.remove(m.g); m.bar.b.remove(); }); MOBS.clear(); [...WHO.keys()].forEach(dropWho); d.mobs.forEach(addMob); d.who.forEach(setWho); HOLD = false; TARGET = null; onChange(); },
+    init: (d, id, send) => { MYID = id; SEND = send; MEV = d.me; MOBS.forEach(m => { G.remove(m.g); m.bar.b.remove(); }); MOBS.clear(); [...WHO.keys()].forEach(dropWho); d.mobs.forEach(addMob); d.who.forEach(setWho); [...DROPS.keys()].forEach(id => dropGone({ id })); (d.drops || []).forEach(addDrop); HOLD = false; TARGET = null; onChange(); },
     me: (d) => { const was = MEV; MEV = d; if (d.dead && TARGET) setTarget(null, true); onChange(was); },
     famPreview: (x, z) => [0, 1, 2].map(i => { const g = new THREE.Group(); FAM[i](g); G.add(g); g.position.set(x + (i - 1) * 1.9, FY(x, z), z); if (g.anim) g.anim(1); return g; }),   // 測試拍照用
-    late, mobs: (l) => l.forEach(setMob), who: setWho, drop: dropWho, fx: onFx, hits: onHits,
+    addDrop, dropGone, late, mobs: (l) => l.forEach(setMob), who: setWho, drop: dropWho, fx: onFx, hits: onHits,
     back: (p) => { ctx.moveMe(p.x, p.z, true); S.goal = null; },
     target: () => TARGET, setTarget, nearest, view: () => MEV, field: () => ctx.field,
     // 技能鈕：要選怪的招沒有目標就抓最近的一隻
@@ -351,6 +377,6 @@ function makeCombat(ctx) {
       if (s.aim && !m) { const n = nearest(s.range + 4); if (n) { m = n.id; setTarget(m); } else return 'far'; }
       SEND('cb:cast', { i, m }); return 'ok'; },
     onChange: (fn) => { onChange = fn; }, onToast: (fn) => { onToast = fn; },
-    debug: () => ({ mobs: [...MOBS.values()].map(m => ({ id: m.id, kind: m.kind, lv: m.lv, x: m.x, z: m.z, hp: m.hp, fl: m.fl, tied: m.tied })), who: [...WHO.values()].map(w => ({ id: w.id, fam: w.fam, mech: w.mech, spec: w.spec })), threads: thN, fx: FX.length, zones: [...ZONES.keys()] }),
+    debug: () => ({ mobs: [...MOBS.values()].map(m => ({ id: m.id, kind: m.kind, lv: m.lv, x: m.x, z: m.z, hp: m.hp, fl: m.fl, tied: m.tied })), who: [...WHO.values()].map(w => ({ id: w.id, fam: w.fam, mech: w.mech, spec: w.spec })), threads: thN, drops: [...DROPS.values()].map(o => ({ id: o.id, k: o.k, x: o.x, z: o.z })), fx: FX.length, zones: [...ZONES.keys()] }),
   };
 }

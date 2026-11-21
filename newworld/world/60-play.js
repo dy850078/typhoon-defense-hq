@@ -81,7 +81,8 @@ const NW = (() => {
     t.className = 'nw-tag'; b.className = 'nw-bubble'; n.className = 'nw-name'; b.hidden = n.hidden = i.hidden = true; i.alt = ''; n.append(i, s); t.append(b); LAB.append(t, n); return { t, b, n, i, s, until: 0 }; };
   // 名字紙條上的職業徽章：用總部同一套手繪圖示
   // 外圈是那個職業的熟練度階級（跟總部同一套：0 階沒有圈，越高越亮）
-  const setBadge = (tag, cls, tier) => { const A = window.HQ_MASTERY_ART, u = !cls || !window.HQ_ICONS ? null : A ? A.badgeUrl(cls, tier | 0) : window.HQ_ICONS.url('cls-' + cls);
+  const setBadge = (tag, cls, tier) => { tag.n.dataset.tier = cls ? (tier | 0) : ''; if (tag.cb) return;   // 練習場的新職業有自己的徽章（58-combat.js 交過來的），有的話用那個
+    const A = window.HQ_MASTERY_ART, u = !cls || !window.HQ_ICONS ? null : A ? A.badgeUrl(cls, tier | 0) : window.HQ_ICONS.url('cls-' + cls);
     tag.i.hidden = !u; tag.n.dataset.tier = cls ? (tier | 0) : ''; if (u && tag.i.src !== u) tag.i.src = u; };
   let MYTIER = 0;
   const HINT = document.createElement('button'); HINT.className = 'nw-hint'; HINT.type = 'button'; HINT.hidden = true; LAB.appendChild(HINT); HINT.addEventListener('click', (e) => { e.stopPropagation(); NW.use(); });
@@ -318,6 +319,7 @@ const NW = (() => {
   R.traverse(o => o.layers.enable(1)); scene.traverse(o => { if (o.isLight) o.layers.enable(1); });
   // 練習場的戰鬥（58-combat.js）：怪、招式特效、使魔；這裡把自己和別人的位置交給它
   const CB = ME && typeof makeCombat === 'function' ? makeCombat({ ME, S, OTH, FY, LAB,
+    badge: (mine, id, url) => { const tag = mine ? MYTAG : (OTH.get(id) || {}).tag; if (!tag || tag.cb === url) return; tag.cb = url; tag.i.hidden = false; tag.i.src = url; },
     moveMe: (x, z) => { const c = collide(LIMX(x, ME.z), LIMZ(z, ME.z), 0.4); ME.x = c.x; ME.z = c.z; }, faceMe: (f) => { ME.face = f; },
     moving: () => Math.hypot(S.jx, S.jy) > 0.15 || !!(S.keys.ArrowLeft || S.keys.ArrowRight || S.keys.ArrowUp || S.keys.ArrowDown || S.keys.a || S.keys.d || S.keys.w || S.keys.s) || !!(S.goal && !S.goal.auto) }) : null;
   function update(dt) {
@@ -465,6 +467,7 @@ const NW = (() => {
     debugMe: () => (ME ? ME.c.g : null), zone: () => (S.lob ? 'lobby' : 'yard'), height: () => (ME ? ME.y : 0), lobby: () => (LOBBY ? { tris: LOBBY.tris(), ms: LOBBY.ms, seats: LOBBY.seats.length, spawn: LOBBY.SPAWN, exit: LOBBY.EXIT, juke: LOBBY.JUKE } : null),
     gear: (equip) => { if (ME && GEAR3) GEAR3.apply(ME.c, equip); }, gearIds: () => (GEAR3 ? GEAR3.ids() : []), gearOn: () => (ME && ME.c.gearKey) || ',,,',
     debugCam: (o) => { S.dbgCam = o || null; }, debugFace: (f) => { if (ME) ME.face = f; },
+    debugScreen: (x, y, z) => { PV.set(x, FY(x, z) + y, z).project(camera); return { x: (PV.x * 0.5 + 0.5) * W, y: (-PV.y * 0.5 + 0.5) * H }; },   // 測試腳本用：世界上的一點在畫面的哪裡
     debugPlace: (x, z) => { if (ME && S.ctrl === 'me') { ME.x = x; ME.z = z; S.goal = null; } },   // 測試腳本用：把人直接放到某個位置
     onStats: (fn) => { onStats = fn; },
     // 大廳第二、三期：花園的狀態、寵物、可以互動的點（測試腳本用 spots 找位置）

@@ -79,12 +79,14 @@
   };
   const QUEST_RATE = { slime: 0.45, shroom: 0.45, golem: 0.4, wisp: 0.4, boss: 1 };
   // 練習場的怪：lv 等級、hp/atk 是同等級玩家的幾倍
+  // drop：倒下時掉在地上的東西（p 機率、n 幾個、pool 從哪幾樣裡抽，都是背包裡本來就有的補品和雜物）。不管幾個人打，就掉這一份，先撿先贏
+  const DROP_MS = 60000, PICK_R = 2.6;
   const MOBS = {
-    slime: { name: '果凍', hp: 0.5, atk: 0.35, sp: 2.0, r: 0.6 },
-    shroom: { name: '香菇怪', hp: 0.7, atk: 0.45, sp: 2.2, r: 0.7 },
-    golem: { name: '石偶', hp: 1.1, atk: 0.55, sp: 1.8, r: 0.9 },
-    wisp: { name: '影子', hp: 0.8, atk: 0.7, sp: 2.8, r: 0.6 },
-    boss: { name: '大石偶', hp: 9, atk: 0.9, sp: 2.0, r: 1.6, boss: 1 },
+    slime: { name: '果凍', hp: 0.5, atk: 0.35, sp: 2.0, r: 0.6, drop: { p: 0.3, pool: ['water', 'noodle'] } },
+    shroom: { name: '香菇怪', hp: 0.7, atk: 0.45, sp: 2.2, r: 0.7, drop: { p: 0.35, pool: ['veggie', 'noodle', 'seedTomato'] } },
+    golem: { name: '石偶', hp: 1.1, atk: 0.55, sp: 1.8, r: 0.9, drop: { p: 0.45, pool: ['chicken', 'twig', 'seedGuava'] } },
+    wisp: { name: '影子', hp: 0.8, atk: 0.7, sp: 2.8, r: 0.6, drop: { p: 0.45, pool: ['bubbletea', 'seedApple'] } },
+    boss: { name: '大石偶', hp: 9, atk: 0.9, sp: 2.0, r: 1.6, boss: 1, drop: { p: 1, n: 3, pool: ['chicken', 'bubbletea', 'seedPineapple', 'seedApple'] } },
   };
   const clsName = (s) => (s && s.spec ? SPECS[s.spec].name : s && s.school ? '見習生' : '芽');
   const basicOf = (s) => BASIC[s && s.spec ? SPECS[s.spec].basic : s && s.school ? s.school : 'sprout'];
@@ -126,5 +128,5 @@
     return out;
   }
   const keyLabel = (k) => k === 'Space' ? '空白' : String(k || '').replace(/^(Digit|Key)/, '').replace(/^Numpad/, '數');
-  return { SCHOOLS, SPECS, BASIC, SK, FAMILIARS, LEVEL, GATE, QUEST, QUEST_RATE, MOBS, KEYS, clsName, basicOf, basicKey, learned, electives, cleanSlots, autoSlots, keyOk, cleanKeys, keyLabel };
+  return { SCHOOLS, SPECS, BASIC, SK, FAMILIARS, LEVEL, GATE, QUEST, QUEST_RATE, MOBS, DROP_MS, PICK_R, KEYS, clsName, basicOf, basicKey, learned, electives, cleanSlots, autoSlots, keyOk, cleanKeys, keyLabel };
 });

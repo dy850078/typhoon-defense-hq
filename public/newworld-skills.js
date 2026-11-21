@@ -7,6 +7,7 @@
     '.cb-bar i{display:block;height:100%;background:#e2506a;border-radius:3px}.cb-bar span{position:absolute;left:50%;bottom:8px;transform:translateX(-50%);white-space:nowrap;font:700 11px/1 inherit;color:#2b2a33;text-shadow:0 0 2px #fffaf0,0 0 2px #fffaf0;display:none}.cb-bar.on span{display:block}',
     '.cb-num{position:absolute;left:0;top:0;font:900 17px/1 inherit;color:#fff;-webkit-text-stroke:3px #2b2a33;paint-order:stroke fill;will-change:transform;white-space:nowrap}',
     '.cb-num.ow{color:#ff8a7a}.cb-num.heal{color:#9fe7a4}.cb-num.poison{color:#d9b8ff;font-size:14px}.cb-num.link{color:#ffe9a8;font-size:14px}.cb-num.lv{color:#ffe27a;font-size:22px}',
+    '.cb-who{position:absolute;left:0;top:0;padding:4px 9px;font:700 12px/1.2 inherit;white-space:nowrap;will-change:transform;pointer-events:none}.cb-who[hidden]{display:none}',
     '#cb-me{position:fixed;left:10px;top:calc(92px + env(safe-area-inset-top));width:168px;padding:7px 9px;z-index:3;display:flex;gap:7px;align-items:center;cursor:pointer;font:inherit;color:#2b2a33;text-align:left}',
     '#cb-me img{width:34px;height:34px;flex:none}#cb-me div{flex:1;min-width:0}#cb-me b{display:block;font-size:12px;line-height:1.2;margin-bottom:3px;white-space:nowrap}',
     '#cb-me u{display:block;position:relative;height:9px;border:1.5px solid #2b2a33;border-radius:5px;background:#fffaf0;margin-top:2px;overflow:hidden;text-decoration:none}#cb-me u i{display:block;height:100%}#cb-me u.hp i{background:#e2506a}#cb-me u.mp i{background:#6ea8e6}#cb-me u.xp{height:5px}#cb-me u.xp i{background:#e8a23c}',
@@ -34,6 +35,16 @@
     '#cb-book .card img{width:34px;height:34px;flex:none}#cb-book .card span{flex:1;display:flex;flex-direction:column}#cb-book .card small{font-size:11px;opacity:.72}',
     '#cb-book .req{display:flex;align-items:center;gap:8px;margin:5px 0;font-size:12px}#cb-book .req u{flex:1;height:9px;border:1.5px solid #2b2a33;border-radius:5px;background:#fffaf0;overflow:hidden;text-decoration:none}#cb-book .req u i{display:block;height:100%;background:#8fd36a}#cb-book .req b{min-width:74px}#cb-book .req.done b::after{content:"　好了";color:#3f8a4f}',
     '#cb-book .dbg{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;padding-top:8px;border-top:1px dashed rgba(43,42,51,.35)}#cb-book .dbg button{font:500 11px/1 inherit;font-family:inherit;padding:6px 8px;border-radius:8px;border:1.5px solid rgba(43,42,51,.45);background:#fff;cursor:pointer}',
+    '#cb-book .tree{position:relative;height:300px;margin:2px 0 4px}#cb-book .tree svg{position:absolute;inset:0;width:100%;height:100%}#cb-book .tree path{fill:none;stroke:rgba(43,42,51,.22);stroke-width:1.6;stroke-dasharray:3 3;vector-effect:non-scaling-stroke}#cb-book .tree path.on{stroke:#2b2a33;stroke-dasharray:none;stroke-width:2}',
+    '#cb-book .nd{all:unset;box-sizing:border-box;position:absolute;transform:translateX(-50%);width:62px;display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;font-size:11px;font-weight:700;text-align:center;line-height:1.15}',
+    '#cb-book .nd img{width:42px;height:42px;padding:3px;box-sizing:border-box;border-radius:50%;border:2px solid #2b2a33;background:#fff}#cb-book .nd.lock img,#cb-book .nd.can img{filter:grayscale(1);opacity:.45;border-style:dashed}#cb-book .nd.can img{opacity:.8}#cb-book .nd.lock span{opacity:.5}',
+    '#cb-book .nd.now img{background:#f3d27a;box-shadow:0 0 0 3px #f3d27a,0 0 0 4.5px #2b2a33}#cb-book .nd.quest img{border-style:dashed;background:#fff6dc}#cb-book .nd.sel span{background:#2b2a33;color:#fffaf0;border-radius:6px;padding:1px 5px}',
+    '#cb-book .nd u{display:block;width:44px;height:5px;border:1.2px solid #2b2a33;border-radius:4px;background:#fffaf0;overflow:hidden;text-decoration:none}#cb-book .nd u i{display:block;height:100%;background:#8fd36a}',
+    '#cb-book .sum{display:block;text-align:center;opacity:.7;margin-bottom:6px}#cb-book .det{padding:9px 11px;border-radius:10px 8px 11px 7px;border:1.5px dashed rgba(43,42,51,.5);background:#fffaf0}#cb-book .det>b{display:block;margin-bottom:5px}#cb-book .det .why{display:block;opacity:.75;margin-top:6px}',
+    '#cb-book .sks{display:flex;flex-wrap:wrap;gap:4px 9px;margin-bottom:4px}#cb-book .sks span{display:flex;align-items:center;gap:3px}#cb-book .sks img{width:24px;height:24px}#cb-book .det .go{display:block;width:100%;box-sizing:border-box;margin-top:8px;padding:10px;font-size:13px;text-align:center;background:#f3d27a}#cb-book .det .go.sure{background:#e2506a;color:#fff}',
+    '#cb-quest{position:fixed;left:10px;top:calc(160px + env(safe-area-inset-top));width:168px;padding:7px 9px;z-index:3;font:inherit;font-size:12px;color:#2b2a33;text-align:left;cursor:pointer;display:block}#cb-quest[hidden]{display:none}',
+    '#cb-quest b{display:flex;justify-content:space-between;gap:6px}#cb-quest b span{font-weight:500;opacity:.75}#cb-quest .qi{display:flex;gap:5px;align-items:baseline;margin-top:3px}#cb-quest .qi span{flex:1;min-width:0}#cb-quest .qi small{opacity:.6;font-size:10px}#cb-quest .qi i{font-style:normal;font-weight:700}#cb-quest .qi.ok{opacity:.45;text-decoration:line-through}',
+    '#cb-quest .back{display:block;margin-top:3px}#cb-quest.done{background:#f3d27a}#cb-quest.flash{animation:cb-pulse .25s ease-in-out 4 alternate}',
     '#cb-dead{position:fixed;inset:0;background:rgba(43,42,51,.45);display:grid;place-items:center;z-index:3;pointer-events:none}#cb-dead div{padding:14px 20px;font-weight:700;font-size:15px}',
   ].join('\n');
   function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
@@ -46,7 +57,8 @@
     var admin = false, off = 0, me = null, toast = function (t) { if (panels) panels.toast(t); };
     // ---- 連線 ----
     sock.on('init', function (d) { admin = !!d.admin; });
-    sock.on('cb:init', function (d) { off = Date.now() - d.me.t; CB.init(d, sock.id, function (ev, arg) { sock.emit(ev, arg); }); });
+    sock.on('cb:init', function (d) { off = Date.now() - d.me.t; CB.init(d, sock.id, function (ev, arg, fn) { if (fn) sock.emit(ev, arg, fn); else sock.emit(ev, arg); }); });
+    sock.on('cb:drop', function (d) { CB.addDrop(d); }); sock.on('cb:dropGone', function (e) { CB.dropGone(e); }); CB.onToast(toast);
     sock.on('cb:me', function (d) { off = Date.now() - d.t; CB.me(d); });
     sock.on('cb:mobs', function (l) { CB.mobs(l); }); sock.on('cb:who', function (d) { CB.who(d); }); sock.on('cb:fx', function (e) { CB.fx(e); }); sock.on('cb:hit', function (l) { CB.hits(l); });
     sock.on('leave', function (id) { CB.drop(id); }); sock.on('cb:back', function (p) { CB.back(p); }); sock.on('cb:tgt', function () { CB.setTarget(null, true); });
@@ -140,35 +152,66 @@
       if (i !== 3 && C3.learned(me).indexOf(k) < 0) { toast('選修的招只能放在最後一格'); pickSkill = ''; pickSlot = -1; drawBook(); return; }
       if (at >= 0 && at !== 3 && next[at] && C3.learned(me).indexOf(next[at]) < 0) next[at] = null;
       send(next); }
-    // 導師：選學門、接三轉任務、交信物
-    function openClass() { mode = 'class'; drawClass(); }
-    function card2(iconKey, title, sub, on, fn, off2) { var b = el('button', 'card' + (on ? ' on' : '')); b.type = 'button'; var t = el('span'); t.append(el('b', '', title), el('small', '', sub)); b.append(icon(iconKey), t); b.dataset.k = iconKey.slice(4); b.disabled = !!off2; b.onclick = fn; return b; }
+    // 導師：一張職業樹（芽 → 三個學門 → 六個專精），走到哪裡亮到哪裡；點一格看內容，下面的按鈕寫明會做什麼
+    var sel = '', sure = '';
+    function openClass() { mode = 'class'; sel = ''; sure = ''; drawClass(); }
     function req(label, have, need) { var r = el('div', 'req' + (have >= need ? ' done' : '')), u = el('u'), i = el('i'); i.style.width = Math.min(100, have / need * 100) + '%'; u.appendChild(i); r.append(el('b', '', label), u, el('span', '', Math.min(have, need) + '/' + need)); return r; }
-    function act(ev, arg, msg) { ask(ev, arg).then(function (r) { if (r && r.error) toast(r.error); else if (msg) toast(msg); setTimeout(function () { if (mode === 'class') drawClass(); }, 80); }); }
+    function act(ev, arg, msg) { sure = ''; ask(ev, arg).then(function (r) { if (r && r.error) toast(r.error); else if (msg) toast(msg); setTimeout(function () { if (mode === 'class') drawClass(); }, 80); }); }
+    var SCH = Object.keys(C3.SCHOOLS), SPX = [8.5, 25.5, 41.5, 58.5, 74.5, 91.5], SCX = [17, 50, 83];
+    function questDone(q) { return !!q && C3.QUEST[q.spec].every(function (it, i) { return q.got[i] >= it[1]; }); }
     function drawClass() {
-      me = CB.view(); if (!me) return; var body = frame('職業導師　Lv.' + me.lv + ' ' + C3.clsName(me));
-      body.appendChild(el('h3', '', '學門'));
-      if (me.lv < C3.GATE.school) body.appendChild(req('等級', me.lv, C3.GATE.school));
-      Object.keys(C3.SCHOOLS).forEach(function (k) { var S = C3.SCHOOLS[k], sc = me.schools[k];
-        body.appendChild(card2('nwc-' + k, S.name + (me.school === k ? '（現在）' : ''), S.specs.map(function (x) { return C3.SPECS[x].name; }).join('、') + (sc ? '　熟練度 ' + sc.m + '/' + C3.GATE.mastery : ''), me.school === k, function () { act('cb:school', k, '進了「' + S.name + '」'); }, me.lv < C3.GATE.school || me.school === k)); });
-      if (!me.school) return dbg(body);
-      var sc = me.schools[me.school]; body.appendChild(el('h3', '', '專精'));
-      C3.SCHOOLS[me.school].specs.forEach(function (sp) { var P = C3.SPECS[sp], got = sc.got.indexOf(sp) >= 0, q = me.quest && me.quest.spec === sp ? me.quest : null;
-        if (got) return body.appendChild(card2('nwc-' + sp, P.name + (me.spec === sp ? '（現在）' : ''), '已經學會', me.spec === sp, function () { act('cb:spec', sp, '專精：' + P.name); }, me.spec === sp));
-        if (q) { var items = C3.QUEST[sp], all = items.every(function (it, i) { return q.got[i] >= it[1]; });
-          body.appendChild(card2('nwc-' + sp, P.name, all ? '信物收齊了' : '收集信物中', false, function () { act('cb:spec', sp, '轉職成' + P.name + '了'); }, !all));
-          items.forEach(function (it, i) { body.appendChild(req(it[0], q.got[i], it[1])); }); return; }
-        var ready = me.lv >= C3.GATE.spec && sc.m >= C3.GATE.mastery;
-        body.appendChild(card2('nwc-' + sp, P.name, ready ? '接下三轉任務' : '還不能接三轉任務', false, function () { act('cb:quest', sp, '接下了' + P.name + '的三轉任務'); }, !ready || !!me.quest)); });
-      if (!sc.got.length || sc.got.length < 2) { body.appendChild(req('等級', me.lv, C3.GATE.spec)); body.appendChild(req('熟練度', sc.m, C3.GATE.mastery)); }
+      me = CB.view(); if (!me) return; var body = frame('職業　Lv.' + me.lv + ' ' + C3.clsName(me));
+      var cur = me.spec || me.school || 'sprout'; if (!sel) sel = me.quest ? me.quest.spec : cur;
+      var tree = el('div', 'tree'), svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); svg.setAttribute('viewBox', '0 0 100 100'); svg.setAttribute('preserveAspectRatio', 'none'); tree.appendChild(svg); body.appendChild(tree);
+      var line = function (x1, y1, x2, y2, on) { var l = document.createElementNS('http://www.w3.org/2000/svg', 'path'); l.setAttribute('d', 'M' + x1 + ' ' + y1 + ' C' + x1 + ' ' + (y1 + y2) / 2 + ' ' + x2 + ' ' + (y1 + y2) / 2 + ' ' + x2 + ' ' + y2); if (on) l.setAttribute('class', 'on'); svg.appendChild(l); };
+      var node = function (k, name, x, y, state, sub) { var b = el('button', 'nd ' + state + (sel === k ? ' sel' : '')); b.type = 'button'; b.dataset.k = k; b.style.left = x + '%'; b.style.top = y + '%'; b.append(icon('nwc-' + k), el('span', '', name)); if (sub != null) { var u = el('u'), i = el('i'); i.style.width = sub + '%'; u.appendChild(i); b.appendChild(u); }
+        b.onclick = function () { sel = k; sure = ''; drawClass(); }; tree.appendChild(b); };
+      node('sprout', '芽', 50, 2, me.school ? 'got' : 'now');
+      var nSch = 0, nSp = 0;
+      SCH.forEach(function (k, i) { var S = C3.SCHOOLS[k], sc = me.schools[k]; if (sc) nSch++; line(50, 21, SCX[i], 36, !!sc);
+        node(k, S.name, SCX[i], 36, me.school === k ? (me.spec ? 'got' : 'now') : sc ? 'got' : me.lv >= C3.GATE.school ? 'can' : 'lock', sc ? sc.m / C3.GATE.mastery * 100 : null);
+        S.specs.forEach(function (sp, j) { var got = !!sc && sc.got.indexOf(sp) >= 0, q = me.quest && me.quest.spec === sp; if (got) nSp++; line(SCX[i], 58, SPX[i * 2 + j], 72, got);
+          node(sp, C3.SPECS[sp].name, SPX[i * 2 + j], 72, me.spec === sp ? 'now' : got ? 'got' : q ? 'quest' : 'lock'); }); });
+      body.appendChild(el('small', 'sum', '學門 ' + nSch + '/3　專精 ' + nSp + '/6'));
+      // 點到的那一格
+      var det = el('div', 'det'); body.appendChild(det);
+      var skills = function (list) { var r = el('div', 'sks'); list.forEach(function (k) { var c = el('span'); c.append(icon('nw-' + k), el('small', '', C3.SK[k].name)); r.appendChild(c); }); return r; };
+      var go = function (label, ev, arg, msg, warn) { var key = ev + arg, b = el('button', 'go note' + (sure === key ? ' sure' : ''), sure === key ? '確定' + (warn ? '（' + warn + '）' : '') : label); b.dataset.act = ev.slice(3);
+        b.onclick = function () { if (sure !== key) { sure = key; return drawClass(); } act(ev, arg, msg); }; det.appendChild(b); };
+      if (sel === 'sprout') { det.append(el('b', '', '芽'), skills(['spark', 'blink'])); if (!me.school) det.appendChild(req('選學門', me.lv, C3.GATE.school)); }
+      else if (C3.SCHOOLS[sel]) { var S = C3.SCHOOLS[sel], sc = me.schools[sel]; det.append(el('b', '', S.name + (me.school === sel ? '　現在的學門' : '')), skills(S.basics));
+        if (sc) det.appendChild(req('熟練度', sc.m, C3.GATE.mastery));
+        if (me.lv < C3.GATE.school) det.appendChild(req('等級', me.lv, C3.GATE.school));
+        else if (me.school !== sel) go((sc ? '回到「' : '加入「') + S.name + '」', 'cb:school', sel, (sc ? '回到「' : '加入「') + S.name + '」', me.quest ? '會放棄現在的試煉' : ''); }
+      else { var P = C3.SPECS[sel], sc2 = me.schools[P.school], got = !!sc2 && sc2.got.indexOf(sel) >= 0, q = me.quest && me.quest.spec === sel ? me.quest : null;
+        det.append(el('b', '', P.name + (me.spec === sel ? '　現在的專精' : got ? '　已經學會' : '')), skills(Object.keys(P.swap).map(function (x) { return P.swap[x]; }).concat(P.own)));
+        if (got) { if (me.spec !== sel) { if (me.school === P.school) go('切換成' + P.name, 'cb:spec', sel, '專精：' + P.name); else det.appendChild(el('small', 'why', '先回到「' + C3.SCHOOLS[P.school].name + '」')); } }
+        else if (me.school !== P.school) det.appendChild(el('small', 'why', '先加入「' + C3.SCHOOLS[P.school].name + '」'));
+        else if (q) { if (questDone(q)) go('轉職成' + P.name, 'cb:spec', sel, '轉職成' + P.name + '了'); else { det.appendChild(el('small', 'why', '試煉進行中')); var qb = el('button', 'go note', '看任務'); qb.onclick = openQuest; det.appendChild(qb); } }
+        else { det.append(req('等級', me.lv, C3.GATE.spec), req('熟練度', sc2.m, C3.GATE.mastery));
+          if (me.quest) det.appendChild(el('small', 'why', '正在進行' + C3.SPECS[me.quest.spec].name + '的試煉'));
+          else if (me.lv >= C3.GATE.spec && sc2.m >= C3.GATE.mastery) go('接下' + P.name + '的試煉', 'cb:quest', sel, '接下了' + P.name + '的試煉'); } }
       dbg(body);
+    }
+    // 任務：自己一塊。左上狀態卡下面一張小紙條列出要收集的信物，點一下可以收合；也可以從職業樹的「看任務」打開
+    var qbox = el('button', 'note'); qbox.id = 'cb-quest'; qbox.type = 'button'; qbox.hidden = true; document.body.appendChild(qbox);
+    var qFold = false; try { qFold = localStorage.getItem('nw-quest-fold') === '1'; } catch (e) {}
+    qbox.onclick = function () { qFold = !qFold; try { localStorage.setItem('nw-quest-fold', qFold ? '1' : '0'); } catch (e) {} drawQuest(); };
+    function openQuest() { close(); qFold = false; drawQuest(); qbox.classList.remove('flash'); void qbox.offsetWidth; qbox.classList.add('flash'); }
+    var MOBN = function (k) { return C3.MOBS[k].name; };
+    function drawQuest() {
+      var q = me && me.quest; qbox.hidden = !q; if (!q) return; var items = C3.QUEST[q.spec], have = 0, need = 0, done = questDone(q); items.forEach(function (it, i) { have += Math.min(q.got[i], it[1]); need += it[1]; });
+      qbox.innerHTML = ''; qbox.className = 'note' + (qFold ? ' fold' : '') + (done ? ' done' : ''); var h = el('b', '', C3.SPECS[q.spec].name + '的試煉'); h.appendChild(el('span', '', have + '/' + need)); qbox.appendChild(h);
+      if (qFold) return;
+      if (done) return qbox.appendChild(el('small', 'back', '信物收齊了，回去找職業導師'));
+      items.forEach(function (it, i) { var r = el('div', 'qi' + (q.got[i] >= it[1] ? ' ok' : '')); r.append(el('span', '', it[0]), el('small', '', MOBN(it[2])), el('i', '', Math.min(q.got[i], it[1]) + '/' + it[1])); qbox.appendChild(r); });
     }
     // 管理員測試用：不用真的練就能看每個階段
     function dbg(body) { if (!admin) return; var d = el('div', 'dbg'); d.appendChild(el('small', '', '管理員測試'));
       [['10 等', { lv: 10 }], ['50 等', { lv: 50 }], ['熟練度練滿', { m: C3.GATE.mastery }], ['信物補滿', { quest: 1 }], ['全部重來', { reset: 1 }]].forEach(function (a) { var b = el('button', '', a[0]); b.type = 'button'; b.onclick = function () { act('cb:dbg', a[1]); }; d.appendChild(b); }); body.appendChild(d); }
     var sig = '';
-    CB.onChange(function () { drawHud(); var v = CB.view(), k = v ? JSON.stringify([v.lv, v.school, v.spec, v.schools, v.quest]) : ''; if (k !== sig) { sig = k; if (!book.hidden && mode === 'class') drawClass(); if (editing() && !document.getElementById('cb-ghost')) drawBook(); } });
-    drawHud();
-    return { openClass: openClass, openBook: openBook, close: close, ask: ask, isOpen: function () { return !book.hidden; } };
+    CB.onChange(function () { drawHud(); var v = CB.view(), k = v ? JSON.stringify([v.lv, v.school, v.spec, v.schools, v.quest]) : ''; if (k !== sig) { sig = k; if (!book.hidden && mode === 'class') drawClass(); drawQuest(); if (editing() && !document.getElementById('cb-ghost')) drawBook(); } });
+    drawHud(); drawQuest();
+    return { openQuest: openQuest, openClass: openClass, openBook: openBook, close: close, ask: ask, isOpen: function () { return !book.hidden; } };
   } };
 })(this);

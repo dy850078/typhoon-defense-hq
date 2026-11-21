@@ -60,7 +60,11 @@ module.exports = function attach(nw, env) {
         if (i >= 0 && c.quest.got[i] < q[i][1]) { c.quest.got[i]++; p.cbSock.emit('cb:loot', { name: q[i][0], n: c.quest.got[i], of: q[i][1] }); } }
       c.changed = true; tell(p); });
     m.dmgBy.clear(); fx({ k: 'die', m: m.id });
+    // 掉東西：一隻怪就掉牠那一份，掉在地上，誰先撿就是誰的
+    const dr = d.drop; if (dr && Math.random() < dr.p) for (let i = 0; i < (dr.n || 1); i++) { const a = Math.random() * Math.PI * 2, r = 0.5 + Math.random() * (d.boss ? 1.8 : 0.7);
+      const o = { id: 'd' + seq++, k: dr.pool[Math.floor(Math.random() * dr.pool.length)], x: +(m.x + Math.cos(a) * r).toFixed(2), z: +(m.z + Math.sin(a) * r).toFixed(2), until: t + C3.DROP_MS }; drops.set(o.id, o); nw.emit('cb:drop', dropView(o)); }
   }
+  const drops = new Map(), dropView = (o) => ({ id: o.id, k: o.k, x: o.x, z: o.z, left: Math.max(0, o.until - now()) });
   function gain(p, n) { const c = p.cb; if (c.lv >= LEVEL.max) return; c.exp += n; let up = false;
     while (c.lv < LEVEL.max && c.exp >= LEVEL.expFor(c.lv)) { c.exp -= LEVEL.expFor(c.lv); c.lv++; up = true; }
     if (up) { stats(c); c.hp = c.hpMax; c.mp = c.mpMax; fx({ k: 'lvup', id: p.id, lv: c.lv }); whoAll(p); } }
@@ -187,6 +191,7 @@ module.exports = function attach(nw, env) {
     if (out.length) nw.emit('cb:mobs', out);
     if (hits.length) { nw.emit('cb:hit', hits); hits = []; }
     each((p, c) => { if (c.dirty) { c.dirty = false; p.cbSock.emit('cb:me', meView(c)); } });
+    if (n % 10 === 0) { const t2 = now(); drops.forEach(o => { if (o.until <= t2) { drops.delete(o.id); nw.emit('cb:dropGone', { id: o.id }); } }); }
     if (n % 300 === 0) each(save);
   }, TICK);
 
@@ -209,7 +214,7 @@ module.exports = function attach(nw, env) {
       const c = load(u); p.cb = c; p.cbUser = u; p.cbSock = socket;
       const ack = (fn, r) => { if (typeof fn === 'function') fn(r); }, done = (fn) => { c.changed = true; save(p); whoAll(p); socket.emit('cb:me', meView(c)); ack(fn, { ok: true }); };
       const busy = () => c.fight > now() || c.dead > now();
-      socket.emit('cb:init', { me: meView(c), field: FIELD, mobs: mobs.map(m => ({ id: m.id, kind: m.kind, lv: m.lv, x: m.x, z: m.z, hp: m.dead ? 0 : Math.round(m.hp), max: m.max })), who: [...players.values()].filter(q => q.cb).map(who) });
+      socket.emit('cb:init', { me: meView(c), field: FIELD, mobs: mobs.map(m => ({ id: m.id, kind: m.kind, lv: m.lv, x: m.x, z: m.z, hp: m.dead ? 0 : Math.round(m.hp), max: m.max })), who: [...players.values()].filter(q => q.cb).map(who), drops: [...drops.values()].map(dropView) });
       mobs.forEach(m => { m.sent = ''; });
       socket.broadcast.emit('cb:who', who(p));
       socket.on('cb:target', (id) => { const m = byId.get(id); c.target = alive(m) ? m.id : null; });
@@ -224,11 +229,17 @@ module.exports = function attach(nw, env) {
       socket.on('cb:spec', (sp, fn) => { if (busy()) return ack(fn, { error: '戰鬥中不能轉職' }); const S = SPECS[sp]; if (!S || S.school !== c.school) return ack(fn, { error: '要先進這個學門' }); const s = c.schools[c.school];
         if (!s.got.includes(sp)) { const q = c.quest; if (!q || q.spec !== sp || QUEST[sp].some((x, i) => q.got[i] < x[1])) return ack(fn, { error: '信物還沒收齊' }); s.got.push(sp); c.quest = null; fx({ k: 'promote', id: p.id }); }
         s.spec = sp; c.spec = sp; c.fam = []; c.stage = {}; c.slots = C3.autoSlots(c, c.slots); done(fn); });
+      // 撿地上的東西：要走到旁邊，背包放得下才撿得起來
+      socket.on('cb:pick', (id, fn) => { const o = drops.get(id); if (!o) return ack(fn, { error: '被撿走了' }); if (c.dead > now()) return ack(fn, { error: '倒下的時候不能撿' });
+        if (Math.hypot(p.x - o.x, p.z - o.z) > C3.PICK_R + 1) return ack(fn, { error: '太遠了，走近一點' });
+        const name = env.give ? env.give(u, o.k) : null; if (!name) return ack(fn, { error: '背包滿了' });
+        drops.delete(id); nw.emit('cb:dropGone', { id, by: p.id }); ack(fn, { ok: true, name }); });
       // 管理員測試用：直接設定等級、熟練度、補滿信物
       socket.on('cb:dbg', (d, fn) => { if (!u.admin || !d || typeof d !== 'object') return ack(fn, { error: '只有管理員可以' });
         if (d.lv) { c.lv = Math.max(1, Math.min(LEVEL.max, d.lv | 0)); c.exp = 0; stats(c); c.hp = c.hpMax; c.mp = c.mpMax; c.cd = {}; c.fight = 0; }
         if (d.m != null && c.school) c.schools[c.school].m = Math.max(0, Math.min(GATE.mastery, d.m | 0));
         if (d.quest && c.quest) c.quest.got = QUEST[c.quest.spec].map(q => q[1]);
+        if (typeof d.drop === 'string') { const o = { id: 'd' + seq++, k: d.drop, x: +(p.x + 1.2).toFixed(2), z: +p.z.toFixed(2), until: now() + (d.ms > 0 ? d.ms : C3.DROP_MS) }; drops.set(o.id, o); nw.emit('cb:drop', dropView(o)); }
         if (d.reset) { Object.assign(c, { lv: 1, exp: 0, school: null, spec: null, schools: {}, quest: null, fam: [], stage: {} }); stats(c); c.slots = C3.autoSlots(c, []); }
         done(fn); });
     },
@@ -239,6 +250,6 @@ module.exports = function attach(nw, env) {
       const d = Object.assign({}, u.save.nw); let lv = Math.max(1, d.lv | 0 || 1), exp = Math.max(0, d.exp | 0) + n; while (lv < LEVEL.max && exp >= LEVEL.expFor(lv)) { exp -= LEVEL.expFor(lv); lv++; }
       accounts.update(u, { nw: Object.assign(d, { lv, exp }) }); },
     tierOf(u) { const d = u.save && u.save.nw, s = d && d.school && d.schools && d.schools[d.school]; return s && s.spec ? 1 : 0; },
-    _mobs: mobs,
+    _mobs: mobs, _drops: drops,
   };
 };

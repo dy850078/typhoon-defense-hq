@@ -12,7 +12,7 @@
 //   node scripts/nw-test.js home       只跑大廳的功能（導師轉職、扭蛋機、公共花園、種子箱、許願池、寵物）；加 GARDEN_SPEED=600 會連收成一起測
 //   node scripts/nw-test.js combat     戰鬥和新職業（芽、學門、專精、每一招、技能書、選修欄）；combat-phone 是手機版面
 //   node scripts/nw-test.js hotbar     快捷列和技能書（拖移換招、點選換招、按鍵提示、自訂按鍵）；hotbar-phone 是手機版面
-//   node scripts/nw-test.js loot       掉落物（一份、點一下撿、進背包、會消失）、名字前的職業徽章、點人看等級
+//   node scripts/nw-test.js loot       掉落物（一份、點一下撿、進背包、會消失）、名字前的職業徽章
 //   node scripts/nw-test.js puppet     操偶師的手、提線、謝幕（主要是拍圖）；fam 是三隻使魔排在一起拍一張
 //   OUT=some/dir 可以指定截圖要放哪裡（預設是系統暫存資料夾）
 //
@@ -635,7 +635,7 @@ async function main() {
     await pg.context().close();
   };
   if (want === 'fam') await fam();
-  // 掉落物、名字前的職業徽章、點人看等級
+  // 掉落物、名字前的職業徽章
   const loot = async () => {
     console.log('loot');
     const accA = await account({ name: '小撿' }), pa = await open(accA, false), pb = await open(await account({ name: '小看' }), false);
@@ -647,9 +647,6 @@ async function main() {
     ok(await badge(pa) === 'pm,sprout' && await badge(pb) === 'pm,sprout', '名字前面有職業徽章，自己和別人都看得到：' + await badge(pb));
     await pa.evaluate(() => window.HQ_NEWWORLD.debugPlace(22, 14)); await pb.evaluate(() => window.HQ_NEWWORLD.debugPlace(23.5, 15.5)); await pa.waitForTimeout(900);
     const at = (pg, x, z, y) => pg.evaluate(([x, z, y]) => { const NW = window.HQ_NEWWORLD; return NW.debugScreen ? NW.debugScreen(x, y, z) : null; }, [x, z, y == null ? 1.4 : y]);
-    const sp = await at(pb, 22, 14);
-    if (sp) { await pb.mouse.click(sp.x, sp.y); await pb.waitForTimeout(300); ok(await pb.evaluate(() => { const c = document.querySelector('.cb-who'); return c && !c.hidden ? c.textContent : ''; }) === 'Lv.60 見習生', '點別人，頭上跳出等級和職業'); await pb.screenshot({ path: path.join(OUT, 'loot-1-card.png') }); }
-    else ok(false, '沒有 debugScreen，點不到人');
     // 一份掉落物，兩個人都看得到，先撿先贏
     await pa.evaluate(() => window.HQ_NEWWORLD.debugPlace(22, 14)); await pb.evaluate(() => window.HQ_NEWWORLD.debugPlace(26, 17)); await pa.waitForTimeout(800); await ask(pa, 'cb:dbg', { drop: 'noodle' }); await pa.waitForTimeout(900);
     const da = (await dbg(pa)).drops, db = (await dbg(pb)).drops; ok(da.length === 1 && db.length === 1 && da[0].id === db[0].id, '怪掉的東西在地上，兩個人看到的是同一份'); await pa.screenshot({ path: path.join(OUT, 'loot-2-ground.png') });

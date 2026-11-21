@@ -73,20 +73,12 @@ function makeCombat(ctx) {
   const setTarget = (id, quiet) => { TARGET = id && MOBS.get(id) && !(MOBS.get(id).fl & 256) ? id : null; if (!quiet) SEND('cb:target', TARGET); onChange(); };
   const RAY = new THREE.Raycaster(), NDC = new THREE.Vector2(), GP = new THREE.Plane(new V3(0, 1, 0), 0), HP3 = new V3();
   // 點到怪：選牠當目標（走過去自動打）；回傳有沒有點到
-  // 點別人（或自己）：頭上跳一張小紙條寫等級和職業，幾秒後收起來
-  const CARD = { el: null, id: null, until: 0 };
-  const showCard = (id) => { const w = WHO.get(id); if (!w) return false; if (!CARD.el) { CARD.el = document.createElement('div'); CARD.el.className = 'cb-who note'; LAB.appendChild(CARD.el); }
-    CARD.el.textContent = 'Lv.' + w.lv + ' ' + C3.clsName(w); CARD.el.hidden = false; CARD.id = id; CARD.until = S.time + 3.5; return true; };
-  const tickCard = () => { if (!CARD.el || CARD.el.hidden) return; const p = CARD.id === MYID ? ME : OTH.get(CARD.id); if (!p || S.time > CARD.until) { CARD.el.hidden = true; return; } put2d(CARD.el, p.x, FY(p.x, p.z) + 4.5, p.z); };
-  // 點畫面：怪、地上的東西、人都可能被點到，挑離手指最近的那一個（地上的東西小，讓它優先一點）
-  function tap(cx, cy) { if (!MEV) return false; NDC.set(cx / W * 2 - 1, -(cy / H) * 2 + 1); RAY.setFromCamera(NDC, camera); let kind = '', hit = null, bs = 1;
+  // 點畫面：怪和地上的東西都可能被點到，挑離手指最近的那一個（地上的東西小，讓它優先一點）
+  function tap(cx, cy) { if (!MEV || S.lob) return false; NDC.set(cx / W * 2 - 1, -(cy / H) * 2 + 1); RAY.setFromCamera(NDC, camera); let kind = '', hit = null, bs = 1;
     const see = (k, o, x, y, z, r) => { PV.set(x, y, z); const sc = RAY.ray.distanceToPoint(PV) / r; if (sc < bs) { bs = sc; kind = k; hit = o; } };
-    const who = (id, p, c) => { if (c && c.H.visible !== false && WHO.has(id)) see('who', id, p.x, FY(p.x, p.z) + 1.4, p.z, 1.2); };
-    OTH.forEach((o, id) => who(id, o, o.c)); if (ME && MYID) who(MYID, ME, ME.c);
-    if (!S.lob) { MOBS.forEach(m => { if (!(m.fl & 256) && m.g.visible) see('mob', m, m.x, FY(m.x, m.z) + m.h * 0.5, m.z, Math.max(0.9, m.h * 0.6)); }); DROPS.forEach(o => see('drop', o, o.x, FY(o.x, o.z) + 0.3, o.z, 1.1)); }
-    if (kind === 'who') return showCard(hit);
+    MOBS.forEach(m => { if (!(m.fl & 256) && m.g.visible) see('mob', m, m.x, FY(m.x, m.z) + m.h * 0.5, m.z, Math.max(0.9, m.h * 0.6)); }); DROPS.forEach(o => see('drop', o, o.x, FY(o.x, o.z) + 0.3, o.z, 1.1));
     if (kind === 'drop') { WANT = hit.id; if (Math.hypot(hit.x - ME.x, hit.z - ME.z) <= C3.PICK_R) { pick(hit); return true; } return false; }   // 遠的話先讓人走過去，走到旁邊就撿
-    WANT = null; if (S.lob) return false;
+    WANT = null;
     if (kind !== 'mob') { if (TARGET && RAY.ray.intersectPlane(GP, HP3)) setTarget(null); return false; } HOLD = false; setTarget(hit.id); S.goal = null; return true; }
   // ---------- 地上的掉落物：一個小束口袋（補品粉紅、雜物牛皮色），快消失的時候會閃 ----------
   const DROPS = new Map(); let WANT = null;
@@ -302,7 +294,7 @@ function makeCombat(ctx) {
     const t = S.time, lob = !!S.lob; G.visible = !lob;
     for (let i = NUMS.length - 1; i >= 0; i--) { const n = NUMS[i]; n.t += dt; if (n.t > 0.9 || lob) { n.el.remove(); NUMS.splice(i, 1); continue; } if (put2d(n.el, n.x, n.y + n.t * 1.6, n.z)) n.el.style.opacity = String(Math.min(1, (0.9 - n.t) * 3)); }
     if (lob) { MOBS.forEach(m => { m.bar.b.hidden = true; }); return; }
-    tickDrops(dt); tickCard(); badgeT -= dt; if (badgeT < 0) { badgeT = 1.5; WHO.forEach(badge); }   // 別人的名牌可能比職業資料晚到，隔一下再補一次
+    tickDrops(dt); badgeT -= dt; if (badgeT < 0) { badgeT = 1.5; WHO.forEach(badge); }   // 別人的名牌可能比職業資料晚到，隔一下再補一次
     for (let i = FX.length - 1; i >= 0; i--) { const f = FX[i]; f.t += dt; const k = f.t / f.dur; if (k >= 1) { if (f.o.parent) f.o.parent.remove(f.o); if (f.done) f.done(f.o); FX.splice(i, 1); } else f.step(k, f.o); }
     thN = 0;
     // 怪

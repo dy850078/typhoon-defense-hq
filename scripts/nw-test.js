@@ -518,7 +518,7 @@ async function main() {
       await pg.evaluate(() => window.NW_SK.close());
       for (const b of C3.SCHOOLS[sk].basics) { await aim(); await pg.waitForTimeout(500); const i = (await view()).slots.indexOf(b); await pg.locator('.cb-sk').nth(i).dispatchEvent('pointerdown'); await pg.waitForTimeout(550); await shot('6-' + sk + '-' + b); ok((await view()).cd[b], '見習生 ' + C3.SK[b].name); }
       await rest();
-      for (const sp of C3.SCHOOLS[sk].specs) {
+      for (const sp of C3.SCHOOLS[sk].specs.filter(x => !process.env.SPEC || process.env.SPEC === x)) {
         await ask('cb:dbg', { m: C3.GATE.mastery }); await pg.evaluate(() => window.NW_SK.openClass()); await pg.waitForTimeout(150);
         await pg.locator('#cb-book .card[data-k="' + sp + '"]').click(); await pg.waitForTimeout(400);
         ok((await view()).quest, C3.SPECS[sp].name + '：接下三轉任務'); if (sp === 'skater') await shot('7-mentor-quest');
@@ -528,16 +528,16 @@ async function main() {
         const all = C3.learned(v).filter(k => k !== 'spark' && k !== 'blink');
         for (let i = 0; i < all.length; i += 4) { await rest(); const set = all.slice(i, i + 4); await ask('cb:slots', set); await pg.waitForTimeout(200);
           for (const k of set) { await aim(); await pg.waitForTimeout(700); const j = (await view()).slots.indexOf(k); await pg.locator('.cb-sk').nth(j).dispatchEvent('pointerdown');
-            if (C3.SK[k].next) { await pg.waitForTimeout(350); ok((await hud()).sk[j] === C3.SK[k].next, '按鈕變成「' + C3.SK[k].next + '」'); }   // 截圖很慢，先看按鈕再截
+            if (C3.SK[k].next) { await pg.waitForTimeout(350); ok((await hud()).sk[j] === C3.SK[k].next, '按鈕變成「' + C3.SK[k].next + '」'); if (k === 'string') { await pg.waitForTimeout(500); const d = await dbg(); ok(d.mobs.some(m => m.fl & 32) && d.threads >= 5, '被提線的怪身上有五條線，從兩隻手出去：' + d.threads); await shot('8-' + sp + '-' + k + '-hold'); } }   // 截圖很慢，先看按鈕再截
             if (k === 'curtain') { await pg.waitForTimeout(500); const d = await dbg(); ok(d.mobs.some(m => m.fl & 512) && d.threads >= 3, '謝幕：怪被線吊起來：' + d.threads); }
-            await pg.waitForTimeout(C3.SK[k].ult ? 900 : 550); await shot('8-' + sp + '-' + k);
+            await pg.waitForTimeout(C3.SK[k].ult ? 900 : 550); if (k !== 'string') await shot('8-' + sp + '-' + k);
             ok((await view()).cd[k], C3.SPECS[sp].name + ' ' + C3.SK[k].name);
-            if (C3.SK[k].next) { if (k === 'string') { await pg.waitForTimeout(400); const d = await dbg(); ok(d.mobs.some(m => m.fl & 32) && d.threads >= 3, '被提線的怪身上有三條線：' + d.threads); } await shot('8-' + sp + '-' + k + '-hold'); await pg.locator('.cb-sk').nth(j).dispatchEvent('pointerdown'); await pg.waitForTimeout(300); await shot('8-' + sp + '-' + k + '2'); }
+            if (C3.SK[k].next) { if (k !== 'string') await shot('8-' + sp + '-' + k + '-hold'); await pg.locator('.cb-sk').nth(j).dispatchEvent('pointerdown'); await pg.waitForTimeout(300); await shot('8-' + sp + '-' + k + '2'); }
             if (C3.SK[k].ult) { await pg.waitForTimeout(1500); await shot('8-' + sp + '-' + k + '-b'); } } }
         await rest();
       }
     }
-    if (process.env.ONLY) { await pg.context().close(); return; }
+    if (process.env.ONLY) { ok(!pg.errors.length, '沒有頁面錯誤' + (pg.errors.length ? '：' + [...new Set(pg.errors)].slice(0, 3).join(' / ') : '')); await pg.context().close(); return; }
     // 選修欄
     await pg.evaluate(() => window.NW_SK.openBook()); await pg.waitForTimeout(200);
     const pick = async (sk, i) => { const r = pg.locator('#cb-book .card.sk[data-sk="' + sk + '"]'); await r.scrollIntoViewIfNeeded(); if (phone) await r.tap(); else await r.click(); await pg.waitForTimeout(150); if (phone) await pg.locator('.cb-sk').nth(i).tap(); else await pg.locator('.cb-sk').nth(i).click(); await pg.waitForTimeout(500); };
@@ -593,6 +593,28 @@ async function main() {
     ok(!pg.errors.length, '沒有頁面錯誤' + (pg.errors.length ? '：' + pg.errors.join(' / ') : ''));
     await pg.context().close();
   };
+  // 操偶師的樣子：手上的線、提線、謝幕（給人看圖用，檢查的項目少）
+  const puppet = async () => {
+    console.log('puppet');
+    const C3 = require('../shared/classes3d.js'), pg = await open(await account({ name: '小偶' }), false);
+    const shot = (n) => pg.screenshot({ path: path.join(OUT, 'puppet-' + n + '.png') });
+    const ask = (ev, arg) => pg.evaluate(([e, a]) => window.NW_SK.ask(e, a), [ev, arg]);
+    const view = () => pg.evaluate(() => window.HQ_NEWWORLD.combat.view()), dbg = () => pg.evaluate(() => window.HQ_NEWWORLD.combat.debug());
+    await pg.waitForFunction(() => window.HQ_NEWWORLD.combat && window.HQ_NEWWORLD.combat.view(), null, { timeout: 20000 });
+    await ask('cb:dbg', { lv: 60 }); await ask('cb:school', 'ae'); await ask('cb:dbg', { m: C3.GATE.mastery }); await ask('cb:quest', 'puppeteer'); await ask('cb:dbg', { quest: 1 }); await ask('cb:spec', 'puppeteer');
+    await ask('cb:slots', ['stitch', 'string', 'curtain', 'spark']); await ask('cb:dbg', { lv: 6 }); await zoomIn(pg);   // 等級調低，怪才不會一下就倒
+    const aim = (reach) => pg.evaluate((reach) => { const NW = window.HQ_NEWWORLD, m = NW.combat.debug().mobs.filter(x => x.kind === 'slime' && !(x.fl & 256)).sort((a, b) => a.x - b.x)[0]; NW.debugPlace(m.x + reach, m.z + 0.5); NW.combat.setTarget(m.id); return m; }, reach);
+    await pg.evaluate(() => window.HQ_NEWWORLD.debugPlace(19, 14)); await pg.waitForTimeout(600); await shot('1-idle');
+    ok((await view()).spec === 'puppeteer' && (await dbg()).threads === 4, '操偶師平常兩隻手各垂著兩條短線');
+    await aim(4.5); await pg.waitForTimeout(600); await pg.locator('.cb-sk').nth(1).dispatchEvent('pointerdown'); await pg.waitForTimeout(700);
+    ok((await dbg()).threads >= 5, '提線：五條線從兩隻手牽到偶身上'); await shot('2-string');
+    await pg.evaluate(() => window.HQ_NEWWORLD.debugPlace(8, 14)); await ask('cb:dbg', { lv: 6 }); await pg.waitForTimeout(300); await zoomIn(pg);
+    await aim(3); await pg.waitForTimeout(500); await pg.locator('.cb-sk').nth(2).dispatchEvent('pointerdown'); await pg.waitForTimeout(800);
+    ok((await dbg()).zones.length === 1, '謝幕：舞台搭起來'); await shot('3-curtain');
+    ok(!pg.errors.length, '沒有頁面錯誤' + (pg.errors.length ? '：' + pg.errors.join(' / ') : ''));
+    await pg.context().close();
+  };
+  if (want === 'puppet') await puppet();
   if (want === 'hotbar') await hotbar(false);
   if (want === 'hotbar-phone') await hotbar(true);
   if (want === 'combat') await combat(false);

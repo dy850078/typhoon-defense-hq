@@ -53,7 +53,7 @@
     .nw-hint.art { background: none; border: 0; padding: 0; box-shadow: none; border-radius: 0; }
     .nw-hint.art img { display: block; animation: nw-pop .16s ease-out, nw-bob 2s ease-in-out .16s infinite; transform-origin: 50% 100%; }
     .nw-hint.art span { position: absolute; left: 0; top: 0; width: 1px; height: 1px; overflow: hidden; opacity: 0; }
-    .nw-npc { position: absolute; left: 0; top: 0; will-change: transform; pointer-events: none; }
+    .nw-npc { position: absolute; left: 0; top: 0; will-change: transform; pointer-events: none; transition: opacity .3s; }
     @keyframes nw-pop { from { transform: scale(.6); } to { transform: scale(1); } }
     @keyframes nw-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
     #acts { display: flex; gap: 6px; padding: 8px; width: min(250px, 100%); }

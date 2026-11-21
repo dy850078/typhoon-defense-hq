@@ -219,9 +219,12 @@ const NW = (() => {
     const i = document.createElement('img'), sp = document.createElement('span'); i.src = art.url; i.width = art.w; i.height = art.h; i.alt = ''; sp.textContent = lb; HINT.append(i, sp); };
   // NPC 和地點的名牌：手繪紙條，飄在頭上
   const NPCS = LOBBY ? [{ name: '職業導師', icon: 'act-mentor', x: LOBBY.SPOTS.mentorSeat.x, z: LOBBY.SPOTS.mentorSeat.z, y: 3.0, lob: true }, { name: '希臘少女', icon: 'act-greek', x: GREEK_AT.x, z: GREEK_AT.z, y: 2.62, lob: false }, { name: '許願池', icon: 'wish-coin', x: WELL.x, z: WELL.z, y: 2.75, lob: false }] : [];
-  const placeNpcs = () => NPCS.forEach(n => { if (!n.el) { if (!window.NW_HINT) return; const a = window.NW_HINT.tag(n.icon, n.name); n.el = document.createElement('img'); n.el.className = 'nw-npc'; n.el.src = a.url; n.el.width = a.w; n.el.height = a.h; n.el.alt = n.name; LAB.appendChild(n.el); }
+  const NPC_NEAR = 6;
+  const placeNpcs = () => NPCS.forEach(n => { if (!n.el) { if (!window.NW_HINT) return; const a = window.NW_HINT.tag(n.icon, n.name); n.el = document.createElement('img'); n.el.className = 'nw-npc'; n.el.src = a.url; n.el.width = Math.round(a.w * 0.6); n.el.height = Math.round(a.h * 0.6); n.el.alt = n.name; n.el.style.opacity = '0'; LAB.appendChild(n.el); }   // 名牌縮成六成大
     PV.set(n.x, n.y, n.z).project(camera); const on = !!S.lob === n.lob && PV.z < 1 && Math.abs(PV.x) < 1.1 && Math.abs(PV.y) < 1.1 && !(NEAR && Math.hypot(NEAR.x - n.x, NEAR.z - n.z) < 1.2);   // 動作紙條冒出來的時候，名牌先讓位
-    n.el.style.display = on ? '' : 'none'; if (on) n.el.style.transform = 'translate(' + ((PV.x * 0.5 + 0.5) * W).toFixed(1) + 'px,' + ((-PV.y * 0.5 + 0.5) * H).toFixed(1) + 'px) translate(-50%,-100%)'; });
+    // 走近（大約五步內）才淡入，走遠淡出，畫面才不會一堆名牌
+    const px = S.ctrl === 'me' && ME ? ME.x : S.x, pz = S.ctrl === 'me' && ME ? ME.z : S.z, close = Math.hypot(px - n.x, pz - n.z) < NPC_NEAR;
+    n.el.style.display = on ? '' : 'none'; n.el.style.opacity = on && close ? '1' : '0'; if (on) n.el.style.transform = 'translate(' + ((PV.x * 0.5 + 0.5) * W).toFixed(1) + 'px,' + ((-PV.y * 0.5 + 0.5) * H).toFixed(1) + 'px) translate(-50%,-100%)'; });
   const hintOf = (it) => (it.kind === 'bench' && ACT.pose === 'sit' ? '站起來' : it.kind === 'plot' ? plotHint(it.i) : HINT_TEXT[it.kind]);
 
   // 點地面走路的目標小圈圈

@@ -337,6 +337,11 @@ async function main() {
     await place(S.well.x - 0.4, S.well.z + 2.7); await near('well');
     ok((await pa.textContent('.nw-hint')) === '許個願' && !!(await pa.$('.nw-hint.art img')), '前院的許願池冒出手繪的「許個願」紙條'); await shot(pa, 'home-2-well');
     ok((await pa.locator('.nw-npc').count()) === 3, 'NPC 和許願池有手繪名牌');
+    await place(S.greek.x + 4, S.greek.z + 3); await pa.waitForTimeout(700);
+    const vis = () => pa.evaluate(() => [...document.querySelectorAll('.nw-npc')].filter(e => e.style.display !== 'none' && e.style.opacity === '1').map(e => e.alt).sort().join(','));
+    ok(/希臘少女/.test(await vis()), '走到五步內，名牌淡入（' + (await vis()) + '）'); await shot(pa, 'home-2a-tags-near');
+    await place(S.greek.x + 12, S.greek.z + 9); await pa.waitForTimeout(700);
+    ok((await vis()) === '', '走遠了名牌淡出');
     await place(S.greek.x + 0.3, S.greek.z + 1.3); await near('greek'); await shot(pa, 'home-2b-greek');
     ok((await pa.textContent('.nw-hint')) === '說話', '希臘少女旁邊冒出「說話」'); await pa.click('.nw-hint'); await panel('well');
     ok(/希臘少女：/.test(await toast()), '跟希臘少女說話，她講一句就打開許願池'); await NW(pa, () => window.NW_UI.close());

@@ -52,6 +52,8 @@
     /* 手繪版的紙條（newworld-hint.js 畫的圖）：外框和底色都在圖裡，按鈕本身透明；字留著給報讀和測試用 */
     .nw-hint.art { background: none; border: 0; padding: 0; box-shadow: none; border-radius: 0; }
     .nw-hint.art img { display: block; animation: nw-pop .16s ease-out, nw-bob 2s ease-in-out .16s infinite; transform-origin: 50% 100%; }
+    .nw-hint.art.mini { background: #fbf6e9; border: 1.5px solid rgba(43,42,51,.7); border-radius: 50%; padding: 4px; box-shadow: 1px 2px 0 rgba(43,42,51,.25); opacity: .92; }
+    .nw-hint.art.mini img { animation: none; }
     .nw-hint.art span { position: absolute; left: 0; top: 0; width: 1px; height: 1px; overflow: hidden; opacity: 0; }
     .nw-npc { position: absolute; left: 0; top: 0; will-change: transform; pointer-events: none; transition: opacity .3s; }
     @keyframes nw-pop { from { transform: scale(.6); } to { transform: scale(1); } }

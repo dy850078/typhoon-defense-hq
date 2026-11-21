@@ -203,8 +203,10 @@ async function main() {
     await pa.waitForFunction(() => HQ_NEWWORLD.near() === 'bench', null, { timeout: 30000 }).catch(() => {});
     ok((await NW(pa, () => HQ_NEWWORLD.near())) === 'bench' && !(await pa.isHidden('.nw-hint')) && (await pa.textContent('.nw-hint')) === '坐下', '靠近長椅會冒出「坐下」紙條');
     await shot(pa, 'live-1-bench-hint');
-    await pa.click('.nw-hint'); await pa.waitForFunction(() => document.querySelector('.nw-hint').textContent === '站起來', null, { timeout: 30000 }).catch(() => {});
-    ok((await NW(pa, () => HQ_NEWWORLD.acts().pose)) === 'sit' && (await NW(pa, () => HQ_NEWWORLD.net.me().p)) === 1 && (await pa.textContent('.nw-hint')) === '站起來', '點紙條就坐到長椅上（' + JSON.stringify(await NW(pa, () => [HQ_NEWWORLD.acts(), HQ_NEWWORLD.net.me(), HQ_NEWWORLD.near()])) + '）');
+    await pa.waitForFunction(() => HQ_NEWWORLD.hintMini(), null, { timeout: 30000 }).catch(() => {});
+    ok((await NW(pa, () => HQ_NEWWORLD.hintMini())) && (await pa.textContent('.nw-hint')) === '坐下' && !!(await pa.$('.nw-hint.mini img')), '過 3 秒紙條縮成小圖示，還是點得到'); await shot(pa, 'live-1b-bench-mini');
+    await pa.click('.nw-hint'); await pa.waitForFunction(() => HQ_NEWWORLD.acts().pose === 'sit' && HQ_NEWWORLD.hint() === '', null, { timeout: 30000 }).catch(() => {});
+    ok((await NW(pa, () => HQ_NEWWORLD.acts().pose)) === 'sit' && (await NW(pa, () => HQ_NEWWORLD.net.me().p)) === 1 && (await NW(pa, () => HQ_NEWWORLD.hint())) === '', '點圖示就坐到長椅上，坐著的時候頭上沒有紙條（' + JSON.stringify(await NW(pa, () => [HQ_NEWWORLD.acts(), HQ_NEWWORLD.net.me(), HQ_NEWWORLD.near()])) + '）');
     await shot(pa, 'live-2-bench-sit');
     await pb.waitForFunction(() => { let p = 0; HQ_NEWWORLD.net.each((o) => { p = o.p; }); return p === 1; }, null, { timeout: 30000 }).catch(() => {});
     ok(await NW(pb, () => { let p = 0; HQ_NEWWORLD.net.each((o) => { p = o.p; }); return p === 1; }), '別人看得到坐下');
@@ -264,8 +266,8 @@ async function main() {
     ok((await NW(pa, () => HQ_NEWWORLD.zone())) === 'lobby' && me1.z <= OZ + 11.7 && me1.z > OZ + 11.3, '走到大廳邊緣會被擋住（z ' + me1.z + '）');
     // 沙發可以坐，別人看得到
     await zoomIn(pa); await place(pa, 1, OZ - 5.2); await near(pa, 'bench');
-    await pa.click('.nw-hint'); await pa.waitForFunction(() => document.querySelector('.nw-hint').textContent === '站起來', null, { timeout: 30000 }).catch(() => {});
-    ok((await NW(pa, () => HQ_NEWWORLD.acts().pose)) === 'sit' && (await pa.textContent('.nw-hint')) === '站起來', '沙發可以坐');
+    await pa.click('.nw-hint'); await pa.waitForFunction(() => HQ_NEWWORLD.acts().pose === 'sit' && HQ_NEWWORLD.hint() === '', null, { timeout: 30000 }).catch(() => {});
+    ok((await NW(pa, () => HQ_NEWWORLD.acts().pose)) === 'sit' && (await NW(pa, () => HQ_NEWWORLD.hint())) === '', '沙發可以坐，坐著沒有紙條（' + (await NW(pa, () => JSON.stringify([HQ_NEWWORLD.acts(), HQ_NEWWORLD.hint(), HQ_NEWWORLD.near()]))) + '）');
     await pb.waitForFunction(() => { let p = 0; HQ_NEWWORLD.net.each((o) => { p = o.p; }); return p === 1; }, null, { timeout: 30000 }).catch(() => {});
     ok(await NW(pb, () => { let p = 0; HQ_NEWWORLD.net.each((o) => { p = o.p; }); return p === 1; }), '別人看得到坐在沙發上');
     await place(pb, 3.2, OZ - 0.2); await pb.waitForTimeout(600);
@@ -292,8 +294,8 @@ async function main() {
     await place(pa, -15.0, OZ + 6.2); await shot(pa, 'lobby-8-gallery-wall');
     // 點唱機搬進客廳
     await place(pa, L.juke.x, L.juke.z + 1.6); await near(pa, 'juke');
-    await pa.click('.nw-hint'); await pa.waitForTimeout(600);
-    ok((await pa.textContent('.nw-tag .nw-bubble')).includes('沒有人點歌'), '點唱機在客廳，點得到');
+    await pa.click('.nw-hint'); await pa.waitForFunction(() => !!document.getElementById('juke-now'), null, { timeout: 30000 }).catch(() => {});
+    ok(!!(await pa.$('#juke-now')), '點唱機在客廳，點得到'); await NW(pa, () => window.NW_UI.close());
     await pa.waitForFunction(() => /繪製/.test(document.getElementById('stats').textContent), null, { timeout: 60000 }).catch(() => {});
     console.log('  大廳（模擬器用軟體算圖，只看繪製次數和面數）：' + (await pa.textContent('#stats')));
     // 在大廳切成機器人騎士：機器人進不來，會回到前院

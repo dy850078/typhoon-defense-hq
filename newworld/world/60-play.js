@@ -214,7 +214,12 @@ const NW = (() => {
   const HINT_ICON = { bench: 'act-sit', juke: 'btn-song', door: 'act-home', exit: 'act-door', well: 'wish-coin', greek: 'act-greek', mentor: 'act-mentor', gacha: 'act-gacha', seedbox: 'act-seedbox' },
     PLOT_ICON = { '種東西': 'act-plant', '收成': 'act-harvest', '清掉': 'item-twig', '澆水': 'act-water', '看看': 'act-plant' };
   const TOUCH = window.matchMedia && matchMedia('(pointer: coarse)').matches;
-  const showHint = (it) => { const lb = hintOf(it), key = it.kind + lb; if (HINT.dataset.k === key) return; HINT.dataset.k = key;
+  // 椅子的紙條：走近先完整顯示 3 秒，之後縮成一個小圖示（還是點得到），不擋畫面；走開再回來會重新顯示
+  let nearIt = null, nearAt = 0; const SEAT_FULL_MS = 3000;
+  const showHint = (it) => { if (it !== nearIt) { nearIt = it; nearAt = performance.now(); }
+    const mini = it.kind === 'bench' && performance.now() - nearAt > SEAT_FULL_MS && !!(window.HQ_ICONS && window.HQ_ICONS.url(HINT_ICON.bench));
+    const lb = hintOf(it), key = it.kind + lb + (mini ? '-mini' : ''); if (HINT.dataset.k === key) return; HINT.dataset.k = key; HINT.classList.toggle('mini', mini);
+    if (mini) { HINT.classList.add('art'); HINT.textContent = ''; const i = document.createElement('img'), sp = document.createElement('span'); i.src = window.HQ_ICONS.url(HINT_ICON.bench); i.width = i.height = 22; i.alt = ''; sp.textContent = lb; HINT.append(i, sp); return; }
     const art = window.NW_HINT ? window.NW_HINT.hint(it.kind === 'plot' ? PLOT_ICON[lb] : HINT_ICON[it.kind], lb, TOUCH) : null;
     HINT.classList.toggle('art', !!art); HINT.textContent = ''; if (!art) { HINT.textContent = lb; return; }
     const i = document.createElement('img'), sp = document.createElement('span'); i.src = art.url; i.width = art.w; i.height = art.h; i.alt = ''; sp.textContent = lb; HINT.append(i, sp); };
@@ -226,7 +231,7 @@ const NW = (() => {
     // 走近（大約五步內）才淡入，走遠淡出，畫面才不會一堆名牌
     const px = S.ctrl === 'me' && ME ? ME.x : S.x, pz = S.ctrl === 'me' && ME ? ME.z : S.z, close = Math.hypot(px - n.x, pz - n.z) < NPC_NEAR;
     n.el.style.display = on ? '' : 'none'; n.el.style.opacity = on && close ? '1' : '0'; if (on) n.el.style.transform = 'translate(' + ((PV.x * 0.5 + 0.5) * W).toFixed(1) + 'px,' + ((-PV.y * 0.5 + 0.5) * H).toFixed(1) + 'px) translate(-50%,-100%)'; });
-  const hintOf = (it) => (it.kind === 'bench' && ACT.pose === 'sit' ? '站起來' : it.kind === 'plot' ? plotHint(it.i) : HINT_TEXT[it.kind]);
+  const hintOf = (it) => (it.kind === 'plot' ? plotHint(it.i) : HINT_TEXT[it.kind]);
 
   // 點地面走路的目標小圈圈
   const GOAL = new THREE.Mesh(new THREE.RingGeometry(0.42, 0.62, 32), new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.95, depthWrite: false }));
@@ -364,7 +369,8 @@ const NW = (() => {
     else S.camT.lerp(bp0.set(S.x - 0.8, 3.6 + shake * 0.07, S.z + 3.2), Math.min(1, dt * 5));
     camera.position.set(S.camT.x + Math.sin(ANG) * cam.dist * far, cam.hgt * far, S.camT.z + Math.cos(ANG) * cam.dist * far); camera.lookAt(S.camT);
     if (S.dbgCam) { const d = S.dbgCam; camera.position.set(ME.x + Math.sin(d.ang) * d.dist, d.hgt, ME.z + Math.cos(d.ang) * d.dist); camera.lookAt(ME.x, d.look ?? 1.1, ME.z); }   // 測試截圖用的近鏡頭
-    camera.updateMatrixWorld(); if (NEAR) { PV.set(NEAR.x, NEAR.y, NEAR.z).project(camera); HINT.hidden = false; showHint(NEAR);
+    camera.updateMatrixWorld(); if (!NEAR) nearIt = null;
+    if (NEAR && ACT.pose !== 'sit') { PV.set(NEAR.x, NEAR.y, NEAR.z).project(camera); HINT.hidden = false; showHint(NEAR);   // 坐著的時候不顯示紙條（走路就會站起來）
       HINT.style.transform = 'translate(' + ((PV.x * 0.5 + 0.5) * W).toFixed(1) + 'px,' + ((-PV.y * 0.5 + 0.5) * H).toFixed(1) + 'px) translate(-50%,-100%)'; } else HINT.hidden = true;
     placeNpcs();
     if (MYTAG) placeTag(MYTAG, ME.x, ME.z, ME.y + TAG_UP(ME.c));
@@ -474,7 +480,7 @@ const NW = (() => {
     tier: (n) => { MYTIER = n | 0; if (MYTAG && ME) setBadge(MYTAG, ME.c.look.cls, MYTIER); }, myTier: () => MYTIER,
     petJoy: (text) => { if (!PET) return; PET.joy = 1.4; if (text) { PET.tag.b.textContent = text; PET.tag.b.hidden = false; PET.tag.until = S.time + 3; } },
     garden: (st) => { PLOTS = Array.isArray(st) ? st : []; if (LOBBY) LOBBY.setGarden(PLOTS); }, plots: () => PLOTS, setPet, pet: () => (PET ? { name: PET.pet.name, kind: PET.pet.kind, x: PET.x, z: PET.z } : null),
-    spots: () => (LOBBY ? { well: WELL, greek: GREEK_AT, ...LOBBY.SPOTS } : null), hint: () => (HINT.hidden ? '' : HINT.textContent), CLS, CLS_NAME,
+    spots: () => (LOBBY ? { well: WELL, greek: GREEK_AT, ...LOBBY.SPOTS } : null), hint: () => (HINT.hidden ? '' : HINT.textContent), hintMini: () => !HINT.hidden && HINT.classList.contains('mini'), CLS, CLS_NAME,
   };
 })();
 window.HQ_NEWWORLD = NW;

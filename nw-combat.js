@@ -30,7 +30,7 @@ module.exports = function attach(nw, env) {
   const ctrl = (m, s) => (MOBS[m.kind].boss ? s * 0.3 : s);   // 大石偶被控制的時間只有三成
   const each = (fn) => players.forEach(p => { if (p.cb) fn(p, p.cb); });
   const fx = (o) => nw.emit('cb:fx', o);
-  const meView = (c) => ({ lv: c.lv, exp: c.exp, need: LEVEL.expFor(c.lv), hp: Math.round(c.hp), hpMax: c.hpMax, mp: Math.round(c.mp), mpMax: c.mpMax, school: c.school, spec: c.spec, schools: c.schools, slots: c.slots, quest: c.quest,
+  const meView = (c) => ({ lv: c.lv, exp: c.exp, need: LEVEL.expFor(c.lv), hp: Math.round(c.hp), hpMax: c.hpMax, mp: Math.round(c.mp), mpMax: c.mpMax, school: c.school, spec: c.spec, schools: c.schools, slots: c.slots, keys: c.keys, quest: c.quest,
     cd: c.cd, stage: Object.keys(c.stage).reduce((o, k) => { if (c.stage[k].until > now()) o[k] = c.stage[k].until; return o; }, {}), dead: c.dead > now() ? c.dead : 0, t: now() });
   const who = (p) => ({ id: p.id, lv: p.cb.lv, school: p.cb.school, spec: p.cb.spec, hp: Math.round(p.cb.hp), hpMax: p.cb.hpMax, fam: p.cb.fam.map(f => f.tier), mech: mechOf(p.cb) });
   const mechOf = (c) => (c.spec !== 'alchemist' ? 0 : c.buff.fear > now() ? 3 : c.buff.mech > now() ? 2 : 1);
@@ -38,7 +38,7 @@ module.exports = function attach(nw, env) {
   const whoAll = (p) => nw.emit('cb:who', who(p));
   function stats(c) { c.hpMax = LEVEL.hp(c.lv); c.mpMax = LEVEL.mp(c.lv); c.hp = Math.min(c.hp, c.hpMax); c.mp = Math.min(c.mp, c.mpMax); }
   function save(p) { const c = p.cb, u = p.cbUser; if (!u || !c.changed) return; c.changed = false;
-    accounts.update(u, { nw: Object.assign({}, u.save.nw, { lv: c.lv, exp: c.exp, school: c.school, spec: c.spec, schools: c.schools, slots: c.slots, quest: c.quest }) }); }
+    accounts.update(u, { nw: Object.assign({}, u.save.nw, { lv: c.lv, exp: c.exp, school: c.school, spec: c.spec, schools: c.schools, slots: c.slots, keys: c.keys, quest: c.quest }) }); }
 
   // ---- 傷害、補血、狀態 ----
   function atkOf(c) { return LEVEL.atk(c.lv) * (1 + (c.buff.atk > now() ? c.buff.atkV : 0)); }
@@ -198,7 +198,7 @@ module.exports = function attach(nw, env) {
     if (c.school && !c.schools[c.school]) c.schools[c.school] = { m: 0, got: [], spec: null };
     if (c.school) c.spec = c.schools[c.school].spec;
     if (d.quest && QUEST[d.quest.spec] && c.school === SPECS[d.quest.spec].school) c.quest = { spec: d.quest.spec, got: QUEST[d.quest.spec].map((q, i) => Math.max(0, Math.min(q[1], (d.quest.got || [])[i] | 0))) };
-    c.slots = C3.autoSlots(c, d.slots);
+    c.slots = C3.autoSlots(c, d.slots); c.keys = C3.cleanKeys(d.keys);
     Object.assign(c, { cd: {}, buff: {}, stage: {}, fam: [], target: null, nextAtk: 0, fight: 0, dead: 0 }); stats(c); c.hp = c.hpMax; c.mp = c.mpMax; c.hp = c.hpMax; c.mp = c.mpMax;
     return c;
   }
@@ -215,6 +215,7 @@ module.exports = function attach(nw, env) {
       socket.on('cb:target', (id) => { const m = byId.get(id); c.target = alive(m) ? m.id : null; });
       socket.on('cb:cast', (d) => { if (d && typeof d === 'object') cast(p, d.i | 0, typeof d.m === 'string' ? d.m : null); });
       socket.on('cb:slots', (arr, fn) => { if (busy()) return ack(fn, { error: '戰鬥中不能換招' }); c.slots = C3.cleanSlots(c, arr); done(fn); });
+      socket.on('cb:keys', (arr, fn) => { if (!Array.isArray(arr) || arr.length !== 4 || !arr.every(C3.keyOk)) return ack(fn, { error: '這個鍵留給走路和互動用，換一個' }); if (new Set(arr).size !== 4) return ack(fn, { error: '這個鍵已經用在別格了' }); c.keys = C3.cleanKeys(arr); done(fn); });
       socket.on('cb:school', (k, fn) => { if (!SCHOOLS[k]) return ack(fn, { error: '沒有這個學門' }); if (busy()) return ack(fn, { error: '戰鬥中不能轉職' });
         if (c.lv < GATE.school) return ack(fn, { error: GATE.school + ' 等才能選學門' }); setSchool(c, k); done(fn); });
       socket.on('cb:quest', (sp, fn) => { const S = SPECS[sp]; if (!S || S.school !== c.school) return ack(fn, { error: '要先進這個學門' }); const s = c.schools[c.school];

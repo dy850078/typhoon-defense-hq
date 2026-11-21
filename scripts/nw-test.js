@@ -11,6 +11,8 @@
 //   node scripts/nw-test.js stay       階段一第一批：封測名單、背包、裝備、熟練度徽章、寵物摸和餵、點歌
 //   node scripts/nw-test.js home       只跑大廳的功能（導師轉職、扭蛋機、公共花園、種子箱、許願池、寵物）；加 GARDEN_SPEED=600 會連收成一起測
 //   node scripts/nw-test.js combat     戰鬥和新職業（芽、學門、專精、每一招、技能書、選修欄）；combat-phone 是手機版面
+//   node scripts/nw-test.js hotbar     快捷列和技能書（拖移換招、點選換招、按鍵提示、自訂按鍵）；hotbar-phone 是手機版面
+//   node scripts/nw-test.js puppet     操偶師的手、提線、謝幕（主要是拍圖）；fam 是三隻使魔排在一起拍一張
 //   OUT=some/dir 可以指定截圖要放哪裡（預設是系統暫存資料夾）
 //
 // 需要 playwright（沒有列在 package.json，本機要跑的話先 npm i -D playwright && npx playwright install chromium）
@@ -505,7 +507,7 @@ async function main() {
     ok((await view()).cd.spark, '按技能鈕放得出小火花，進入冷卻');
     // 技能書、導師
     await pg.evaluate(() => window.NW_SK.openBook()); await pg.waitForTimeout(200); await shot('3-book-sprout');
-    ok(await pg.locator('#cb-book .grid .cell').count() === 2, '技能書裡有芽的兩招');
+    ok(await pg.locator('#cb-book .card.sk').count() === 2, '技能書裡有芽的兩招');
     await pg.evaluate(() => window.NW_SK.openClass()); await pg.waitForTimeout(200); await shot('4-mentor-lv1');
     ok(await pg.locator('#cb-book .card:disabled').count() === 3, '10 等以前三個學門都還不能選');
     await rest();
@@ -517,7 +519,7 @@ async function main() {
       await pg.evaluate(() => window.NW_SK.close());
       for (const b of C3.SCHOOLS[sk].basics) { await aim(); await pg.waitForTimeout(500); const i = (await view()).slots.indexOf(b); await pg.locator('.cb-sk').nth(i).dispatchEvent('pointerdown'); await pg.waitForTimeout(550); await shot('6-' + sk + '-' + b); ok((await view()).cd[b], '見習生 ' + C3.SK[b].name); }
       await rest();
-      for (const sp of C3.SCHOOLS[sk].specs) {
+      for (const sp of C3.SCHOOLS[sk].specs.filter(x => !process.env.SPEC || process.env.SPEC === x)) {
         await ask('cb:dbg', { m: C3.GATE.mastery }); await pg.evaluate(() => window.NW_SK.openClass()); await pg.waitForTimeout(150);
         await pg.locator('#cb-book .card[data-k="' + sp + '"]').click(); await pg.waitForTimeout(400);
         ok((await view()).quest, C3.SPECS[sp].name + '：接下三轉任務'); if (sp === 'skater') await shot('7-mentor-quest');
@@ -527,25 +529,108 @@ async function main() {
         const all = C3.learned(v).filter(k => k !== 'spark' && k !== 'blink');
         for (let i = 0; i < all.length; i += 4) { await rest(); const set = all.slice(i, i + 4); await ask('cb:slots', set); await pg.waitForTimeout(200);
           for (const k of set) { await aim(); await pg.waitForTimeout(700); const j = (await view()).slots.indexOf(k); await pg.locator('.cb-sk').nth(j).dispatchEvent('pointerdown');
-            if (C3.SK[k].next) { await pg.waitForTimeout(350); ok((await hud()).sk[j] === C3.SK[k].next, '按鈕變成「' + C3.SK[k].next + '」'); }   // 截圖很慢，先看按鈕再截
+            if (C3.SK[k].next) { await pg.waitForTimeout(350); ok((await hud()).sk[j] === C3.SK[k].next, '按鈕變成「' + C3.SK[k].next + '」'); if (k === 'string') { await pg.waitForTimeout(500); const d = await dbg(); ok(d.mobs.some(m => m.fl & 32) && d.threads >= 5, '被提線的怪身上有五條線，從兩隻手出去：' + d.threads); await shot('8-' + sp + '-' + k + '-hold'); } }   // 截圖很慢，先看按鈕再截
             if (k === 'curtain') { await pg.waitForTimeout(500); const d = await dbg(); ok(d.mobs.some(m => m.fl & 512) && d.threads >= 3, '謝幕：怪被線吊起來：' + d.threads); }
-            await pg.waitForTimeout(C3.SK[k].ult ? 900 : 550); await shot('8-' + sp + '-' + k);
+            await pg.waitForTimeout(C3.SK[k].ult ? 900 : 550); if (k !== 'string') await shot('8-' + sp + '-' + k);
             ok((await view()).cd[k], C3.SPECS[sp].name + ' ' + C3.SK[k].name);
-            if (C3.SK[k].next) { if (k === 'string') { await pg.waitForTimeout(400); const d = await dbg(); ok(d.mobs.some(m => m.fl & 32) && d.threads >= 3, '被提線的怪身上有三條線：' + d.threads); } await shot('8-' + sp + '-' + k + '-hold'); await pg.locator('.cb-sk').nth(j).dispatchEvent('pointerdown'); await pg.waitForTimeout(300); await shot('8-' + sp + '-' + k + '2'); }
+            if (C3.SK[k].next) { if (k !== 'string') await shot('8-' + sp + '-' + k + '-hold'); await pg.locator('.cb-sk').nth(j).dispatchEvent('pointerdown'); await pg.waitForTimeout(300); await shot('8-' + sp + '-' + k + '2'); }
             if (C3.SK[k].ult) { await pg.waitForTimeout(1500); await shot('8-' + sp + '-' + k + '-b'); } } }
         await rest();
       }
     }
-    if (process.env.ONLY) { await pg.context().close(); return; }
+    if (process.env.ONLY) { ok(!pg.errors.length, '沒有頁面錯誤' + (pg.errors.length ? '：' + [...new Set(pg.errors)].slice(0, 3).join(' / ') : '')); await pg.context().close(); return; }
     // 選修欄
     await pg.evaluate(() => window.NW_SK.openBook()); await pg.waitForTimeout(200);
-    await pg.locator('#cb-book .slots .cell').nth(3).click(); await pg.waitForTimeout(150); await pg.locator('#cb-book .cell.el[data-sk="potion"]').click(); await pg.waitForTimeout(500); await shot('9-book-elective');
+    const pick = async (sk, i) => { const r = pg.locator('#cb-book .card.sk[data-sk="' + sk + '"]'); await r.scrollIntoViewIfNeeded(); if (phone) await r.tap(); else await r.click(); await pg.waitForTimeout(150); if (phone) await pg.locator('.cb-sk').nth(i).tap(); else await pg.locator('.cb-sk').nth(i).click(); await pg.waitForTimeout(500); };
+    await pick('potion', 3); await shot('9-book-elective');
     ok((await view()).slots[3] === 'potion', '第四格可以放別的學門的基礎招（選修）');
-    await pg.locator('#cb-book .cell[data-sk="bubble"]').click(); await pg.waitForTimeout(150); await pg.locator('#cb-book .slots .cell').nth(0).click(); await pg.waitForTimeout(400);
+    await pick('bubble', 0);
     ok((await view()).slots[0] !== 'bubble', '選修的招不能放前三格');
     ok(!pg.errors.length, '沒有頁面錯誤' + (pg.errors.length ? '：' + pg.errors.join(' / ') : ''));
     await pg.context().close();
   };
+  // 快捷列和技能書：拖移換招、點選換招、按鍵提示、自訂按鍵
+  const hotbar = async (phone) => {
+    console.log('hotbar' + (phone ? '（手機）' : ''));
+    const acc = await account({ name: '小列' }), pg = await open(acc, phone), tag = phone ? 'hotbar-phone-' : 'hotbar-';
+    const shot = (n) => pg.screenshot({ path: path.join(OUT, tag + n + '.png') });
+    const ask = (ev, arg) => pg.evaluate(([e, a]) => window.NW_SK.ask(e, a), [ev, arg]);
+    const view = () => pg.evaluate(() => window.HQ_NEWWORLD.combat.view());
+    const box = async (sel, i) => { const l = pg.locator(sel).nth(i || 0); await l.scrollIntoViewIfNeeded(); const b = await l.boundingBox(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }; };
+    const dragTo = async (from, to) => { await pg.mouse.move(from.x, from.y); await pg.mouse.down(); await pg.mouse.move((from.x + to.x) / 2, (from.y + to.y) / 2, { steps: 4 }); await pg.mouse.move(to.x, to.y, { steps: 4 }); await pg.mouse.up(); await pg.waitForTimeout(450); };
+    const touch = async (sel, i) => { const l = pg.locator(sel).nth(i || 0); await l.scrollIntoViewIfNeeded(); if (phone) await l.tap(); else await l.click(); await pg.waitForTimeout(350); };
+    await pg.waitForFunction(() => window.HQ_NEWWORLD.combat && window.HQ_NEWWORLD.combat.view(), null, { timeout: 20000 });
+    await ask('cb:dbg', { lv: 60 }); await ask('cb:school', 'pm'); await ask('cb:school', 'ae'); await pg.waitForTimeout(300);
+    await shot('1-main');
+    const kb = await pg.evaluate(() => [...document.querySelectorAll('.cb-sk kbd')].map(k => getComputedStyle(k).display === 'none' ? '' : k.textContent).join());
+    ok(phone ? kb === ',,,' : kb === '1,2,3,4', phone ? '手機的快捷列不顯示按鍵' : '電腦的快捷列每格都寫著按鍵：' + kb);
+    await pg.evaluate(() => window.NW_SK.openBook()); await pg.waitForTimeout(300); await shot('2-book');
+    ok(await pg.locator('#cb-book .slots').count() === 0 && await pg.locator('#cb-skills.edit').count() === 1, '技能書只列招式，快捷列留在主畫面並進入編排');
+    const hb = await pg.locator('#cb-skills').boundingBox(), bk = await pg.locator('#cb-book').boundingBox();
+    ok(hb.y >= bk.y + bk.height || hb.x >= bk.x + bk.width || hb.x + hb.width <= bk.x, '技能書沒有蓋住快捷列');
+    const before = (await view()).slots;
+    if (!phone) {
+      await ask('cb:slots', ['spark', 'blink', null, null]); await pg.waitForTimeout(300);
+      await dragTo(await box('#cb-book .card.sk[data-sk="transmute"]'), await box('.cb-sk', 2)); ok((await view()).slots[2] === 'transmute', '把招式從技能書拖到快捷列第三格：' + (await view()).slots);
+      await dragTo(await box('.cb-sk', 2), await box('.cb-sk', 0)); let v = await view(); ok(v.slots[0] === 'transmute' && v.slots[2] === 'spark', '快捷列的兩格互拖會交換：' + v.slots);
+      await dragTo(await box('.cb-sk', 1), { x: 60, y: 300 }); ok((await view()).slots[1] === null, '把招式拖出快捷列就是拿掉');
+      await dragTo(await box('#cb-book .card.sk[data-sk="potion"]'), await box('.cb-sk', 1)); ok((await view()).slots[1] !== 'potion', '選修的招拖不進前三格');
+      await dragTo(await box('#cb-book .card.sk[data-sk="potion"]'), await box('.cb-sk', 3)); ok((await view()).slots[3] === 'potion', '選修的招可以拖進最後一格'); await shot('3-dragged');
+    } else ok(before.length === 4, '手機不用拖的');
+    await touch('#cb-book .card.sk[data-sk="enchant"]'); ok(await pg.locator('#cb-book .card.sk.on').count() === 1, '點一招會選起來'); await shot('4-picked');
+    await touch('.cb-sk', 1); ok((await view()).slots[1] === 'enchant', '再點快捷列的格子就放進去：' + (await view()).slots);
+    const cd0 = JSON.stringify((await view()).cd); await touch('.cb-sk', 1); await touch('.cb-sk', 1); ok(JSON.stringify((await view()).cd) === cd0, '編排的時候點快捷列不會放招');
+    if (!phone) {
+      await pg.click('#cb-keys'); await pg.waitForTimeout(200); await pg.locator('.cb-sk').nth(0).click(); await pg.waitForTimeout(200); await shot('5-binding');
+      await pg.keyboard.press('KeyW'); await pg.waitForTimeout(300); ok((await view()).keys[0] === 'Digit1', '走路用的鍵不能綁');
+      await pg.keyboard.press('KeyQ'); await pg.waitForTimeout(400); ok((await view()).keys[0] === 'KeyQ', '按下 Q 就把第一格綁到 Q：' + (await view()).keys);
+      await pg.locator('.cb-sk').nth(1).click(); await pg.waitForTimeout(200); await pg.keyboard.press('KeyQ'); await pg.waitForTimeout(400); let v = await view(); ok(v.keys[1] === 'KeyQ' && v.keys[0] === 'Digit2', '綁到別格用過的鍵，兩格互換：' + v.keys);
+      ok(await pg.evaluate(() => document.querySelectorAll('.cb-sk kbd')[1].textContent) === 'Q', '快捷列上的按鍵提示跟著變'); await shot('6-bound');
+      await pg.evaluate(() => { window.NW_SK.close(); window.HQ_NEWWORLD.debugPlace(22, 14); }); await pg.waitForTimeout(600);
+      await pg.keyboard.press('KeyQ'); await pg.waitForTimeout(500); ok((await view()).cd.enchant, '關掉技能書後按 Q 放得出第二格的招');
+      await pg.reload(); await pg.waitForFunction(() => window.HQ_NEWWORLD && window.HQ_NEWWORLD.combat && window.HQ_NEWWORLD.combat.view(), null, { timeout: 60000 }); await pg.waitForTimeout(500);
+      ok((await view()).keys[1] === 'KeyQ', '按鍵設定存在帳號裡，重新進來還在');
+    }
+    ok(!pg.errors.length, '沒有頁面錯誤' + (pg.errors.length ? '：' + pg.errors.join(' / ') : ''));
+    await pg.context().close();
+  };
+  // 操偶師的樣子：手上的線、提線、謝幕（給人看圖用，檢查的項目少）
+  const puppet = async () => {
+    console.log('puppet');
+    const C3 = require('../shared/classes3d.js'), pg = await open(await account({ name: '小偶' }), false);
+    const shot = (n) => pg.screenshot({ path: path.join(OUT, 'puppet-' + n + '.png') });
+    const ask = (ev, arg) => pg.evaluate(([e, a]) => window.NW_SK.ask(e, a), [ev, arg]);
+    const view = () => pg.evaluate(() => window.HQ_NEWWORLD.combat.view()), dbg = () => pg.evaluate(() => window.HQ_NEWWORLD.combat.debug());
+    await pg.waitForFunction(() => window.HQ_NEWWORLD.combat && window.HQ_NEWWORLD.combat.view(), null, { timeout: 20000 });
+    await ask('cb:dbg', { lv: 60 }); await ask('cb:school', 'ae'); await ask('cb:dbg', { m: C3.GATE.mastery }); await ask('cb:quest', 'puppeteer'); await ask('cb:dbg', { quest: 1 }); await ask('cb:spec', 'puppeteer');
+    await ask('cb:slots', ['stitch', 'string', 'curtain', 'spark']); await ask('cb:dbg', { lv: 6 }); await zoomIn(pg);   // 等級調低，怪才不會一下就倒
+    const aim = (reach) => pg.evaluate((reach) => { const NW = window.HQ_NEWWORLD, m = NW.combat.debug().mobs.filter(x => x.kind === 'slime' && !(x.fl & 256)).sort((a, b) => a.x - b.x)[0]; NW.debugPlace(m.x + reach, m.z + 0.5); NW.combat.setTarget(m.id); return m; }, reach);
+    await pg.evaluate(() => window.HQ_NEWWORLD.debugPlace(19, 14)); await pg.waitForTimeout(600); await shot('1-idle');
+    ok((await view()).spec === 'puppeteer' && (await dbg()).threads === 4, '操偶師平常兩隻手各垂著兩條短線');
+    await aim(4.5); await pg.waitForTimeout(600); await pg.locator('.cb-sk').nth(1).dispatchEvent('pointerdown'); await pg.waitForTimeout(700);
+    ok((await dbg()).threads >= 5, '提線：五條線從兩隻手牽到偶身上'); await shot('2-string');
+    await pg.evaluate(() => window.HQ_NEWWORLD.debugPlace(8, 14)); await ask('cb:dbg', { lv: 6 }); await pg.waitForTimeout(300); await zoomIn(pg);
+    await aim(3); await pg.waitForTimeout(500); await pg.locator('.cb-sk').nth(2).dispatchEvent('pointerdown'); await pg.waitForTimeout(800);
+    ok((await dbg()).zones.length === 1, '謝幕：舞台搭起來'); await shot('3-curtain');
+    ok(!pg.errors.length, '沒有頁面錯誤' + (pg.errors.length ? '：' + pg.errors.join(' / ') : ''));
+    await pg.context().close();
+  };
+  // 使魔的樣子：三隻排在一起拍一張大圖，拿來跟繪師的圖對照
+  const fam = async () => {
+    console.log('fam');
+    const pg = await open(await account({ name: '小召' }), false);
+    await pg.waitForFunction(() => window.HQ_NEWWORLD.combat && window.HQ_NEWWORLD.combat.view(), null, { timeout: 20000 });
+    await pg.setViewportSize({ width: 2400, height: 1500 }); await zoomIn(pg);
+    await pg.evaluate(() => { const NW = window.HQ_NEWWORLD; NW.debugPlace(13.8, 20); }); await pg.waitForTimeout(1500);
+    const n = await pg.evaluate(() => window.HQ_NEWWORLD.combat.famPreview(9.5, 20).length); await pg.waitForTimeout(1200);
+    ok(n === 3, '三隻使魔都做得出來'); await pg.screenshot({ path: path.join(OUT, 'fam-lineup.png'), clip: { x: 700, y: 380, width: 900, height: 640 } });
+    ok(!pg.errors.length, '沒有頁面錯誤' + (pg.errors.length ? '：' + pg.errors.join(' / ') : ''));
+    await pg.context().close();
+  };
+  if (want === 'fam') await fam();
+  if (want === 'puppet') await puppet();
+  if (want === 'hotbar') await hotbar(false);
+  if (want === 'hotbar-phone') await hotbar(true);
   if (want === 'combat') await combat(false);
   if (want === 'combat-phone') await combat(true);
   if (want === 'all' || want === 'stay') await stay();

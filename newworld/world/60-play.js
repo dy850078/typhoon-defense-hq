@@ -403,6 +403,7 @@ const NW = (() => {
       STD.tick(TW.s1, dt, 1, 1.1); STD.tick(TW.s2, dt, 0); STD.tick(TW.s3, dt, 0); }
     TW.pet.pose(t * PI2 * 4); TW.pet.position.y = 0.12 * Math.abs(Math.sin(t * PI2 * 4));
     TW.mobs.forEach((m) => { const h = Math.abs(Math.sin(t * PI2 * 3 + m.ph)); m.g.position.y = h * 0.45; m.g.scale.set(1 + (1 - h) * 0.1, 0.9 + h * 0.16, 1 + (1 - h) * 0.1); });
+    if (CB) CB.late(dt);   // 人物的動作都算完之後，才擺操偶師的手
   }
 
   // --- 畫質：低 = 不開影子、解析度 1 倍；中 = 影子 1024、1.5 倍；高 = 影子 2048、2 倍 ---

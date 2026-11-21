@@ -79,19 +79,65 @@ function makeCombat(ctx) {
   const nearest = (r) => { let best = null, bd = r; MOBS.forEach(m => { if (m.fl & 256) return; const d = Math.hypot(m.x - ME.x, m.z - ME.z); if (d < bd) { bd = d; best = m; } }); return best; };
 
   // ---------- 使魔（繪師的聖誕外星人）和夢魘機甲 ----------
+  // ---- 使魔：照繪師的聖誕圖做（星星臉、三眼花農、花圈長老），每一隻有自己的小動作（g.anim）----
+  const blob = (pts, depth, bevel) => { const sh = new THREE.Shape(); sh.moveTo(pts[0][0], pts[0][1]); sh.splineThru(pts.slice(1).concat([pts[0]]).map(q => new THREE.Vector2(q[0], q[1])));
+    const g = new THREE.ExtrudeGeometry(sh, { depth, bevelEnabled: bevel > 0, bevelThickness: bevel, bevelSize: bevel, bevelSegments: 3, curveSegments: 8 }); g.translate(0, 0, -depth / 2); return g; };
+  const lathe = (pts, seg = 14) => new THREE.LatheGeometry(pts.map(q => new THREE.Vector2(q[0], q[1])), seg);
+  const starPts = (n, tips, dip, rot = 0) => { const o = []; for (let i = 0; i < n * 2; i++) { const a = rot + i * Math.PI / n, r = i % 2 ? dip : tips[(i / 2) % tips.length]; o.push([Math.sin(a) * r, Math.cos(a) * r]); } return o; };
+  const LV = new V3(), LW = new V3();
+  const limb = (g, col, a, b, r, o) => { LV.set(...a); LW.set(...b); const m = part(g, GEO.cyl, col, Object.assign({ scale: [r, LV.distanceTo(LW), r] }, o)); m.position.copy(LV).add(LW).multiplyScalar(0.5); m.quaternion.setFromUnitVectors(UP, LW.sub(LV).normalize()); return m; };
+  const flatM = (c) => basic(c), dot = (g, col, pos, sc, rot) => part(g, sph(1, 10, 8), col, { pos, scale: sc, rot, noLine: true, shadow: false, mat: flatM(col) });
+  const GF = { starHead: blob(starPts(5, [0.62, 0.5, 0.46, 0.5, 0.6], 0.3, 0.35), 0.16, 0.09), leaf: blob([[0, 0], [0.2, 0.25], [0.24, 0.7], [0.14, 1.1], [0, 1.22], [-0.12, 1.05], [-0.2, 0.65], [-0.16, 0.22]], 0.03, 0.02),
+    flatHead: blob([[-0.78, 0.1], [-0.4, 0.2], [0, 0.23], [0.4, 0.2], [0.78, 0.1], [0.4, -0.02], [0.17, -0.2], [0.11, -0.62], [-0.11, -0.62], [-0.17, -0.2], [-0.4, -0.02]], 0.24, 0.09),
+    star5: blob(starPts(5, [0.2], 0.09), 0.03, 0.02), petal: blob([[0, 0], [0.09, 0.08], [0.1, 0.22], [0, 0.3], [-0.1, 0.22], [-0.09, 0.08]], 0.02, 0.015), holly: blob([[0, 0], [0.07, 0.06], [0.04, 0.12], [0.08, 0.18], [0, 0.26], [-0.08, 0.18], [-0.04, 0.12], [-0.07, 0.06]], 0.015, 0.01),
+    pot: new THREE.CylinderGeometry(0.13, 0.085, 0.24, 10), cone: new THREE.ConeGeometry(1, 1, 8), tor: new THREE.TorusGeometry(0.27, 0.085, 7, 18), scarf: new THREE.TorusGeometry(0.26, 0.09, 7, 16) };
   const FAM = {
-    0: (g) => { part(g, GEO.cyl, '#2f5d3a', { pos: [0, 0.45, 0], scale: [0.2, 0.9, 0.2] }); const h = part(g, GEO.star, '#f6a9c0', { pos: [0, 1.12, 0], scale: [0.5, 0.42, 0.26], rot: [0, 0, 0.5] }); h.name = 'head';
-      eyes(g, 1.16, 0.2, 0.12, 0.06); part(g, sph(0.05, 6, 6), '#d23a4a', { pos: [0, 1.0, 0.22], scale: [1.4, 0.7, 0.5], noLine: true, shadow: false });
-      [-1, 1].forEach(k => part(g, sph(0.3, 10, 8), '#9fdc9a', { pos: [0.3 * k, 0.75, -0.2], scale: [0.55, 1.2, 0.12], rot: [0, 0.5 * k, -0.5 * k], noLine: true })); g.H = 1.5; },
-    1: (g) => { part(g, GEO.cyl, '#2f5d3a', { pos: [0, 0.75, 0], scale: [0.3, 1.5, 0.3] }); part(g, sph(0.6, 14, 10), '#8fa38a', { pos: [0, 1.62, 0], scale: [1.15, 0.36, 0.8] });
-      [-1, 0, 1].forEach(k => part(g, sph(0.07, 8, 6), '#f2d86a', { pos: [0.16 * k, 1.64, 0.42], scale: [1, 0.8, 0.5], noLine: true, shadow: false, mat: basic('#f2d86a') }));
-      [-1, 1].forEach(k => { part(g, GEO.cyl, '#6fbf6a', { pos: [0.16 * k, 1.95, 0], scale: [0.025, 0.4, 0.025], noLine: true }); part(g, GEO.star, '#8fd36a', { pos: [0.16 * k, 2.2, 0], scale: [0.2, 0.2, 0.08], noLine: true }); });
-      part(g, GEO.cyl, '#f08aa8', { pos: [0.42, 1.0, 0.25], scale: [0.12, 0.22, 0.12] }); part(g, GEO.star, '#c8323c', { pos: [0.42, 1.36, 0.25], scale: [0.2, 0.2, 0.08], noLine: true }); g.H = 2.3; },
-    2: (g) => { part(g, GEO.cyl, '#f3a5b8', { pos: [0, 0.95, 0], scale: [0.46, 1.9, 0.42] }); part(g, GEO.box, '#fbf3e4', { pos: [0, 1.25, 0.34], scale: [0.4, 0.9, 0.12], noLine: true });
-      part(g, sph(0.3, 12, 10), '#6fbf6a', { pos: [0, 2.2, 0.05], scale: [1, 1.1, 1] }); part(g, sph(0.2, 10, 8), '#6fbf6a', { pos: [0, 2.12, 0.45], scale: [0.6, 0.45, 2.0] });
-      eyes(g, 2.3, 0.26, 0.2, 0.06); part(g, new THREE.TorusGeometry(0.24, 0.07, 6, 14), '#3f8a4f', { pos: [0, 2.72, 0], noLine: true }); part(g, sph(0.07, 6, 6), '#e9c46a', { pos: [0, 2.72, 0], noLine: true });
-      [0, 1, 2].forEach(i => part(g, sph(0.05, 6, 6), '#d23a4a', { pos: [Math.cos(i * 2.1) * 0.24, 2.72 + Math.sin(i * 2.1) * 0.24, 0.05], noLine: true, shadow: false })); g.H = 3.0; },
-    3: (g) => { FAM[2](g); const halo = flat(mesh(GEO.ring, bm('#ffe9a8', 0.9), g)); halo.position.y = 3.25; halo.scale.setScalar(0.55); [0, 1, 2, 3, 4].forEach(i => { const b = mesh(GEO.star, bm(['#ffd76a', '#f08aa8', '#9fdc9a'][i % 3]), g); b.scale.setScalar(0.09); b.position.set(Math.cos(i * 1.26) * 0.5, 1.2 + i * 0.25, Math.sin(i * 1.26) * 0.5); }); g.scale.setScalar(1.7); g.H = 5.1; },
+    // 星星臉：粉紅色歪歪的星星頭、垂垂的黑眼睛和紅嘴唇、細長的深綠身體、背後兩片有條紋的淺綠翅膀
+    0: (g) => { const DG = '#2f5d3a', PK = '#f4a6c0';
+      part(g, lathe([[0.3, 0], [0.24, 0.12], [0.17, 0.5], [0.12, 0.9], [0.085, 1.12], [0.07, 1.2]]), DG, {}); limb(g, DG, [0.13, 0.86, 0.06], [0.2, 0.52, 0.16], 0.04, {}); limb(g, DG, [-0.13, 0.86, 0.06], [-0.2, 0.56, 0.14], 0.04, {});
+      const hd = new THREE.Group(); hd.position.set(0, 1.5, 0.02); hd.rotation.z = -0.12; g.add(hd); part(hd, GF.starHead, PK, { line: 0.03 });
+      dot(hd, '#ffc4d6', [-0.16, 0.06, 0.17], [0.2, 0.13, 0.02]); dot(hd, '#ffc4d6', [0.2, -0.12, 0.17], [0.1, 0.07, 0.02]);
+      [-1, 1].forEach(k => { dot(hd, INK, [0.15 * k + 0.02, 0.02, 0.19], [0.1, 0.062, 0.03], [0, 0, -0.5 * k]); dot(hd, '#fffaf0', [0.13 * k + 0.02, 0.035, 0.215], [0.028, 0.022, 0.01]);
+        [0, 1].forEach(i => limb(hd, INK, [0.22 * k + 0.02, 0.0 + i * 0.03, 0.2], [0.29 * k + 0.02, -0.03 + i * 0.05, 0.19], 0.008, { noLine: true, shadow: false, mat: flatM(INK) })); });
+      limb(hd, '#c97f98', [0.02, -0.02, 0.2], [0.035, -0.11, 0.21], 0.008, { noLine: true, shadow: false, mat: flatM('#c97f98') });
+      [-1, 1].forEach(k => dot(hd, '#d23a4a', [0.02 + 0.028 * k, -0.165, 0.2], [0.04, 0.026, 0.02])); dot(hd, '#d23a4a', [0.02, -0.195, 0.2], [0.05, 0.026, 0.02]);
+      const wings = [-1, 1].map(k => { const w = new THREE.Group(); w.position.set(0.05 * k, 0.92, -0.1); g.add(w); const l = part(w, GF.leaf, '#a9e0a0', { rot: [0.1, 0, -0.95 * k], line: 0.02 });
+        [-0.07, 0, 0.07].forEach(x => part(l, GEO.box, '#86cf86', { pos: [x, 0.62, 0.035], scale: [0.02, 0.85 - Math.abs(x) * 3, 0.01], noLine: true, shadow: false, mat: flatM('#86cf86') }));
+        const l2 = part(w, GF.leaf, '#bfe9b4', { rot: [0.1, 0, -1.45 * k], scale: [0.8, 0.72, 1], pos: [0, -0.02, -0.02], line: 0.02 }); part(l2, GEO.box, '#86cf86', { pos: [0, 0.62, 0.035], scale: [0.02, 0.8, 0.01], noLine: true, shadow: false, mat: flatM('#86cf86') }); w.k = k; return w; });
+      g.anim = (t) => { wings.forEach(w => { w.rotation.y = w.k * (0.25 + Math.sin(t * 7) * 0.3); }); hd.rotation.z = -0.12 + Math.sin(t * 1.7) * 0.08; hd.rotation.y = Math.sin(t * 1.1) * 0.15; hd.rotation.x = -0.22; }; g.scale.setScalar(1.25); g.H = 2.5; },
+    // 三眼花農：灰綠色扁扁寬寬的頭、一排三顆黃眼睛、頭上兩朵星星花，深綠的高個子，手上捧著一盆紅色風車花
+    1: (g) => { const DG = '#2f5d3a', GY = '#93a58c';
+      part(g, lathe([[0.36, 0], [0.3, 0.14], [0.24, 0.7], [0.27, 1.25], [0.25, 1.5], [0.12, 1.62], [0.1, 1.75]]), DG, {});
+      limb(g, DG, [-0.27, 1.45, 0], [-0.36, 0.95, 0.04], 0.06, {}); limb(g, DG, [-0.36, 0.95, 0.04], [-0.33, 0.5, 0.1], 0.05, {}); dot(g, DG, [-0.33, 0.46, 0.1], [0.06, 0.08, 0.06]);
+      limb(g, DG, [0.27, 1.45, 0], [0.42, 1.08, 0.12], 0.06, {}); limb(g, DG, [0.42, 1.08, 0.12], [0.3, 1.05, 0.42], 0.05, {});
+      const hd = new THREE.Group(); hd.position.set(0, 2.25, 0); g.add(hd); part(hd, GF.flatHead, GY, { line: 0.03 }); dot(hd, '#a9b8a2', [0, 0.14, 0.2], [0.5, 0.05, 0.02]);
+      [-1, 0, 1].forEach(k => { dot(hd, '#6f8068', [0.23 * k, 0.07, 0.205], [0.125, 0.09, 0.02]); dot(hd, '#f2d86a', [0.23 * k, 0.07, 0.215], [0.1, 0.068, 0.02]); dot(hd, '#fff3b0', [0.23 * k - 0.03, 0.09, 0.228], [0.032, 0.022, 0.01]); });
+      const ants = [-1, 1].map(k => { const a = new THREE.Group(); a.position.set(0.2 * k, 0.28, 0); hd.add(a); limb(a, '#6fbf6a', [0, 0, 0], [0.05 * k, 0.26, 0], 0.016, { noLine: true }); limb(a, '#6fbf6a', [0.05 * k, 0.26, 0], [0.14 * k, 0.46, 0], 0.016, { noLine: true });
+        const st = part(a, GF.star5, '#7fcf6a', { pos: [0.16 * k, 0.56, 0], rot: [0, 0, 0.3 * k], line: 0.018 }); dot(st, '#e9c46a', [0, 0, 0.035], [0.045, 0.045, 0.02]); a.k = k; return a; });
+      const pot = new THREE.Group(); pot.position.set(0.3, 1.02, 0.5); g.add(pot); part(pot, GF.pot, '#f08aa8', { line: 0.02 }); part(pot, GEO.cyl, '#f6a9c0', { pos: [0, 0.12, 0], scale: [0.15, 0.04, 0.15], line: 0.02 }); limb(pot, '#3f8a4f', [0, 0.12, 0], [0, 0.4, 0], 0.018, { noLine: true });
+      const fl = new THREE.Group(); fl.position.set(0, 0.5, 0.02); pot.add(fl); for (let i = 0; i < 5; i++) { const pt = part(fl, GF.petal, i % 2 ? '#c8323c' : '#d9434c', { rot: [0, 0, i * PI2 / 5], line: 0.014 }); part(pt, GEO.box, '#8f1f2a', { pos: [0.02, 0.16, 0.02], scale: [0.012, 0.2, 0.008], rot: [0, 0, -0.25], noLine: true, shadow: false, mat: flatM('#8f1f2a') }); }
+      dot(fl, '#e9c46a', [0, 0, 0.03], [0.05, 0.05, 0.03]);
+      g.anim = (t) => { fl.rotation.z = t * 1.6; pot.rotation.z = Math.sin(t * 1.3) * 0.08; ants.forEach(a => { a.rotation.z = Math.sin(t * 2 + a.k) * 0.14; }); hd.rotation.z = Math.sin(t * 0.9) * 0.05; hd.rotation.x = -0.3; }; g.scale.setScalar(1.25); g.H = 3.75; },
+    // 花圈長老：最高的一隻。淺綠的頭有長長的鳥喙和鬚，頭上頂著掛鈴鐺的聖誕花圈，粉紅條紋長袍配白色內襯，手上拿著一串小燈
+    2: (g) => { const PK = '#f2a3b6', PD = '#e2869f', LG = '#7fcf7a', MG = '#5fb863';
+      part(g, lathe([[0.58, 0], [0.52, 0.1], [0.44, 1.0], [0.4, 1.9], [0.36, 2.2], [0.2, 2.34], [0.16, 2.4]], 18), PK, {});
+      part(g, lathe([[0.5, 0.02], [0.45, 1.0], [0.41, 1.9], [0.3, 2.22]], 8).rotateY(-Math.PI / 8), '#fbf3e4', { pos: [0, 0.02, 0.05], scale: [0.62, 1, 1], noLine: true });
+      [-1, 1].forEach(k => { [0.3, 0.38].forEach((x, i) => limb(g, PD, [x * k * 1.02, 2.12, 0.3 - i * 0.1], [(x + 0.1) * k, 0.06, 0.4 - i * 0.12], 0.022, { noLine: true, shadow: false }));
+        limb(g, PK, [0.38 * k, 2.1, 0], [0.5 * k, 1.5, 0.16], 0.13, {}); limb(g, PK, [0.5 * k, 1.5, 0.16], [0.26 * k, 1.42, 0.52], 0.115, {}); part(g, GEO.cyl, PD, { pos: [0.29 * k, 1.43, 0.47], scale: [0.125, 0.07, 0.125], rot: [1.2, 0, 0.55 * k], noLine: true });
+        dot(g, LG, [0.2 * k, 1.42, 0.6], [0.09, 0.075, 0.09]); [-1, 0, 1].forEach(j => limb(g, LG, [0.2 * k, 1.42, 0.62], [0.14 * k + j * 0.03, 1.4 + j * 0.03, 0.74], 0.02, { noLine: true })); });
+      part(g, GF.scarf, '#ee8fa8', { pos: [0, 2.3, 0.02], rot: [Math.PI / 2, 0, 0], scale: [1, 1, 1.1], line: 0.02 }); limb(g, LG, [0, 2.3, 0], [0, 2.62, 0.02], 0.12, {});
+      const sprig = new THREE.Group(); sprig.position.set(0, 1.44, 0.72); g.add(sprig); limb(sprig, '#3f8a4f', [-0.34, -0.02, 0], [0.34, 0.06, 0], 0.02, { noLine: true });
+      [[-0.3, '#f2d86a'], [-0.15, '#fffaf0'], [0.02, '#f2d86a'], [0.18, '#fffaf0'], [0.32, '#f2d86a']].forEach((a, i) => { limb(sprig, '#3f8a4f', [a[0], 0.0, 0], [a[0], -0.08, 0], 0.008, { noLine: true }); dot(sprig, a[1], [a[0], -0.12, 0], [0.04, 0.05, 0.04]); });
+      const hd = new THREE.Group(); hd.position.set(0, 2.82, 0.04); g.add(hd); part(hd, sph(0.3, 14, 12), LG, { scale: [0.95, 1.12, 1.05] }); part(hd, sph(0.2, 10, 8), LG, { pos: [0, 0.05, -0.26], scale: [0.5, 0.9, 0.9], rot: [0.5, 0, 0] });
+      part(hd, GF.cone, LG, { pos: [0, 0.0, 0.62], scale: [0.13, 0.95, 0.1], rot: [Math.PI / 2 + 0.12, 0, 0] }); part(hd, GF.cone, MG, { pos: [0, -0.13, 0.5], scale: [0.1, 0.7, 0.07], rot: [Math.PI / 2 + 0.3, 0, 0] });
+      [-0.09, 0, 0.09].forEach((x, i) => part(hd, GF.cone, MG, { pos: [x, -0.42 - (i === 1 ? 0.05 : 0), 0.16 + (i === 1 ? 0.05 : 0)], scale: [0.03, 0.34 + (i === 1 ? 0.1 : 0), 0.03], rot: [Math.PI + 0.15, 0, x * 2], noLine: true }));
+      [-1, 1].forEach(k => { dot(hd, '#3f8a4f', [0.2 * k, 0.1, 0.2], [0.07, 0.14, 0.09], [0, 0.6 * k, 0]); dot(hd, '#1f3d26', [0.215 * k, 0.1, 0.225], [0.045, 0.1, 0.07], [0, 0.6 * k, 0]); dot(hd, '#dff5d8', [0.22 * k, 0.15, 0.27], [0.016, 0.03, 0.02]); });
+      const wr = new THREE.Group(); wr.position.set(0, 0.6, 0); hd.add(wr); part(wr, GF.tor, '#3f8a4f', { line: 0.024 });
+      for (let i = 0; i < 12; i++) { const a = i * PI2 / 12; dot(wr, i % 2 ? '#2f6e3d' : '#57a85f', [Math.cos(a) * 0.27, Math.sin(a) * 0.27, 0.07], [0.07, 0.07, 0.05]); }
+      [[-0.24, -0.12], [0.24, -0.12], [0.02, -0.27]].forEach(q => dot(wr, '#e6e6e0', [q[0], q[1], 0.11], [0.05, 0.05, 0.05])); [-1, 0, 1].forEach(k => part(wr, GF.holly, '#c8323c', { pos: [0.02 * k, 0.3, 0.06], rot: [0, 0, -0.75 * k], scale: 0.85, line: 0.012 })); dot(wr, '#e9c46a', [0, 0.31, 0.1], [0.035, 0.035, 0.03]);
+      const bell = new THREE.Group(); bell.position.set(0, 0.16, 0.02); wr.add(bell); part(bell, GF.cone, '#e9c46a', { pos: [0, -0.1, 0], scale: [0.1, 0.18, 0.1], line: 0.016 }); dot(bell, '#c99a2e', [0, -0.21, 0], [0.035, 0.035, 0.035]);
+      g.anim = (t) => { hd.rotation.x = Math.sin(t * 1.2) * 0.1 - 0.18; hd.rotation.y = Math.sin(t * 0.7) * 0.18; bell.rotation.z = Math.sin(t * 3.2) * 0.4; sprig.rotation.z = Math.sin(t * 1.5) * 0.08; }; g.scale.setScalar(1.25); g.H = 4.6; },
+    3: (g) => { FAM[2](g); const halo = flat(mesh(GEO.ring, bm('#ffe9a8', 0.9), g)); halo.position.y = 4.0; halo.scale.setScalar(0.55); [0, 1, 2, 3, 4].forEach(i => { const b = mesh(GEO.star, bm(['#ffd76a', '#f08aa8', '#9fdc9a'][i % 3]), g); b.scale.setScalar(0.09); b.position.set(Math.cos(i * 1.26) * 0.5, 1.2 + i * 0.25, Math.sin(i * 1.26) * 0.5); }); g.scale.setScalar(1.9); g.H = 7.0; },
   };
   const mkMecha = () => { const g = new THREE.Group(), c1 = '#3a3350', c2 = '#57496f';
     part(g, GEO.box, c1, { pos: [0, 1.75, 0], scale: [1.5, 1.3, 1.0] }); part(g, GEO.box, c2, { pos: [0, 2.75, 0.05], scale: [0.85, 0.7, 0.8] }); part(g, GEO.box, '#1d1a2b', { pos: [0, 2.75, 0.42], scale: [0.6, 0.4, 0.1], noLine: true });
@@ -115,10 +161,33 @@ function makeCombat(ctx) {
   const thread = (i) => { while (THREADS.length <= i) { const segs = []; for (let k = 0; k < SEG; k++) { const m = mesh(GEO.tube, TH_MAT); m.frustumCulled = false; segs.push(m); } THREADS.push(segs); } return THREADS[i]; };
   const A3 = new V3(), B3 = new V3(), C3v = new V3(), P0 = new V3(), P1 = new V3(), UP = new V3(0, 1, 0);
   let thN = 0;
-  const drawThread = (ax, ay, az, bx, by, bz, slack) => { const segs = thread(thN++); A3.set(ax, ay, az); B3.set(bx, by, bz); const d = A3.distanceTo(B3); C3v.copy(A3).add(B3).multiplyScalar(0.5); C3v.y -= slack * Math.max(0.05, 1 - d / 9) * 1.6;
+  const drawThread = (ax, ay, az, bx, by, bz, slack, wd = 0.045) => { const segs = thread(thN++); A3.set(ax, ay, az); B3.set(bx, by, bz); const d = A3.distanceTo(B3); C3v.copy(A3).add(B3).multiplyScalar(0.5); C3v.y -= slack * Math.max(0.05, 1 - d / 9) * 1.6;
     for (let k = 0; k < SEG; k++) { const t0 = k / SEG, t1 = (k + 1) / SEG, q = (t, out) => out.set((1 - t) * (1 - t) * A3.x + 2 * (1 - t) * t * C3v.x + t * t * B3.x, (1 - t) * (1 - t) * A3.y + 2 * (1 - t) * t * C3v.y + t * t * B3.y, (1 - t) * (1 - t) * A3.z + 2 * (1 - t) * t * C3v.z + t * t * B3.z);
-      q(t0, P0); q(t1, P1); const m = segs[k], l = P0.distanceTo(P1); m.visible = true; m.position.copy(P0).add(P1).multiplyScalar(0.5); m.scale.set(0.045, l, 0.045); m.quaternion.setFromUnitVectors(UP, P1.sub(P0).normalize()); } };
-  const hand = (p, side) => { const f = p.face || 0; return [p.x + Math.sin(f) * 0.35 + Math.cos(f) * 0.42 * side, FY(p.x, p.z) + 1.25, p.z + Math.cos(f) * 0.35 - Math.sin(f) * 0.42 * side]; };
+      q(t0, P0); q(t1, P1); const m = segs[k], l = P0.distanceTo(P1); m.visible = true; m.position.copy(P0).add(P1).multiplyScalar(0.5); m.scale.set(wd, l, wd); m.quaternion.setFromUnitVectors(UP, P1.sub(P0).normalize()); } };
+  // ---- 操偶師的手：手上有線的時候把兩隻手抬到身前，線從指尖出去；謝幕的時候兩手高舉 ----
+  const HANDS = new Map(), PULL = new Map(), HQ1 = new THREE.Quaternion(), HQ2 = new THREE.Quaternion(), HA = new V3(), HB = new V3(), HD = new V3();
+  const charOf = (id) => id === MYID ? (ME && ME.c) : (OTH.get(id) || {}).c;
+  const bonesOf = (c) => { if (!c._cbB) { c._cbB = {}; c.g.traverse(o => { if (o.isBone) c._cbB[o.name] = o; }); } return c._cbB; };
+  const aimBone = (bone, child, dx, dy, dz, f, w) => { bone.updateWorldMatrix(true, true); bone.getWorldPosition(HA); child.getWorldPosition(HB); HB.sub(HA).normalize(); HD.set(dx, dy, dz).normalize().applyAxisAngle(UP, f);
+    HQ1.setFromUnitVectors(HB, HD); HQ2.identity().slerp(HQ1, w); bone.getWorldQuaternion(HQ1); HQ2.multiply(HQ1); bone.parent.getWorldQuaternion(HQ1).invert(); bone.quaternion.copy(HQ1.multiply(HQ2)); };
+  function late(dt) {
+    const t = S.time;
+    WHO.forEach(w => { if (w.spec !== 'puppeteer') { HANDS.delete(w.id); return; }
+      const c = charOf(w.id), p = posOf(w.id); if (!c || !p) return; const B = bonesOf(c); if (!B.upper_armL || !B.handL) return;
+      let h = HANDS.get(w.id); if (!h) { h = { k: 0, up: 0, yank: 0, L: [-0.42, 1.0, 0.1], R: [0.42, 1.0, 0.1] }; HANDS.set(w.id, h); }
+      const up = [...ZONES.values()].some(o => o.g.curtain && o.z.id === w.id && o.t < (o.z.dur || 2)) ? 1 : 0, want = up || h.yank > 0 || PULL.get(w.id) ? 1 : 0;
+      h.k += (want - h.k) * Math.min(1, dt * 9); h.up += (up - h.up) * Math.min(1, dt * 7); if (h.yank > 0) h.yank -= dt;
+      const f = p.face || 0, y = h.yank > 0 ? Math.sin((1 - h.yank / 0.45) * Math.PI) : 0, gy = FY(p.x, p.z);
+      [['L', -1], ['R', 1]].forEach(([n, sd]) => { const ua = B['upper_arm' + n], la = B['lower_arm' + n], hd = B['hand' + n];
+        if (h.k > 0.02) { const bob = (Math.sin(t * 9 + sd) * 0.1 + (Math.floor(t * 6) % 2 ? 0.1 : -0.1) * sd) * (1 - h.up), sway = h.up * Math.sin(t * 2) * 0.25;   // 一手高一手低，跟著偶一頓一頓
+          aimBone(ua, la, sd * (0.5 + h.up * 0.25) + y * 1.3 + sway, 0.1 + bob + h.up * 1.2, 0.85 - h.up * 0.5 + y * 0.2, f, h.k);
+          aimBone(la, hd, sd * (0.18 + h.up * 0.2) + y * 1.6 + sway, 0.5 + bob * 1.5 + h.up * 1.4, 0.8 - h.up * 0.55, f, h.k); }
+        la.updateWorldMatrix(true, true); la.getWorldPosition(HA); hd.getWorldPosition(HB); HD.copy(HB).sub(HA).normalize().multiplyScalar(0.1); HB.add(HD);
+        h[n] = [HB.x - p.x, HB.y - gy, HB.z - p.z]; }); });
+    PULL.clear();
+  }
+  const hand = (p, side, id) => { const h = id != null ? HANDS.get(id) : null; if (h) { const a = side < 0 ? h.L : h.R; return [p.x + a[0], FY(p.x, p.z) + a[1], p.z + a[2]]; }
+    const f = p.face || 0; return [p.x + Math.sin(f) * 0.35 + Math.cos(f) * 0.42 * side, FY(p.x, p.z) + 1.25, p.z + Math.cos(f) * 0.35 - Math.sin(f) * 0.42 * side]; };
 
   // ---------- 持續一陣子的東西：星星燈、絕壁、禁錮的框、封印之匣、謝幕 ----------
   const ZONE = {
@@ -130,8 +199,20 @@ function makeCombat(ctx) {
       g.tick = (t, k) => { const drop = Math.min(1, k * 5), sq = k > 0.86 ? 1 - (k - 0.86) / 0.14 : 1; [b, e].forEach(o => { o.scale.set(side * (0.6 + 0.4 * sq), 3.2 * sq + 0.05, side * (0.6 + 0.4 * sq)); o.position.y = (1 - drop) * 8 + (3.2 * sq + 0.05) / 2; }); }; return g; },
     lock: (z) => { const g = new THREE.Group(); const side = z.r * 1.6, e = new THREE.LineSegments(GEO.wire, lm('#7fb4ff')); e.scale.set(side, 2.6, side); e.position.y = 1.3; g.add(e); const f = mesh(GEO.box, bm('#7fb4ff', 0.12), g); f.scale.copy(e.scale); f.position.y = 1.3;
       g.tick = (t, k) => { const s = Math.min(1, k * 10); g.scale.set(s, 1, s); g.rotation.y = 0; }; return g; },
-    curtain: (z) => { const g = new THREE.Group(); const bar = new THREE.Group(); g.add(bar); bar.position.y = 5.6; g.barY = 5.6; [0, Math.PI / 2].forEach(a => { const m = mesh(GEO.box, bm('#8a5a3c'), bar); m.scale.set(z.r * 1.1, 0.16, 0.22); m.rotation.y = a; });
-      g.tick = (t, k) => { bar.rotation.y = Math.sin(t * 2) * 0.2; g.barY = 5.6 + k * 1.0; bar.position.y = g.barY; }; g.curtain = true; return g; },
+    // 謝幕：一座小舞台。上面是木頭十字控制桿，兩邊紅布幕、頂上一排布簾，聚光燈打在被吊起來的偶身上
+    curtain: (z) => { const g = new THREE.Group(), R = z.r, bar = new THREE.Group(); g.add(bar); bar.position.y = 6.4; g.barY = 6.4;
+      [0, Math.PI / 2].forEach(a => { const m = mesh(GEO.box, bm('#8a5a3c'), bar); m.scale.set(R * 1.25, 0.26, 0.36); m.rotation.y = a; const d = mesh(GEO.box, bm('#5e3a22'), bar); d.scale.set(R * 1.25, 0.08, 0.4); d.rotation.y = a; d.position.y = -0.15;
+        [-1, 1].forEach(k => { const n = mesh(GEO.sph, bm('#e9c46a'), bar); n.scale.setScalar(0.24); n.position.set(Math.cos(a) * k * R * 0.625, 0, -Math.sin(a) * k * R * 0.625); }); });
+      const hub = mesh(GEO.cyl, bm('#5e3a22'), bar); hub.scale.set(0.3, 0.9, 0.3); hub.position.y = 0.45; const knob = mesh(GEO.sph, bm('#e9c46a'), bar); knob.scale.setScalar(0.34); knob.position.y = 0.95;
+      const lite = mesh(new THREE.ConeGeometry(1, 1, 20, 1, true), bm('#fff3c4', 0.16, true), g), pool = flat(mesh(GEO.disc, bm('#fff3c4', 0.22, true), g)); pool.position.y = 0.07;
+      const drapes = [-1, 1].map(k => { const d = new THREE.Group(); g.add(d); for (let i = 0; i < 6; i++) { const c = mesh(GEO.cyl, bm(i % 2 ? '#b8283c' : '#d2364a'), d); c.scale.set(0.34, 7.4, 0.34); c.position.set(k * i * 0.5, 3.7, (i % 2) * 0.12); }
+        const tie = mesh(GEO.box, bm('#e9c46a'), d); tie.scale.set(3.1, 0.16, 0.8); tie.position.set(k * 1.25, 2.6, 0.06); d.k = k; return d; });
+      const top = new THREE.Group(); g.add(top); const n = Math.ceil(R * 2 / 0.9) + 2; for (let i = 0; i < n; i++) { const x = (i - (n - 1) / 2) * 0.9, c = mesh(GEO.sph, bm(i % 2 ? '#b8283c' : '#d2364a'), top); c.scale.set(0.55, 0.9, 0.4); c.position.set(x, 0, 0); const f = mesh(GEO.sph, bm('#e9c46a'), top); f.scale.setScalar(0.12); f.position.set(x, -0.9, 0.1); }
+      g.tick = (t, k) => { const inn = Math.min(1, k * 6), ea = 1 - (1 - inn) * (1 - inn); bar.rotation.y = Math.sin(t * 2) * 0.22; bar.rotation.z = Math.sin(t * 3.1) * 0.07; g.barY = 6.4 + k * 0.8 + (1 - ea) * 5; bar.position.y = g.barY;
+        drapes.forEach(d => { d.position.set(d.k * (R + 0.6 + (1 - ea) * 5), 0, 0.3); d.scale.y = ea; }); top.position.set(0, 7.5 + (1 - ea) * 4, 0.3);
+        const lr = R * 0.82 * (0.9 + Math.sin(t * 4) * 0.04); lite.scale.set(lr, 9, lr); lite.position.y = 4.5; lite.material.opacity = 0.16 * ea; pool.scale.setScalar(lr); pool.material.opacity = 0.22 * ea;
+        if (Math.random() < 0.3) rise(z.x + (Math.random() - 0.5) * R, z.z2, ['#ffe27a', '#ff9ec4', '#bfe9ff'][Math.random() * 3 | 0], 1, R * 0.5, 3.2, 0.08, 0.9, GEO.star); };
+      g.curtain = true; return g; },
   };
   const addZone = (z) => { if (ZONES.has(z.z) || !ZONE[z.zk]) return; const g = ZONE[z.zk](z); g.position.set(z.x, FY(z.x, z.z2), z.z2); G.add(g); ZONES.set(z.z, { g, z, t: 0 }); };
   const endZone = (id, f) => { const o = ZONES.get(id); if (!o) return; G.remove(o.g); ZONES.delete(id); };
@@ -173,10 +254,13 @@ function makeCombat(ctx) {
     fearEnd: (e) => { ring(e.x, e.z, C3.SK.fear.r, '#57496f', 0.7, 0.05); ring(e.x, e.z, C3.SK.fear.r * 0.7, '#e2506a', 0.5, 0.05); burst(e.x, 0.4, e.z, '#3a3350', 18, 6, 0.22, 0.8, GEO.box); SHAKE = 0.4; },
     stitch: (e, p) => { let prev = head(p, 1.25); (e.ids || []).forEach((id, i) => { const b = mobAt(id); if (!b) return; const a = prev; setTimeout(() => { shot(a, b, '#f4f1ea', 0.14, 0.09, GEO.cone, 0.1, () => burst(b.x, b.y, b.z, '#ffe9a8', 3, 1.2, 0.07, 0.3)); }, i * 110); prev = b; }); },
     string: (e) => { const b = mobAt(e.m); if (b) { ring(b.x, b.z, 1.3, '#ffe9a8', 0.4); rise(b.x, b.z, '#ffe9a8', 6, 0.5, 2.4, 0.08, 0.6); } },
-    string2: (e) => { const m = MOBS.get(e.m); if (m) { const x0 = m.x, z0 = m.z; m.fling = { x0, z0, x1: e.x + 0.6, z1: e.z, t: 0 }; } setTimeout(() => { ring(e.x, e.z, C3.SK.string.r, '#ffe9a8', 0.5, 0.1); burst(e.x, 0.4, e.z, '#f4f1ea', 10, 4, 0.12); SHAKE = 0.2; }, 300); },
+    string2: (e) => { const hh = HANDS.get(e.id); if (hh) hh.yank = 0.45; const m = MOBS.get(e.m); if (m) { const x0 = m.x, z0 = m.z; m.fling = { x0, z0, x1: e.x + 0.6, z1: e.z, t: 0 }; } setTimeout(() => { ring(e.x, e.z, C3.SK.string.r, '#ffe9a8', 0.5, 0.1); burst(e.x, 0.4, e.z, '#f4f1ea', 10, 4, 0.12); SHAKE = 0.2; }, 300); },
     zone: (e) => addZone(e),
     zoneEnd: (e) => { const o = ZONES.get(e.z); endZone(e.z); if (e.zk === 'box') { burst(e.x, 0.5, e.z2, '#e9c46a', 18, 6, 0.2, 0.7, GEO.box); ring(e.x, e.z2, e.r * 1.4, '#ffe9a8', 0.5, 0.05); SHAKE = 0.3; }
-      if (e.zk === 'curtain') { CUT = 0.3; [-1, 1].forEach(k => { const b = mesh(GEO.box, bm('#f4f1ea')); fx(b, 0.3, (kk, m) => { m.position.set(e.x, FY(e.x, e.z2) + 5.2, e.z2); m.scale.set(e.r * 2.2 * Math.min(1, kk * 4), 0.07, 0.3); m.rotation.set(0, 0.4, k * (0.5 - kk * 0.5)); }); }); ring(e.x, e.z2, e.r, '#ffe9a8', 0.6, 0.05); } },
+      if (e.zk === 'curtain') { const gy = FY(e.x, e.z2); [-1, 1].forEach(k => { const d = new THREE.Group(); G.add(d); for (let i = 0; i < Math.ceil(e.r / 0.5) + 1; i++) { const c = mesh(GEO.cyl, bm(i % 2 ? '#b8283c' : '#d2364a'), d); c.scale.set(0.34, 7.4, 0.34); c.position.set(-k * i * 0.5, 3.7, (i % 2) * 0.12); }
+          fx(d, 0.75, (kk, o) => { const cl = Math.min(1, kk * 3.2), dn = kk > 0.6 ? (kk - 0.6) / 0.4 : 0; o.position.set(e.x + k * (e.r + 0.6) * (1 - cl * cl), gy, e.z2 + 0.3); o.scale.y = 1 - dn; }, (o) => G.remove(o)); });
+        setTimeout(() => { burst(e.x, gy + 2.5, e.z2, '#ffe27a', 14, 7, 0.16, 0.9, GEO.star); burst(e.x, gy + 2.5, e.z2, '#ff9ec4', 12, 6, 0.14, 0.9, GEO.box); burst(e.x, gy + 2.5, e.z2, '#bfe9ff', 12, 6, 0.14, 0.9, GEO.box); SHAKE = 0.35; }, 240);
+        CUT = 0.3; [-1, 1].forEach(k => { const b = mesh(GEO.box, bm('#f4f1ea')); fx(b, 0.3, (kk, m) => { m.position.set(e.x, FY(e.x, e.z2) + 5.2, e.z2); m.scale.set(e.r * 2.2 * Math.min(1, kk * 4), 0.07, 0.3); m.rotation.set(0, 0.4, k * (0.5 - kk * 0.5)); }); }); ring(e.x, e.z2, e.r, '#ffe9a8', 0.6, 0.05); } },
     die: (e) => { const m = MOBS.get(e.m); if (m) { burst(m.x, FY(m.x, m.z) + m.h * 0.5, m.z, '#ffffff', 8, 2.5, 0.16, 0.5); if (TARGET === m.id) setTarget(null, true); } },
     mobAtk: (e) => { const m = MOBS.get(e.m); if (m) m.atkT = 0.3; },
     lvup: (e, p) => { ring(p.x, p.z, 2.4, '#ffd76a', 0.9); rise(p.x, p.z, '#ffe27a', 16, 1, 3.4, 0.14, 1.2, GEO.star); num(p.x, FY(p.x, p.z) + 2.8, p.z, 'Lv.' + e.lv, 'lv'); },
@@ -207,7 +291,7 @@ function makeCombat(ctx) {
       // 被提線的怪：像木偶一樣一頓一頓的
       const step = charm || lift ? Math.floor(t * 6) : 0, jerk = charm ? (step % 2 ? 0.28 : 0) : 0, tilt = charm || lift ? ((step * 37) % 7 - 3) * 0.08 : 0;
       const hop = held ? 0 : m.kind === 'wisp' ? 0.5 + Math.sin(m.ph * 2) * 0.15 : Math.abs(Math.sin(m.ph * (d > 0.05 ? 6 : 2.4))) * (d > 0.05 ? 0.3 : 0.1);
-      m.g.position.set(m.x, FY(m.x, m.z) + (charm ? jerk : hop) + m.lift + (m.air || 0), m.z); m.g.rotation.set(0, m.f, tilt);
+      m.g.position.set(m.x, FY(m.x, m.z) + (charm ? jerk : hop) + m.lift + (m.air || 0), m.z); m.g.rotation.set(lift ? Math.max(0, Math.sin(t * 5 + m.x)) * 0.55 : 0, lift ? 0 : m.f, tilt);
       const sq = m.hurtT > 0 ? 1 + m.hurtT * 1.2 : 1, at = m.atkT > 0 ? 1 + Math.sin((0.3 - m.atkT) / 0.3 * Math.PI) * 0.25 : 1; m.body.scale.set(m.sc * sq * m.show, m.sc * (2 - sq) * at * m.show, m.sc * sq * m.show);
       Object.values(m.fxo).forEach(o => { if (o.spin) o.rotation.y = t * o.spin; });
       const showBar = !dead && (m.hp < m.max || TARGET === m.id); m.bar.b.hidden = !showBar; if (showBar) { put2d(m.bar.b, m.x, FY(m.x, m.z) + m.h + 0.35 + m.lift, m.z); m.bar.i.style.width = Math.max(0, m.hp / m.max * 100).toFixed(0) + '%'; m.bar.b.classList.toggle('on', TARGET === m.id); }
@@ -215,13 +299,19 @@ function makeCombat(ctx) {
       const top = FY(m.x, m.z) + m.h + m.lift + (charm ? jerk : 0);
       if (lift && !dead) { const z = [...ZONES.values()].find(o => o.g.curtain), bx = z ? z.g.position.x + (m.x - z.g.position.x) * 0.45 : m.x, bz = z ? z.g.position.z + (m.z - z.g.position.z) * 0.45 : m.z, by = FY(m.x, m.z) + (z ? z.g.barY : 6);
         [0, -1, 1].forEach(side => drawThread(m.x + side * 0.4 * m.sc, top - (side ? 0.3 : 0), m.z, bx + side * 0.25, by, bz, 0)); }
-      else if (m.tied && !dead) { const p = posOf(m.tied); if (p) [0, -1, 1].slice(0, charm ? 3 : 1).forEach(side => { const h = hand(p, side || 1); drawThread(h[0], h[1] + (charm ? 0.5 : 0), h[2], m.x + side * 0.4 * m.sc, top - (side ? 0.35 : 0), m.z, charm ? 0.25 : 1); }); }
+      else if (m.tied && !dead) { const p = posOf(m.tied); if (p) { PULL.set(m.tied, 1); const cf = Math.cos(p.face || 0), sf = Math.sin(p.face || 0), hasH = HANDS.has(m.tied);
+        // 被提線的：左手兩條、右手三條，分別牽著頭、兩肩、兩側；只是被縫住的：右手一條
+        (charm ? [[1, 0, 0, 0], [-1, -1, -0.4, 0.3], [1, 1, 0.4, 0.3], [-1, -2, -0.6, 0.85], [1, 2, 0.6, 0.85]] : [[1, 0, 0, 0.2]]).forEach(a => { const h = hand(p, a[0], m.tied), sp = a[1] * 0.045;
+          drawThread(h[0] + cf * sp, h[1] + (hasH ? 0 : charm ? 0.5 : 0), h[2] - sf * sp, m.x + a[2] * m.sc, top - a[3] * Math.min(1, m.h), m.z, charm ? 0.12 : 1, charm ? 0.03 : 0.045); }); } }
     });
     // 被縫在一起的怪：彼此之間也有線
     { const gs = new Map(); MOBS.forEach(m => { if (m.link && !(m.fl & 256) && m.g.visible) { if (!gs.has(m.link)) gs.set(m.link, []); gs.get(m.link).push(m); } });
       gs.forEach(l => { for (let i = 0; i + 1 < l.length; i++) drawThread(l[i].x, FY(l[i].x, l[i].z) + l[i].h * 0.6, l[i].z, l[i + 1].x, FY(l[i + 1].x, l[i + 1].z) + l[i + 1].h * 0.6, l[i + 1].z, 0.6); }); }
     // 操偶師的飛針後面拖著線
-    for (let i = NEEDLE.length - 1; i >= 0; i--) { const n = NEEDLE[i]; n.t -= dt; const p = posOf(n.id), b = mobAt(n.m); if (n.t <= 0 || !p || !b) { NEEDLE.splice(i, 1); continue; } const h = hand(p, 1), k = Math.min(1, (0.32 - n.t) / 0.2); drawThread(h[0], h[1], h[2], h[0] + (b.x - h[0]) * k, h[1] + (b.y - h[1]) * k, h[2] + (b.z - h[2]) * k, 0.2); }
+    for (let i = NEEDLE.length - 1; i >= 0; i--) { const n = NEEDLE[i]; n.t -= dt; const p = posOf(n.id), b = mobAt(n.m); if (n.t <= 0 || !p || !b) { NEEDLE.splice(i, 1); continue; } const h = hand(p, 1, n.id), k = Math.min(1, (0.32 - n.t) / 0.2); drawThread(h[0], h[1], h[2], h[0] + (b.x - h[0]) * k, h[1] + (b.y - h[1]) * k, h[2] + (b.z - h[2]) * k, 0.2); }
+    // 操偶師手上沒牽著東西的時候，指尖垂著幾條短線，一眼看得出是操偶師
+    HANDS.forEach((h, id) => { if (h.k > 0.5) return; const p = posOf(id); if (!p) return; const cf = Math.cos(p.face || 0), sf = Math.sin(p.face || 0);
+      [-1, 1].forEach(sd => [-1, 1].forEach(j => { const a = hand(p, sd, id), sw = Math.sin(t * 2.2 + sd + j) * 0.04, x = a[0] + cf * j * 0.04, z = a[2] - sf * j * 0.04; drawThread(x, a[1], z, x + sw, a[1] - 0.3 - (j > 0 ? 0.08 : 0), z + sw * 0.5, 0, 0.018); })); });
     for (let i = thN; i < THREADS.length; i++) THREADS[i].forEach(s => { s.visible = false; });
     if (CUT > 0) CUT -= dt;
     // 持續的東西
@@ -229,7 +319,7 @@ function makeCombat(ctx) {
     // 使魔和機甲跟著主人
     WHO.forEach(w => { const p = posOf(w.id); if (!p) return; const f = p.face || 0, tgt = w.id === MYID && TARGET ? MOBS.get(TARGET) : null;
       w.famG.forEach((o, i) => { const side = (i % 2 ? -1 : 1) * (o.tier === 3 ? 3.4 : 2.0); follow(o, p.x - Math.sin(f) * 0.8 + Math.cos(f) * side, p.z - Math.cos(f) * 0.8 - Math.sin(f) * side, dt, 3.5); o.ph += dt; if (o.hit > 0) o.hit -= dt; if (o.bond > 0) o.bond -= dt;
-        o.g.position.set(o.x, FY(o.x, o.z) + 0.12 + Math.sin(o.ph * 2.2) * 0.1 + (o.hit > 0 ? Math.sin(o.hit / 0.3 * Math.PI) * 0.35 : 0), o.z); o.g.rotation.set(0, o.f, Math.sin(o.ph * 1.6) * 0.06); if (o.bond > 0 && Math.random() < 0.15) rise(o.x, o.z, '#ff9ec4', 1, 0.5, 2, 0.08, 0.7); });
+        o.g.position.set(o.x, FY(o.x, o.z) + 0.12 + Math.sin(o.ph * 2.2) * 0.1 + (o.hit > 0 ? Math.sin(o.hit / 0.3 * Math.PI) * 0.35 : 0), o.z); o.g.rotation.set(0, o.f, Math.sin(o.ph * 1.6) * 0.04); if (o.g.anim) o.g.anim(o.ph); if (o.bond > 0 && Math.random() < 0.15) rise(o.x, o.z, '#ff9ec4', 1, 0.5, 2, 0.08, 0.7); });
       const M = w.mechG; if (M) { const big = w.mech === 3 ? 2 : 1; M.sc += (big - M.sc) * Math.min(1, dt * 3); const tm = M.hit > 0 ? MOBS.get(M.tm) : null; if (M.hit > 0) M.hit -= dt; if (M.guard > 0) M.guard -= dt;
         const gx = tm ? tm.x - Math.sin(M.f) * (1.6 * M.sc) : M.guard > 0 ? p.x + Math.sin(f) * 1.6 : p.x + Math.sin(f) * 1.2 + Math.cos(f) * 2.0, gz = tm ? tm.z - Math.cos(M.f) * (1.6 * M.sc) : M.guard > 0 ? p.z + Math.cos(f) * 1.6 : p.z + Math.cos(f) * 1.2 - Math.sin(f) * 2.0;
         const d = follow(M, gx, gz, dt, tm ? 12 : 4); if (tm) M.f = Math.atan2(tm.x - M.x, tm.z - M.z); else if (M.guard > 0) M.f = f;
@@ -252,7 +342,8 @@ function makeCombat(ctx) {
     // 連線那邊接過來的事件
     init: (d, id, send) => { MYID = id; SEND = send; MEV = d.me; MOBS.forEach(m => { G.remove(m.g); m.bar.b.remove(); }); MOBS.clear(); [...WHO.keys()].forEach(dropWho); d.mobs.forEach(addMob); d.who.forEach(setWho); HOLD = false; TARGET = null; onChange(); },
     me: (d) => { const was = MEV; MEV = d; if (d.dead && TARGET) setTarget(null, true); onChange(was); },
-    mobs: (l) => l.forEach(setMob), who: setWho, drop: dropWho, fx: onFx, hits: onHits,
+    famPreview: (x, z) => [0, 1, 2].map(i => { const g = new THREE.Group(); FAM[i](g); G.add(g); g.position.set(x + (i - 1) * 1.9, FY(x, z), z); if (g.anim) g.anim(1); return g; }),   // 測試拍照用
+    late, mobs: (l) => l.forEach(setMob), who: setWho, drop: dropWho, fx: onFx, hits: onHits,
     back: (p) => { ctx.moveMe(p.x, p.z, true); S.goal = null; },
     target: () => TARGET, setTarget, nearest, view: () => MEV, field: () => ctx.field,
     // 技能鈕：要選怪的招沒有目標就抓最近的一隻

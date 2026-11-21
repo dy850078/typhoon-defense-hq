@@ -12,6 +12,7 @@
 //   node scripts/nw-test.js home       只跑大廳的功能（導師轉職、扭蛋機、公共花園、種子箱、許願池、寵物）；加 GARDEN_SPEED=600 會連收成一起測
 //   node scripts/nw-test.js combat     戰鬥和新職業（芽、學門、專精、每一招、技能書、選修欄）；combat-phone 是手機版面
 //   node scripts/nw-test.js hotbar     快捷列和技能書（拖移換招、點選換招、按鍵提示、自訂按鍵）；hotbar-phone 是手機版面
+//   node scripts/nw-test.js puppet     操偶師的手、提線、謝幕（主要是拍圖）；fam 是三隻使魔排在一起拍一張
 //   OUT=some/dir 可以指定截圖要放哪裡（預設是系統暫存資料夾）
 //
 // 需要 playwright（沒有列在 package.json，本機要跑的話先 npm i -D playwright && npx playwright install chromium）
@@ -614,6 +615,19 @@ async function main() {
     ok(!pg.errors.length, '沒有頁面錯誤' + (pg.errors.length ? '：' + pg.errors.join(' / ') : ''));
     await pg.context().close();
   };
+  // 使魔的樣子：三隻排在一起拍一張大圖，拿來跟繪師的圖對照
+  const fam = async () => {
+    console.log('fam');
+    const pg = await open(await account({ name: '小召' }), false);
+    await pg.waitForFunction(() => window.HQ_NEWWORLD.combat && window.HQ_NEWWORLD.combat.view(), null, { timeout: 20000 });
+    await pg.setViewportSize({ width: 2400, height: 1500 }); await zoomIn(pg);
+    await pg.evaluate(() => { const NW = window.HQ_NEWWORLD; NW.debugPlace(13.8, 20); }); await pg.waitForTimeout(1500);
+    const n = await pg.evaluate(() => window.HQ_NEWWORLD.combat.famPreview(9.5, 20).length); await pg.waitForTimeout(1200);
+    ok(n === 3, '三隻使魔都做得出來'); await pg.screenshot({ path: path.join(OUT, 'fam-lineup.png'), clip: { x: 700, y: 380, width: 900, height: 640 } });
+    ok(!pg.errors.length, '沒有頁面錯誤' + (pg.errors.length ? '：' + pg.errors.join(' / ') : ''));
+    await pg.context().close();
+  };
+  if (want === 'fam') await fam();
   if (want === 'puppet') await puppet();
   if (want === 'hotbar') await hotbar(false);
   if (want === 'hotbar-phone') await hotbar(true);

@@ -79,19 +79,65 @@ function makeCombat(ctx) {
   const nearest = (r) => { let best = null, bd = r; MOBS.forEach(m => { if (m.fl & 256) return; const d = Math.hypot(m.x - ME.x, m.z - ME.z); if (d < bd) { bd = d; best = m; } }); return best; };
 
   // ---------- 使魔（繪師的聖誕外星人）和夢魘機甲 ----------
+  // ---- 使魔：照繪師的聖誕圖做（星星臉、三眼花農、花圈長老），每一隻有自己的小動作（g.anim）----
+  const blob = (pts, depth, bevel) => { const sh = new THREE.Shape(); sh.moveTo(pts[0][0], pts[0][1]); sh.splineThru(pts.slice(1).concat([pts[0]]).map(q => new THREE.Vector2(q[0], q[1])));
+    const g = new THREE.ExtrudeGeometry(sh, { depth, bevelEnabled: bevel > 0, bevelThickness: bevel, bevelSize: bevel, bevelSegments: 3, curveSegments: 8 }); g.translate(0, 0, -depth / 2); return g; };
+  const lathe = (pts, seg = 14) => new THREE.LatheGeometry(pts.map(q => new THREE.Vector2(q[0], q[1])), seg);
+  const starPts = (n, tips, dip, rot = 0) => { const o = []; for (let i = 0; i < n * 2; i++) { const a = rot + i * Math.PI / n, r = i % 2 ? dip : tips[(i / 2) % tips.length]; o.push([Math.sin(a) * r, Math.cos(a) * r]); } return o; };
+  const LV = new V3(), LW = new V3();
+  const limb = (g, col, a, b, r, o) => { LV.set(...a); LW.set(...b); const m = part(g, GEO.cyl, col, Object.assign({ scale: [r, LV.distanceTo(LW), r] }, o)); m.position.copy(LV).add(LW).multiplyScalar(0.5); m.quaternion.setFromUnitVectors(UP, LW.sub(LV).normalize()); return m; };
+  const flatM = (c) => basic(c), dot = (g, col, pos, sc, rot) => part(g, sph(1, 10, 8), col, { pos, scale: sc, rot, noLine: true, shadow: false, mat: flatM(col) });
+  const GF = { starHead: blob(starPts(5, [0.62, 0.5, 0.46, 0.5, 0.6], 0.3, 0.35), 0.16, 0.09), leaf: blob([[0, 0], [0.2, 0.25], [0.24, 0.7], [0.14, 1.1], [0, 1.22], [-0.12, 1.05], [-0.2, 0.65], [-0.16, 0.22]], 0.03, 0.02),
+    flatHead: blob([[-0.78, 0.1], [-0.4, 0.2], [0, 0.23], [0.4, 0.2], [0.78, 0.1], [0.4, -0.02], [0.17, -0.2], [0.11, -0.62], [-0.11, -0.62], [-0.17, -0.2], [-0.4, -0.02]], 0.24, 0.09),
+    star5: blob(starPts(5, [0.2], 0.09), 0.03, 0.02), petal: blob([[0, 0], [0.09, 0.08], [0.1, 0.22], [0, 0.3], [-0.1, 0.22], [-0.09, 0.08]], 0.02, 0.015), holly: blob([[0, 0], [0.07, 0.06], [0.04, 0.12], [0.08, 0.18], [0, 0.26], [-0.08, 0.18], [-0.04, 0.12], [-0.07, 0.06]], 0.015, 0.01),
+    pot: new THREE.CylinderGeometry(0.13, 0.085, 0.24, 10), cone: new THREE.ConeGeometry(1, 1, 8), tor: new THREE.TorusGeometry(0.27, 0.085, 7, 18), scarf: new THREE.TorusGeometry(0.26, 0.09, 7, 16) };
   const FAM = {
-    0: (g) => { part(g, GEO.cyl, '#2f5d3a', { pos: [0, 0.45, 0], scale: [0.2, 0.9, 0.2] }); const h = part(g, GEO.star, '#f6a9c0', { pos: [0, 1.12, 0], scale: [0.5, 0.42, 0.26], rot: [0, 0, 0.5] }); h.name = 'head';
-      eyes(g, 1.16, 0.2, 0.12, 0.06); part(g, sph(0.05, 6, 6), '#d23a4a', { pos: [0, 1.0, 0.22], scale: [1.4, 0.7, 0.5], noLine: true, shadow: false });
-      [-1, 1].forEach(k => part(g, sph(0.3, 10, 8), '#9fdc9a', { pos: [0.3 * k, 0.75, -0.2], scale: [0.55, 1.2, 0.12], rot: [0, 0.5 * k, -0.5 * k], noLine: true })); g.H = 1.5; },
-    1: (g) => { part(g, GEO.cyl, '#2f5d3a', { pos: [0, 0.75, 0], scale: [0.3, 1.5, 0.3] }); part(g, sph(0.6, 14, 10), '#8fa38a', { pos: [0, 1.62, 0], scale: [1.15, 0.36, 0.8] });
-      [-1, 0, 1].forEach(k => part(g, sph(0.07, 8, 6), '#f2d86a', { pos: [0.16 * k, 1.64, 0.42], scale: [1, 0.8, 0.5], noLine: true, shadow: false, mat: basic('#f2d86a') }));
-      [-1, 1].forEach(k => { part(g, GEO.cyl, '#6fbf6a', { pos: [0.16 * k, 1.95, 0], scale: [0.025, 0.4, 0.025], noLine: true }); part(g, GEO.star, '#8fd36a', { pos: [0.16 * k, 2.2, 0], scale: [0.2, 0.2, 0.08], noLine: true }); });
-      part(g, GEO.cyl, '#f08aa8', { pos: [0.42, 1.0, 0.25], scale: [0.12, 0.22, 0.12] }); part(g, GEO.star, '#c8323c', { pos: [0.42, 1.36, 0.25], scale: [0.2, 0.2, 0.08], noLine: true }); g.H = 2.3; },
-    2: (g) => { part(g, GEO.cyl, '#f3a5b8', { pos: [0, 0.95, 0], scale: [0.46, 1.9, 0.42] }); part(g, GEO.box, '#fbf3e4', { pos: [0, 1.25, 0.34], scale: [0.4, 0.9, 0.12], noLine: true });
-      part(g, sph(0.3, 12, 10), '#6fbf6a', { pos: [0, 2.2, 0.05], scale: [1, 1.1, 1] }); part(g, sph(0.2, 10, 8), '#6fbf6a', { pos: [0, 2.12, 0.45], scale: [0.6, 0.45, 2.0] });
-      eyes(g, 2.3, 0.26, 0.2, 0.06); part(g, new THREE.TorusGeometry(0.24, 0.07, 6, 14), '#3f8a4f', { pos: [0, 2.72, 0], noLine: true }); part(g, sph(0.07, 6, 6), '#e9c46a', { pos: [0, 2.72, 0], noLine: true });
-      [0, 1, 2].forEach(i => part(g, sph(0.05, 6, 6), '#d23a4a', { pos: [Math.cos(i * 2.1) * 0.24, 2.72 + Math.sin(i * 2.1) * 0.24, 0.05], noLine: true, shadow: false })); g.H = 3.0; },
-    3: (g) => { FAM[2](g); const halo = flat(mesh(GEO.ring, bm('#ffe9a8', 0.9), g)); halo.position.y = 3.25; halo.scale.setScalar(0.55); [0, 1, 2, 3, 4].forEach(i => { const b = mesh(GEO.star, bm(['#ffd76a', '#f08aa8', '#9fdc9a'][i % 3]), g); b.scale.setScalar(0.09); b.position.set(Math.cos(i * 1.26) * 0.5, 1.2 + i * 0.25, Math.sin(i * 1.26) * 0.5); }); g.scale.setScalar(1.7); g.H = 5.1; },
+    // 星星臉：粉紅色歪歪的星星頭、垂垂的黑眼睛和紅嘴唇、細長的深綠身體、背後兩片有條紋的淺綠翅膀
+    0: (g) => { const DG = '#2f5d3a', PK = '#f4a6c0';
+      part(g, lathe([[0.3, 0], [0.24, 0.12], [0.17, 0.5], [0.12, 0.9], [0.085, 1.12], [0.07, 1.2]]), DG, {}); limb(g, DG, [0.13, 0.86, 0.06], [0.2, 0.52, 0.16], 0.04, {}); limb(g, DG, [-0.13, 0.86, 0.06], [-0.2, 0.56, 0.14], 0.04, {});
+      const hd = new THREE.Group(); hd.position.set(0, 1.5, 0.02); hd.rotation.z = -0.12; g.add(hd); part(hd, GF.starHead, PK, { line: 0.03 });
+      dot(hd, '#ffc4d6', [-0.16, 0.06, 0.17], [0.2, 0.13, 0.02]); dot(hd, '#ffc4d6', [0.2, -0.12, 0.17], [0.1, 0.07, 0.02]);
+      [-1, 1].forEach(k => { dot(hd, INK, [0.15 * k + 0.02, 0.02, 0.19], [0.1, 0.062, 0.03], [0, 0, -0.5 * k]); dot(hd, '#fffaf0', [0.13 * k + 0.02, 0.035, 0.215], [0.028, 0.022, 0.01]);
+        [0, 1].forEach(i => limb(hd, INK, [0.22 * k + 0.02, 0.0 + i * 0.03, 0.2], [0.29 * k + 0.02, -0.03 + i * 0.05, 0.19], 0.008, { noLine: true, shadow: false, mat: flatM(INK) })); });
+      limb(hd, '#c97f98', [0.02, -0.02, 0.2], [0.035, -0.11, 0.21], 0.008, { noLine: true, shadow: false, mat: flatM('#c97f98') });
+      [-1, 1].forEach(k => dot(hd, '#d23a4a', [0.02 + 0.028 * k, -0.165, 0.2], [0.04, 0.026, 0.02])); dot(hd, '#d23a4a', [0.02, -0.195, 0.2], [0.05, 0.026, 0.02]);
+      const wings = [-1, 1].map(k => { const w = new THREE.Group(); w.position.set(0.05 * k, 0.92, -0.1); g.add(w); const l = part(w, GF.leaf, '#a9e0a0', { rot: [0.1, 0, -0.95 * k], line: 0.02 });
+        [-0.07, 0, 0.07].forEach(x => part(l, GEO.box, '#86cf86', { pos: [x, 0.62, 0.035], scale: [0.02, 0.85 - Math.abs(x) * 3, 0.01], noLine: true, shadow: false, mat: flatM('#86cf86') }));
+        const l2 = part(w, GF.leaf, '#bfe9b4', { rot: [0.1, 0, -1.45 * k], scale: [0.8, 0.72, 1], pos: [0, -0.02, -0.02], line: 0.02 }); part(l2, GEO.box, '#86cf86', { pos: [0, 0.62, 0.035], scale: [0.02, 0.8, 0.01], noLine: true, shadow: false, mat: flatM('#86cf86') }); w.k = k; return w; });
+      g.anim = (t) => { wings.forEach(w => { w.rotation.y = w.k * (0.25 + Math.sin(t * 7) * 0.3); }); hd.rotation.z = -0.12 + Math.sin(t * 1.7) * 0.08; hd.rotation.y = Math.sin(t * 1.1) * 0.15; hd.rotation.x = -0.22; }; g.scale.setScalar(1.25); g.H = 2.5; },
+    // 三眼花農：灰綠色扁扁寬寬的頭、一排三顆黃眼睛、頭上兩朵星星花，深綠的高個子，手上捧著一盆紅色風車花
+    1: (g) => { const DG = '#2f5d3a', GY = '#93a58c';
+      part(g, lathe([[0.36, 0], [0.3, 0.14], [0.24, 0.7], [0.27, 1.25], [0.25, 1.5], [0.12, 1.62], [0.1, 1.75]]), DG, {});
+      limb(g, DG, [-0.27, 1.45, 0], [-0.36, 0.95, 0.04], 0.06, {}); limb(g, DG, [-0.36, 0.95, 0.04], [-0.33, 0.5, 0.1], 0.05, {}); dot(g, DG, [-0.33, 0.46, 0.1], [0.06, 0.08, 0.06]);
+      limb(g, DG, [0.27, 1.45, 0], [0.42, 1.08, 0.12], 0.06, {}); limb(g, DG, [0.42, 1.08, 0.12], [0.3, 1.05, 0.42], 0.05, {});
+      const hd = new THREE.Group(); hd.position.set(0, 2.25, 0); g.add(hd); part(hd, GF.flatHead, GY, { line: 0.03 }); dot(hd, '#a9b8a2', [0, 0.14, 0.2], [0.5, 0.05, 0.02]);
+      [-1, 0, 1].forEach(k => { dot(hd, '#6f8068', [0.23 * k, 0.07, 0.205], [0.125, 0.09, 0.02]); dot(hd, '#f2d86a', [0.23 * k, 0.07, 0.215], [0.1, 0.068, 0.02]); dot(hd, '#fff3b0', [0.23 * k - 0.03, 0.09, 0.228], [0.032, 0.022, 0.01]); });
+      const ants = [-1, 1].map(k => { const a = new THREE.Group(); a.position.set(0.2 * k, 0.28, 0); hd.add(a); limb(a, '#6fbf6a', [0, 0, 0], [0.05 * k, 0.26, 0], 0.016, { noLine: true }); limb(a, '#6fbf6a', [0.05 * k, 0.26, 0], [0.14 * k, 0.46, 0], 0.016, { noLine: true });
+        const st = part(a, GF.star5, '#7fcf6a', { pos: [0.16 * k, 0.56, 0], rot: [0, 0, 0.3 * k], line: 0.018 }); dot(st, '#e9c46a', [0, 0, 0.035], [0.045, 0.045, 0.02]); a.k = k; return a; });
+      const pot = new THREE.Group(); pot.position.set(0.3, 1.02, 0.5); g.add(pot); part(pot, GF.pot, '#f08aa8', { line: 0.02 }); part(pot, GEO.cyl, '#f6a9c0', { pos: [0, 0.12, 0], scale: [0.15, 0.04, 0.15], line: 0.02 }); limb(pot, '#3f8a4f', [0, 0.12, 0], [0, 0.4, 0], 0.018, { noLine: true });
+      const fl = new THREE.Group(); fl.position.set(0, 0.5, 0.02); pot.add(fl); for (let i = 0; i < 5; i++) { const pt = part(fl, GF.petal, i % 2 ? '#c8323c' : '#d9434c', { rot: [0, 0, i * PI2 / 5], line: 0.014 }); part(pt, GEO.box, '#8f1f2a', { pos: [0.02, 0.16, 0.02], scale: [0.012, 0.2, 0.008], rot: [0, 0, -0.25], noLine: true, shadow: false, mat: flatM('#8f1f2a') }); }
+      dot(fl, '#e9c46a', [0, 0, 0.03], [0.05, 0.05, 0.03]);
+      g.anim = (t) => { fl.rotation.z = t * 1.6; pot.rotation.z = Math.sin(t * 1.3) * 0.08; ants.forEach(a => { a.rotation.z = Math.sin(t * 2 + a.k) * 0.14; }); hd.rotation.z = Math.sin(t * 0.9) * 0.05; hd.rotation.x = -0.3; }; g.scale.setScalar(1.25); g.H = 3.75; },
+    // 花圈長老：最高的一隻。淺綠的頭有長長的鳥喙和鬚，頭上頂著掛鈴鐺的聖誕花圈，粉紅條紋長袍配白色內襯，手上拿著一串小燈
+    2: (g) => { const PK = '#f2a3b6', PD = '#e2869f', LG = '#7fcf7a', MG = '#5fb863';
+      part(g, lathe([[0.58, 0], [0.52, 0.1], [0.44, 1.0], [0.4, 1.9], [0.36, 2.2], [0.2, 2.34], [0.16, 2.4]], 18), PK, {});
+      part(g, lathe([[0.5, 0.02], [0.45, 1.0], [0.41, 1.9], [0.3, 2.22]], 8).rotateY(-Math.PI / 8), '#fbf3e4', { pos: [0, 0.02, 0.05], scale: [0.62, 1, 1], noLine: true });
+      [-1, 1].forEach(k => { [0.3, 0.38].forEach((x, i) => limb(g, PD, [x * k * 1.02, 2.12, 0.3 - i * 0.1], [(x + 0.1) * k, 0.06, 0.4 - i * 0.12], 0.022, { noLine: true, shadow: false }));
+        limb(g, PK, [0.38 * k, 2.1, 0], [0.5 * k, 1.5, 0.16], 0.13, {}); limb(g, PK, [0.5 * k, 1.5, 0.16], [0.26 * k, 1.42, 0.52], 0.115, {}); part(g, GEO.cyl, PD, { pos: [0.29 * k, 1.43, 0.47], scale: [0.125, 0.07, 0.125], rot: [1.2, 0, 0.55 * k], noLine: true });
+        dot(g, LG, [0.2 * k, 1.42, 0.6], [0.09, 0.075, 0.09]); [-1, 0, 1].forEach(j => limb(g, LG, [0.2 * k, 1.42, 0.62], [0.14 * k + j * 0.03, 1.4 + j * 0.03, 0.74], 0.02, { noLine: true })); });
+      part(g, GF.scarf, '#ee8fa8', { pos: [0, 2.3, 0.02], rot: [Math.PI / 2, 0, 0], scale: [1, 1, 1.1], line: 0.02 }); limb(g, LG, [0, 2.3, 0], [0, 2.62, 0.02], 0.12, {});
+      const sprig = new THREE.Group(); sprig.position.set(0, 1.44, 0.72); g.add(sprig); limb(sprig, '#3f8a4f', [-0.34, -0.02, 0], [0.34, 0.06, 0], 0.02, { noLine: true });
+      [[-0.3, '#f2d86a'], [-0.15, '#fffaf0'], [0.02, '#f2d86a'], [0.18, '#fffaf0'], [0.32, '#f2d86a']].forEach((a, i) => { limb(sprig, '#3f8a4f', [a[0], 0.0, 0], [a[0], -0.08, 0], 0.008, { noLine: true }); dot(sprig, a[1], [a[0], -0.12, 0], [0.04, 0.05, 0.04]); });
+      const hd = new THREE.Group(); hd.position.set(0, 2.82, 0.04); g.add(hd); part(hd, sph(0.3, 14, 12), LG, { scale: [0.95, 1.12, 1.05] }); part(hd, sph(0.2, 10, 8), LG, { pos: [0, 0.05, -0.26], scale: [0.5, 0.9, 0.9], rot: [0.5, 0, 0] });
+      part(hd, GF.cone, LG, { pos: [0, 0.0, 0.62], scale: [0.13, 0.95, 0.1], rot: [Math.PI / 2 + 0.12, 0, 0] }); part(hd, GF.cone, MG, { pos: [0, -0.13, 0.5], scale: [0.1, 0.7, 0.07], rot: [Math.PI / 2 + 0.3, 0, 0] });
+      [-0.09, 0, 0.09].forEach((x, i) => part(hd, GF.cone, MG, { pos: [x, -0.42 - (i === 1 ? 0.05 : 0), 0.16 + (i === 1 ? 0.05 : 0)], scale: [0.03, 0.34 + (i === 1 ? 0.1 : 0), 0.03], rot: [Math.PI + 0.15, 0, x * 2], noLine: true }));
+      [-1, 1].forEach(k => { dot(hd, '#3f8a4f', [0.2 * k, 0.1, 0.2], [0.07, 0.14, 0.09], [0, 0.6 * k, 0]); dot(hd, '#1f3d26', [0.215 * k, 0.1, 0.225], [0.045, 0.1, 0.07], [0, 0.6 * k, 0]); dot(hd, '#dff5d8', [0.22 * k, 0.15, 0.27], [0.016, 0.03, 0.02]); });
+      const wr = new THREE.Group(); wr.position.set(0, 0.6, 0); hd.add(wr); part(wr, GF.tor, '#3f8a4f', { line: 0.024 });
+      for (let i = 0; i < 12; i++) { const a = i * PI2 / 12; dot(wr, i % 2 ? '#2f6e3d' : '#57a85f', [Math.cos(a) * 0.27, Math.sin(a) * 0.27, 0.07], [0.07, 0.07, 0.05]); }
+      [[-0.24, -0.12], [0.24, -0.12], [0.02, -0.27]].forEach(q => dot(wr, '#e6e6e0', [q[0], q[1], 0.11], [0.05, 0.05, 0.05])); [-1, 0, 1].forEach(k => part(wr, GF.holly, '#c8323c', { pos: [0.02 * k, 0.3, 0.06], rot: [0, 0, -0.75 * k], scale: 0.85, line: 0.012 })); dot(wr, '#e9c46a', [0, 0.31, 0.1], [0.035, 0.035, 0.03]);
+      const bell = new THREE.Group(); bell.position.set(0, 0.16, 0.02); wr.add(bell); part(bell, GF.cone, '#e9c46a', { pos: [0, -0.1, 0], scale: [0.1, 0.18, 0.1], line: 0.016 }); dot(bell, '#c99a2e', [0, -0.21, 0], [0.035, 0.035, 0.035]);
+      g.anim = (t) => { hd.rotation.x = Math.sin(t * 1.2) * 0.1 - 0.18; hd.rotation.y = Math.sin(t * 0.7) * 0.18; bell.rotation.z = Math.sin(t * 3.2) * 0.4; sprig.rotation.z = Math.sin(t * 1.5) * 0.08; }; g.scale.setScalar(1.25); g.H = 4.6; },
+    3: (g) => { FAM[2](g); const halo = flat(mesh(GEO.ring, bm('#ffe9a8', 0.9), g)); halo.position.y = 4.0; halo.scale.setScalar(0.55); [0, 1, 2, 3, 4].forEach(i => { const b = mesh(GEO.star, bm(['#ffd76a', '#f08aa8', '#9fdc9a'][i % 3]), g); b.scale.setScalar(0.09); b.position.set(Math.cos(i * 1.26) * 0.5, 1.2 + i * 0.25, Math.sin(i * 1.26) * 0.5); }); g.scale.setScalar(1.9); g.H = 7.0; },
   };
   const mkMecha = () => { const g = new THREE.Group(), c1 = '#3a3350', c2 = '#57496f';
     part(g, GEO.box, c1, { pos: [0, 1.75, 0], scale: [1.5, 1.3, 1.0] }); part(g, GEO.box, c2, { pos: [0, 2.75, 0.05], scale: [0.85, 0.7, 0.8] }); part(g, GEO.box, '#1d1a2b', { pos: [0, 2.75, 0.42], scale: [0.6, 0.4, 0.1], noLine: true });
@@ -273,7 +319,7 @@ function makeCombat(ctx) {
     // 使魔和機甲跟著主人
     WHO.forEach(w => { const p = posOf(w.id); if (!p) return; const f = p.face || 0, tgt = w.id === MYID && TARGET ? MOBS.get(TARGET) : null;
       w.famG.forEach((o, i) => { const side = (i % 2 ? -1 : 1) * (o.tier === 3 ? 3.4 : 2.0); follow(o, p.x - Math.sin(f) * 0.8 + Math.cos(f) * side, p.z - Math.cos(f) * 0.8 - Math.sin(f) * side, dt, 3.5); o.ph += dt; if (o.hit > 0) o.hit -= dt; if (o.bond > 0) o.bond -= dt;
-        o.g.position.set(o.x, FY(o.x, o.z) + 0.12 + Math.sin(o.ph * 2.2) * 0.1 + (o.hit > 0 ? Math.sin(o.hit / 0.3 * Math.PI) * 0.35 : 0), o.z); o.g.rotation.set(0, o.f, Math.sin(o.ph * 1.6) * 0.06); if (o.bond > 0 && Math.random() < 0.15) rise(o.x, o.z, '#ff9ec4', 1, 0.5, 2, 0.08, 0.7); });
+        o.g.position.set(o.x, FY(o.x, o.z) + 0.12 + Math.sin(o.ph * 2.2) * 0.1 + (o.hit > 0 ? Math.sin(o.hit / 0.3 * Math.PI) * 0.35 : 0), o.z); o.g.rotation.set(0, o.f, Math.sin(o.ph * 1.6) * 0.04); if (o.g.anim) o.g.anim(o.ph); if (o.bond > 0 && Math.random() < 0.15) rise(o.x, o.z, '#ff9ec4', 1, 0.5, 2, 0.08, 0.7); });
       const M = w.mechG; if (M) { const big = w.mech === 3 ? 2 : 1; M.sc += (big - M.sc) * Math.min(1, dt * 3); const tm = M.hit > 0 ? MOBS.get(M.tm) : null; if (M.hit > 0) M.hit -= dt; if (M.guard > 0) M.guard -= dt;
         const gx = tm ? tm.x - Math.sin(M.f) * (1.6 * M.sc) : M.guard > 0 ? p.x + Math.sin(f) * 1.6 : p.x + Math.sin(f) * 1.2 + Math.cos(f) * 2.0, gz = tm ? tm.z - Math.cos(M.f) * (1.6 * M.sc) : M.guard > 0 ? p.z + Math.cos(f) * 1.6 : p.z + Math.cos(f) * 1.2 - Math.sin(f) * 2.0;
         const d = follow(M, gx, gz, dt, tm ? 12 : 4); if (tm) M.f = Math.atan2(tm.x - M.x, tm.z - M.z); else if (M.guard > 0) M.f = f;
@@ -296,6 +342,7 @@ function makeCombat(ctx) {
     // 連線那邊接過來的事件
     init: (d, id, send) => { MYID = id; SEND = send; MEV = d.me; MOBS.forEach(m => { G.remove(m.g); m.bar.b.remove(); }); MOBS.clear(); [...WHO.keys()].forEach(dropWho); d.mobs.forEach(addMob); d.who.forEach(setWho); HOLD = false; TARGET = null; onChange(); },
     me: (d) => { const was = MEV; MEV = d; if (d.dead && TARGET) setTarget(null, true); onChange(was); },
+    famPreview: (x, z) => [0, 1, 2].map(i => { const g = new THREE.Group(); FAM[i](g); G.add(g); g.position.set(x + (i - 1) * 1.9, FY(x, z), z); if (g.anim) g.anim(1); return g; }),   // 測試拍照用
     late, mobs: (l) => l.forEach(setMob), who: setWho, drop: dropWho, fx: onFx, hits: onHits,
     back: (p) => { ctx.moveMe(p.x, p.z, true); S.goal = null; },
     target: () => TARGET, setTarget, nearest, view: () => MEV, field: () => ctx.field,

@@ -44,6 +44,11 @@
     '#cb-quest{position:fixed;left:10px;top:calc(160px + env(safe-area-inset-top));width:168px;padding:7px 9px;z-index:3;font:inherit;font-size:12px;color:#2b2a33;text-align:left;cursor:pointer;display:block}#cb-quest[hidden]{display:none}',
     '#cb-quest b{display:flex;justify-content:space-between;gap:6px}#cb-quest b span{font-weight:500;opacity:.75}#cb-quest .qi{display:flex;gap:5px;align-items:baseline;margin-top:3px}#cb-quest .qi span{flex:1;min-width:0}#cb-quest .qi small{opacity:.6;font-size:10px}#cb-quest .qi i{font-style:normal;font-weight:700}#cb-quest .qi.ok{opacity:.45;text-decoration:line-through}',
     '#cb-quest .back{display:block;margin-top:3px}#cb-quest.done{background:#f3d27a}#cb-quest.flash{animation:cb-pulse .25s ease-in-out 4 alternate}',
+    '#cb-party{position:fixed;left:10px;top:calc(160px + env(safe-area-inset-top));width:168px;padding:6px 8px;z-index:3;font-size:12px;color:#2b2a33}#cb-party[hidden]{display:none}#cb-party>b{display:flex;justify-content:space-between;align-items:center;font-size:12px;margin-bottom:2px}#cb-party>b span{font-weight:400;opacity:.7}',
+    '#cb-party .pm{display:flex;gap:6px;align-items:center;padding:3px 0;border-top:1px dashed rgba(43,42,51,.25);cursor:default}#cb-party .pm img{width:22px;height:22px;flex:none}#cb-party .pm div{flex:1;min-width:0}#cb-party .pm em{display:block;font-style:normal;font-weight:700;font-size:11px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}#cb-party .pm.lead em{text-decoration:underline;text-underline-offset:2px}',
+    '#cb-party .pm u{display:block;height:5px;border:1.2px solid #2b2a33;border-radius:4px;background:#fffaf0;margin-top:2px;overflow:hidden;text-decoration:none}#cb-party .pm u i{display:block;height:100%;background:#e2506a}#cb-party .pm u.mp{height:4px}#cb-party .pm u.mp i{background:#6ea8e6}#cb-party .pm.dead{opacity:.5}#cb-party .pm.out{cursor:pointer}',
+    '#cb-party .pf{display:flex;gap:5px;margin-top:4px}#cb-party button,#cb-pop button,#cb-inv button{font:inherit;font-size:11px;font-weight:700;color:#2b2a33;background:#fffaf0;border:1.5px solid #2b2a33;border-radius:8px;padding:3px 7px;cursor:pointer}#cb-party button:disabled{opacity:.6;cursor:default}#cb-party button.sure,#cb-inv button.yes,#cb-pop button{background:#ffe27a}#cb-party .pm button{flex:none;padding:2px 5px}',
+    '#cb-pop{position:fixed;z-index:6;padding:5px;transform:translate(-50%,-130%)}#cb-pop[hidden]{display:none}#cb-inv{position:fixed;left:50%;top:calc(96px + env(safe-area-inset-top));transform:translateX(-50%);z-index:7;padding:9px 12px;font-size:13px;color:#2b2a33;text-align:center;max-width:80vw}#cb-inv[hidden]{display:none}#cb-inv div{display:flex;gap:8px;justify-content:center;margin-top:7px}#cb-inv button{font-size:12px;padding:5px 12px}',
     '#cb-dead{position:fixed;inset:0;background:rgba(43,42,51,.45);display:grid;place-items:center;z-index:3;pointer-events:none}#cb-dead div{padding:14px 20px;font-weight:700;font-size:15px}',
   ].join('\n');
   function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
@@ -53,14 +58,15 @@
   root.NW_SKILLS = { start: function (NW, sock, panels) {
     var CB = NW.combat; if (!CB || !C3 || !sock) return null;
     var st = el('style'); st.textContent = CSS; document.head.appendChild(st);
-    var admin = false, off = 0, me = null, toast = function (t) { if (panels) panels.toast(t); };
+    var admin = false, off = 0, me = null, party = null, toast = function (t) { if (panels) panels.toast(t); };
     // ---- 連線 ----
     sock.on('init', function (d) { admin = !!d.admin; });
     sock.on('cb:init', function (d) { off = Date.now() - d.me.t; CB.init(d, sock.id, function (ev, arg, fn) { if (fn) sock.emit(ev, arg, fn); else sock.emit(ev, arg); }); });
     sock.on('cb:drop', function (d) { CB.addDrop(d); }); sock.on('cb:dropGone', function (e) { CB.dropGone(e); }); CB.onToast(toast);
     sock.on('cb:me', function (d) { off = Date.now() - d.t; CB.me(d); });
     sock.on('cb:mobs', function (l) { CB.mobs(l); }); sock.on('cb:who', function (d) { CB.who(d); }); sock.on('cb:fx', function (e) { CB.fx(e); }); sock.on('cb:hit', function (l) { CB.hits(l); });
-    sock.on('leave', function (id) { CB.drop(id); }); sock.on('cb:back', function (p) { CB.back(p); }); sock.on('cb:tgt', function () { CB.setTarget(null, true); });
+    sock.on('leave', function (id) { CB.drop(id); }); sock.on('cb:back', function (p) { CB.back(p); if (p && p.lose > 0) toast('倒下了，少了 ' + p.lose + ' 點經驗'); });
+    sock.on('cb:say', function (t) { toast(String(t)); }); sock.on('cb:party', function (v) { party = v; drawParty(); }); sock.on('cb:pinv', function (v) { showInv(v); }); sock.on('cb:tgt', function () { CB.setTarget(null, true); });
     sock.on('cb:loot', function (o) { toast('拿到 ' + o.name + '（' + o.n + '/' + o.of + '）'); });
     sock.on('cb:no', function () { toast('太遠了，走近一點'); });
     var ask = function (ev, arg) { return new Promise(function (ok) { sock.emit(ev, arg, ok); }); };
@@ -97,7 +103,7 @@
       var sg = me.slots.map(function (k) { return staged(k) ? 1 : 0; }).join(''); if (sg !== stageSig) { stageSig = sg; drawHud(); }
       btns.forEach(function (o, i) { var k = me.slots[i], s = C3.SK[k], left = s && !staged(k) ? ((me.cd[k] || 0) - now) / 1000 : 0;
         if (left > 0.05) { var p = Math.min(1, left / s.cd) * 360; o.s.style.background = 'conic-gradient(rgba(43,42,51,.55) ' + p.toFixed(0) + 'deg, transparent 0)'; o.em.textContent = left >= 1 ? String(Math.ceil(left)) : ''; } else if (o.em.textContent || o.s.style.background) { o.s.style.background = ''; o.em.textContent = ''; } });
-      var d = me.dead ? (me.dead - now) / 1000 : 0; dead.hidden = !(d > 0); if (d > 0) deadNote.textContent = '倒下了，' + Math.ceil(d) + ' 秒後回到練習場入口';
+      var d = me.dead ? (me.dead - now) / 1000 : 0; dead.hidden = !(d > 0); if (d > 0) deadNote.textContent = d > 5 && party ? '倒下了，隊友的補血招可以救你（' + Math.ceil(d) + '）' : '倒下了，' + Math.ceil(d) + ' 秒後回到入口';
     }, 100);
 
     // ---- 技能書和轉職面板（同一張紙條）----
@@ -195,7 +201,7 @@
     // 任務：自己一塊。左上狀態卡下面一張小紙條列出要收集的信物，點一下可以收合；也可以從職業樹的「看任務」打開
     var qbox = el('button', 'note'); qbox.id = 'cb-quest'; qbox.type = 'button'; qbox.hidden = true; document.body.appendChild(qbox);
     var qFold = false; try { qFold = localStorage.getItem('nw-quest-fold') === '1'; } catch (e) {}
-    qbox.onclick = function () { qFold = !qFold; try { localStorage.setItem('nw-quest-fold', qFold ? '1' : '0'); } catch (e) {} drawQuest(); };
+    qbox.onclick = function () { qFold = !qFold; try { localStorage.setItem('nw-quest-fold', qFold ? '1' : '0'); } catch (e) {} drawQuest(); placeParty(); };
     function openQuest() { close(); qFold = false; drawQuest(); qbox.classList.remove('flash'); void qbox.offsetWidth; qbox.classList.add('flash'); }
     var MOBN = function (k) { return C3.SRC[k] || ''; };
     function drawQuest() {
@@ -205,12 +211,39 @@
       if (done) return qbox.appendChild(el('small', 'back', '信物收齊了，回去找職業導師'));
       items.forEach(function (it, i) { var r = el('div', 'qi' + (q.got[i] >= it[1] ? ' ok' : '')); r.append(el('span', '', it[0]), el('small', '', MOBN(it[2])), el('i', '', Math.min(q.got[i], it[1]) + '/' + it[1])); qbox.appendChild(r); });
     }
+    // ---- 隊伍：左邊一張小紙條列出隊友（職業徽章、名字、血量、魔量），下面是經驗怎麼分和離開 ----
+    var pbox = el('div', 'note'); pbox.id = 'cb-party'; pbox.hidden = true; document.body.appendChild(pbox); var kickId = '';
+    var badgeKey = function (m) { return 'nwc-' + (m.spec || m.school || 'sprout'); };
+    function placeParty() { if (pbox.hidden) return; var top = qbox.hidden ? card.offsetTop + card.offsetHeight + 6 : qbox.offsetTop + qbox.offsetHeight + 6; pbox.style.top = top + 'px'; }
+    function drawParty() {
+      pbox.hidden = !party; if (!party) { kickId = ''; return; } var mine = sock.id, lead = party.leader === mine; pbox.innerHTML = '';
+      var h = el('b', '', '隊伍'); h.appendChild(el('span', '', party.m.length + '/' + C3.PARTY.max)); pbox.appendChild(h);
+      party.m.forEach(function (m) { if (m.id === mine) return; var r = el('div', 'pm' + (m.id === party.leader ? ' lead' : '') + (m.dead ? ' dead' : '') + (lead ? ' out' : '')), d = el('div'), hp = el('u', 'hp'), mp = el('u', 'mp'), hi = el('i'), mi = el('i'); r.dataset.id = m.id;
+        hi.style.width = Math.max(0, Math.min(100, m.hp / m.hpMax * 100)).toFixed(0) + '%'; mi.style.width = Math.max(0, Math.min(100, m.mp / m.mpMax * 100)).toFixed(0) + '%'; hp.appendChild(hi); mp.appendChild(mi);
+        d.append(el('em', '', m.name + '　Lv.' + m.lv), hp, mp); r.append(icon(badgeKey(m)), d);
+        if (lead && kickId === m.id) { var k = el('button', 'sure', '請離開'); k.type = 'button'; k.onclick = function (e) { e.stopPropagation(); kickId = ''; ask('cb:pkick', m.id).then(function (x) { if (x && x.error) toast(x.error); }); }; r.appendChild(k); }
+        if (lead) r.onclick = function () { kickId = kickId === m.id ? '' : m.id; drawParty(); };
+        pbox.appendChild(r); });
+      var f = el('div', 'pf'), sh = el('button', '', party.share ? '經驗平分' : '經驗各拿'), out = el('button', '', '離開隊伍'); sh.type = out.type = 'button'; sh.disabled = !lead;
+      sh.onclick = function () { ask('cb:pshare', party.share ? 0 : 1).then(function (x) { if (x && x.error) toast(x.error); }); }; out.onclick = function () { ask('cb:pleave').then(function () {}); };
+      f.append(sh, out); pbox.appendChild(f); placeParty();
+    }
+    // 點到別的玩家：冒出一顆「邀請組隊」；自己不是隊長、隊伍滿了、對方已經是隊友就不冒
+    var pop = el('div', 'note'); pop.id = 'cb-pop'; pop.hidden = true; var popB = el('button', '', '邀請組隊'); popB.type = 'button'; pop.appendChild(popB); document.body.appendChild(pop); var popT = 0, popId = '';
+    CB.onPlayer(function (id, x, y) { clearTimeout(popT); var can = id && (!party || (party.leader === sock.id && party.m.length < C3.PARTY.max && !party.m.some(function (m) { return m.id === id; })));
+      pop.hidden = !can; if (!can) return; popId = id; pop.style.left = x + 'px'; pop.style.top = y + 'px'; popT = setTimeout(function () { pop.hidden = true; }, 5000); });
+    popB.addEventListener('pointerdown', function (e) { e.stopPropagation(); }); popB.onclick = function (e) { e.stopPropagation(); pop.hidden = true; ask('cb:pinvite', popId).then(function (r) { toast(r && r.error ? r.error : '邀請送出去了'); }); };
+    // 被邀請：上面一張紙條，加入或不要
+    var inv = el('div', 'note'); inv.id = 'cb-inv'; inv.hidden = true; document.body.appendChild(inv); var invT = 0;
+    function showInv(v) { clearTimeout(invT); inv.innerHTML = ''; inv.hidden = false; inv.appendChild(el('span', '', (v.name || '有人') + ' 邀請你組隊')); var d = el('div'), y = el('button', 'yes', '加入'), n = el('button', '', '不要'); y.type = n.type = 'button';
+      var answer = function (yes) { clearTimeout(invT); inv.hidden = true; ask('cb:panswer', { from: v.from, yes: yes }).then(function (r) { if (r && r.error) toast(r.error); }); };
+      y.onclick = function () { answer(1); }; n.onclick = function () { answer(0); }; d.append(y, n); inv.appendChild(d); invT = setTimeout(function () { inv.hidden = true; }, (v.sec || 30) * 1000); }
     // 管理員測試用：不用真的練就能看每個階段
     function dbg(body) { if (!admin) return; var d = el('div', 'dbg'); d.appendChild(el('small', '', '管理員測試'));
       [['10 等', { lv: 10 }], ['50 等', { lv: 50 }], ['熟練度練滿', { m: C3.GATE.mastery }], ['信物補滿', { quest: 1 }], ['全部重來', { reset: 1 }]].forEach(function (a) { var b = el('button', '', a[0]); b.type = 'button'; b.onclick = function () { act('cb:dbg', a[1]); }; d.appendChild(b); }); body.appendChild(d); }
     var sig = '';
-    CB.onChange(function () { drawHud(); var v = CB.view(), k = v ? JSON.stringify([v.lv, v.school, v.spec, v.schools, v.quest]) : ''; if (k !== sig) { sig = k; if (!book.hidden && mode === 'class') drawClass(); drawQuest(); if (editing() && !document.getElementById('cb-ghost')) drawBook(); } });
-    drawHud(); drawQuest();
+    CB.onChange(function () { drawHud(); var v = CB.view(), k = v ? JSON.stringify([v.lv, v.school, v.spec, v.schools, v.quest]) : ''; if (k !== sig) { sig = k; if (!book.hidden && mode === 'class') drawClass(); drawQuest(); placeParty(); if (editing() && !document.getElementById('cb-ghost')) drawBook(); } });
+    drawHud(); drawQuest(); drawParty();
     return { openQuest: openQuest, openClass: openClass, openBook: openBook, close: close, ask: ask, isOpen: function () { return !book.hidden; } };
   } };
 })(this);

@@ -107,6 +107,76 @@ async function main() {
       ok(r2.s === 304 && r2.n === 0, '檔案沒變時第二次不用重新下載'); }
   };
 
+  // ---- 許願池：搜尋、類別、排序、我許的、願望頁（紙張＋留言串）、修改、收回、管理員改狀態 ----
+  const wishesT = async (phone) => {
+    const tag = phone ? 'wishes-phone' : 'wishes'; console.log(tag);
+    const a = await account({ name: '管理員', hair: 'bob' }), b = await account({ name: '阿寶', hair: 'buzz' }, false);
+    await post('/api/admin/newworld', { username: b.name, on: true }, { 'x-admin-token': ad.token });
+    const api = (acc, body) => post('/api/newworld/wishes', body, { Authorization: 'Bearer ' + acc.token });
+    const slow = () => new Promise(r => setTimeout(r, 300));
+    // 先用接口放幾個願望（阿寶許 3 個、管理員許 1 個）
+    const w1 = await api(b, { act: 'add', title: '想要在大廳養魚', cat: 'feature', body: '陽台的水缸可以放幾隻魚\n最好可以餵' }); await slow();
+    const w2 = await api(b, { act: 'add', title: '椅子坐下去會陷進去', cat: 'bug', body: '' }); await slow();
+    const w3 = await api(b, { act: 'add', title: '點唱機想要黑膠轉動', cat: 'improve', body: '跟以前一樣' }); await slow();
+    const w4 = await api(a, { act: 'add', title: '大家想要什麼寵物', cat: 'other', body: '留言跟我說' }); await slow();
+    ok(w1.ok && w2.ok && w3.ok && w4.ok, '接口：許願');
+    ok((await api(b, { act: 'status', id: w1.id, status: 'done' })).error === '只有管理員可以改狀態', '接口：不是管理員不能改狀態');
+    ok((await api(a, { act: 'edit', id: w1.id, title: '亂改別人的', cat: 'bug', body: '' })).ok === false && (await api(a, { act: 'withdraw', id: w1.id })).ok === false, '接口：不能修改、收回別人的願望'); await slow();
+    const c1 = await api(b, { act: 'comment', id: w4.id, text: '想要水豚' }); await slow();
+    ok(c1.ok && c1.wish.comments.length === 1 && !c1.wish.comments[0].admin, '接口：留言');
+    ok((await api(a, { act: 'like', id: w2.id })).ok, '接口：按愛心'); await slow();
+    const pa = await open(a, phone);
+    const P = (fn, arg) => pa.evaluate(fn, arg), txt = () => pa.textContent('#panel');
+    const ready = () => pa.waitForFunction(() => { const p = document.getElementById('panel'); return !p.hidden && p.dataset.kind === 'well' && !/讀取中/.test(p.textContent); }, null, { timeout: 30000 }).catch(() => {});
+    const titles = () => P(() => [...document.querySelectorAll('#panel .wish b')].map(e => e.textContent));
+    await NW(pa, () => { HQ_NEWWORLD.near = () => 'well'; NW_UI.open('well', {}); }); await ready(); await pa.waitForTimeout(300);
+    ok((await titles()).length === 4, '清單：四個願望都在'); await shot(pa, tag + '-1-list');
+    ok(await P(() => { const w = document.querySelector('#panel .wish'); return !!w.querySelector('.chip') && !!w.querySelector('.likes img') && !!document.querySelector('#panel .likes.on'); }), '清單：每一列有類別章、愛心和數字，自己按過的是紅的');
+    if (!phone) ok(await P(() => document.getElementById('panel').getBoundingClientRect().width > 600), '電腦：許願池用寬版');
+    else ok(await P(() => { const r = document.getElementById('panel').getBoundingClientRect(); return r.left >= 0 && r.right <= innerWidth + 0.5; }), '手機：面板在畫面裡');
+    await pa.fill('#wish-q', '養魚'); await pa.waitForFunction(() => document.querySelectorAll('#panel .wish').length === 1, null, { timeout: 15000 }).catch(() => {});
+    ok((await titles()).join() === '想要在大廳養魚', '搜尋「養魚」只剩一個'); await pa.fill('#wish-q', ''); await pa.waitForFunction(() => document.querySelectorAll('#panel .wish').length === 4, null, { timeout: 15000 }).catch(() => {});
+    await tap(pa, '#wish-cats [data-cat=bug]'); await pa.waitForFunction(() => document.querySelectorAll('#panel .wish').length === 1, null, { timeout: 15000 }).catch(() => {});
+    ok((await titles()).join() === '椅子坐下去會陷進去', '類別分頁：Bug 回報'); await tap(pa, '#wish-cats [data-cat=""]'); await pa.waitForFunction(() => document.querySelectorAll('#panel .wish').length === 4, null, { timeout: 15000 }).catch(() => {});
+    await tap(pa, '#panel [data-sort=likes]'); await pa.waitForFunction(() => { const b = document.querySelector('#panel .wish b'); return b && b.textContent === '椅子坐下去會陷進去'; }, null, { timeout: 15000 }).catch(() => {});
+    ok((await titles())[0] === '椅子坐下去會陷進去', '排序：最多愛心'); await tap(pa, '#panel [data-sort=new]'); await pa.waitForFunction(() => { const b = document.querySelector('#panel .wish b'); return b && b.textContent === '大家想要什麼寵物'; }, null, { timeout: 15000 }).catch(() => {});
+    ok((await titles())[0] === '大家想要什麼寵物', '排序：最新許願');
+    await tap(pa, '#wish-mine'); await pa.waitForFunction(() => document.querySelectorAll('#panel .wish').length === 1, null, { timeout: 15000 }).catch(() => {});
+    ok((await titles()).join() === '大家想要什麼寵物', '「我許的」只看自己的'); await tap(pa, '#wish-mine'); await pa.waitForFunction(() => document.querySelectorAll('#panel .wish').length === 4, null, { timeout: 15000 }).catch(() => {});
+    // 願望頁：別人的願望，管理員留言、改狀態
+    await tap(pa, '#panel .wish[data-id="' + w1.id + '"]'); await pa.waitForSelector('#wish-like', { timeout: 30000 }).catch(() => {});
+    ok(await P(() => !!document.querySelector('#panel .wpaper') && !!document.getElementById('wish-say') && !document.getElementById('wish-edit')), '願望頁：紙張、留言框；別人的願望沒有修改鈕');
+    ok(!/到總部/.test(await txt()), '不再叫玩家去總部留言');
+    await pa.fill('#wish-say', '收到，排進下一批'); await tap(pa, '#wish-say-send'); await pa.waitForFunction(() => !!document.querySelector('#panel .wc.admin'), null, { timeout: 15000 }).catch(() => {});
+    ok(await P(() => { const c = document.querySelector('#panel .wc.admin'); return !!c && /收到，排進下一批/.test(c.textContent) && c.querySelector('.chip.role.admin').textContent === '管理員'; }), '管理員留言有藍色「管理員」標籤');
+    await tap(pa, '#wish-status [data-st=doing]'); await pa.waitForFunction(() => !!document.querySelector('#panel .wpaper.s-doing'), null, { timeout: 15000 }).catch(() => {});
+    ok((await api(b, { act: 'get', id: w1.id })).wish.status === 'doing', '管理員在願望頁改狀態：處理中'); await shot(pa, tag + '-2-post');
+    await tap(pa, '#wish-status [data-st=done]'); await pa.waitForTimeout(400); ok((await api(b, { act: 'get', id: w1.id })).wish.status === 'doing', '改成已完成要再按一次確認');
+    await tap(pa, '#wish-status [data-st=done]'); await pa.waitForFunction(() => !!document.querySelector('#panel .wstamp'), null, { timeout: 15000 }).catch(() => {});
+    ok(await P(() => !!document.querySelector('#panel .wstamp')) && (await api(b, { act: 'get', id: w1.id })).wish.status === 'done', '已完成：紙上蓋章'); await shot(pa, tag + '-3-done');
+    // 自己的願望：許願者標籤、修改、刪留言、收回
+    await tap(pa, '#wish-back'); await ready(); await pa.waitForSelector('#panel .wish', { timeout: 15000 }).catch(() => {});
+    await tap(pa, '#panel .wish[data-id="' + w4.id + '"]'); await pa.waitForSelector('#wish-edit', { timeout: 30000 }).catch(() => {});
+    await pa.fill('#wish-say', '水豚好'); await tap(pa, '#wish-say-send'); await pa.waitForFunction(() => document.querySelectorAll('#panel .wc').length === 2, null, { timeout: 15000 }).catch(() => {});
+    ok(await P(() => document.querySelectorAll('#panel .wc').length === 2 && !!document.querySelector('#panel .wc.admin')), '自己願望下的留言串：阿寶的留言和自己的回覆'); await shot(pa, tag + '-4-mine');
+    await tap(pa, '#wish-edit'); await pa.waitForSelector('#wish-title', { timeout: 15000 }).catch(() => {}); ok((await pa.inputValue('#wish-title')) === '大家想要什麼寵物' && await P(() => document.querySelector('#panel .wtab.on').dataset.cat === 'other'), '修改：表單帶著原本的內容');
+    await pa.fill('#wish-title', '大家想要什麼新寵物'); await tap(pa, '#wish-send'); await pa.waitForSelector('#wish-like', { timeout: 15000 }).catch(() => {});
+    ok(/大家想要什麼新寵物/.test(await txt()) && (await api(b, { act: 'get', id: w4.id })).wish.title === '大家想要什麼新寵物', '修改後回到願望頁，標題換了');
+    await tap(pa, '#panel .wc:not(.admin) .wdel'); await pa.waitForTimeout(300); await tap(pa, '#panel .wc:not(.admin) .wdel'); await pa.waitForFunction(() => document.querySelectorAll('#panel .wc').length === 1, null, { timeout: 15000 }).catch(() => {});
+    ok((await api(b, { act: 'get', id: w4.id })).wish.comments.length === 1, '管理員可以刪別人的留言（按兩次確認）');
+    await tap(pa, '#wish-withdraw'); await pa.waitForTimeout(300); ok((await api(b, { act: 'get', id: w4.id })).ok, '收回要再按一次確認'); await tap(pa, '#wish-withdraw');
+    await pa.waitForFunction(() => document.querySelectorAll('#panel .wish').length === 3, null, { timeout: 15000 }).catch(() => {});
+    ok((await titles()).length === 3 && !(await api(b, { act: 'get', id: w4.id })).ok, '收回後回到清單，願望不見了');
+    // 別人許願，開著的清單自己更新
+    await api(b, { act: 'add', title: '想要釣魚', cat: 'feature', body: '' }); await pa.waitForFunction(() => document.querySelectorAll('#panel .wish').length === 4, null, { timeout: 15000 }).catch(() => {});
+    ok((await titles()).includes('想要釣魚'), '別人許了願，開著的清單自己更新'); await shot(pa, tag + '-5-list-after');
+    // 許願表單
+    await tap(pa, '#wish-add'); await pa.waitForSelector('#wish-title', { timeout: 15000 }).catch(() => {}); await tap(pa, '#wish-send'); await pa.waitForFunction(() => { const e = document.querySelector('#panel .err'); return !!e && !e.hidden; }, null, { timeout: 15000 }).catch(() => {});
+    ok(await P(() => { const e = document.querySelector('#panel .err'); return !!e && !e.hidden; }), '許願：沒寫主題會提醒'); await shot(pa, tag + '-6-form');
+    ok(pa.errors.length === 0, '沒有主控台錯誤' + pa.errors.join(' / '));
+    await pa.context().close();
+  };
+
   // ---- 聊天區和頭上的手繪泡泡：電腦一個人、手機一個人 ----
   const chat = async () => {
     console.log('chat');
@@ -471,7 +541,7 @@ async function main() {
     await pa.waitForFunction(() => /想要在大廳養魚/.test(document.getElementById('panel').textContent) && !!document.querySelector('#panel .wish'), null, { timeout: 30000 }).catch(() => {});
     ok(/想要在大廳養魚/.test(await pa.textContent('#panel')), '許了一個願，清單上看得到'); await shot(pa, 'home-3-well-list');
     await pa.click('#panel .wish'); await pa.waitForSelector('#wish-like', { timeout: 30000 }).catch(() => {}); await pa.click('#wish-like');
-    await pa.waitForFunction(() => /收回讚（1）/.test(document.getElementById('panel').textContent), null, { timeout: 30000 }).catch(() => {});
+    await pa.waitForFunction(() => /已經按愛心/.test(document.getElementById('panel').textContent), null, { timeout: 30000 }).catch(() => {});
     const wl = await api('wishes', { act: 'list' });
     ok(wl.ok && wl.items.length === 1 && wl.items[0].likes === 1 && wl.items[0].liked, '按讚有記到（跟總部同一個許願池）');
     // 職業導師
@@ -892,6 +962,8 @@ async function main() {
   if (want === 'all' || want === 'solo') await solo(false);
   if (want === 'all' || want === 'phone') await solo(true);
   if (want === 'all' || want === 'chat') await chat();
+  if (want === 'all' || want === 'wishes') await wishesT(false);
+  if (want === 'wishes-phone') await wishesT(true);
   if (want === 'all' || want === 'multi') await multi();
   if (want === 'all' || want === 'classes') await classes();
   if (want === 'all' || want === 'live') await live();

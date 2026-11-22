@@ -73,7 +73,7 @@ function create(dataDir) {
     query(o, voter, username) {
       o = o || {};
       const words = String(o.q || '').toLowerCase().split(/\s+/).filter(Boolean).slice(0, 5).map(norm);
-      let rows = list.filter(w => (!CATS.includes(o.cat) || w.cat === o.cat) && words.every(k => norm(w.title).includes(k)));
+      let rows = list.filter(w => (!CATS.includes(o.cat) || w.cat === o.cat) && (!o.mine || isMine(w, username)) && words.every(k => norm(w.title).includes(k)));   // mine：只看自己許的（新世界的許願池用）
       const by = o.sort === 'likes' ? (a, b) => (b.likes.length - a.likes.length) || (b.updated - a.updated)
         : o.sort === 'new' ? (a, b) => b.at - a.at : (a, b) => b.updated - a.updated;
       rows = rows.slice().sort(by);

@@ -14,7 +14,7 @@ window.NW_PANELS = function (NW, token, opt) {
   }
   function close() { P.hidden = true; P.innerHTML = ''; cur = null; pinned = false; }
   function frame(kind, title, sub) {
-    cur = kind; P.hidden = false; P.innerHTML = ''; P.dataset.kind = kind;
+    cur = kind; P.hidden = false; P.innerHTML = ''; P.dataset.kind = kind; P.classList.remove('post');
     var h = el('h2', '', title), x = el('button', 'note', '關掉'); x.type = 'button'; x.onclick = close; h.appendChild(x); P.appendChild(h);
     if (sub) P.appendChild(el('p', 'sub', sub));
     var body = el('div', 'body'); P.appendChild(body); return body;
@@ -103,53 +103,117 @@ window.NW_PANELS = function (NW, token, opt) {
   }
   function seedbox() { post('garden', { act: 'seed' }).then(function (r) { gardenSync(r); toast(r.ok ? r.text + '，找一格空的花圃種下去吧' : r.error); }); }
 
-  // ---------- 許願池 ----------
-  var wishPage = 1;
+  // ---------- 許願池：跟總部同一份願望，功能也一樣齊（搜尋、類別、排序、留言、修改、收回、管理員改狀態）----------
+  var wishQ = { q: '', cat: '', sort: '', mine: false, page: 1 }, wishSeq = 0, wishDraft = '', wishReload = null;
+  function two(n) { return (n < 10 ? '0' : '') + n; }
   function when(at) { var d = new Date(at); return (d.getMonth() + 1) + '/' + d.getDate(); }
+  function whenFull(at) { var d = new Date(at); return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + two(d.getHours()) + ':' + two(d.getMinutes()); }
+  function chip(cls, text) { return el('span', 'chip ' + cls, text); }
+  function hearts(w) { var s = el('span', 'likes' + (w.liked ? ' on' : '')), i = icon(w.liked ? 'wish-heart' : 'wish-heart-off', 16); if (i) s.appendChild(i); s.appendChild(document.createTextNode(w.likes)); return s; }
   function well() {
-    var body = frame('well', '許願池', '想要什麼功能、哪裡壞了，都可以丟進來。跟總部的許願池是同一個。');
-    wait(body);
-    post('wishes', { act: 'list', page: wishPage, sort: 'new' }).then(function (r) { if (cur === 'well') drawWishes(body, r); });
+    var body = frame('well', '許願池', '想要什麼功能、哪裡壞了，都可以丟進來，大家可以按愛心和留言。');
+    // 上面一排：搜尋、許願；下面：類別分頁、排序、我許的。這幾樣不重畫，只重畫下面的清單（打字才不會被打斷）
+    var bar = el('div', 'wbar'), q = el('input'); q.type = 'search'; q.id = 'wish-q'; q.placeholder = '搜尋主題'; q.maxLength = 30; q.value = wishQ.q; q.setAttribute('enterkeyhint', 'search');
+    var add = btn('許一個願', function () { if (wishInfo) wishForm(wishInfo, null); }, 'main'); add.id = 'wish-add'; add.disabled = true; var ci = icon('wish-coin', 20); if (ci) add.insertBefore(ci, add.firstChild);
+    bar.appendChild(q); bar.appendChild(add); body.appendChild(bar);
+    var cats = el('div', 'wtabs'); cats.id = 'wish-cats'; body.appendChild(cats);
+    var sorts = el('div', 'wtabs sort'); body.appendChild(sorts);
+    var list = el('div', 'wishes'); body.appendChild(list); var nav = el('div', 'acts pager'); body.appendChild(nav);
+    var wishInfo = null, t = 0;
+    function tabs(r) {
+      cats.innerHTML = ''; [['', '全部']].concat(Object.keys(r.cats).map(function (k) { return [k, r.cats[k]]; })).forEach(function (c) {
+        var b = el('button', 'wtab' + (wishQ.cat === c[0] ? ' on' : '') + (c[0] ? ' c-' + c[0] : ''), c[1]); b.type = 'button'; b.dataset.cat = c[0]; b.onclick = function () { wishQ.cat = c[0]; wishQ.page = 1; load(); }; cats.appendChild(b); });
+      sorts.innerHTML = ''; [['', '最近更新'], ['likes', '最多愛心'], ['new', '最新許願']].forEach(function (c) {
+        var b = el('button', 'wtab' + (wishQ.sort === c[0] ? ' on' : ''), c[1]); b.type = 'button'; b.dataset.sort = c[0]; b.onclick = function () { wishQ.sort = c[0]; wishQ.page = 1; load(); }; sorts.appendChild(b); });
+      var m = el('button', 'wtab mine' + (wishQ.mine ? ' on' : ''), '我許的'); m.type = 'button'; m.id = 'wish-mine'; m.onclick = function () { wishQ.mine = !wishQ.mine; wishQ.page = 1; load(); }; sorts.appendChild(m);
+    }
+    function load() {
+      var seq = ++wishSeq; if (!list.children.length) list.appendChild(el('p', 'sub', '讀取中…'));
+      post('wishes', { act: 'list', page: wishQ.page, sort: wishQ.sort, cat: wishQ.cat, q: wishQ.q, mine: wishQ.mine ? 1 : 0 }).then(function (r) {
+        if (cur !== 'well' || seq !== wishSeq || !list.isConnected) return; list.innerHTML = ''; nav.innerHTML = '';
+        if (!r.ok) { list.appendChild(el('p', 'err', r.error || '出了點問題，等等再試')); return; }
+        wishInfo = r; wishQ.page = r.page; tabs(r); add.disabled = r.left < 1; add.title = r.left < 1 ? '今天已經許了 ' + r.perDay + ' 個願，明天再來' : '今天還能許 ' + r.left + ' 個';
+        if (!r.items.length) list.appendChild(el('p', 'dim', !r.all ? '還沒有人許願，來當第一個。' : '找不到符合的願望，換個關鍵字或類別看看。'));
+        r.items.forEach(function (w) {
+          var b = el('button', 'wish s-' + w.status); b.type = 'button'; b.dataset.id = w.id; b.onclick = function () { wishOne(w.id); };
+          var main = el('span', 'wmain'), top = el('span', 'wtop'); top.appendChild(chip('c-' + w.cat, r.cats[w.cat])); top.appendChild(el('b', '', w.title)); if (w.status !== 'new') top.appendChild(chip('s-' + w.status, r.statuses[w.status]));
+          main.appendChild(top); main.appendChild(el('small', '', w.name + (w.mine ? '（我）' : '') + '　' + when(w.at) + (w.comments ? '　留言 ' + w.comments : '') + (w.updated > w.at + 60000 ? '　更新 ' + when(w.updated) : '')));
+          b.appendChild(main); b.appendChild(hearts(w)); list.appendChild(b);
+        });
+        if (r.pages > 1) { var a = btn('上一頁', function () { wishQ.page = r.page - 1; load(); }); a.disabled = r.page <= 1; var c = btn('下一頁', function () { wishQ.page = r.page + 1; load(); }); c.disabled = r.page >= r.pages;
+          nav.appendChild(a); nav.appendChild(el('span', 'dim', '第 ' + r.page + ' / ' + r.pages + ' 頁，共 ' + r.total + ' 個願望')); nav.appendChild(c); }
+        else if (r.total) nav.appendChild(el('span', 'dim', '共 ' + r.total + ' 個願望'));
+      });
+    }
+    q.addEventListener('input', function () { clearTimeout(t); t = setTimeout(function () { wishQ.q = q.value.trim(); wishQ.page = 1; load(); }, 300); });
+    q.addEventListener('keydown', function (e) { e.stopPropagation(); }); q.addEventListener('keyup', function (e) { e.stopPropagation(); });
+    wishReload = function () { if (document.activeElement !== q) load(); }; load();
   }
-  function drawWishes(body, r) {
-    if (!r.ok) return fail(body, r);
+  function wishOne(id, keepDraft) {
+    wishReload = null; var body = frame('well', '許願池'); P.classList.add('post'); if (!keepDraft) wishDraft = ''; wait(body);
+    post('wishes', { act: 'get', id: id }).then(function (r) { if (cur === 'well' && body.isConnected) drawWish(body, id, r); });
+  }
+  function drawWish(body, id, r) {
+    if (!r.ok) { fail(body, r); var bk = el('div', 'acts'); bk.appendChild(btn('回清單', well)); body.appendChild(bk); return; }
+    var w = r.wish, again = function (x) { if (cur !== 'well' || !body.isConnected) return; if (x.ok && x.wish) drawWish(body, id, x); else { if (x.error) toast(x.error); wishOne(id, true); } };
     body.innerHTML = '';
-    var top = el('div', 'acts'); var add = btn('許一個願（今天還能許 ' + r.left + ' 個）', function () { wishForm(r); }, 'main'); add.disabled = r.left < 1; add.id = 'wish-add'; top.appendChild(add); body.appendChild(top);
-    if (!r.items.length) body.appendChild(el('p', 'dim', '還沒有人許願，來當第一個。'));
-    var list = el('div', 'wishes');
-    r.items.forEach(function (w) {
-      var b = el('button', 'wish'); b.type = 'button'; b.onclick = function () { wishOne(w.id); };
-      b.appendChild(el('b', '', w.title));
-      b.appendChild(el('small', '', '【' + r.cats[w.cat] + '】' + r.statuses[w.status] + '　' + w.name + '　' + when(w.at) + '　讚 ' + w.likes + (w.comments ? '　留言 ' + w.comments : '')));
-      list.appendChild(b);
+    var back = el('button', 'wback', '← 回清單'); back.type = 'button'; back.id = 'wish-back'; back.onclick = well; body.appendChild(back);
+    var cols = el('div', 'wcols'), left = el('div', 'wleft'), right = el('div', 'wright'); cols.appendChild(left); cols.appendChild(right); body.appendChild(cols);
+    // 左邊：願望本身，一張紙；完成的蓋一個章
+    var paper = el('div', 'wpaper s-' + w.status), top = el('div', 'wtop'); top.appendChild(chip('c-' + w.cat, r.cats[w.cat])); top.appendChild(chip('s-' + w.status, r.statuses[w.status])); paper.appendChild(top);
+    paper.appendChild(el('h3', 'wh', w.title)); paper.appendChild(el('p', 'wby', w.name + '　' + whenFull(w.at) + (w.updated > w.at + 60000 ? '　（更新 ' + when(w.updated) + '）' : '')));
+    paper.appendChild(el('p', 'text' + (w.body ? '' : ' none'), w.body || '（沒有寫細節）'));
+    if (w.status === 'done') { var st = el('div', 'wstamp'), si = icon('wish-stamp'); if (si) st.appendChild(si); st.appendChild(el('span', '', r.statuses.done)); paper.appendChild(st); }
+    left.appendChild(paper);
+    var acts = el('div', 'acts wacts');
+    var like = el('button', 'opt wlike' + (w.liked ? ' on' : '')); like.type = 'button'; like.id = 'wish-like'; var hi = icon(w.liked ? 'wish-heart' : 'wish-heart-off', 20); if (hi) like.appendChild(hi); like.appendChild(document.createTextNode((w.liked ? '已經按愛心' : '我也想要') + '　' + w.likes));
+    like.onclick = function () { like.disabled = true; post('wishes', { act: 'like', id: id }).then(function (x) { if (!x.ok) toast(x.error); wishOne(id, true); }); }; acts.appendChild(like);
+    if (w.mine) {
+      var ed = btn('修改', function () { wishForm(r, w); }); ed.id = 'wish-edit'; acts.appendChild(ed);
+      var sure = false, wd = btn('收回', function () { if (!sure) { sure = true; wd.textContent = '確定收回？再按一次'; wd.classList.add('warn'); setTimeout(function () { if (wd.isConnected) { sure = false; wd.textContent = '收回'; wd.classList.remove('warn'); } }, 4000); return; }
+        post('wishes', { act: 'withdraw', id: id }).then(function (x) { if (!x.ok) return toast(x.error); toast('願望收回來了'); well(); }); }); wd.id = 'wish-withdraw'; acts.appendChild(wd);
+    }
+    left.appendChild(acts);
+    // 管理員：直接在這裡改狀態（伺服器會再檢查一次）
+    if (r.admin) { var ad = el('div', 'wadmin'); ad.appendChild(el('small', '', '管理員：改狀態')); var pick = el('div', 'wtabs'); pick.id = 'wish-status';
+      Object.keys(r.statuses).forEach(function (k) { var b = el('button', 'chip s-' + k + (w.status === k ? ' on' : ''), r.statuses[k]); b.type = 'button'; b.dataset.st = k; var ask = false;
+        b.onclick = function () { if (w.status === k) return; if (k === 'done' && !ask) { ask = true; b.textContent = '確定已完成？再按一次'; setTimeout(function () { if (b.isConnected) { ask = false; b.textContent = r.statuses[k]; } }, 4000); return; }
+          post('wishes', { act: 'status', id: id, status: k }).then(function (x) { if (x.ok) toast('狀態改成' + r.statuses[k] + '了'); again(x); }); }; pick.appendChild(b); });
+      ad.appendChild(pick); left.appendChild(ad); }
+    // 右邊：留言串和留言框
+    right.appendChild(el('h4', 'wch', '留言' + (w.comments.length ? '（' + w.comments.length + '）' : '')));
+    var th = el('div', 'wthread'); th.id = 'wish-thread';
+    if (!w.comments.length) th.appendChild(el('p', 'dim', '還沒有人留言。'));
+    w.comments.forEach(function (c) {
+      var row = el('div', 'wc' + (c.admin ? ' admin' : c.author ? ' author' : '')), hd = el('div', 'wc-h'); hd.appendChild(el('b', '', c.name));
+      if (c.admin) hd.appendChild(chip('role admin', '管理員')); else if (c.author) hd.appendChild(chip('role author', '許願者'));
+      hd.appendChild(el('small', '', whenFull(c.at)));
+      if (c.mine || r.admin) { var del = el('button', 'wdel', '刪除'); del.type = 'button'; var ok = false; del.onclick = function () { if (!ok) { ok = true; del.textContent = '確定刪除？'; setTimeout(function () { if (del.isConnected) { ok = false; del.textContent = '刪除'; } }, 4000); return; }
+        post('wishes', { act: 'uncomment', id: id, cid: c.id }).then(again); }; hd.appendChild(del); }
+      row.appendChild(hd); row.appendChild(el('p', 'wc-t', c.text)); th.appendChild(row);
     });
-    body.appendChild(list);
-    if (r.pages > 1) { var nav = el('div', 'acts'); var a = btn('上一頁', function () { wishPage = r.page - 1; well(); }); a.disabled = r.page <= 1; var c = btn('下一頁', function () { wishPage = r.page + 1; well(); }); c.disabled = r.page >= r.pages;
-      nav.appendChild(a); nav.appendChild(el('span', 'dim', '第 ' + r.page + ' / ' + r.pages + ' 頁')); nav.appendChild(c); body.appendChild(nav); }
+    right.appendChild(th);
+    var form = el('div', 'wsay'), ta = el('textarea'); ta.id = 'wish-say'; ta.rows = 2; ta.maxLength = r.commentLen || 300; ta.placeholder = '留言（最多 ' + (r.commentLen || 300) + ' 個字）'; ta.value = wishDraft;
+    ta.addEventListener('input', function () { wishDraft = ta.value; }); ta.addEventListener('keydown', function (e) { e.stopPropagation(); }); ta.addEventListener('keyup', function (e) { e.stopPropagation(); });
+    var send = btn('送出留言', function () { var t = ta.value.trim(); if (!t) return; send.disabled = true;
+      post('wishes', { act: 'comment', id: id, text: t }).then(function (x) { send.disabled = false; if (!x.ok) return toast(x.error); wishDraft = ''; again(x); }); }, 'main'); send.id = 'wish-say-send';
+    form.appendChild(ta); form.appendChild(send); right.appendChild(form);
+    th.scrollTop = th.scrollHeight;
   }
-  function wishOne(id) {
-    var body = frame('well', '許願池'); wait(body);
-    post('wishes', { act: 'get', id: id }).then(function (r) { if (cur !== 'well') return; if (!r.ok) return fail(body, r);
-      var w = r.wish; body.innerHTML = '';
-      body.appendChild(el('p', 'title', w.title));
-      body.appendChild(el('p', 'dim', '【' + r.cats[w.cat] + '】' + r.statuses[w.status] + '　' + w.name + '　' + when(w.at)));
-      if (w.body) body.appendChild(el('p', 'text', w.body));
-      (w.comments || []).forEach(function (c) { var p = el('p', 'cmt'); p.appendChild(el('b', '', c.name + (c.admin ? '（管理員）' : c.author ? '（許願者）' : '') + '：')); p.appendChild(document.createTextNode(c.text)); body.appendChild(p); });
-      var acts = el('div', 'acts');
-      var like = btn((w.liked ? '收回讚' : '我也想要') + '（' + w.likes + '）', function () { post('wishes', { act: 'like', id: id }).then(function (x) { if (!x.ok) toast(x.error); wishOne(id); }); }, w.liked ? 'on' : 'main'); like.id = 'wish-like'; acts.appendChild(like);
-      acts.appendChild(btn('回清單', well)); body.appendChild(acts);
-      body.appendChild(el('p', 'dim', '要留言、修改或收回願望，請到總部的許願池。'));
-    });
-  }
-  function wishForm(r) {
-    var body = frame('well', '許一個願'), cat = '';
-    var title = el('input'); title.type = 'text'; title.maxLength = r.titleLen; title.placeholder = '主題（最多 ' + r.titleLen + ' 個字）'; title.id = 'wish-title'; body.appendChild(title);
-    var cats = el('div', 'acts'); Object.keys(r.cats).forEach(function (k) { var b = btn(r.cats[k], function () { cat = k; [].forEach.call(cats.children, function (x) { x.classList.toggle('on', x === b); }); }); b.dataset.cat = k; cats.appendChild(b); }); body.appendChild(cats);
-    var text = el('textarea'); text.maxLength = r.bodyLen; text.rows = 4; text.placeholder = '想說的細節（可以不寫）'; text.id = 'wish-body'; body.appendChild(text);
+  // 許願和修改共用一張表：w 有東西就是修改
+  function wishForm(r, w) {
+    wishReload = null; var body = frame('well', w ? '修改願望' : '許一個願'), cat = w ? w.cat : '';
+    body.appendChild(el('p', 'sub', w ? '改完按儲存，清單上會排到最前面。' : '今天還能許 ' + r.left + ' 個願。主題寫短一點，細節寫在下面。'));
+    var title = el('input'); title.type = 'text'; title.maxLength = r.titleLen; title.placeholder = '主題（最多 ' + r.titleLen + ' 個字）'; title.id = 'wish-title'; title.value = w ? w.title : ''; body.appendChild(title);
+    var cats = el('div', 'wtabs'); Object.keys(r.cats).forEach(function (k) { var b = el('button', 'wtab c-' + k + (cat === k ? ' on' : ''), r.cats[k]); b.type = 'button'; b.dataset.cat = k;
+      b.onclick = function () { cat = k; [].forEach.call(cats.children, function (x) { x.classList.toggle('on', x === b); }); }; cats.appendChild(b); }); body.appendChild(cats);
+    var text = el('textarea'); text.maxLength = r.bodyLen; text.rows = 6; text.placeholder = '想說的細節（可以不寫）'; text.id = 'wish-body'; text.value = w ? (w.body || '') : ''; body.appendChild(text);
+    [title, text].forEach(function (x) { x.addEventListener('keydown', function (e) { e.stopPropagation(); }); x.addEventListener('keyup', function (e) { e.stopPropagation(); }); });
     var err = el('p', 'err'); err.hidden = true; body.appendChild(err);
-    var acts = el('div', 'acts'); var send = btn('丟進許願池', function () { send.disabled = true;
-      post('wishes', { act: 'add', title: title.value, cat: cat, body: text.value }).then(function (x) { send.disabled = false; if (!x.ok) { err.hidden = false; err.textContent = x.error; return; } toast('願望丟進許願池了'); wishPage = 1; well(); }); }, 'main'); send.id = 'wish-send';
-    acts.appendChild(send); acts.appendChild(btn('先不要', well)); body.appendChild(acts);
+    var acts = el('div', 'acts'), back = w ? function () { wishOne(w.id); } : well; var send = btn(w ? '儲存' : '丟進許願池', function () { send.disabled = true;
+      post('wishes', w ? { act: 'edit', id: w.id, title: title.value, cat: cat, body: text.value } : { act: 'add', title: title.value, cat: cat, body: text.value }).then(function (x) { send.disabled = false; if (!x.ok) { err.hidden = false; err.textContent = x.error; return; }
+        toast(w ? '願望改好了' : '願望丟進許願池了'); if (w) wishOne(w.id); else { wishQ = { q: '', cat: '', sort: '', mine: false, page: 1 }; well(); } }); }, 'main'); send.id = 'wish-send';
+    acts.appendChild(send); acts.appendChild(btn('先不要', back)); body.appendChild(acts);
   }
 
   // ---------- 背包和裝備：跟總部同一個背包 ----------
@@ -261,6 +325,8 @@ window.NW_PANELS = function (NW, token, opt) {
   // 一進來先拿一次花園的狀態（之後有變伺服器會推過來）
   post('garden', { act: 'state' }).then(gardenSync);
   return { close: close, toast: toast,
+    // 有人許願、按愛心、留言：開著的許願池清單跟著更新（正在看某個願望或打字時不動）
+    wishes: function () { if (cur === 'well' && wishReload && P.querySelector('.wishes')) wishReload(); },
     // 歌單有變（換歌了、別人點歌了）：開著的點唱機面板跟著更新；輸入框裡正在打字就先不動
     music: function () { if (cur !== 'juke' || (document.activeElement && document.activeElement.id === 'juke-q') || (document.getElementById('juke-q') || {}).value) return; jukePost({ act: 'state' }); },
     // 花園有變（長大了、別人澆水了）：開著的花圃面板跟著更新
@@ -273,7 +339,7 @@ window.NW_PANELS = function (NW, token, opt) {
       if (pin && kind === 'pet') { pet(); pinned = true; return; }
       if (pin && kind === 'juke') { juke(); pinned = true; return; }
       pinned = false;
-      if (kind === 'mentor') mentor(); else if (kind === 'gacha') gacha(); else if (kind === 'plot') plot(it.i); else if (kind === 'seedbox') seedbox(); else if (kind === 'well') { wishPage = 1; well(); } else if (kind === 'juke') juke();
+      if (kind === 'mentor') mentor(); else if (kind === 'gacha') gacha(); else if (kind === 'plot') plot(it.i); else if (kind === 'seedbox') seedbox(); else if (kind === 'well') { wishQ.page = 1; well(); } else if (kind === 'juke') juke();
       else if (kind === 'bag') { if (cur === 'bag') close(); else { eqView = false; bag(); } } else if (kind === 'pet') { if (cur === 'pet') close(); else pet(); } else if (cur) close();
     } };
 };

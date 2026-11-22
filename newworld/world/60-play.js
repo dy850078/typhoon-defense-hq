@@ -347,6 +347,7 @@ const NW = (() => {
   const CB = ME && typeof makeCombat === 'function' ? makeCombat({ ME, S, OTH, FY, LAB,
     badge: (mine, id, url) => { const tag = mine ? MYTAG : (OTH.get(id) || {}).tag; if (!tag || tag.cb === url) return; tag.cb = url; tag.i.hidden = false; tag.i.src = url; },
     moveMe: (x, z) => { const c = collide(LIMX(x, ME.z), LIMZ(z, ME.z), 0.4); ME.x = c.x; ME.z = c.z; }, faceMe: (f) => { ME.face = f; },
+    posed: (mine, id) => (mine ? !!ACT.pose || S.ctrl !== 'me' : !!(POSE_OF[(OTH.get(id) || {}).p] || (OTH.get(id) || {}).rider)),   // 坐著、揮手、騎機器人的時候不擺待機動作
     moving: () => Math.hypot(S.jx, S.jy) > 0.15 || !!(S.keys.ArrowLeft || S.keys.ArrowRight || S.keys.ArrowUp || S.keys.ArrowDown || S.keys.a || S.keys.d || S.keys.w || S.keys.s) || !!(S.goal && !S.goal.auto) }) : null;
   function update(dt) {
     S.time += dt; const t = S.time / 6; if (CB) CB.tick(dt);

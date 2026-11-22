@@ -60,11 +60,13 @@
   };
   // 召喚師的使魔（繪師的聖誕外星人）：弱、中、強，還有大招的那一位
   const FAMILIARS = [
-    { id: 'star', name: '星星臉', atk: 0.55, every: 1.3 },
-    { id: 'bloom', name: '三眼花農', atk: 0.85, every: 1.3 },
-    { id: 'wreath', name: '花圈長老', atk: 1.25, every: 1.4 },
-    { id: 'envoy', name: '聖誕使者', atk: 2.4, every: 1.2, r: 3 },
+    { id: 'star', name: '星星臉', atk: 0.55, every: 1.3, hp: 0.5, range: 4.5 },
+    { id: 'bloom', name: '三眼花農', atk: 0.85, every: 1.3, hp: 0.7, range: 4.5 },
+    { id: 'wreath', name: '花圈長老', atk: 1.25, every: 1.4, hp: 0.9, range: 4.5 },
+    { id: 'envoy', name: '聖誕使者', atk: 2.4, every: 1.2, r: 3, hp: 1.6, range: 5.5 },
   ];
+  // 使魔自己行動：hp 是主人血量的幾成；平常在主人身邊 near 步內晃，主人附近 seek 步內的怪會自己去打，離主人超過 leash 就跑回來，超過 tele 直接回到身邊；主人 idle 秒沒動作就不主動找新的怪
+  const FAMAI = { near: 3.5, seek: 8, leash: 12, tele: 20, idle: 60, sp: 8, own: 4, foe: 6 };
   const LEVEL = { max: 99, expFor: (lv) => Math.round(40 * Math.pow(lv, 1.6)), hp: (lv) => 100 + 25 * lv, mp: (lv) => 50 + 8 * lv, atk: (lv) => 10 + 4 * lv };
   // 轉職門檻：10 等選學門；50 等、見習生熟練度練滿（打怪次數）再加收集信物，才能專精
   const GATE = { school: 10, spec: 50, mastery: 1200 };
@@ -140,5 +142,5 @@
     return out;
   }
   const keyLabel = (k) => k === 'Space' ? '空白' : String(k || '').replace(/^(Digit|Key)/, '').replace(/^Numpad/, '數');
-  return { SCHOOLS, SPECS, BASIC, SK, FAMILIARS, LEVEL, GATE, QUEST, QUEST_RATE, SRC, MOBS, DROP_MS, PICK_R, PARTY, DOWN, KEYS, clsName, basicOf, basicKey, learned, electives, cleanSlots, autoSlots, keyOk, cleanKeys, keyLabel };
+  return { SCHOOLS, SPECS, BASIC, SK, FAMILIARS, FAMAI, LEVEL, GATE, QUEST, QUEST_RATE, SRC, MOBS, DROP_MS, PICK_R, PARTY, DOWN, KEYS, clsName, basicOf, basicKey, learned, electives, cleanSlots, autoSlots, keyOk, cleanKeys, keyLabel };
 });

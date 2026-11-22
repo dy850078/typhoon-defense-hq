@@ -968,6 +968,23 @@ async function main() {
     ok(!pg.errors.length, '沒有頁面錯誤' + (pg.errors.length ? '：' + pg.errors.slice(0, 3).join(' / ') : ''));
     fs.writeFileSync(path.join(OUT, 'idle-list.json'), JSON.stringify(shots)); await pg.context().close();
   };
+  const famAi = async () => {
+    console.log('famai');
+    const pg = await open(await account({ name: '小召' }), false), shot = (n) => pg.screenshot({ path: path.join(OUT, 'famai-' + n + '.png') });
+    const ask = (ev, arg) => pg.evaluate(([e, a]) => window.NW_SK.ask(e, a), [ev, arg]), dbg = () => pg.evaluate(() => window.HQ_NEWWORLD.combat.debug()), mine = async () => (await dbg()).who.find(w => w.famAt && w.famAt.length);
+    await pg.waitForFunction(() => window.HQ_NEWWORLD.combat && window.HQ_NEWWORLD.combat.view(), null, { timeout: 20000 });
+    await ask('cb:dbg', { lv: 14 }); await ask('cb:school', 'sc'); await ask('cb:slots', ['seal', 'pact', 'spark', null]); await zoomIn(pg);
+    const mo = (await dbg()).mobs.filter(m => m.kind === 'puff' && m.lv <= 30 && m.hp > 0).sort((a, b) => b.lv - a.lv)[0];
+    await pg.evaluate(([x, z]) => window.HQ_NEWWORLD.debugPlace(x, z), [mo.x + 6, mo.z + 1]); await pg.waitForTimeout(800);
+    await pg.locator('.cb-sk').nth(1).dispatchEvent('pointerdown');
+    await pg.waitForFunction(() => window.HQ_NEWWORLD.combat.debug().who.some(w => w.famAt && w.famAt.length), null, { timeout: 15000 }).catch(() => {});
+    const w0 = await mine(); ok(w0 && w0.famAt[0].max > 0, '叫出使魔，畫面上有牠的血量');
+    const hurt = await pg.waitForFunction(() => window.HQ_NEWWORLD.combat.debug().who.some(w => w.famAt && w.famAt.some(f => f.hp < f.max)), null, { timeout: 60000 }).then(() => true).catch(() => false);
+    const w1 = await mine(); ok(hurt, '使魔自己去打怪，被怪打到會扣血'); if (w0 && w1) ok(Math.hypot(w1.famAt[0].x - w0.famAt[0].x, w1.famAt[0].z - w0.famAt[0].z) > 0.5, '使魔自己走動了');
+    ok(await pg.evaluate(() => [...document.querySelectorAll('.cb-bar')].filter(b => !b.hidden).length > 0), '頭上看得到血條'); await shot('1-fight');
+    ok(!pg.errors.length, '沒有頁面錯誤' + (pg.errors.length ? '：' + pg.errors.slice(0, 3).join(' / ') : '')); await pg.context().close();
+  };
+  if (want === 'famai') await famAi();
   if (want === 'idle') await idleShow();
   if (want === 'party') await partyShow(false);
   if (want === 'party-phone') await partyShow(true);

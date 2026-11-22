@@ -590,6 +590,30 @@ nwRoute('pet', { READ: ['state'],
     return { happy: true, text: `${p.pet.name}吃了${nwItemName(item)}，感情 +${g}` };
   },
 });
+// ---- 管理員的「功能測試」面板（public/newworld-ui.js）：只有管理員帳號能用，每個動作都再檢查一次 ----
+// 等級、熟練度、轉職那些走戰鬥連線的 cb:dbg（nw-combat.js，一樣會檢查管理員）；這裡管背包、裝備、寵物
+const NW_TEST_SETS = {
+  tickets: { name: '扭蛋券 10 張', inv: { gachaTicket: 10 } },
+  food: { name: '補品各 5 個', inv: { water: 5, bubbletea: 5, chicken: 5 } },
+  magical: { name: '魔法少女整套', series: 'magical' },
+  wizard: { name: '小巫師整套', series: 'wizard' },
+};
+const nwTestAdmin = (fn) => (A, b, u) => (u.admin ? fn(A, b, u) : { error: '只有管理員可以' });
+nwRoute('test', { READ: [],
+  give: nwTestAdmin(({ p }, b) => {
+    const S = Object.prototype.hasOwnProperty.call(NW_TEST_SETS, b.set) && NW_TEST_SETS[b.set]; if (!S) return { error: '沒有這一組' };
+    if (S.inv) Object.keys(S.inv).forEach(k => { if (MAP.ITEMS[k]) p.inv[k] = Math.min(INV_MAX, (p.inv[k] || 0) + S.inv[k]); });
+    if (S.series) Object.keys(GEAR.GEAR).forEach(id => { if (GEAR.GEAR[id].series === S.series) { p.gear[id] = Math.min(99, (p.gear[id] || 0) + 1); if (!p.seen.includes(id)) p.seen.push(id); } });
+    return { text: '放進背包了：' + S.name };
+  }),
+  pet: nwTestAdmin(({ p }, b) => {
+    if (b.kind === 'none') { p.pet = null; return { text: '寵物收走了', pet: null }; }
+    const kind = Object.prototype.hasOwnProperty.call(PETS.KINDS, b.kind) ? b.kind : 'cat';
+    p.pet = PETS.withTemper(PETS.sanitize(Object.assign({}, PETS.DEFAULTS[kind], { kind, name: { cat: '測試貓', dog: '測試狗', horse: '測試馬' }[kind] || '測試寵物' })));
+    return { text: '領到一隻' + p.pet.name, pet: p.pet };
+  }),
+  clear: nwTestAdmin(({ p }) => { p.inv = {}; p.furn = {}; p.gear = {}; p.seen = []; p.equip = {}; p.gachaPity = 0; return { text: '背包和裝備清空了', equip: {} }; }),
+});
 // 點歌：排進總部「全區」的同一份歌單（新世界聽的就是那一份）
 app.post('/api/newworld/music', async (req, res) => {
   const u = newworldUser(req, res); if (!u) return;

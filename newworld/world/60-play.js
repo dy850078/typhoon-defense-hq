@@ -74,7 +74,9 @@ const NW = (() => {
     P.g.legs.forEach((l, i) => { l.position.y = P.g.legY + P.mv * Math.max(0, Math.sin(P.ph + (i % 3 ? 0 : Math.PI))) * 0.08; }); P.g.tail.rotation.z = Math.sin(S.time * 7) * 0.45;
     placeTag(P.tag, P.x, P.z, -1.2); };
   const FORMS = ['carry', 'float', 'front'], FORM_NAME = { carry: '單手捧著', float: '漂浮操控', front: '走在前面' };
-  const CAM = [{ dist: 47, hgt: 17 }, { dist: 30, hgt: 10.5 }], CAM_ME = CAM, ANG = 0.62;
+  const CAM = [{ dist: 47, hgt: 17 }, { dist: 30, hgt: 10.5 }], CAM_ME = CAM, ANG0 = 0.62, LOB_TURN = 0.7;   // ANG0：鏡頭平常的方向；大廳只有北牆和西牆，鏡頭左右各只能轉 LOB_TURN（約 40 度），不然會被牆擋住
+  S.ang = S.angT = ANG0;
+  const clampAng = () => { if (S.lob) S.angT = Math.max(ANG0 - LOB_TURN, Math.min(ANG0 + LOB_TURN, S.angT)); };
   // 多人：別的玩家的標準人物，還有頭上的名字紙條和聊天泡泡（用網頁元素疊在畫面上，字才清楚）
   const OTH = new Map(), LAB = document.createElement('div'); LAB.id = 'nw-labels'; document.body.appendChild(LAB);
   const mkTag = () => { const t = document.createElement('div'), b = document.createElement('div'), n = document.createElement('div'), i = document.createElement('img'), s = document.createElement('span');
@@ -313,7 +315,8 @@ const NW = (() => {
   const tickGreek = (dt) => { if (!GREEK || S.lob) return; STD.tick(GREEK, dt, 0); const B = GREEK.B, f = GREEK.H.rotation.y;
     aim(B.upper_armR, B.lower_armR, 0.12, 0.18, 1, f); aim(B.lower_armR, B.handR, 0.75, 0.62, 0.22, f); };
   const YARD = LOBBY ? scene.children.filter(o => o.visible && !o.isLight && o !== sun.target && o !== R && o !== GOAL && o !== LOBBY.G && !(ME && o === ME.c.H) && !RIDER_FX.includes(o)) : [], SKY = scene.background;
-  const setZone = (lob) => { S.lob = lob; YARD.forEach(o => { o.visible = !lob; }); LOBBY.G.visible = lob; LOBX.forEach(o => { o.visible = lob; }); scene.background = lob ? LOBBY.bg : SKY; S.goal = null; S.camT.set(ME.x, 1.3 + FY(ME.x, ME.z), ME.z); };
+  const setZone = (lob) => { S.lob = lob; YARD.forEach(o => { o.visible = !lob; }); LOBBY.G.visible = lob; LOBX.forEach(o => { o.visible = lob; }); scene.background = lob ? LOBBY.bg : SKY; S.goal = null; if (lob) { S.angT = ANG0 + Math.atan2(Math.sin(S.angT - ANG0), Math.cos(S.angT - ANG0)); clampAng(); S.ang = S.angT; }   // 進大廳：鏡頭轉回大廳看得到的範圍
+    S.camT.set(ME.x, 1.3 + FY(ME.x, ME.z), ME.z); };
   A.boy.visible = false;   // 舊的小男孩不再出現：騎士就是玩家自己的標準人物
   // 機器人的小零件不投影子（影子那一輪少畫很多次，地上的影子看不出差別）
   { let cut = 0, all = 0; A.bot.updateMatrixWorld(true); const sc = new V3(); A.bot.traverse(o => { if (!o.isMesh || !o.castShadow) return; all++;
@@ -333,7 +336,7 @@ const NW = (() => {
     let jx = S.jx, jy = S.jy; const K = S.keys;
     if (K.ArrowLeft || K.a) jx -= 1; if (K.ArrowRight || K.d) jx += 1; if (K.ArrowUp || K.w) jy -= 1; if (K.ArrowDown || K.s) jy += 1;
     let jl = Math.hypot(jx, jy), wx = 0, wz = 0;
-    if (jl > 0.15) { S.goal = null; const n = Math.min(1, jl) / jl; wx = (Math.cos(ANG) * jx + Math.sin(ANG) * jy) * n; wz = (-Math.sin(ANG) * jx + Math.cos(ANG) * jy) * n; }
+    if (jl > 0.15) { S.goal = null; const n = Math.min(1, jl) / jl; wx = (Math.cos(S.ang) * jx + Math.sin(S.ang) * jy) * n; wz = (-Math.sin(S.ang) * jx + Math.cos(S.ang) * jy) * n; }
     else if (S.goal) { // 點地面走路：朝目標走，到了就停；搖桿或鍵盤一動就取消
       const me = S.ctrl === 'me', dx = S.goal.x - (me ? ME.x : S.x), dz = S.goal.z - (me ? ME.z : S.z), d = Math.hypot(dx, dz), step = (me ? (ACT.run ? 7 : 4.2) * (CB ? CB.slow() : 1) : 6.5) * dt;
       if (d < S.goal.best - 0.01) { S.goal.best = d; S.goal.t = S.time; }   // 被擋住一陣子沒有更靠近，就不走了
@@ -363,11 +366,12 @@ const NW = (() => {
     R.visible = RID; RIDER_FX.forEach(o => { o.visible = RID; });
     if (ME) { if (RID) { const w = seat(ME.c, S, dt, info); ME.x = w.x; ME.z = w.z; ME.y = w.y; ME.face = S.face; } else ME.y = (ME.sy || 0) + FY(ME.x, ME.z);
       const lob = S.ctrl === 'me' && inLob(ME.z); if (lob !== S.lob) setZone(lob); }
-    // --- 鏡頭：固定斜角，跟著角色 ---
+    // --- 鏡頭：固定的俯角，跟著角色；左右可以轉（滑鼠右鍵拖），慢慢滑到要去的角度 ---
+    S.ang += (S.angT - S.ang) * Math.min(1, dt * 12);
     const cam = (S.ctrl === 'me' ? CAM_ME : CAM)[S.zoom], asp = W / H, far = asp < 1 ? Math.pow(1 / asp, 0.75) : 1;
     if (S.ctrl === 'me') S.camT.lerp(bp0.set(ME.x, 1.3 + FY(ME.x, ME.z), ME.z), Math.min(1, dt * 5));   // 騎士的鏡頭看整台機器人
     else S.camT.lerp(bp0.set(S.x - 0.8, 3.6 + shake * 0.07, S.z + 3.2), Math.min(1, dt * 5));
-    camera.position.set(S.camT.x + Math.sin(ANG) * cam.dist * far, cam.hgt * far, S.camT.z + Math.cos(ANG) * cam.dist * far); camera.lookAt(S.camT);
+    camera.position.set(S.camT.x + Math.sin(S.ang) * cam.dist * far, cam.hgt * far, S.camT.z + Math.cos(S.ang) * cam.dist * far); camera.lookAt(S.camT);
     if (S.dbgCam) { const d = S.dbgCam; camera.position.set(ME.x + Math.sin(d.ang) * d.dist, d.hgt, ME.z + Math.cos(d.ang) * d.dist); camera.lookAt(ME.x, d.look ?? 1.1, ME.z); }   // 測試截圖用的近鏡頭
     camera.updateMatrixWorld(); if (!NEAR) nearIt = null;
     if (NEAR && ACT.pose !== 'sit') { PV.set(NEAR.x, NEAR.y, NEAR.z).project(camera); HINT.hidden = false; showHint(NEAR);   // 坐著的時候不顯示紙條（走路就會站起來）
@@ -441,6 +445,10 @@ const NW = (() => {
     nextForm: () => { S.form = FORMS[(FORMS.indexOf(S.form) + 1) % FORMS.length]; return FORM_NAME[S.form]; },
     gesture: () => { if (S.gt < 0) { S.gt = 0; S.gn = (S.gn + 1) % 1000; } },
     zoom: () => { S.zoom = 1 - S.zoom; return S.zoom ? '近' : '遠'; },
+    // 轉鏡頭：d 是要轉的弧度（正的往右拖）；前院和野外可以轉一整圈，大廳左右各 LOB_TURN
+    turn: (d) => { S.angT += d; clampAng(); return S.angT; },
+    turnReset: () => { S.angT = ANG0 + Math.round((S.ang - ANG0) / (Math.PI * 2)) * Math.PI * 2; },   // 回正：轉最近的那一圈回去，不會多繞
+    camAngle: () => S.ang - ANG0,
     nextQuality: () => { S.quality = (S.quality + 1) % QUALITY.length; applyQuality(); return QUALITY[S.quality].name; },
     lines: () => { S.lines = !S.lines; outlines.forEach(o => { o.visible = S.lines; }); if (STD) STD.lines(S.lines); return S.lines ? '開' : '關'; },
     // 標準人物：換操控的角色、換裝

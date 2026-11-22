@@ -175,6 +175,7 @@
       <button class="opt" type="button" id="b-zoom">鏡頭遠近<small id="s-zoom">遠</small></button>
       <button class="opt" type="button" id="b-quality">畫質<small id="s-quality">中</small></button>
       <button class="opt" type="button" id="b-lines">外框線<small id="s-lines">開</small></button>
+      <button class="opt" type="button" id="b-turn">鏡頭回正<small>按住滑鼠右鍵拖可以轉</small></button>
     </div>
     <p class="sub">手機會燙的話，把畫質調低、外框線關掉。</p>
     <div class="acts"><a class="opt" href="hq.html">回總部</a></div>
@@ -199,7 +200,7 @@
   <div id="panel" class="note" hidden></div>
   <div id="toast" class="note" hidden></div>
   <div id="chat" hidden><div id="chat-log"></div><div id="emotes" class="note" hidden></div><div id="acts" class="note" hidden><button type="button" data-act="sit">坐下</button><button type="button" data-act="wave">揮手</button><button type="button" data-act="run">跑步</button></div><form id="chat-form"><button class="note" type="button" id="b-emote">表情</button><button class="note" type="button" id="b-act">動作</button><input id="chat-in" maxlength="60" autocomplete="off" placeholder="說點什麼"><button class="note" type="submit">送出</button></form></div>
-  <div id="hint" hidden>點地面就會走過去，也可以用搖桿、方向鍵或 WASD</div>
+  <div id="hint" hidden>點地面就會走過去，也可以用搖桿、方向鍵或 WASD；按住滑鼠右鍵拖可以轉鏡頭</div>
 
   <script src="/socket.io/socket.io.js"></script>
   <script src="account.js"></script>
@@ -370,6 +371,7 @@
       $('b-zoom').onclick = function () { $('s-zoom').textContent = NW.zoom(); };
       $('b-quality').onclick = function () { $('s-quality').textContent = NW.nextQuality(); };
       $('b-lines').onclick = function () { $('s-lines').textContent = NW.lines(); };
+      $('b-turn').onclick = function () { NW.turnReset(); };
       NW.onStats(function (s) { $('stats').textContent = '每秒 ' + s.fps + ' 張　繪製 ' + s.calls + ' 次　' + Math.round(s.tris / 1000) + 'k 面'; });
       // 搖桿
       var stick = $('stick'), knob = $('knob'), id = null;
@@ -382,6 +384,13 @@
       // 點地面走路：按下和放開在差不多同一個位置才算點（避免誤觸）
       var cv = $('nw-canvas'), tap = null;
       cv.addEventListener('pointerdown', function (e) { if (e.button) return; tap = { id: e.pointerId, x: e.clientX, y: e.clientY }; });
+      // 按住滑鼠右鍵左右拖：轉鏡頭（前院和野外一整圈，大廳左右各約 40 度）
+      var turn = null;
+      cv.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+      cv.addEventListener('pointerdown', function (e) { if (e.button !== 2 || e.pointerType === 'touch') return; turn = { id: e.pointerId, x: e.clientX }; cv.setPointerCapture(e.pointerId); cv.style.cursor = 'grabbing'; e.preventDefault(); });
+      cv.addEventListener('pointermove', function (e) { if (!turn || turn.id !== e.pointerId) return; NW.turn(-(e.clientX - turn.x) * 0.0065); turn.x = e.clientX; });
+      var turnEnd = function (e) { if (turn && turn.id === e.pointerId) { turn = null; cv.style.cursor = ''; } };
+      cv.addEventListener('pointerup', turnEnd); cv.addEventListener('pointercancel', turnEnd);
       cv.addEventListener('pointerup', function (e) { if (tap && tap.id === e.pointerId && Math.hypot(e.clientX - tap.x, e.clientY - tap.y) < 12) NW.walkTo(e.clientX, e.clientY); tap = null; });
       cv.addEventListener('pointercancel', function () { tap = null; });
       window.addEventListener('keydown', function (e) { if (e.target && /^(INPUT|TEXTAREA)$/.test(e.target.tagName)) return; NW.key(e.key.length === 1 ? e.key.toLowerCase() : e.key, true); });

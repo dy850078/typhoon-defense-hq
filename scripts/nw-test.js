@@ -13,6 +13,7 @@
 //   node scripts/nw-test.js combat     戰鬥和新職業（芽、學門、專精、每一招、技能書、選修欄）；combat-phone 是手機版面
 //   node scripts/nw-test.js hotbar     快捷列和技能書（拖移換招、點選換招、按鍵提示、自訂按鍵）；hotbar-phone 是手機版面
 //   node scripts/nw-test.js ui         主畫面的圖示鈕、設定、管理員的功能測試（伺服器會擋不是管理員的人）；ui-phone 是手機版面
+//   node scripts/nw-test.js turn       轉鏡頭（右鍵拖、前院一整圈、大廳左右各約 40 度、走路方向跟著鏡頭、回正）
 //   node scripts/nw-test.js loot       掉落物（一份、點一下撿、進背包、會消失）、名字前的職業徽章
 //   node scripts/nw-test.js puppet     操偶師的手、提線、謝幕（主要是拍圖）；fam 是三隻使魔排在一起拍一張
 //   OUT=some/dir 可以指定截圖要放哪裡（預設是系統暫存資料夾）
@@ -236,6 +237,37 @@ async function main() {
     ok((await NW(pa, () => HQ_NEWWORLD.net.count())) === 0, '假人收掉');
     ok(pa.errors.length + pb.errors.length === 0, '沒有主控台錯誤' + (pa.errors.concat(pb.errors).length ? '：' + pa.errors.concat(pb.errors).join(' / ') : ''));
     await pa.context().close();
+  };
+
+  // ---- 轉鏡頭：按住滑鼠右鍵拖。前院可以轉一整圈，大廳左右各約 40 度；走路方向跟著鏡頭 ----
+  const turn = async () => {
+    console.log('turn');
+    const a = await account({ name: '轉轉', hair: 'bob' });
+    const pg = await open(a);
+    const ang = () => NW(pg, () => HQ_NEWWORLD.camAngle());
+    const settle = async () => { await pg.waitForFunction(() => { const a = HQ_NEWWORLD.camAngle(), b = window.__a; window.__a = a; return b != null && Math.abs(a - b) < 0.002; }, null, { timeout: 30000, polling: 250 }).catch(() => {}); };
+    const drag = async (dx) => { await pg.mouse.move(640, 300); await pg.mouse.down({ button: 'right' }); await pg.mouse.move(640 + dx / 2, 300, { steps: 4 }); await pg.mouse.move(640 + dx, 300, { steps: 4 }); await pg.mouse.up({ button: 'right' }); await settle(); };
+    const place = async (x, z) => { await NW(pg, ([x, z]) => HQ_NEWWORLD.debugPlace(x, z), [x, z]); await pg.waitForTimeout(900); };
+    ok(Math.abs(await ang()) < 0.01, '一開始是平常的角度');
+    const p0 = await NW(pg, () => HQ_NEWWORLD.net.me());
+    await drag(-240); const a1 = await ang(); ok(Math.abs(a1 - 240 * 0.0065) < 0.05, '按住右鍵往左拖，鏡頭轉過去（' + a1.toFixed(2) + '）'); await shot(pg, 'turn-1-yard-90');
+    const p1 = await NW(pg, () => HQ_NEWWORLD.net.me()); ok(Math.abs(p1.x - p0.x) < 0.05 && Math.abs(p1.z - p0.z) < 0.05, '右鍵拖的時候人不會走');
+    await drag(-240); await shot(pg, 'turn-2-yard-180'); await drag(-240); await shot(pg, 'turn-3-yard-270');
+    await drag(-240); const a4 = await ang(); ok(a4 > 5.5, '前院可以轉一整圈（' + a4.toFixed(2) + '）');
+    // 走路方向跟著鏡頭：轉 90 度之後按「上」，人在畫面上還是往上走
+    await NW(pg, () => HQ_NEWWORLD.turnReset()); await settle(); ok(Math.abs(await ang() - Math.PI * 2) < 0.02 || Math.abs(await ang()) < 0.02, '「鏡頭回正」轉回平常的角度');
+    await place(6, 14); await drag(-242); const before = await NW(pg, () => HQ_NEWWORLD.net.me());
+    await pg.keyboard.down('ArrowUp'); await pg.waitForTimeout(1200); await pg.keyboard.up('ArrowUp'); await pg.waitForTimeout(300);
+    const after = await NW(pg, () => HQ_NEWWORLD.net.me()), th = (await ang()) + 0.62, fx = -Math.sin(th), fz = -Math.cos(th), dx = after.x - before.x, dz = after.z - before.z, len = Math.hypot(dx, dz);
+    ok(len > 0.4 && (dx * fx + dz * fz) / len > 0.95, '轉了鏡頭之後按「上」，人往畫面的上方走（走了 ' + len.toFixed(1) + '，方向吻合 ' + ((dx * fx + dz * fz) / len).toFixed(2) + '）');
+    // 大廳：只能左右各轉一點，不會轉到牆後面
+    const L = await NW(pg, () => HQ_NEWWORLD.lobby());
+    await place(L.spawn.x, L.spawn.z - 3); await pg.waitForFunction(() => HQ_NEWWORLD.zone() === 'lobby', null, { timeout: 30000 }).catch(() => {});
+    ok(Math.abs(await ang()) <= 0.71, '進大廳，鏡頭自己轉回看得到的範圍（' + (await ang()).toFixed(2) + '）');
+    await place(0, -55); await drag(-600); const l1 = await ang(); await shot(pg, 'turn-4-lobby-left'); await drag(1200); const l2 = await ang(); await shot(pg, 'turn-5-lobby-right');
+    ok(Math.abs(l1 - 0.7) < 0.02 && Math.abs(l2 + 0.7) < 0.02, '大廳左右各只能轉約 40 度（' + l1.toFixed(2) + '、' + l2.toFixed(2) + '）');
+    ok(!pg.errors.length, '頁面沒有錯誤' + (pg.errors.length ? '：' + pg.errors.join(' / ') : ''));
+    await pg.context().close();
   };
 
   // ---- 總部大廳：前院和室內是分開的兩區 ----
@@ -688,6 +720,7 @@ async function main() {
     await pg.context().close();
   };
   if (want === 'fam') await fam();
+  if (want === 'turn') await turn();
   if (want === 'ui') await ui(false);
   if (want === 'ui-phone') await ui(true);
   // 掉落物、名字前的職業徽章

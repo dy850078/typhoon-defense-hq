@@ -59,6 +59,15 @@
       CR.blob(x, 24, 31, 11, 9, r, 0.07, 18); CR.fill(x, '#f2a65a', r, [13, 22, 22, 18]); CR.stroke(x, r, 2.3);
       [[10, 20, 4.2, 5], [19, 11, 4.4, 5.4], [29, 11, 4.4, 5.4], [38, 20, 4.2, 5]].forEach(function (p) { CR.blob(x, p[0], p[1], p[2], p[3], r, 0.07, 12); CR.fill(x, '#f2a65a', r, null); CR.stroke(x, r, 2.1); });
     },
+    // 任務：一卷攤開的紙，上面三行字、一個勾
+    'btn-quest': function (x, r) {
+      CR.rect(x, 10, 9, 28, 31, r, 0.8); CR.fill(x, '#fbf6e9', r, [10, 9, 28, 31]); CR.stroke(x, r, 2.4);
+      CR.rect(x, 7, 6, 34, 6, r, 0.5); CR.fill(x, '#c98a52', r, [7, 6, 34, 6]); CR.stroke(x, r, 2);
+      CR.line(x, 22, 19, 33, 19, r, 2, '#8a8378', 0.4); CR.line(x, 22, 26, 33, 26, r, 2, '#8a8378', 0.4); CR.line(x, 22, 33, 30, 33, r, 2, '#8a8378', 0.4);
+      x.beginPath(); x.moveTo(13.5, 19); x.lineTo(15.5, 21.5); x.lineTo(19, 16.5); CR.stroke(x, r, 2, '#3f8a4f');
+      x.beginPath(); x.moveTo(13.5, 26); x.lineTo(15.5, 28.5); x.lineTo(19, 23.5); CR.stroke(x, r, 2, '#3f8a4f');
+      CR.blob(x, 16, 33, 2, 2, r, 0.1, 8); CR.stroke(x, r, 1.6, '#c9562a');
+    },
     'btn-set': function (x, r) {
       for (var i = 0; i < 8; i++) { x.save(); x.translate(24, 24); x.rotate(i * Math.PI / 4); CR.rect(x, -4.2, -20, 8.4, 9, r, 0.4); CR.fill(x, '#8fa2a4', r, null); CR.stroke(x, r, 2); x.restore(); }
       CR.blob(x, 24, 24, 14, 14, r, 0.04, 20); CR.fill(x, '#a9babb', r, [10, 10, 28, 28]); CR.stroke(x, r, 2.3);
@@ -77,6 +86,29 @@
   var $ = function (id) { return document.getElementById(id); };
   function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
 
+  // 小 i：細節說明不直接印在面板上，收在一顆小圓 i 裡，滑鼠移上去（手機點一下）才冒出來。所有面板共用
+  //   NW_TIP.info(text) 回傳一顆小 i；NW_TIP.attach(el, text) 讓任何一個東西有說明
+  var TIP = null, tipFor = null;
+  function tipHide() { if (TIP) TIP.hidden = true; tipFor = null; }
+  function tipShow(e, text) {
+    if (!TIP) { TIP = el('div'); TIP.id = 'nw-tip'; TIP.setAttribute('role', 'tooltip'); TIP.hidden = true; document.body.appendChild(TIP);
+      window.addEventListener('scroll', tipHide, true); window.addEventListener('pointerdown', function (ev) { if (tipFor && !tipFor.contains(ev.target)) tipHide(); }, true); }
+    tipFor = e; TIP.textContent = text; TIP.hidden = false; TIP.style.left = '0px'; TIP.style.top = '0px';
+    var r = e.getBoundingClientRect(), w = TIP.offsetWidth, h = TIP.offsetHeight, x = Math.max(8, Math.min(window.innerWidth - w - 8, r.left + r.width / 2 - w / 2)), y = r.top - h - 7;
+    if (y < 8) y = r.bottom + 7; TIP.style.left = Math.round(x) + 'px'; TIP.style.top = Math.round(y) + 'px';
+  }
+  function tipAttach(e, text) {
+    e.dataset.tip = text;
+    e.addEventListener('pointerenter', function (ev) { if (ev.pointerType !== 'touch') tipShow(e, e.dataset.tip); }); e.addEventListener('pointerleave', function (ev) { if (ev.pointerType !== 'touch' && tipFor === e) tipHide(); });
+    e.addEventListener('focus', function () { tipShow(e, e.dataset.tip); }); e.addEventListener('blur', function () { if (tipFor === e) tipHide(); });
+    return e;
+  }
+  root.NW_TIP = { attach: tipAttach, hide: tipHide,
+    info: function (text) { var b = el('button', 'nw-i'); b.type = 'button'; b.setAttribute('aria-label', text); var u = IC.url('btn-info'); if (u) { var i = el('img'); i.alt = ''; i.src = u; b.appendChild(i); } else b.textContent = 'i';
+      var was = false;   // 點之前就開著：這一下是收起來。不然點一下會先被 focus 打開、又被 click 關掉
+      b.addEventListener('pointerdown', function (e) { e.stopPropagation(); was = tipFor === b && !!TIP && !TIP.hidden; }); b.addEventListener('click', function (e) { e.stopPropagation(); e.preventDefault(); if (was) tipHide(); else tipShow(b, b.dataset.tip); was = false; });
+      return tipAttach(b, text); } };
+
   root.NW_SHELL = { start: function (NW, o) {
     var C3 = root.HQ_CLS3, panels = o.panels, BOX = $('btns'), SETP = $('set-panel'), TEST = $('test-panel'), DRESS = $('dress');
     var toast = function (t) { if (panels && t) panels.toast(t); };
@@ -90,8 +122,8 @@
     $('b-kit').onclick = function () { var on = BOX.classList.toggle('open'); $('b-kit').setAttribute('aria-expanded', on ? 'true' : 'false'); };
     var skMode = '';
     function sk(mode) { return function () { var SK = root.NW_SK; if (!SK) return toast('連線中，等一下再試');
-      if (SK.isOpen() && skMode === mode) { shut(); return; } shut('sk'); skMode = mode; if (mode === 'class') SK.openClass(); else SK.openBook(); }; }
-    $('b-cls').onclick = sk('class'); $('b-skill').onclick = sk('book');
+      if (SK.isOpen() && (SK.tab ? SK.tab() : skMode) === mode) { shut(); return; } shut('sk'); skMode = mode; if (mode === 'class') SK.openClass(); else if (mode === 'quest') SK.openQuest(); else SK.openBook(); }; }
+    $('b-cls').onclick = sk('class'); $('b-skill').onclick = sk('book'); if ($('b-quest')) $('b-quest').onclick = sk('quest');
     function pan(kind) { return function () { if (!panels) return; shut('panel'); panels.open(kind, null, true); }; }
     $('b-gear').onclick = pan('gear'); $('b-bag').onclick = pan('bag'); $('b-pet').onclick = pan('pet'); $('b-song').onclick = pan('juke');
     $('b-dress').onclick = function () { var was = !DRESS.hidden; shut(); if (!was) { DRESS.hidden = false; o.drawDress(); } };

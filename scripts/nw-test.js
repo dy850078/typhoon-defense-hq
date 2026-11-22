@@ -55,7 +55,7 @@ async function main() {
   };
   const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
   const open = async (acc, phone) => {
-    const ctx = await browser.newContext(phone ? { ...devices['iPhone 13'] } : { viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1 });
+    const ctx = await browser.newContext(phone ? { ...devices['iPhone 13'] } : { viewport: { width: 1280, height: 800 }, deviceScaleFactor: Number(process.env.DSF) || 1 });
     const pg = await ctx.newPage(); pg.errors = [];
     pg.on('pageerror', e => pg.errors.push(e.message));
     await pg.goto(B + '/'); await pg.evaluate(([t, u]) => { localStorage.setItem('hq-token', t); localStorage.setItem('hq-user', u); }, [acc.token, acc.name]);
@@ -175,6 +175,77 @@ async function main() {
     ok(await P(() => { const e = document.querySelector('#panel .err'); return !!e && !e.hidden; }), '許願：沒寫主題會提醒'); await shot(pa, tag + '-6-form');
     ok(pa.errors.length === 0, '沒有主控台錯誤' + pa.errors.join(' / '));
     await pa.context().close();
+  };
+
+  // ---- 角色面板：職業／技能／任務分頁、技能書分段、小 i、模擬鍵盤、任務面板 ----
+  const charT = async (phone) => {
+    const tag = phone ? 'char-phone' : 'char'; console.log(tag);
+    const C3 = require('../shared/classes3d.js'), pg = await open(await account({ name: '小角', hair: 'bob' }), phone);
+    const ask = (ev, arg) => pg.evaluate(([e, a]) => window.NW_SK.ask(e, a), [ev, arg]);
+    const view = () => pg.evaluate(() => window.HQ_NEWWORLD.combat.view());
+    const E = (fn, arg) => pg.evaluate(fn, arg), T = async (sel) => { await tap(pg, sel); await pg.waitForTimeout(350); };
+    const secs = () => E(() => [...document.querySelectorAll('#cb-book h3.sec')].map(h => (h.classList.contains('lock') ? '?' : '') + h.querySelector('em').textContent + (h.querySelector('span') ? ':' + h.querySelector('span').textContent : '')));
+    const quests = () => E(() => ({ doing: [...document.querySelectorAll('#cb-book .q-row.doing b')].map(b => b.textContent), open: [...document.querySelectorAll('#cb-book .q-row.open b')].map(b => b.textContent), tag: (document.querySelector('#cb-book .q-tag') || {}).textContent || '', det: (document.querySelector('#cb-book .q-top b') || {}).textContent || '' }));
+    await pg.waitForFunction(() => window.NW_SK && window.HQ_NEWWORLD.combat && window.HQ_NEWWORLD.combat.view(), null, { timeout: 30000 });
+    if (phone) await T('#b-kit');
+    ok(await E(() => !!document.getElementById('b-quest') && /^data:image/.test(document.querySelector('#b-quest img').src)), '右上多一顆「任務」，是手繪圖示');
+    // 芽：技能書只有芽的招，三個學門是灰的預告
+    await T('#b-skill');
+    ok(await E(() => { const b = document.getElementById('cb-book'); return !b.hidden && b.dataset.tab === 'book' && document.querySelectorAll('#cb-book .ch-tab').length === 3 && !!document.querySelector('#cb-book .ch-side'); }), '點「技能」打開角色面板的技能分頁，左邊有自己的資料');
+    let s = await secs(); ok(s[0] === '芽' && s.filter(x => x[0] === '?').length === 3 && s.includes('?學門:毒與藥'), '芽：一段「芽」，三個學門是還沒學的預告（' + s.join(' / ') + '）');
+    ok(await E(() => document.querySelectorAll('#cb-book .sk-soon img').length === 6 && document.querySelectorAll('#cb-book .card.sk').length === 2), '還沒學的只列小圖示，不佔一整列');
+    ok(await E(() => { const t = document.querySelector('#cb-book .ch-side').textContent; return /攻擊力/.test(t) && /防禦力/.test(t) && /Lv\.1/.test(t) && /血量/.test(t); }), '左邊：等級、血、魔、經驗、攻擊力、防禦力');
+    ok(!(await E(() => /耗魔/.test(document.getElementById('cb-book').textContent))), '耗魔、冷卻這些細節不直接印出來');
+    // 小 i
+    if (!phone) { await pg.hover('#cb-book .card.sk .nw-i'); await pg.waitForTimeout(250); } else { await pg.tap('#cb-book .card.sk .nw-i'); await pg.waitForTimeout(250); }
+    ok(await E(() => { const t = document.getElementById('nw-tip'); if (!t || t.hidden || !/耗魔 \d+　冷卻 \d+ 秒/.test(t.textContent)) return false; const r = t.getBoundingClientRect(); return r.left >= 0 && r.right <= innerWidth && r.top >= 0; }), (phone ? '點' : '滑鼠移到') + '小 i 才冒出說明，而且在畫面裡'); await shot(pg, tag + '-1-book-sprout');
+    if (!phone) { await pg.mouse.move(5, 300); await pg.waitForTimeout(200); ok(await E(() => document.getElementById('nw-tip').hidden), '滑鼠移開說明就收起來'); }
+    else { await pg.tap('#cb-book h2'); await pg.waitForTimeout(200); ok(await E(() => document.getElementById('nw-tip').hidden), '點別的地方說明就收起來'); }
+    // 任務：芽只有一條主線進行中
+    await T('#cb-book .ch-tab[data-tab=quest]'); let q = await quests();
+    ok(q.doing.join() === '長到 10 等' && q.open.length === 0 && q.det === '長到 10 等', '任務・主線：只顯示進行中的「長到 10 等」，後面的還不顯示'); await shot(pg, tag + '-2-quest-main');
+    await T('#cb-book .q-cat[data-cat=class]'); ok(/沒有可以接的職業任務/.test(await pg.textContent('#cb-book')), '任務・職業：條件還沒到的不顯示');
+    await T('#cb-book .q-cat[data-cat=event]'); ok(/現在沒有活動/.test(await pg.textContent('#cb-book')), '任務・活動：現在沒有活動');
+    // 見習生：學門一段、專精預告、選修
+    await ask('cb:dbg', { lv: 60 }); await ask('cb:school', 'pm'); await ask('cb:school', 'sc'); await pg.waitForTimeout(400);
+    await T('#cb-book .ch-tab[data-tab=book]'); s = await secs();
+    ok(s.join(' / ') === '芽 / 學門:封印與契約 / 選修:別的學門學過的招 / ?專精:結界師 / ?專精:召喚師', '見習生：芽、學門、選修，兩個專精是預告（' + s.join(' / ') + '）');
+    ok(await E(() => { const h = [...document.querySelectorAll('#cb-book h3.sec')].find(x => /學門/.test(x.textContent)); return getComputedStyle(h).borderBottomColor === 'rgb(79, 124, 194)'; }), '段落標題用學門的顏色');
+    ok(await E(() => { const e = document.querySelector('.cb-sk.el'); return getComputedStyle(e, '::after').content.includes('選修'); }), '快捷列第 4 格標著「選修」'); await shot(pg, tag + '-3-book-school');
+    // 專精：可接取 → 進行中 → 可以回報
+    await ask('cb:dbg', { m: C3.GATE.mastery }); await pg.waitForTimeout(400); await T('#cb-book .ch-tab[data-tab=quest]'); await T('#cb-book .q-cat[data-cat=class]'); q = await quests();
+    ok(q.doing.length === 0 && q.open.join() === '結界師的試煉,召喚師的試煉' && q.tag === '可接取', '等級和熟練度夠了：兩個試煉出現在「可接取」'); await shot(pg, tag + '-4-quest-open');
+    await ask('cb:quest', 'summoner'); await pg.waitForTimeout(500); q = await quests();
+    ok(q.doing.join() === '召喚師的試煉' && q.open.length === 0 && q.tag === '進行中', '接了之後移到「進行中」，另一個試煉不再列出來');
+    ok(await E(() => document.querySelectorAll('#cb-book .q-det .req').length === 5 && document.querySelectorAll('#cb-book .q-det .req .nw-i').length === 5 && /苔球/.test(document.querySelector('#cb-book .q-det').textContent)), '任務內容：五樣信物、從哪種怪掉，掉落機率收在小 i'); await shot(pg, tag + '-5-quest-doing');
+    ok(await E(() => { const i = document.querySelector('#cb-book .ch-tab[data-tab=quest] i'); return !!i && i.textContent === '2'; }), '任務分頁上有進行中的數量');
+    await E(() => document.getElementById('cb-quest').click()); await pg.waitForTimeout(300); ok(await E(() => document.getElementById('cb-book').hidden), '點左邊的任務紙條：面板開著就收起來');
+    await E(() => document.getElementById('cb-quest').click()); await pg.waitForTimeout(300); ok(await E(() => document.getElementById('cb-book').dataset.tab === 'quest' && !document.getElementById('cb-book').hidden && document.querySelector('#cb-book .q-cat.on').dataset.cat === 'class'), '再點一次：打開任務面板的職業任務');
+    await E(() => document.querySelector('#cb-quest .qf').click()); await pg.waitForTimeout(200); ok(await E(() => document.querySelectorAll('#cb-quest .qi').length === 0), '紙條右上的小鈕可以收合'); await E(() => document.querySelector('#cb-quest .qf').click());
+    await ask('cb:dbg', { quest: 1 }); await pg.waitForTimeout(500); q = await quests(); ok(q.tag === '可以回報', '信物收齊：標成「可以回報」');
+    await T('#cb-book .q-det .go'); ok(await E(() => document.getElementById('cb-book').dataset.tab === 'class' && document.querySelector('#cb-book .nd.sel').dataset.k === 'summoner'), '「看職業樹」跳到職業分頁，選在召喚師');
+    await ask('cb:spec', 'summoner'); await pg.waitForTimeout(500); await T('#cb-book .ch-tab[data-tab=book]'); s = await secs();
+    ok(s.join(' / ') === '芽 / 學門:封印與契約 / 專精:召喚師 / 選修:別的學門學過的招', '專精後：芽、學門、專精、選修四段（' + s.join(' / ') + '）');
+    ok(await E(() => { const t = document.getElementById('cb-book').textContent; return !/取代/.test(t) && !!document.querySelector('#cb-book .card.sk[data-sk=pact2]') && !document.querySelector('#cb-book .card.sk[data-sk=pact]') && !!document.querySelector('#cb-book .card.sk.ult b em'); }), '強化版的招直接放在專精那段，不寫「取代」；大招有標記'); await shot(pg, tag + '-6-book-spec');
+    ok(await E(() => { const b = document.getElementById('cb-book').getBoundingClientRect(), h = document.getElementById('cb-skills').getBoundingClientRect(); return h.top >= b.bottom || h.bottom <= b.top || h.left >= b.right || h.right <= b.left; }), '技能分頁沒有蓋住快捷列');
+    await T('#cb-book .ch-tab[data-tab=quest]'); await T('#cb-book .q-cat[data-cat=main]'); ok(/主線都完成了/.test(await pg.textContent('#cb-book')) && await E(() => /已完成（5）/.test(document.querySelector('#cb-book .q-done').textContent)), '主線全部完成後收在「已完成」');
+    // 按鍵設定：模擬鍵盤（電腦）
+    if (!phone) {
+      await T('#cb-book .ch-tab[data-tab=book]'); await T('#cb-keys');
+      ok(await E(() => document.querySelectorAll('#cb-book .kb-k').length === 49 && document.querySelectorAll('#cb-book .kb-k.taken').length === 8 && document.querySelectorAll('#cb-book .kb-k.used').length === 4), '按鍵設定是一張鍵盤：走路和互動的 5 個鍵是灰的，已經綁的 4 個鍵有標');
+      await T('#cb-book .kb-slot[data-i="2"]'); await T('#cb-book .kb-k[data-code=KeyW]'); ok((await view()).keys[2] === 'Digit3', '灰的鍵點了沒有用');
+      await T('#cb-book .kb-k[data-code=KeyR]'); await pg.waitForTimeout(300); ok((await view()).keys[2] === 'KeyR', '點快捷格再點鍵盤上的 R：第 3 格綁到 R'); await shot(pg, tag + '-7-keys');
+      ok(await E(() => document.querySelector('#cb-book .kb-k[data-code=KeyR] i').textContent === '3' && document.querySelectorAll('.cb-sk kbd')[2].textContent === 'R'), '鍵盤上的 R 標著 3，快捷列的提示也變成 R');
+      await T('#cb-book .kb-slot[data-i="0"]'); await T('#cb-book .kb-k[data-code=KeyR]'); await pg.waitForTimeout(300); let v = await view(); ok(v.keys[0] === 'KeyR' && v.keys[2] === 'Digit1', '點到別格用過的鍵，兩格互換');
+      await T('#cb-book .kb-slot[data-i="1"]'); await T('#cb-book .kb-k[data-code=F5]'); ok((await view()).keys[1] === 'Digit2', 'F5 是瀏覽器的鍵，點了沒有用');
+      await T('#cb-book .kb-k[data-code=F2]'); await pg.waitForTimeout(300); ok((await view()).keys[1] === 'F2' && await E(() => document.querySelectorAll('.cb-sk kbd')[1].textContent === 'F2'), '第 2 格可以綁到 F2'); await shot(pg, tag + '-7b-fkeys');
+      ok(await E(() => ['#cb-book .kb-k.used i', '#cb-book .ch-tab i'].every((q) => [...document.querySelectorAll(q)].every((n) => { const r = document.createRange(); r.selectNodeContents(n); const t = r.getBoundingClientRect(), o = n.getBoundingClientRect(); return Math.abs((t.left + t.right) - (o.left + o.right)) <= 1.5 && Math.abs((t.top + t.bottom) - (o.top + o.bottom)) <= 1.5; }))), '紅點裡的數字在正中間');
+      await T('#cb-book .go'); await pg.waitForTimeout(300); ok((await view()).keys.join() === 'Digit1,Digit2,Digit3,Digit4', '恢復成 1 2 3 4');
+    } else ok(!(await pg.$('#cb-keys')), '手機沒有按鍵設定');
+    await T('#cb-book .ch-tab[data-tab=class]'); ok(await E(() => !!document.querySelector('#cb-book .tree') && !document.querySelector('#cb-book .dbg')), '職業分頁是原本的職業樹，管理員測試鈕不在這裡了'); await shot(pg, tag + '-8-class');
+    ok(await E(() => { const r = document.getElementById('cb-book').getBoundingClientRect(); return r.left >= 0 && r.right <= innerWidth + 0.5 && (innerWidth < 821 || r.width > 700); }), phone ? '手機：面板在畫面裡' : '電腦：角色面板是寬版');
+    ok(!pg.errors.length, '沒有頁面錯誤' + (pg.errors.length ? '：' + pg.errors.join(' / ') : ''));
+    await pg.context().close();
   };
 
   // ---- 聊天區和頭上的手繪泡泡：電腦一個人、手機一個人 ----
@@ -800,7 +871,7 @@ async function main() {
     const shot = (n) => pg.screenshot({ path: path.join(OUT, tag + n + '.png') });
     const ask = (ev, arg) => pg.evaluate(([e, a]) => window.NW_SK.ask(e, a), [ev, arg]);
     const view = () => pg.evaluate(() => window.HQ_NEWWORLD.combat.view());
-    const box = async (sel, i) => { const l = pg.locator(sel).nth(i || 0); await l.scrollIntoViewIfNeeded(); const b = await l.boundingBox(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }; };
+    const box = async (sel, i) => { for (let t = 0; ; t++) { try { const l = pg.locator(sel).nth(i || 0); await l.scrollIntoViewIfNeeded(); const b = await l.boundingBox(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }; } catch (e) { if (t > 3) throw e; await pg.waitForTimeout(400); } } };   // 技能書剛好在重畫的話等一下再量
     const dragTo = async (from, to) => { await pg.mouse.move(from.x, from.y); await pg.mouse.down(); await pg.mouse.move((from.x + to.x) / 2, (from.y + to.y) / 2, { steps: 4 }); await pg.mouse.move(to.x, to.y, { steps: 4 }); await pg.mouse.up(); await pg.waitForTimeout(450); };
     const touch = async (sel, i) => { const l = pg.locator(sel).nth(i || 0); await l.scrollIntoViewIfNeeded(); if (phone) await l.tap(); else await l.click(); await pg.waitForTimeout(350); };
     await pg.waitForFunction(() => window.HQ_NEWWORLD.combat && window.HQ_NEWWORLD.combat.view(), null, { timeout: 20000 });
@@ -1023,6 +1094,8 @@ async function main() {
   if (want === 'all' || want === 'solo') await solo(false);
   if (want === 'all' || want === 'phone') await solo(true);
   if (want === 'all' || want === 'chat') await chat();
+  if (want === 'all' || want === 'char') await charT(false);
+  if (want === 'char-phone') await charT(true);
   if (want === 'all' || want === 'wishes') await wishesT(false);
   if (want === 'wishes-phone') await wishesT(true);
   if (want === 'all' || want === 'multi') await multi();

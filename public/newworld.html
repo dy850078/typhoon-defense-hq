@@ -67,7 +67,13 @@
       body #panel, body #dress, body #cb-book, .shell { top: 50%; bottom: auto; transform: translate(-50%, -50%); width: min(430px, calc(100vw - 24px)); max-height: calc(100vh - 230px); }
       .shell.wide { width: min(820px, calc(100vw - 48px)); } .shell.wide .cols { grid-template-columns: 1fr 1fr; }
     }
-    body #cb-book .dbg { display: none; }   /* 職業面板底下那排管理員測試鈕搬到「功能測試」了 */
+    /* 角色面板（職業、技能、任務）在電腦上用寬版 */
+    @media (min-width: 821px) { body #cb-book { width: min(880px, calc(100vw - 48px)); } }
+    /* 小 i 和它冒出來的說明（newworld-ui.js 的 NW_TIP），所有面板共用 */
+    .nw-i { all: unset; box-sizing: border-box; flex: none; width: 17px; height: 17px; display: inline-grid; place-items: center; cursor: help; vertical-align: -3px; opacity: .8; font: 700 11px/1 serif; -webkit-tap-highlight-color: transparent; }
+    .nw-i img { width: 17px; height: 17px; display: block; pointer-events: none; } .nw-i:hover, .nw-i:focus-visible { opacity: 1; transform: scale(1.12); }
+    #nw-tip { position: fixed; z-index: 20; max-width: min(260px, calc(100vw - 16px)); padding: 6px 10px; font-size: 12px; line-height: 1.55; color: #fff7e6; background: #2b2a33; border-radius: 9px 7px 10px 6px; box-shadow: 2px 3px 0 rgba(43,42,51,.3); pointer-events: none; }
+    #nw-tip[hidden] { display: none; }
     /* 等級卡和任務紙條往上靠（原本上面那張測試用的卡拿掉了） */
     body #cb-me { top: calc(10px + env(safe-area-inset-top)); } body #cb-quest { top: calc(78px + env(safe-area-inset-top)); }
     /* 左下：搖桿 */
@@ -234,6 +240,7 @@
     <div id="hb-row">
       <button class="hb" id="b-cls" type="button" data-ic="nwc-sprout"><span>職業</span></button>
       <button class="hb" id="b-skill" type="button" data-ic="btn-book"><span>技能</span></button>
+      <button class="hb" id="b-quest" type="button" data-ic="btn-quest"><span>任務</span></button>
       <button class="hb" id="b-gear" type="button" data-ic="btn-gear"><span>裝備</span></button>
       <button class="hb" id="b-bag" type="button" data-ic="btn-bag" hidden><span>背包</span></button>
       <button class="hb" id="b-dress" type="button" data-ic="btn-dress" hidden><span>換裝</span></button>

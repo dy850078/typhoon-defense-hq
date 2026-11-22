@@ -144,8 +144,8 @@
     return out;
   }
   // 快捷鍵：存的是鍵盤位置（KeyboardEvent.code），開著注音輸入法也按得到。走路和互動用掉的鍵不能綁
-  const KEYS = ['Digit1', 'Digit2', 'Digit3', 'Digit4'], KEY_TAKEN = ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyE'];
-  const keyOk = (k) => typeof k === 'string' && /^(Digit\d|Numpad\d|Key[A-Z]|Space)$/.test(k) && !KEY_TAKEN.includes(k);
+  const KEYS = ['Digit1', 'Digit2', 'Digit3', 'Digit4'], KEY_TAKEN = ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyE', 'F5', 'F11', 'F12'];
+  const keyOk = (k) => typeof k === 'string' && /^(Digit\d|Numpad\d|Key[A-Z]|Space|F([1-9]|1[0-2]))$/.test(k) && !KEY_TAKEN.includes(k);
   function cleanKeys(arr) {
     const out = [], ok = Array.isArray(arr) && arr.length === 4 && arr.every(keyOk) && new Set(arr).size === 4;
     for (let i = 0; i < 4; i++) out.push(ok ? arr[i] : KEYS[i]);

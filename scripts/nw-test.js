@@ -12,6 +12,7 @@
 //   node scripts/nw-test.js home       只跑大廳的功能（導師轉職、扭蛋機、公共花園、種子箱、許願池、寵物）；加 GARDEN_SPEED=600 會連收成一起測
 //   node scripts/nw-test.js combat     戰鬥和新職業（芽、學門、專精、每一招、技能書、選修欄）；combat-phone 是手機版面
 //   node scripts/nw-test.js hotbar     快捷列和技能書（拖移換招、點選換招、按鍵提示、自訂按鍵）；hotbar-phone 是手機版面
+//   node scripts/nw-test.js ui         主畫面的圖示鈕、設定、管理員的功能測試（伺服器會擋不是管理員的人）；ui-phone 是手機版面
 //   node scripts/nw-test.js loot       掉落物（一份、點一下撿、進背包、會消失）、名字前的職業徽章
 //   node scripts/nw-test.js puppet     操偶師的手、提線、謝幕（主要是拍圖）；fam 是三隻使魔排在一起拍一張
 //   OUT=some/dir 可以指定截圖要放哪裡（預設是系統暫存資料夾）
@@ -64,6 +65,7 @@ async function main() {
   };
   const NW = (pg, fn, arg) => pg.evaluate(fn, arg);
   const zoomIn = (pg) => pg.evaluate(() => document.getElementById('b-zoom').click());   // 兩個分頁同時開時，後面的分頁畫面更新很慢，用一般的點擊會等不到
+  const tap = (pg, sel) => pg.evaluate((q) => document.querySelector(q).click(), sel);   // 有些按鈕收在面板或工具包裡（功能測試、手機的工具包），用程式點才點得到
   const shot = (pg, name) => pg.screenshot({ path: path.join(OUT, name + '.png') });
 
   // ---- 單人：進場造型、點地面走路、換裝存檔 ----
@@ -86,7 +88,7 @@ async function main() {
       await NW(pg, () => HQ_NEWWORLD.key('ArrowUp', false)); const pc = await NW(pg, () => HQ_NEWWORLD.net.me());
       const cs = Math.cos(-0.25), sn = Math.sin(-0.25), dx = pc.x + 11.96, dz = pc.z + 5.98, lx = dx * cs - dz * sn, lz = dx * sn + dz * cs;
       ok(!(Math.abs(lx) < 3.45 + 0.3 && Math.abs(lz) < 2.645 + 0.3), '走不進小屋（停在 ' + pc.x + ', ' + pc.z + '）'); await shot(pg, tag + '-2b-wall'); }
-    await pg.click('#b-dress'); await pg.waitForTimeout(300);
+    await tap(pg, '#b-dress'); await pg.waitForTimeout(300);
     await pg.click('#dress .row:nth-of-type(3) .opt:nth-of-type(3)'); await pg.waitForTimeout(1500);
     await shot(pg, tag + '-3-dress');
     await pg.context().close(); pg = await open(acc, phone);
@@ -134,7 +136,7 @@ async function main() {
     console.log('rider');
     const a = await account({ name: '騎士', hair: 'bob', hairColor: '#c9772f', outfit: '#6baf7b', glasses: '1' }), b = await account({ name: '觀眾', hair: 'short' });
     const pa = await open(a), pb = await open(b);
-    await pa.click('#b-ctrl'); await pa.waitForTimeout(2500);
+    await tap(pa, '#b-ctrl'); await pa.waitForTimeout(2500);
     ok(await NW(pa, () => HQ_NEWWORLD.isRider()) && !(await pa.isHidden('#b-form')), '切成機器人騎士，隊形和揮手按鈕出現');
     await shot(pa, 'rider-1-carry');
     const p0 = await NW(pa, () => HQ_NEWWORLD.net.me());
@@ -145,10 +147,10 @@ async function main() {
     await pb.waitForFunction(() => /繪製/.test(document.getElementById('stats').textContent), null, { timeout: 60000 }).catch(() => {});
     console.log('  機器人不投影子的小零件：' + (await NW(pa, () => HQ_NEWWORLD.mem().robotShadowCut)));
     console.log('  自己是騎士：' + (await pa.textContent('#stats')) + '　看別人當騎士：' + (await pb.textContent('#stats')));
-    await pa.click('#b-form'); await pa.waitForTimeout(2500); await shot(pa, 'rider-3-float');
-    await pa.click('#b-form'); await pa.waitForTimeout(2500); await shot(pa, 'rider-4-front');
-    await pa.click('#b-gesture'); await pa.waitForTimeout(2200); await shot(pa, 'rider-5-gesture'); await shot(pb, 'rider-6-gesture-seen');
-    for (let i = 0; i < 3; i++) await pa.click('#b-ctrl'); await pa.waitForTimeout(1500);
+    await tap(pa, '#b-form'); await pa.waitForTimeout(2500); await shot(pa, 'rider-3-float');
+    await tap(pa, '#b-form'); await pa.waitForTimeout(2500); await shot(pa, 'rider-4-front');
+    await tap(pa, '#b-gesture'); await pa.waitForTimeout(2200); await shot(pa, 'rider-5-gesture'); await shot(pb, 'rider-6-gesture-seen');
+    for (let i = 0; i < 3; i++) await tap(pa, '#b-ctrl'); await pa.waitForTimeout(1500);
     ok(!(await NW(pa, () => HQ_NEWWORLD.isRider())) && (await pa.isHidden('#b-form')), '切回一般，機器人收起來');
     await shot(pa, 'rider-7-back-to-normal');
     ok(pa.errors.length + pb.errors.length === 0, '沒有主控台錯誤' + (pa.errors.concat(pb.errors).length ? '：' + pa.errors.concat(pb.errors).join(' / ') : ''));
@@ -163,12 +165,12 @@ async function main() {
     await zoomIn(pa); await zoomIn(pb);   // 鏡頭拉近，截圖才看得清楚
     const vis = (p, n) => NW(p, (n) => { let v = false; const r = HQ_NEWWORLD.debugMe().getObjectByName(n); if (r) r.traverse(o => { if (o.isMesh && o.visible && !o.material.isMeshBasicMaterial) v = true; }); return v; }, n);
     ok((await NW(pa, () => HQ_NEWWORLD.look().hair)) === 'long' && (await NW(pa, () => HQ_NEWWORLD.look().face)) === 'cat', '總部的長髮和表情有帶過來');
-    await pa.click('#b-ctrl'); await pa.click('#b-ctrl'); await pa.waitForTimeout(1500);
+    await tap(pa, '#b-ctrl'); await tap(pa, '#b-ctrl'); await pa.waitForTimeout(1500);
     ok((await NW(pa, () => HQ_NEWWORLD.look().cls)) === 'summoner' && (await vis(pa, 'Top_space')) && (await vis(pa, 'Acc_antenna')) && !(await vis(pa, 'Top_tee')), '召喚師：換上太空衣和觸角髮箍');
     ok((await NW(pa, () => HQ_NEWWORLD.mem().spirits)) === 1, '召喚師：召喚物出現');
     await NW(pa, () => HQ_NEWWORLD.key('d', true)); await pa.waitForTimeout(2500); await NW(pa, () => HQ_NEWWORLD.key('d', false)); await pa.waitForTimeout(1200);
     await shot(pa, 'class-1-summoner');
-    for (let i = 0; i < 3; i++) await pb.click('#b-ctrl'); await pb.waitForTimeout(1500);
+    for (let i = 0; i < 3; i++) await tap(pb, '#b-ctrl'); await pb.waitForTimeout(1500);
     ok((await NW(pb, () => HQ_NEWWORLD.look().cls)) === 'skater' && (await vis(pb, 'Top_qi')) && (await vis(pb, 'Acc_liangbatou')) && (await vis(pb, 'Acc_skates')), '陵媒：換上旗裝、大拉翅、冰刀');
     await NW(pb, () => HQ_NEWWORLD.key('a', true)); await pb.waitForTimeout(1800); await shot(pb, 'class-2-skater-moving'); await NW(pb, () => HQ_NEWWORLD.key('a', false));
     await pb.waitForTimeout(1500); await shot(pb, 'class-3-skater-sees-summoner');
@@ -177,7 +179,7 @@ async function main() {
     ok(await vis(pa, 'Face_love'), '表情：按了換成愛心眼'); await shot(pa, 'class-4-emote');
     await pa.waitForFunction(() => { const r = HQ_NEWWORLD.debugMe().getObjectByName('Face_love'); let v = false; r.traverse(o => { if (o.isMesh && o.visible) v = true; }); return !v; }, null, { timeout: 60000 }).catch(() => {});   // 模擬器跑得慢，等到變回來為止
     ok(!(await vis(pa, 'Face_love')) && (await vis(pa, 'Face_cat')), '表情：時間到變回平常的臉');
-    await pa.click('#b-ctrl'); await pa.click('#b-ctrl'); await pa.waitForTimeout(1200);
+    await tap(pa, '#b-ctrl'); await tap(pa, '#b-ctrl'); await pa.waitForTimeout(1200);
     ok((await NW(pa, () => HQ_NEWWORLD.look().cls)) === null && (await NW(pa, () => HQ_NEWWORLD.mem().spirits)) === 0 && (await vis(pa, 'Top_tee')), '切回一般：穿回自己的上衣，召喚物收起來');
     ok(pa.errors.length + pb.errors.length === 0, '沒有主控台錯誤' + (pa.errors.concat(pb.errors).length ? '：' + pa.errors.concat(pb.errors).join(' / ') : ''));
     await pa.context().close(); await pb.context().close();
@@ -213,7 +215,7 @@ async function main() {
     await NW(pa, () => HQ_NEWWORLD.key('s', true)); await pa.waitForTimeout(1200); await NW(pa, () => HQ_NEWWORLD.key('s', false));
     ok((await NW(pa, () => HQ_NEWWORLD.acts().pose)) === null, '一走動就站起來');
     // 職業徽章
-    for (let i = 0; i < 2; i++) await pa.click('#b-ctrl'); await pa.waitForTimeout(1200);
+    for (let i = 0; i < 2; i++) await tap(pa, '#b-ctrl'); await pa.waitForTimeout(1200);
     ok(await pa.evaluate(() => { const i = document.querySelector('.nw-name img'); return !!i && !i.hidden && /^data:image/.test(i.src); }), '名字紙條上有職業徽章');
     await pb.waitForFunction(() => [...document.querySelectorAll('.nw-name img')].some(i => !i.hidden), null, { timeout: 30000 }).catch(() => {});
     ok(await pb.evaluate(() => [...document.querySelectorAll('.nw-name img')].some(i => !i.hidden)), '別人也看得到徽章');
@@ -224,13 +226,13 @@ async function main() {
     ok(/現在沒有歌/.test(await pa.textContent('#panel')) && !(await pa.evaluate(() => NW_MUSIC.state().on)), '點唱機：打開面板，沒有歌的時候會說一聲');
     await shot(pa, 'live-4-jukebox');
     // 假人：放 19 個進來，量張數
-    await pa.click('#b-bots'); await pa.click('#b-bots'); await cnt(pa, 20);
+    await tap(pa, '#b-bots'); await tap(pa, '#b-bots'); await cnt(pa, 20);
     ok((await NW(pa, () => HQ_NEWWORLD.net.count())) === 20, '放 19 個假人進來（加上觀眾共 20 個別人）');
     await NW(pa, () => HQ_NEWWORLD.debugPlace(0, 14)); await pa.waitForFunction(() => HQ_NEWWORLD.zone() === 'yard', null, { timeout: 30000 }).catch(() => {}); await pa.waitForTimeout(8000);
     await pa.waitForFunction(() => /繪製/.test(document.getElementById('stats').textContent), null, { timeout: 60000 }).catch(() => {});
     console.log('  21 人同時在線（模擬器用軟體算圖，數字只能看繪製次數和面數）：' + (await pa.textContent('#stats')));
     await pb.context().close(); await pa.screenshot({ path: path.join(OUT, 'live-5-crowd.png'), timeout: 180000 }).catch(() => console.log('  （21 人的截圖太慢，跳過）'));
-    await pa.click('#b-bots'); await cnt(pa, 0);
+    await tap(pa, '#b-bots'); await cnt(pa, 0);
     ok((await NW(pa, () => HQ_NEWWORLD.net.count())) === 0, '假人收掉');
     ok(pa.errors.length + pb.errors.length === 0, '沒有主控台錯誤' + (pa.errors.concat(pb.errors).length ? '：' + pa.errors.concat(pb.errors).join(' / ') : ''));
     await pa.context().close();
@@ -401,6 +403,51 @@ async function main() {
     ok(pp.errors.length === 0 && !!(await pp.$('#gacha-spin')), '手機也開得了扭蛋機面板'); await pp.context().close();
   };
 
+  // ---- 主畫面的圖示鈕、設定、管理員的功能測試（ui 是電腦、ui-phone 是手機）----
+  const ui = async (phone) => {
+    const tag = phone ? 'ui-phone' : 'ui'; console.log(tag);
+    const adm = await account({ name: '管理員', hair: 'bob' });
+    const pa = await open(adm, phone);
+    const vis = (id) => pa.evaluate((i) => { const e = document.getElementById(i); return !!e && !e.hidden && e.getClientRects().length > 0; }, id);
+    const toast = () => pa.evaluate(() => (document.getElementById('toast').hidden ? '' : document.getElementById('toast').textContent));
+    const view = () => pa.evaluate(() => { const v = HQ_NEWWORLD.combat.view(); return v ? { lv: v.lv, school: v.school, spec: v.spec } : null; });
+    await pa.waitForFunction(() => !!window.NW_SK && !!HQ_NEWWORLD.combat.view() && !document.getElementById('b-test').hidden, null, { timeout: 30000 }).catch(() => {});
+    await shot(pa, tag + '-1-main');
+    if (phone) { ok(await vis('b-kit') && !(await vis('b-cls')), '手機：右上只有一顆工具包'); await pa.tap('#b-kit'); await pa.waitForTimeout(300); ok(await vis('b-cls'), '手機：點工具包，圖示鈕展開'); await shot(pa, tag + '-1b-kit'); }
+    else ok(await vis('b-cls') && await vis('b-skill') && await vis('b-gear') && await vis('b-bag') && await vis('b-set') && !(await vis('b-kit')), '電腦：右上一排圖示鈕（職業、技能、裝備、背包、設定）');
+    ok(await vis('b-test'), '管理員看得到「功能測試」');
+    ok(!(await pa.$('#top.note')) && !(await vis('b-ctrl')), '主畫面沒有測試用的卡和舊的職業切換鈕');
+    await tap(pa, '#b-cls'); await pa.waitForTimeout(500); ok(await pa.evaluate(() => !document.getElementById('cb-book').hidden && !!document.querySelector('#cb-book .tree')), '職業鈕打開職業樹'); await shot(pa, tag + '-2-class');
+    await tap(pa, '#b-skill'); await pa.waitForTimeout(500); ok(await pa.evaluate(() => !document.getElementById('cb-book').hidden && !!document.querySelector('#cb-book .card.sk')), '技能鈕打開技能書'); await shot(pa, tag + '-3-skill');
+    await tap(pa, '#b-skill'); await pa.waitForTimeout(300); ok(await pa.evaluate(() => document.getElementById('cb-book').hidden), '再按一次收起來');
+    await tap(pa, '#b-gear'); await pa.waitForFunction(() => !!document.querySelector('#panel .worn-row'), null, { timeout: 30000 }).catch(() => {}); ok(!!(await pa.$('#panel .worn-row')), '裝備鈕直接開到裝備頁'); await shot(pa, tag + '-4-gear');
+    await tap(pa, '#b-song'); await pa.waitForFunction(() => !!document.getElementById('juke-q'), null, { timeout: 30000 }).catch(() => {}); await pa.waitForTimeout(1200);
+    ok(!!(await pa.$('#juke-q')), '點歌鈕打開點唱機，人不在點唱機旁邊也不會自己關掉');
+    await tap(pa, '#b-set'); await pa.waitForTimeout(300); ok(await vis('set-panel') && await vis('b-zoom') && await pa.evaluate(() => document.getElementById('panel').hidden), '設定：鏡頭、畫質、外框線收在這裡，一次只開一張面板'); await shot(pa, tag + '-5-settings');
+    await tap(pa, '#b-test'); await pa.waitForTimeout(300); ok(await vis('test-panel') && !(await vis('set-panel')), '功能測試面板打開'); await shot(pa, tag + '-6-test');
+    await tap(pa, '#t-cls [data-t=summoner]'); await pa.waitForFunction(() => (HQ_NEWWORLD.combat.view() || {}).spec === 'summoner', null, { timeout: 20000 }).catch(() => {});
+    let v = await view(); ok(v && v.spec === 'summoner' && v.lv === 50, '直接轉職成召喚師（' + JSON.stringify(v) + '）');
+    await pa.waitForTimeout(400); await tap(pa, '#t-cls [data-t=ae]'); await pa.waitForFunction(() => (HQ_NEWWORLD.combat.view() || {}).school === 'ae', null, { timeout: 20000 }).catch(() => {});
+    v = await view(); ok(v && v.school === 'ae' && !v.spec, '換成見習生：鍊金與附魔');
+    await pa.waitForTimeout(400); await tap(pa, '#t-give [data-t=magical]'); await pa.waitForTimeout(900); ok(/魔法少女/.test(await toast()), '給魔法少女整套（' + (await toast()) + '）');
+    await tap(pa, '#t-give [data-t=pet-cat]'); await pa.waitForTimeout(900); ok(!(await pa.evaluate(() => document.getElementById('b-pet').hidden)), '給一隻貓，寵物鈕出現');
+    await tap(pa, '#b-gear'); await pa.waitForFunction(() => !!document.querySelector('#panel [data-gear=mgDress]'), null, { timeout: 30000 }).catch(() => {}); ok(!!(await pa.$('#panel [data-gear=mgDress]')), '背包裡有剛剛給的裝備'); await shot(pa, tag + '-7-gear-given');
+    await tap(pa, '#b-test'); await tap(pa, '#t-lv [data-t=reset]'); await pa.waitForTimeout(300); await tap(pa, '#t-lv [data-t=reset]'); await pa.waitForFunction(() => (HQ_NEWWORLD.combat.view() || {}).lv === 1, null, { timeout: 20000 }).catch(() => {});
+    v = await view(); ok(v && v.lv === 1 && !v.school, '全部重來要按兩次，回到 1 等的芽');
+    ok(!pa.errors.length, '頁面沒有錯誤' + (pa.errors.length ? '：' + pa.errors.join(' / ') : ''));
+    await pa.context().close();
+    // 不是管理員：看不到按鈕，直接打接口也會被伺服器擋掉
+    const b = await account({ name: '阿福', hair: 'bob' }, false);
+    await post('/api/admin/newworld', { username: b.name, on: true }, { 'x-admin-token': ad.token });
+    const r = await post('/api/newworld/test', { act: 'give', set: 'tickets' }, { Authorization: 'Bearer ' + b.token });
+    const bag = await post('/api/newworld/bag', { act: 'state' }, { Authorization: 'Bearer ' + b.token });
+    ok(r.ok === false && !(bag.items || []).length, '封測帳號打功能測試的接口，伺服器不給（' + r.error + '）');
+    const pb = await open(b, phone); await pb.waitForFunction(() => !!window.NW_SK && !!HQ_NEWWORLD.combat.view(), null, { timeout: 30000 }).catch(() => {});
+    ok(await pb.evaluate(() => document.getElementById('b-test').hidden && !document.body.classList.contains('is-admin')), '封測帳號看不到功能測試');
+    const dr = await pb.evaluate(() => NW_SK.ask('cb:dbg', { lv: 50 })); ok(dr && !!dr.error, '封測帳號直接送調等級的指令也被擋（' + (dr && dr.error) + '）');
+    await pb.context().close();
+  };
+
   // ---- 階段一第一批：封測名單、背包、裝備、熟練度徽章、寵物摸和餵、點歌 ----
   const stay = async () => {
     console.log('stay');
@@ -427,13 +474,13 @@ async function main() {
     const toast = () => pa.evaluate(() => (document.getElementById('toast').hidden ? '' : document.getElementById('toast').textContent));
     const place = async (x, z) => { await NW(pa, ([x, z]) => HQ_NEWWORLD.debugPlace(x, z), [x, z]); await pa.waitForTimeout(900); };
     await zoomIn(pa);
-    ok(await pa.evaluate(() => document.getElementById('b-bots').hidden), '封測帳號看不到壓力測試按鈕');
+    ok(await pa.evaluate(() => document.getElementById('b-test').hidden), '封測帳號看不到功能測試按鈕');
     // 名字旁的徽章：新帳號的召喚師熟練度是 0 階（熟練度只能在總部打怪累積，測試帳號灌不進去）；階級變了徽章跟著換
     ok((await NW(pa, () => HQ_NEWWORLD.myTier())) === 0 && !!(await pa.$('.nw-name[data-tier="0"] img')), '名字旁的職業徽章用總部的熟練度徽章（新帳號 0 階）');
     const b0 = await pa.getAttribute('.nw-name[data-tier="0"] img', 'src'); await NW(pa, () => HQ_NEWWORLD.tier(4)); await pa.waitForTimeout(300);
     ok(!!(await pa.$('.nw-name[data-tier="4"] img')) && (await pa.getAttribute('.nw-name[data-tier="4"] img', 'src')) !== b0, '階級升上去，徽章換成那一階的外圈'); await shot(pa, 'stay-1-badge');
     // 背包
-    await pa.click('#b-bag'); await panel('bag'); await pa.waitForTimeout(400); await shot(pa, 'stay-2-bag');
+    await tap(pa, '#b-bag'); await panel('bag'); await pa.waitForTimeout(400); await shot(pa, 'stay-2-bag');
     ok(/等級 1$/.test((await pa.textContent('#bag-level')).trim()), '背包面板看得到等級，新世界從 1 等開始（總部的 12 等沒有帶過來）');
     ok(!!(await pa.$('#panel [data-item="apple"] img')) && /×2/.test(await pa.textContent('#panel [data-item="apple"]')), '補品那一頁有 2 顆蘋果，有手繪圖示');
     await pa.click('#panel [data-item="water"]'); await pa.click('#bag-trash'); await pa.waitForFunction(() => /×2/.test((document.querySelector('#panel [data-item="water"]') || {}).textContent || ''), null, { timeout: 30000 }).catch(() => {});
@@ -454,7 +501,7 @@ async function main() {
     await pa.click('#panel [data-slot="outfit"]'); await pa.click('#gear-equip'); await pa.waitForFunction(() => (document.querySelector('#panel [data-slot="outfit"]') || { dataset: {} }).dataset.worn === '', null, { timeout: 30000 }).catch(() => {});
     ok(!(await api('bag', { act: 'state' })).equip.outfit && (await NW(pa, () => HQ_NEWWORLD.gearOn())) === ',,,', '脫下來也記得，身上也換回來');
     // 寵物
-    await pa.click('#b-pet'); await panel('pet');
+    await tap(pa, '#b-pet'); await panel('pet');
     ok((await pa.getAttribute('#pet-bond', 'data-bond')) === '0', '寵物面板讀到感情值');
     await pa.click('#pet-pat'); await pa.waitForFunction(() => document.getElementById('pet-bond').dataset.bond === '1', null, { timeout: 30000 }).catch(() => {});
     ok(/感情 \+1/.test(await toast()), '摸一下感情 +1'); await pa.waitForTimeout(300); await shot(pa, 'stay-4-pet');
@@ -485,7 +532,7 @@ async function main() {
     ok(pa.errors.length === 0, '沒有主控台錯誤' + (pa.errors.length ? '：' + pa.errors.join(' / ') : ''));
     await pa.context().close();
     // 手機
-    const pp = await open(a, true); await pp.click('#b-bag'); await pp.waitForFunction(() => !!document.getElementById('bag-level'), null, { timeout: 30000 }).catch(() => {});
+    const pp = await open(a, true); await tap(pp, '#b-bag'); await pp.waitForFunction(() => !!document.getElementById('bag-level'), null, { timeout: 30000 }).catch(() => {});
     await pp.click('#panel [data-tab="gear"]'); await pp.waitForTimeout(600); await shot(pp, 'stay-6-phone-gear');
     ok(pp.errors.length === 0 && (await pp.locator('#panel .grid [data-gear]').count()) === 3, '手機也開得了背包和裝備'); await pp.context().close();
   };
@@ -637,6 +684,8 @@ async function main() {
     await pg.context().close();
   };
   if (want === 'fam') await fam();
+  if (want === 'ui') await ui(false);
+  if (want === 'ui-phone') await ui(true);
   // 掉落物、名字前的職業徽章
   const loot = async () => {
     console.log('loot');

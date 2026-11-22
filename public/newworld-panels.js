@@ -3,7 +3,7 @@
 // 背包和裝備、寵物的摸和餵、點唱機點歌也在這裡（階段一第一批），一樣是總部同一份資料
 // 用法：NW_PANELS(NW, token, { setClass(cls), curClass(), music })，回傳 { open(kind, it), close(), toast(text) }
 window.NW_PANELS = function (NW, token, opt) {
-  var P = document.getElementById('panel'), TOAST = document.getElementById('toast'), toastT = 0, cur = null;
+  var P = document.getElementById('panel'), TOAST = document.getElementById('toast'), toastT = 0, cur = null, pinned = false;   // pinned：從右上按鈕開的面板，走遠了不會自己收
   function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
   function icon(key, size) { var u = window.HQ_ICONS && HQ_ICONS.url(key); if (!u) return null; var i = el('img', 'ic'); i.src = u; i.alt = ''; if (size) i.style.width = i.style.height = size + 'px'; return i; }
   function btn(text, fn, cls) { var b = el('button', 'opt' + (cls ? ' ' + cls : ''), text); b.type = 'button'; b.onclick = fn; return b; }
@@ -12,7 +12,7 @@ window.NW_PANELS = function (NW, token, opt) {
     return fetch('/api/newworld/' + name, { method: 'POST', headers: { Authorization: 'Bearer ' + token, 'content-type': 'application/json' }, body: JSON.stringify(body) })
       .then(function (r) { return r.ok ? r.json() : { ok: false, error: '連不上伺服器，等等再試' }; }, function () { return { ok: false, error: '連不上伺服器，等等再試' }; });
   }
-  function close() { P.hidden = true; P.innerHTML = ''; cur = null; }
+  function close() { P.hidden = true; P.innerHTML = ''; cur = null; pinned = false; }
   function frame(kind, title, sub) {
     cur = kind; P.hidden = false; P.innerHTML = ''; P.dataset.kind = kind;
     var h = el('h2', '', title), x = el('button', 'note', '關掉'); x.type = 'button'; x.onclick = close; h.appendChild(x); P.appendChild(h);
@@ -154,7 +154,7 @@ window.NW_PANELS = function (NW, token, opt) {
 
   // ---------- 背包和裝備：跟總部同一個背包 ----------
   var bagTab = 'food', bagSel = null;
-  function bag() { var body = frame('bag', '背包', '新世界自己的背包，跟總部的分開。補品要等新世界有戰鬥才能吃，現在先看和整理。'); wait(body); post('bag', { act: 'state' }).then(function (r) { if (cur === 'bag') drawBag(body, r); }); }
+  function bag() { var body = frame('bag', '背包', '新世界自己的背包，跟總部的分開。補品現在還不能在新世界吃，先看和整理。'); wait(body); post('bag', { act: 'state' }).then(function (r) { if (cur === 'bag') drawBag(body, r); }); }
   function bagDo(body, req, done) { post('bag', req).then(function (x) { if (cur !== 'bag') return;
     if (!x.ok) return post('bag', { act: 'state' }).then(function (s) { s.error = x.error; if (cur === 'bag') drawBag(body, s); });
     toast(x.text); bagSel = null; if (x.equip) NW.gear(x.equip); if (done) done(x); drawBag(body, x); }); }
@@ -237,7 +237,7 @@ window.NW_PANELS = function (NW, token, opt) {
   }
 
   // 走遠了就把面板收起來（背包和寵物是按鈕開的，不會自己收）
-  setInterval(function () { if (!cur || cur === 'bag' || cur === 'pet') return; var k = NW.near(); if (k === 'greek') k = 'well'; if (k !== cur) close(); }, 500);
+  setInterval(function () { if (!cur || pinned || cur === 'bag' || cur === 'pet') return; var k = NW.near(); if (k === 'greek') k = 'well'; if (k !== cur) close(); }, 500);
   // 一進來先拿一次花園的狀態（之後有變伺服器會推過來）
   post('garden', { act: 'state' }).then(gardenSync);
   return { close: close, toast: toast,
@@ -245,7 +245,14 @@ window.NW_PANELS = function (NW, token, opt) {
     music: function () { if (cur !== 'juke' || (document.activeElement && document.activeElement.id === 'juke-q') || (document.getElementById('juke-q') || {}).value) return; jukePost({ act: 'state' }); },
     // 花園有變（長大了、別人澆水了）：開著的花圃面板跟著更新
     garden: function () { if (cur !== 'plot') return; var i = plotI, body = plotBody; post('garden', { act: 'info', i: i }).then(function (r) { if (cur === 'plot' && plotI === i && r.info) drawPlot(body, i, r); }); },
-    open: function (kind, it) {
+    cur: function () { return cur; },
+    refresh: function () { if (cur === 'bag') bag(); },
+    open: function (kind, it, pin) {
+      if (pin && cur === (kind === 'gear' ? 'bag' : kind) && (kind !== 'gear' || bagTab === 'gear') && (kind !== 'bag' || bagTab !== 'gear')) return close();   // 右上的按鈕再按一次就是收起來
+      if (kind === 'gear' || (pin && kind === 'bag')) { bagTab = kind === 'gear' ? 'gear' : bagTab === 'gear' ? 'food' : bagTab; bagSel = null; bag(); pinned = true; return; }
+      if (pin && kind === 'pet') { pet(); pinned = true; return; }
+      if (pin && kind === 'juke') { juke(); pinned = true; return; }
+      pinned = false;
       if (kind === 'mentor') mentor(); else if (kind === 'gacha') gacha(); else if (kind === 'plot') plot(it.i); else if (kind === 'seedbox') seedbox(); else if (kind === 'well') { wishPage = 1; well(); } else if (kind === 'juke') juke();
       else if (kind === 'bag') { if (cur === 'bag') close(); else bag(); } else if (kind === 'pet') { if (cur === 'pet') close(); else pet(); } else if (cur) close();
     } };

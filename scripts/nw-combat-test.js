@@ -140,6 +140,29 @@ async function main() {
     await S.ask('cb:dbg', { famHit: 3 }); ok(await until(() => S.who && S.who.fam.length === 0, 1500), '使魔血量歸零就消失');
     S.s.close(); H.s.close();
   }
+  // ---- 雲海高原：棉雲羊、風鈴鳥、雷角鹿、雲鯨 ----
+  if (!process.env.ONLY || process.env.ONLY === 'cloud') {
+    const until = async (fn, ms) => { for (let i = 0; i < ms / 100; i++) { const v = fn(); if (v) return v; await wait(100); } return null; };
+    const K = await player(); await K.ask('cb:dbg', { lv: 30 }); await K.ask('cb:school', 'sc'); await K.ask('cb:slots', ['seal', 'pact', 'spark', null]);
+    const seen = (k, mk, id) => K.fx.find(f => f.k === k && f.mk === mk && f.m === id), keep = setInterval(() => K.s.emit('cb:dbg', { hp: 1 }), 1200), hitMe = () => K.hits.some(h => h[0] === 'p:' + K.s.id && h[1] > 0);
+    const kinds = ['sheep', 'bird', 'deer', 'whale'].map(k => [...K.mobs.values()].filter(m => m.kind === k).length).join(); ok(kinds === '10,10,10,1', '雲海高原有棉雲羊、風鈴鳥、雷角鹿各十隻和一隻雲鯨：' + kinds);
+    ok(![...K.mobs.values()].some(m => m.lv > 30 && ['moss', 'puff', 'dew'].includes(m.kind)), '暫時的霧林深處搬走了');
+    for (const [kind, mk, name] of [['sheep', 'charge', '棉雲羊倒退助跑再衝撞'], ['bird', 'dive', '風鈴鳥俯衝'], ['deer', 'bolt', '雷角鹿放一道雷']]) {
+      const mo = K.mob(kind, 9); K.at(mo.x + 4, mo.z); await wait(200); K.fx.length = 0; K.hits.length = 0; K.s.emit('cb:target', mo.id); await until(() => K.mobs.get(mo.id).hp < mo.max, 4000); K.s.emit('cb:target', null);   // 打一下把牠引過來就收手，免得還沒出招就打死
+      const t1 = await until(() => seen('tele', mk, mo.id), 14000); ok(t1 && t1.x2 != null && t1.dur > 0, name + '之前有預告'); K.hits.length = 0;
+      const mv1 = await until(() => seen('mobMove', mk, mo.id), 3000); ok(mv1, name); if (!mv1) console.log(JSON.stringify([K.mobs.get(mo.id), K.fx.slice(-6)])); await wait(800); ok(hitMe(), '站著不躲會被打到（' + C3.MOBS[kind].name + '）');
+      if (kind === 'sheep') ok(K.mobs.get(mo.id).fl & 2048 || await until(() => K.mobs.get(mo.id).fl & 2048, 800), '棉雲羊撞完在喘');
+      K.at(mo.x + 60, mo.z - 40); await wait(600); }
+    // 雲鯨：打哈欠有預告、會吸人、壓下來會痛；唱歌有讀條，被框住就斷
+    await K.ask('cb:dbg', { lv: 99 }); await wait(5200); const wh = K.mob('whale'); K.at(wh.x + 5, wh.z); await wait(200); K.s.emit('cb:target', wh.id); await until(() => K.mobs.get(wh.id).hp < wh.max, 4000);
+    K.fx.length = 0; K.hits.length = 0; await K.ask('cb:dbg', { whale: 'yawn' }); const y1 = await until(() => seen('tele', 'yawn', wh.id), 2000); ok(y1 && y1.pull > 0 && y1.r > 0, '雲鯨打哈欠之前有預告，會把人吸過去');
+    K.hits.length = 0; ok(await until(() => seen('mobMove', 'yawn', wh.id), 5000), '哈欠打完壓下來'); await wait(300); ok(hitMe(), '站在圈裡會被壓到');
+    K.fx.length = 0; await K.ask('cb:dbg', { whale: 'song' }); ok(await until(() => seen('tele', 'song', wh.id), 2000), '雲鯨唱歌有讀條'); await wait(600); await K.cast('seal', wh);
+    const st = await until(() => K.fx.find(f => f.k === 'mobStop' && f.m === wh.id && f.mk === 'song'), 2000); ok(st, '唱歌被控場招打中就斷'); ok(K.mobs.get(wh.id).fl & 2048 || await until(() => K.mobs.get(wh.id).fl & 2048, 800), '被打斷會委屈一下');
+    await wait(4000); clearInterval(keep); await K.ask('cb:dbg', { lv: 99 }); K.fx.length = 0; await K.ask('cb:dbg', { whale: 'song' }); await until(() => seen('tele', 'song', wh.id), 2000); const hp0 = K.me.hp;
+    ok(await until(() => seen('mobMove', 'song', wh.id), 7000), '沒人打斷就會唱完'); await wait(400); ok(K.me.hp <= hp0 - K.me.hpMax * 0.4, '唱完全場重傷：' + hp0 + ' → ' + K.me.hp);
+    K.s.emit('cb:target', null); K.s.close();
+  }
   // ---- 組隊、出力、倒下 ----
   if (!process.env.ONLY || process.env.ONLY === 'party') {
     const until = async (fn, ms) => { for (let i = 0; i < ms / 100; i++) { const v = fn(); if (v) return v; await wait(100); } return null; };
@@ -160,7 +183,7 @@ async function main() {
     m = mossAt(5); Y.at(m.x + 4, m.z + 1); X.at(m.x + 3, m.z); await wait(200); y0 = Y.me.exp; ym = Y.me.schools.pm.m; X.s.emit('cb:target', m.id); await until(() => X.hits.some(h => h[0] === m.id), 3000); Y.s.emit('cb:cast', { i: 0 });
     await until(() => X.mobs.get(m.id).hp === 0, 12000); await wait(300); X.s.emit('cb:target', null); ok(Y.me.exp > y0 && Y.me.schools.pm.m === ym + 1, '只補血沒打怪也算出力：有經驗、有熟練度');
     // 倒下：附近有隊友就多等一下，隊友補血可以救起來，不扣經驗
-    await wait(5500); await X.ask('cb:dbg', { exp: 200 }); const big = [...X.mobs.values()].filter(q => q.lv >= 50 && q.hp > 0)[0]; X.at(big.x + 2, big.z); Y.at(big.x + 9, big.z + 9); await wait(200); X.fx.length = 0; X.s.emit('cb:target', big.id);
+    await wait(5500); await X.ask('cb:dbg', { exp: 200 }); const big = [...X.mobs.values()].filter(q => q.kind === 'deer' && q.lv >= 50 && q.hp > 0)[0]; X.at(big.x + 2, big.z); Y.at(big.x + 9, big.z + 9); await wait(200); X.fx.length = 0; X.s.emit('cb:target', big.id);
     ok(await until(() => X.me.dead > 0, 20000), '被打倒了'); const left = X.me.dead - X.me.t; ok(left > 8000, '附近有隊友，倒下後等久一點讓人來救：' + Math.round(left / 1000) + ' 秒');
     Y.at(X.me && big.x + 2.5, big.z + 0.5); await wait(300); Y.s.emit('cb:cast', { i: 0 }); ok(await until(() => X.fx.find(f => f.k === 'rise' && f.id === X.s.id), 2000) && await until(() => X.me.dead === 0 && X.me.hp > 0, 1500), '隊友的補血招把人救起來');
     ok(X.me.exp === 200 && !X.back.length, '被救起來不扣經驗、不用回入口'); X.at(8, 14); Y.at(8, 15); await wait(400);
@@ -176,7 +199,7 @@ async function main() {
     X.s.emit('cb:target', null); clearInterval(keep); [X, Y, Z].forEach(P => P.s.close());
   }
   // 被怪打會扣血，倒下後回到入口
-  const Bp = await player(); await Bp.ask('cb:dbg', { lv: 2 }); const w = [...Bp.mobs.values()].filter(m => m.lv >= 50 && m.hp > 0).pop(); Bp.at(w.x + 1, w.z); await wait(200); Bp.s.emit('cb:target', w.id);
+  const Bp = await player(); await Bp.ask('cb:dbg', { lv: 2 }); const w = [...Bp.mobs.values()].filter(m => m.kind === 'deer' && m.lv >= 50 && m.hp > 0).pop(); Bp.at(w.x + 1, w.z); await wait(200); Bp.s.emit('cb:target', w.id);
   let back = null; Bp.s.on('cb:back', (p) => { back = p; });
   for (let i = 0; i < 100 && !back; i++) await wait(200);
   if (!back) console.log(JSON.stringify([Bp.me, Bp.hits.slice(0, 5), Bp.fx.slice(0, 5), Bp.mobs.get(w.id)]));

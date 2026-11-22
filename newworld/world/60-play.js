@@ -88,6 +88,10 @@ const NW = (() => {
     tag.i.hidden = !u; tag.n.dataset.tier = cls ? (tier | 0) : ''; if (u && tag.i.src !== u) tag.i.src = u; };
   let MYTIER = 0;
   const HINT = document.createElement('button'); HINT.className = 'nw-hint'; HINT.type = 'button'; HINT.hidden = true; LAB.appendChild(HINT); HINT.addEventListener('click', (e) => { e.stopPropagation(); NW.use(); });
+  // 頭上的對話泡泡：手繪的小紙片（newworld-hint.js 畫的圖），字另外藏一份給報讀軟體
+  const setBubble = (b, text) => { const H = window.NW_HINT, a = H && H.talk ? H.talk(text) : null; b.hidden = false;
+    if (!a) { b.classList.remove('art'); b.textContent = text; return; }
+    const i = document.createElement('img'), s = document.createElement('span'); i.src = a.url; i.width = a.w; i.height = a.h; i.alt = ''; s.textContent = text; b.classList.add('art'); b.replaceChildren(i, s); };
   const MYTAG = ME ? mkTag() : null, PV = new V3();
   const hideTag = (tag) => { tag.t.style.display = tag.n.style.display = 'none'; };
   // 名字放在腳下（沒有底色和邊框），說話的泡泡在頭上
@@ -116,7 +120,7 @@ const NW = (() => {
     each: (fn) => { OTH.forEach(fn); },
     emote: (id, face) => { const o = id ? OTH.get(id) : ME; if (o && STD) STD.emote(o.c, face, 5); },
     clear: () => { [...OTH.keys()].forEach(NET.drop); },
-    say: (id, text) => { const tag = id == null ? MYTAG : (OTH.get(id) || {}).tag; if (!tag) return; tag.b.textContent = text; tag.b.hidden = false; tag.until = S.time + 6; },
+    say: (id, text) => { const tag = id == null ? MYTAG : (OTH.get(id) || {}).tag; if (!tag) return; setBubble(tag.b, text); tag.until = S.time + 6; },
     count: () => OTH.size,
   };
   // --- 碰撞：小屋是一個轉了角度的方塊，樹和石頭是圓；走到會被推出來，所以會沿著邊滑過去 ---
@@ -502,7 +506,7 @@ const NW = (() => {
     onStats: (fn) => { onStats = fn; },
     // 大廳第二、三期：花園的狀態、寵物、可以互動的點（測試腳本用 spots 找位置）
     tier: (n) => { MYTIER = n | 0; if (MYTAG && ME) setBadge(MYTAG, ME.c.look.cls, MYTIER); }, myTier: () => MYTIER,
-    petJoy: (text) => { if (!PET) return; PET.joy = 1.4; if (text) { PET.tag.b.textContent = text; PET.tag.b.hidden = false; PET.tag.until = S.time + 3; } },
+    petJoy: (text) => { if (!PET) return; PET.joy = 1.4; if (text) { setBubble(PET.tag.b, text); PET.tag.until = S.time + 3; } },
     garden: (st) => { PLOTS = Array.isArray(st) ? st : []; if (LOBBY) LOBBY.setGarden(PLOTS); }, plots: () => PLOTS, setPet, pet: () => (PET ? { name: PET.pet.name, kind: PET.pet.kind, x: PET.x, z: PET.z } : null),
     spots: () => (LOBBY ? { well: WELL, greek: GREEK_AT, ...LOBBY.SPOTS } : null), hint: () => (HINT.hidden ? '' : HINT.textContent), hintMini: () => !HINT.hidden && HINT.classList.contains('mini'), CLS, CLS_NAME,
   };

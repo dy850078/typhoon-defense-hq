@@ -107,6 +107,67 @@ async function main() {
       ok(r2.s === 304 && r2.n === 0, '檔案沒變時第二次不用重新下載'); }
   };
 
+  // ---- 聊天區和頭上的手繪泡泡：電腦一個人、手機一個人 ----
+  const chat = async () => {
+    console.log('chat');
+    const a = await account({ name: '小安', hair: 'bob' }), b = await account({ name: '阿寶', hair: 'buzz' });
+    const pa = await open(a), pb = await open(b, true);
+    await pa.waitForFunction(() => HQ_NEWWORLD.net.count() === 1, null, { timeout: 30000 }).catch(() => {}); await pb.waitForFunction(() => HQ_NEWWORLD.net.count() === 1, null, { timeout: 30000 }).catch(() => {});
+    const st = (pg) => pg.evaluate(() => { const c = document.getElementById('chat'), l = document.getElementById('chat-log'), i = document.getElementById('chat-in'), box = (e) => { const r = e.getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height, r: r.right, b: r.bottom }; };
+      const bs = [...document.querySelectorAll('.nw-bubble')].filter(e => !e.hidden).map(e => ({ art: e.classList.contains('art'), text: e.textContent, ...box(e) }));
+      return { fold: c.classList.contains('fold'), rows: l.children.length, text: l.textContent, inVis: i.getClientRects().length > 0, log: box(l), chat: box(c), top: l.scrollTop, max: l.scrollHeight - l.clientHeight, bs, dot: !document.getElementById('chat-dot').hidden,
+        icons: ['chat-tab', 'b-emote', 'b-act', 'chat-send'].every(k => { const m = document.getElementById(k).querySelector('img'); return !!m && /^data:image/.test(m.src); }), vw: innerWidth, vh: innerHeight }; });
+    let A = await st(pa), P = await st(pb);
+    ok(!A.fold && A.inVis && A.icons, '電腦：聊天區打開著，表情、動作、送出都是手繪圖示');
+    ok(P.fold && !P.inVis, '手機：聊天區一開始收著，沒有輸入框擋畫面');
+    const hit = (r, q) => !(r.r <= q.x || q.r <= r.x || r.b <= q.y || q.b <= r.y);
+    const rects = (pg) => pg.evaluate(() => { const g = (q) => { const e = document.querySelector(q); if (!e || !e.getClientRects().length) return null; const r = e.getBoundingClientRect(); return { x: r.x, y: r.y, r: r.right, b: r.bottom }; }; return { chat: [...document.getElementById('chat').children].map(e => { if (!e.getClientRects().length) return null; const r = e.getBoundingClientRect(); return { x: r.x, y: r.y, r: r.right, b: r.bottom }; }).filter(Boolean), stick: g('#stick'), skills: g('#cb-skills') }; });
+    let R = await rects(pb); ok(R.chat.every(c => !(R.stick && hit(c, R.stick)) && !(R.skills && hit(c, R.skills))), '手機收著：不蓋到搖桿和技能鈕');
+    await shot(pb, 'chat-1-phone-fold');
+    // 手機打開、說話
+    await pb.tap('#chat-tab'); await pb.waitForTimeout(250); P = await st(pb); ok(!P.fold && P.inVis && P.chat.x >= 0 && P.chat.r <= P.vw + 0.5, '手機：點「聊天」打開，輸入框完整在畫面裡');
+    R = await rects(pb); ok(R.chat.every(c => !(R.stick && hit(c, R.stick)) && !(R.skills && hit(c, R.skills))), '手機打開：不蓋到搖桿和技能鈕');
+    await pb.fill('#chat-in', '哈囉，今天下班要不要一起打怪？'); await pb.press('#chat-in', 'Enter'); await pa.waitForTimeout(1500);
+    A = await st(pa); ok(A.text.includes('阿寶：哈囉，今天下班要不要一起打怪？'), '電腦收到手機說的話');
+    const bub = A.bs.find(x => /哈囉/.test(x.text)); ok(!!bub && bub.art, '對方頭上冒出手繪泡泡（是畫出來的圖）');
+    ok(!!bub && bub.w <= 150 && bub.h <= 60, '泡泡比以前小（' + (bub ? Math.round(bub.w) + 'x' + Math.round(bub.h) : '沒有') + '，以前最寬 190）');
+    await pa.fill('#chat-in', '好'); await pa.press('#chat-in', 'Enter'); await pa.waitForTimeout(1200);
+    A = await st(pa); const mine = A.bs.find(x => x.text === '好'); ok(!!mine && mine.art && mine.w <= 48, '很短的話泡泡也跟著縮小（' + (mine ? Math.round(mine.w) : 0) + '）');
+    ok(await pa.evaluate(() => !!document.querySelector('#chat-log .me')), '自己說的話名字換一個顏色');
+    await NW(pa, () => HQ_NEWWORLD.zoom()); await pa.waitForTimeout(400); await shot(pa, 'chat-2-desktop-bubble'); await shot(pb, 'chat-3-phone-open');
+    // 長句：最多四行，後面用刪節號
+    await pa.fill('#chat-in', '一二三四五六七八九十'.repeat(6)); await pa.press('#chat-in', 'Enter'); await pa.waitForTimeout(1200);
+    A = await st(pa); const long = A.bs.find(x => x.text.length === 60); ok(!!long && long.w <= 152 && long.h <= 78, '60 個字的長句也不會變成一大塊（' + (long ? Math.round(long.w) + 'x' + Math.round(long.h) : '沒有') + '）');
+    await shot(pa, 'chat-4-desktop-long');
+    // 往上捲看紀錄：留最近 100 句，自己在看舊的時候不會被新的話拉下去
+    await pa.evaluate(() => { for (let i = 0; i < 120; i++) NW_CHAT.add('路人' + i, '第 ' + i + ' 句', false); }); A = await st(pa);
+    ok(A.rows === 100 && A.max > 100 && Math.abs(A.top - A.max) < 3, '紀錄留最近 100 句，新的話在最下面');
+    await pa.hover('#chat-log'); await pa.mouse.wheel(0, -400); await pa.waitForFunction(() => { const l = document.getElementById('chat-log'); return l.scrollTop < l.scrollHeight - l.clientHeight - 200; }, null, { timeout: 8000 }).catch(() => {}); await pa.waitForTimeout(1200); const up = (await st(pa)).top;   // 等滾動停下來 ok(up < A.max - 200, '滑鼠滾輪可以往上捲');
+    await pa.evaluate(() => NW_CHAT.add('路人', '新的一句', false)); { const n = await st(pa); ok(Math.abs(n.top - up) < 30 && n.top < n.max - 150, '正在看舊的話時，新的話不會把畫面拉下去'); }   // 滿 100 句會丟掉最舊的一句，位置差一行是正常的
+    await shot(pa, 'chat-5-desktop-scroll');
+    // 系統訊息：跳出來的提示也記在聊天區，可以關
+    await pa.evaluate(() => { NW_UI.toast('拿到 小番茄 x3'); NW_UI.toast('拿到 小番茄 x3'); });
+    ok(await pa.evaluate(() => document.querySelectorAll('#chat-log .sys').length === 1 && getComputedStyle(document.querySelector('#chat-log .sys')).display !== 'none'), '提示也記一份在聊天區（同一句不重複）');
+    await pa.click('#chat-sys'); ok(await pa.evaluate(() => getComputedStyle(document.querySelector('#chat-log .sys')).display === 'none'), '按系統訊息開關，系統訊息藏起來');
+    await pa.click('#chat-sys');
+    // 收起來：只浮出最後幾句，不擋點擊
+    await pa.click('#chat-tab'); await pa.waitForTimeout(200); A = await st(pa);
+    ok(A.fold && A.log.h <= 60 && await pa.evaluate(() => getComputedStyle(document.getElementById('chat-log')).pointerEvents === 'none'), '收起來只浮出最後幾句，不擋點地面');
+    await shot(pa, 'chat-6-desktop-fold');
+    await pa.reload({ waitUntil: 'domcontentloaded' }); await pa.waitForFunction(() => !document.getElementById('chat').hidden, null, { timeout: 120000 }); ok((await st(pa)).fold, '收合的狀態會記住');
+    await pa.click('#chat-tab'); await pa.keyboard.press('Enter'); ok(await pa.evaluate(() => document.activeElement === document.getElementById('chat-in')), '電腦按 Enter 直接開始打字');
+    await pa.keyboard.press('Escape'); await pa.evaluate(() => document.activeElement.blur());
+    // 表情、動作選單
+    await pa.click('#b-emote'); ok(await pa.evaluate(() => !document.getElementById('emotes').hidden && document.querySelectorAll('#emotes button').length > 3), '表情選單打得開'); await shot(pa, 'chat-7-desktop-emote');
+    await pa.click('#b-act'); ok(await pa.evaluate(() => document.getElementById('emotes').hidden && !document.getElementById('acts').hidden), '動作選單打得開，表情選單收起來'); await pa.click('#acts [data-act=wave]');
+    // 手機收著時有人說話：紅點
+    await pb.tap('#chat-tab'); await pb.waitForTimeout(200); await pa.fill('#chat-in', '等我一下'); await pa.press('#chat-in', 'Enter'); await pb.waitForTimeout(1500);
+    P = await st(pb); ok(P.fold && P.dot && /等我一下/.test(P.text), '手機收著時有人說話：浮出那句話，「聊天」上有紅點'); await shot(pb, 'chat-8-phone-unread');
+    await pb.tap('#b-emote'); await pb.waitForTimeout(200); R = await rects(pb); ok(R.chat.every(c => c.x >= 0 && c.r <= P.vw + 0.5 && !(R.stick && hit(c, R.stick))), '手機：表情選單在畫面裡'); await shot(pb, 'chat-9-phone-emote');
+    ok(pa.errors.length + pb.errors.length === 0, '沒有主控台錯誤' + (pa.errors.concat(pb.errors).join(' / ')));
+    await pa.context().close(); await pb.context().close();
+  };
+
   // ---- 雙人：互相看得到、移動和聊天同步、離線會消失、非管理員連不上 ----
   const multi = async () => {
     console.log('multi');
@@ -115,6 +176,7 @@ async function main() {
     const cnt = (p, n) => p.waitForFunction((k) => HQ_NEWWORLD.net.count() === k, n, { timeout: 30000 }).catch(() => {});
     await cnt(pa, 1); await cnt(pb, 1);
     ok((await NW(pa, () => HQ_NEWWORLD.net.count())) === 1 && (await NW(pb, () => HQ_NEWWORLD.net.count())) === 1, '兩邊都看得到對方');
+    await pb.tap('#chat-tab'); await pb.waitForTimeout(200);   // 手機的聊天區一開始是收著的
     await pb.fill('#chat-in', '哈囉'); await pb.press('#chat-in', 'Enter'); await pa.waitForTimeout(1500);
     ok((await pa.textContent('#chat-log')).includes('阿寶：哈囉'), '聊天有傳到對方');
     await shot(pa, 'multi-1-desktop'); await shot(pb, 'multi-2-phone');
@@ -829,6 +891,7 @@ async function main() {
   if (want === 'all' || want === 'stay') await stay();
   if (want === 'all' || want === 'solo') await solo(false);
   if (want === 'all' || want === 'phone') await solo(true);
+  if (want === 'all' || want === 'chat') await chat();
   if (want === 'all' || want === 'multi') await multi();
   if (want === 'all' || want === 'classes') await classes();
   if (want === 'all' || want === 'live') await live();

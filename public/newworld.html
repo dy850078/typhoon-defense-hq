@@ -92,21 +92,48 @@
     .nw-npc { position: absolute; left: 0; top: 0; will-change: transform; pointer-events: none; transition: opacity .3s; }
     @keyframes nw-pop { from { transform: scale(.6); } to { transform: scale(1); } }
     @keyframes nw-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
-    #acts { display: flex; gap: 6px; padding: 8px; width: min(250px, 100%); }
-    #acts[hidden] { display: none; }
-    #acts button { flex: 1; font: 500 12px/1 inherit; font-family: inherit; color: var(--note-ink); padding: 8px 4px; border-radius: 9px 6px 10px 7px; border: 1.5px solid rgba(43,42,51,.45); background: #fff; cursor: pointer; }
-    #acts button.on { background: #ffe9a8; }
+    /* 頭上的對話泡泡：手繪的小紙片（newworld-hint.js 畫成圖）；畫不出來才用這個白框 */
+    .nw-bubble { max-width: 130px; font: 700 11px/1.35 inherit; font-family: inherit; color: var(--note-ink); background: #fbf6e9; border: 1.5px solid rgba(43,42,51,.6); border-radius: 10px 8px 11px 7px; padding: 3px 7px; overflow-wrap: anywhere; }
+    .nw-bubble.art { max-width: none; background: none; border: 0; padding: 0; line-height: 0; }
+    .nw-bubble.art img { display: block; } .nw-bubble.art span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+    /* 左下：聊天區（newworld-chat.js）。收著只浮出最後幾句，打開是一張可以捲的紙 */
+    #chat { position: fixed; left: calc(164px + env(safe-area-inset-left)); bottom: calc(30px + env(safe-area-inset-bottom)); width: min(390px, calc(100vw - 180px)); z-index: 3; display: flex; flex-wrap: wrap; align-items: center; gap: 5px; pointer-events: none; }
+    #chat[hidden] { display: none; }
+    #chat > * { pointer-events: auto; }
+    #chat-log { flex: 0 0 100%; box-sizing: border-box; font-size: 12.5px; line-height: 1.55; min-height: 62px; max-height: 150px; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y; -webkit-user-select: text; user-select: text;
+      border: 10px solid transparent; border-image: var(--nw-frame) 28 fill / 10px / 2px stretch; padding: 0 2px; scrollbar-width: thin; scrollbar-color: #b78a55 transparent; }
+    #chat-log:empty::before { content: '還沒有人說話'; opacity: .5; }
+    #chat-log > div { overflow-wrap: anywhere; padding: 1px 0; }
+    #chat-log b { font-weight: 700; color: #7a4a1c; } #chat-log .me b { color: #2f5d9e; }
+    #chat-log .sys { color: #6d6252; font-size: 12px; padding-left: 9px; position: relative; } #chat-log .sys::before { content: ''; position: absolute; left: 0; top: .72em; width: 5px; height: 5px; border-radius: 60% 40% 55% 45%; background: #e8a23c; }
+    #chat.nosys #chat-log .sys { display: none; }
+    #chat.fold #chat-log { min-height: 0; max-height: 58px; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; border: 0; border-image: none; padding: 0 2px; pointer-events: none; -webkit-user-select: none; user-select: none;
+      text-shadow: 0 0 3px #fbf5e6, 0 0 3px #fbf5e6, 0 0 2px #fbf5e6, 0 0 5px #fbf5e6; }
+    #chat.fold #chat-log:empty::before { content: none; } #chat.fold #chat-log > div { flex: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }   /* 收著時一句一行，太長的用刪節號 */
+    #chat.fold #chat-sys { display: none; }
+    #chat-top { display: flex; gap: 5px; flex: none; }
+    #chat-form { display: flex; gap: 5px; flex: 1; min-width: 0; align-items: center; }
+    .cb { all: unset; box-sizing: border-box; height: 36px; min-width: 36px; display: inline-flex; align-items: center; justify-content: center; gap: 3px; cursor: pointer; position: relative; flex: none; font: 700 12px/1 'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', sans-serif; color: var(--note-ink); white-space: nowrap;
+      border: 7px solid transparent; border-image: var(--nw-chip) 18 fill / 7px stretch; -webkit-tap-highlight-color: transparent; }
+    .cb img { width: 22px; height: 22px; display: block; }
+    .cb:hover, .cb:focus-visible, .cb[aria-expanded="true"] { border-image-source: var(--nw-chip-on); }
+    .cb:active { transform: translate(1px, 2px); }
+    #chat-tab { padding: 0 3px 0 0; }
+    #chat-dot { position: absolute; right: -8px; top: -9px; width: 10px; height: 10px; border-radius: 55% 45% 50% 50%; background: #ef4b5c; border: 1.5px solid var(--note-ink); } #chat-dot[hidden] { display: none; }
+    #chat-in { all: unset; box-sizing: border-box; flex: 1; min-width: 0; height: 36px; font: 500 14px/1.2 'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', sans-serif; color: var(--note-ink); background: rgba(251,246,233,.94); border: 1.5px solid rgba(43,42,51,.6); border-radius: 11px 8px 12px 7px / 8px 12px 7px 11px; padding: 0 10px; box-shadow: 1px 2px 0 rgba(43,42,51,.22); -webkit-user-select: text; user-select: text; }
+    #chat-in:focus { background: #fffdf5; border-color: var(--note-ink); } #chat-in::placeholder { color: rgba(43,42,51,.45); }
+    #chat .pop { flex: 0 0 auto; box-sizing: border-box; width: min(270px, 100%); display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; border: 10px solid transparent; border-image: var(--nw-frame) 28 fill / 10px / 2px stretch; padding: 1px; margin-right: 40%; }
+    #chat .pop[hidden] { display: none; }
+    #chat .pop button { font: 500 12px/1 inherit; font-family: inherit; color: var(--note-ink); padding: 8px 4px; border-radius: 9px 6px 10px 7px; border: 1.5px solid rgba(43,42,51,.45); background: #fff; cursor: pointer; }
+    #chat .pop button:hover { background: #fff6dc; } #chat .pop button.on { background: #ffe9a8; }
+    @media (max-width: 820px) {
+      /* 手機：技能鈕上面一排小鈕；收著的時候不放輸入框，點「聊天」才打開 */
+      #chat { left: calc(10px + env(safe-area-inset-left)); right: calc(10px + env(safe-area-inset-right)); width: auto; bottom: calc(244px + env(safe-area-inset-bottom)); }
+      #chat-log { max-height: min(30vh, 190px); }
+      #chat.fold #chat-log { flex-basis: 72%; max-width: 72%; margin-right: 28%; } #chat.fold #chat-form { flex: none; } #chat.fold #chat-in, #chat.fold #chat-send { display: none; }
+      #chat .pop { margin-right: 0; }
+    }
     #music-nw { position: fixed; width: 1px; height: 1px; left: -10px; top: -10px; opacity: 0; pointer-events: none; }
-    .nw-bubble { max-width: 190px; font: 500 12px/1.4 inherit; font-family: inherit; color: var(--note-ink); background: #fff; border: 1.5px solid rgba(43,42,51,.5); border-radius: 12px 10px 13px 9px; padding: 5px 9px; overflow-wrap: anywhere; }
-    #chat { position: fixed; left: calc(164px + env(safe-area-inset-left)); bottom: calc(34px + env(safe-area-inset-bottom)); width: min(380px, calc(100vw - 180px)); z-index: 3; display: flex; flex-direction: column; gap: 5px; }
-    #chat-log { font-size: 12px; line-height: 1.5; max-height: 92px; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; pointer-events: none; text-shadow: 0 0 3px #fbf5e6, 0 0 3px #fbf5e6, 0 0 2px #fbf5e6; }
-    #chat-log b { font-weight: 700; }
-    #chat form { display: flex; gap: 6px; }
-    #emotes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; padding: 8px; width: min(250px, 100%); }
-    #emotes[hidden] { display: none; }
-    #emotes button { font: 500 12px/1 inherit; font-family: inherit; color: var(--note-ink); padding: 8px 4px; border-radius: 9px 6px 10px 7px; border: 1.5px solid rgba(43,42,51,.45); background: #fff; cursor: pointer; }
-    #chat input { all: unset; flex: 1; min-width: 0; font: 500 14px/1.2 inherit; font-family: inherit; color: var(--note-ink); background: rgba(251,246,233,.92); border: 1.5px solid rgba(43,42,51,.45); border-radius: 10px 8px 11px 7px; padding: 8px 10px; -webkit-user-select: text; user-select: text; }
-    #chat button { font: 700 13px/1 inherit; font-family: inherit; color: var(--note-ink); padding: 8px 12px; cursor: pointer; }
     #dress { position: fixed; left: 50%; bottom: calc(14px + env(safe-area-inset-bottom)); transform: translateX(-50%); width: min(380px, calc(100vw - 24px)); max-height: 62vh; overflow: auto; padding: 12px 14px 14px; z-index: 4; font-size: 13px; }
     #dress h2 { font-size: 15px; margin: 0 0 8px; display: flex; justify-content: space-between; align-items: center; }
     #dress h2 button { font: 700 12px/1 inherit; font-family: inherit; padding: 6px 10px; cursor: pointer; }
@@ -199,7 +226,13 @@
   <div id="dress" class="note" hidden></div>
   <div id="panel" class="note" hidden></div>
   <div id="toast" class="note" hidden></div>
-  <div id="chat" hidden><div id="chat-log"></div><div id="emotes" class="note" hidden></div><div id="acts" class="note" hidden><button type="button" data-act="sit">坐下</button><button type="button" data-act="wave">揮手</button><button type="button" data-act="run">跑步</button></div><form id="chat-form"><button class="note" type="button" id="b-emote">表情</button><button class="note" type="button" id="b-act">動作</button><input id="chat-in" maxlength="60" autocomplete="off" placeholder="說點什麼"><button class="note" type="submit">送出</button></form></div>
+  <div id="chat" class="fold" hidden>
+    <div id="chat-log" role="log" aria-live="polite"></div>
+    <div id="emotes" class="pop" hidden></div>
+    <div id="acts" class="pop" hidden><button type="button" data-act="sit">坐下</button><button type="button" data-act="wave">揮手</button><button type="button" data-act="run">跑步</button></div>
+    <div id="chat-top"><button class="cb" type="button" id="chat-tab" aria-expanded="false" aria-controls="chat-log"><span>聊天</span><i id="chat-dot" hidden></i></button><button class="cb" type="button" id="chat-sys" aria-label="系統訊息開關"></button></div>
+    <form id="chat-form"><button class="cb" type="button" id="b-emote" aria-label="表情" title="表情">表情</button><button class="cb" type="button" id="b-act" aria-label="動作" title="動作">動作</button><input id="chat-in" maxlength="60" autocomplete="off" placeholder="說點什麼" enterkeyhint="send"><button class="cb" type="submit" id="chat-send" aria-label="送出" title="送出">送出</button></form>
+  </div>
   <div id="hint" hidden>點地面就會走過去，也可以用搖桿、方向鍵或 WASD；按住滑鼠右鍵拖可以轉鏡頭</div>
 
   <script src="/socket.io/socket.io.js"></script>
@@ -214,6 +247,7 @@
   <script src="mastery-art.js"></script>
   <script src="newworld-hint.js"></script>
   <script src="newworld-ui.js"></script>
+  <script src="newworld-chat.js"></script>
   <script src="newworld-panels.js"></script>
   <script src="/shared/classes3d.js"></script>
   <script src="icons-nw.js"></script>
@@ -322,7 +356,7 @@
         sock = io('/newworld', { auth: { token: token } });
         window.NW_SK = window.NW_SKILLS ? NW_SKILLS.start(NW, sock, panels) : null;   // 戰鬥介面：技能鈕、技能書、轉職
         var last = '';
-        sock.on('init', function (d) { NW.net.clear(); NW.net.name(d.name); NW.tier(d.tier); if (shell) shell.admin(d.admin); d.players.forEach(function (p) { NW.net.put(p.id, p); }); sock.emit('look', NW.look()); last = ''; $('chat').hidden = false; });
+        sock.on('init', function (d) { NW.net.clear(); NW.net.name(d.name); NW.tier(d.tier); if (shell) shell.admin(d.admin); d.players.forEach(function (p) { NW.net.put(p.id, p); }); sock.emit('look', NW.look()); last = ''; $('chat').hidden = false; if (window.NW_CHAT) NW_CHAT.start(); });
         sock.on('join', function (p) { NW.net.put(p.id, p); });
         sock.on('leave', function (id) { NW.net.drop(id); });
         sock.on('look', function (d) { NW.net.put(d.id, { look: d.look, tier: d.tier }); });
@@ -332,8 +366,7 @@
         sock.on('music', function (st) { music.set(st); if (panels) panels.music(); });
         sock.on('garden', function (st) { NW.garden(st); if (panels) panels.garden(); });
         sock.on('emote', function (d) { NW.net.emote(d.id, d.face); });
-        sock.on('chat', function (m) { NW.net.say(m.id === sock.id ? null : m.id, m.text); var log = $('chat-log'), row = document.createElement('div'), b = document.createElement('b');
-          b.textContent = m.name + '：'; row.appendChild(b); row.appendChild(document.createTextNode(m.text)); log.appendChild(row); while (log.children.length > 5) log.removeChild(log.firstChild); });
+        sock.on('chat', function (m) { var mine = m.id === sock.id; NW.net.say(mine ? null : m.id, m.text); if (window.NW_CHAT) NW_CHAT.add(m.name, m.text, mine); });
         setInterval(function () { var m = NW.net.me(); if (!m || !sock.connected) return; var k = m.x + ',' + m.z + ',' + m.f + ',' + m.mv + ',' + m.fm + ',' + m.g + ',' + m.p; if (k !== last) { last = k; sock.emit('move', m); } }, 100);
         // 表情：按一下換 5 秒的臉，別人也看得到；時間到變回平常的臉
         var E = $('emotes'); NW.options().parts.face.forEach(function (k) { var b = document.createElement('button'); b.type = 'button'; b.textContent = NW.options().names[k];

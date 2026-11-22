@@ -7,7 +7,7 @@ window.NW_PANELS = function (NW, token, opt) {
   function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
   function icon(key, size) { var u = window.HQ_ICONS && HQ_ICONS.url(key); if (!u) return null; var i = el('img', 'ic'); i.src = u; i.alt = ''; if (size) i.style.width = i.style.height = size + 'px'; return i; }
   function btn(text, fn, cls) { var b = el('button', 'opt' + (cls ? ' ' + cls : ''), text); b.type = 'button'; b.onclick = fn; return b; }
-  function toast(text) { if (!text) return; TOAST.textContent = text; TOAST.hidden = false; clearTimeout(toastT); toastT = setTimeout(function () { TOAST.hidden = true; }, 2600); }
+  function toast(text) { if (!text) return; if (window.NW_CHAT) NW_CHAT.sys(text); TOAST.textContent = text; TOAST.hidden = false; clearTimeout(toastT); toastT = setTimeout(function () { TOAST.hidden = true; }, 2600); }
   function post(name, body) {
     return fetch('/api/newworld/' + name, { method: 'POST', headers: { Authorization: 'Bearer ' + token, 'content-type': 'application/json' }, body: JSON.stringify(body) })
       .then(function (r) { return r.ok ? r.json() : { ok: false, error: '連不上伺服器，等等再試' }; }, function () { return { ok: false, error: '連不上伺服器，等等再試' }; });

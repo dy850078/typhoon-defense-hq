@@ -1,6 +1,7 @@
 // 新世界的手繪紙條：跟總部（game.js 的 drawHint）同一種畫法，蠟筆描邊的米白紙條＋手繪小圖示
 //   NW_HINT.hint(iconKey, label, touch)  靠近東西時冒出來的動作紙條：圖示＋動作名稱＋小鍵帽（手機是「點我」），底下有小尖角
 //   NW_HINT.tag(iconKey, name)           NPC 和地點的名牌：圖示＋名字
+//   NW_HINT.talk(text)                   頭上的對話泡泡：蠟筆描邊的小紙片，底下有尖角；字比名牌小，最多四行
 // 回傳 { url, w, h }（w、h 是畫面上要顯示的大小）
 (function (root) {
   var CR = root.HQ_CRAYON, IC = root.HQ_ICONS;
@@ -42,7 +43,37 @@
       ctx.font = capFont; ctx.fillStyle = capHot ? '#ffffff' : INK; ctx.textAlign = 'center'; ctx.fillText(cap, cx + cw / 2, cy + 8.5); }
     return (cache[key] = { url: cv.toDataURL(), w: w, h: h });
   }
+  // 對話泡泡（總部 game.js 的 drawTalk 搬過來，縮小一號）。短句用窄的，長句才放寬；標點不放行首，兩行時盡量在標點後面換行
+  var PUNC = '，。！？…、,.!?~）」';
+  function talk(text) {
+    text = String(text == null ? '' : text).replace(/\s+/g, ' ').trim(); if (!text) return null;
+    var key = 'k|' + text; if (cache[key]) return cache[key];
+    var TL = 6, PAD = 7, LH = 14, MAXL = 4, cv = document.createElement('canvas'), ctx = cv.getContext('2d'), font = 'bold 11px ' + FONT;
+    ctx.font = font; var W = function (t) { return ctx.measureText(t).width; }, chars = Array.from(text), MAXW = W(text) > 230 ? 132 : 114;
+    var lines = [], cur = '';
+    chars.forEach(function (ch) { if (W(cur + ch) > MAXW && cur && PUNC.indexOf(ch) < 0) { lines.push(cur); cur = ch; } else cur += ch; });
+    if (cur) lines.push(cur);
+    if (lines.length === 2) { var best = 0, bd = 1e9;
+      chars.forEach(function (ch, i) { if (PUNC.indexOf(ch) < 0 || i >= chars.length - 1) return; var a = chars.slice(0, i + 1).join(''), b = chars.slice(i + 1).join('');
+        if (W(a) <= MAXW && W(b) <= MAXW && Math.abs(i + 1 - chars.length / 2) < bd) { bd = Math.abs(i + 1 - chars.length / 2); best = i + 1; } });
+      if (best) { lines[0] = chars.slice(0, best).join(''); lines[1] = chars.slice(best).join(''); } }
+    if (lines.length > MAXL) { lines.length = MAXL; var last = Array.from(lines[MAXL - 1]); while (last.length && W(last.join('') + '…') > MAXW) last.pop(); lines[MAXL - 1] = last.join('') + '…'; }
+    var tw = Math.max.apply(null, lines.map(W)), bw = Math.max(26, Math.ceil(tw + PAD * 2)), PH = lines.length * LH + 8, ox = 2, oy = 1.5, w = bw + 5, h = PH + 4 + TL;
+    cv.width = w * RES; cv.height = h * RES; ctx.scale(RES, RES);
+    var r = CR.rng(text.length * 53 + 11 + text.charCodeAt(0));
+    var tri = function (dx, dy) { var m = ox + bw / 2; ctx.beginPath(); ctx.moveTo(m - 5 + dx, oy + PH - 1 + dy); ctx.lineTo(m + dx, oy + PH + TL + dy); ctx.lineTo(m + 5 + dx, oy + PH - 1 + dy); };
+    ctx.fillStyle = 'rgba(43,42,51,0.26)';
+    CR.rect(ctx, ox + 1.5, oy + 2, bw, PH, r, 0.6); ctx.fill(); tri(1.5, 2); ctx.closePath(); ctx.fill();
+    CR.rect(ctx, ox, oy, bw, PH, r, 1); ctx.fillStyle = PAPER; ctx.fill(); CR.stroke(ctx, r, 1.4, INK);
+    tri(0, 0); ctx.closePath(); ctx.fillStyle = PAPER; ctx.fill(); tri(0, 0); CR.stroke(ctx, r, 1.4, INK);
+    ctx.font = font; ctx.fillStyle = INK; ctx.textBaseline = 'middle'; ctx.textAlign = 'center';
+    lines.forEach(function (l, i) { ctx.fillText(l, ox + bw / 2, oy + 4 + LH * (i + 0.5) + 0.5); });
+    var n = 0; for (var k in cache) if (k.charCodeAt(0) === 107 && k.charAt(1) === '|') n++;   // 講過的話不用一直留著
+    if (n > 60) for (var k2 in cache) if (k2.charCodeAt(0) === 107 && k2.charAt(1) === '|') delete cache[k2];
+    return (cache[key] = { url: cv.toDataURL(), w: w, h: h, lines: lines.length });
+  }
   root.NW_HINT = {
+    talk: talk,
     hint: function (iconKey, label, touch) { return strip('h|' + iconKey + '|' + label + '|' + (touch ? 1 : 0), iconKey, label, touch ? '點我' : 'E', !!touch, true); },
     tag: function (iconKey, name) { return strip('t|' + iconKey + '|' + name, iconKey, name, '', false, false); },
   };

@@ -430,7 +430,7 @@ async function main() {
     await pa.waitForTimeout(400); await tap(pa, '#t-cls [data-t=ae]'); await pa.waitForFunction(() => (HQ_NEWWORLD.combat.view() || {}).school === 'ae', null, { timeout: 20000 }).catch(() => {});
     v = await view(); ok(v && v.school === 'ae' && !v.spec, '換成見習生：鍊金與附魔');
     await pa.waitForTimeout(400); await tap(pa, '#t-give [data-t=magical]'); await pa.waitForTimeout(900); ok(/魔法少女/.test(await toast()), '給魔法少女整套（' + (await toast()) + '）');
-    await tap(pa, '#t-give [data-t=pet-cat]'); await pa.waitForTimeout(900); ok(!(await pa.evaluate(() => document.getElementById('b-pet').hidden)), '給一隻貓，寵物鈕出現');
+    await tap(pa, '#t-give [data-t=pet-cat]'); await pa.waitForTimeout(900); ok(await pa.evaluate(() => { const b = document.getElementById('b-pet'), i = b.querySelector('img'); return !b.hidden && i.naturalWidth > 0; }), '給一隻貓，寵物鈕出現（圖示有畫出來）'); await shot(pa, tag + '-6b-pet-btn');
     await tap(pa, '#b-gear'); await pa.waitForFunction(() => !!document.querySelector('#panel [data-gear=mgDress]'), null, { timeout: 30000 }).catch(() => {}); ok(!!(await pa.$('#panel [data-gear=mgDress]')), '背包裡有剛剛給的裝備'); await shot(pa, tag + '-7-gear-given');
     await tap(pa, '#b-test'); await tap(pa, '#t-lv [data-t=reset]'); await pa.waitForTimeout(300); await tap(pa, '#t-lv [data-t=reset]'); await pa.waitForFunction(() => (HQ_NEWWORLD.combat.view() || {}).lv === 1, null, { timeout: 20000 }).catch(() => {});
     v = await view(); ok(v && v.lv === 1 && !v.school, '全部重來要按兩次，回到 1 等的芽');

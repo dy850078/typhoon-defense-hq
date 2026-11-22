@@ -47,13 +47,17 @@
   st.setProperty('--nw-frame', 'url(' + frame(11, PAPER, 1.8) + ')'); st.setProperty('--nw-chip', 'url(' + frame(23, PAPER, 2) + ')'); st.setProperty('--nw-chip-on', 'url(' + frame(23, '#f3d27a', 2) + ')');
   st.setProperty('--nw-wood', 'url(' + wood() + ')'); st.setProperty('--nw-tile', 'url(' + tile() + ')');
 
-  // 這一排才有的三個圖示：換裝（上衣）、設定（齒輪）、功能測試（燒瓶）
+  // 這一排才有的四個圖示：換裝（上衣）、寵物（腳印）、設定（齒輪）、功能測試（燒瓶）
   IC.add({
     'btn-dress': function (x, r) {
       x.beginPath(); [[16, 9], [21, 12], [27, 12], [32, 9], [43, 17], [37, 25], [33, 22], [33, 41], [15, 41], [15, 22], [11, 25], [5, 17]].forEach(function (p, i) { if (i) x.lineTo(p[0], p[1]); else x.moveTo(p[0], p[1]); }); x.closePath();
       CR.fill(x, '#4f7cc2', r, [5, 9, 38, 32]); CR.stroke(x, r, 2.4);
       x.beginPath(); x.moveTo(20, 12); x.quadraticCurveTo(24, 18, 28, 12); CR.stroke(x, r, 1.8);
       CR.blob(x, 24, 29, 3.4, 3.4, r, 0.1, 10); CR.fill(x, '#ffd23f', r, null); CR.stroke(x, r, 1.3);
+    },
+    'btn-paw': function (x, r) {
+      CR.blob(x, 24, 31, 11, 9, r, 0.07, 18); CR.fill(x, '#f2a65a', r, [13, 22, 22, 18]); CR.stroke(x, r, 2.3);
+      [[10, 20, 4.2, 5], [19, 11, 4.4, 5.4], [29, 11, 4.4, 5.4], [38, 20, 4.2, 5]].forEach(function (p) { CR.blob(x, p[0], p[1], p[2], p[3], r, 0.07, 12); CR.fill(x, '#f2a65a', r, null); CR.stroke(x, r, 2.1); });
     },
     'btn-set': function (x, r) {
       for (var i = 0; i < 8; i++) { x.save(); x.translate(24, 24); x.rotate(i * Math.PI / 4); CR.rect(x, -4.2, -20, 8.4, 9, r, 0.4); CR.fill(x, '#8fa2a4', r, null); CR.stroke(x, r, 2); x.restore(); }

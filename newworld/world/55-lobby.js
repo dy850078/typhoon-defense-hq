@@ -240,7 +240,7 @@ const LOBBY = TW ? (() => {
   grp([-8.7, 0, -10.6], 0, () => { p(box(0.9, 0.1, 0.85), WALNUT, { pos: [0, 0.72, 0], line: 0.02 }); p(rbox(0.8, 0.12, 0.75, 0.05), MUST, { pos: [0, 0.82, 0], noLine: true }); p(box(0.9, 0.9, 0.1), WALNUT, { pos: [0, 1.3, -0.4], line: 0.02 }); [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([a, b]) => p(box(0.08, 0.7, 0.08), WALNUT, { pos: [a * 0.38, 0.35, b * 0.36], noLine: true })); });
   lamp(-9.6, 1.16, -9.3, 0.5); { const cs = [RED, NAVY, '#f4e9d2']; cs.forEach((c2, i) => p(box(0.62 - i * 0.05, 0.09, 0.44), c2, { pos: [-7.6, 1.2 + i * 0.09, -9.4], rot: [0, 0.2 * i - 0.2, 0], line: 0.012, shadow: false })); }
   p(cyl(0.1, 0.08, 0.2, 10), '#f4e9d2', { pos: [-8.4, 1.26, -8.95], line: 0.012 }); [[-0.03, RED], [0.04, NAVY], [0, MUST]].forEach(([a, c2], i) => p(cyl(0.012, 0.012, 0.3, 4), c2, { pos: [-8.4 + a, 1.44, -8.95 + (i - 1) * 0.03], rot: [0.15 * (i - 1), 0, a * 4], noLine: true, shadow: false }));   // 筆筒
-  sign('職業導師', 1.5, { pos: [-8.6, 0.62, -8.55] });
+  // （ZS 2026-11-22：寫字的立牌都拿掉，靠外型和走近的動作紙條認東西）
   wall(-8.6, -10.2, 2.15, 1.75);
   // 扭蛋機：從牆邊搬出來，獨立一角（左前）。玻璃罩是真的透明，裡面一顆一顆的扭蛋（上半有顏色、下半米白）堆在底部
   const GLASS = [];
@@ -260,7 +260,6 @@ const LOBBY = TW ? (() => {
       p(sph(0.09, 8, 6), '#ffffff', { glow: true, pos: [-0.4, gy + 0.46, 0.63], scale: [1, 2.2, 0.25], rot: [0, 0, 0.6] }); });
     round(x, gz, 0.9); });
   p(new THREE.CircleGeometry(2.5, 32), '#e9d3b0', { pos: [-9.35, 0.014, 3.7], rot: FLOOR, scale: [1, 0.72, 1], noLine: true, shadow: false }); p(new THREE.RingGeometry(2.1, 2.22, 32), SAGE, { pos: [-9.35, 0.018, 3.7], rot: FLOOR, scale: [1, 0.72, 1], noLine: true, shadow: false });
-  p(box(0.1, 1.3, 0.1), WALNUT, { pos: [-12.3, 0.65, 4.2], noLine: true }); p(box(1.26, 0.56, 0.08), '#e5cfa0', { pos: [-12.3, 1.5, 4.2], line: 0.02 }); sign('扭蛋', 1.16, { pos: [-12.3, 1.5, 4.25] }); round(-12.3, 4.2, 0.3);
   plant(-4.6, -11.0, 1.25);
 
   // ================= 客廳（中間） =================
@@ -310,7 +309,7 @@ const LOBBY = TW ? (() => {
     p(box(5.6, 2.5, 0.16), STEEL, { pos: [11.6, 2.25, -HD + 0.1], line: 0.022, shadow: false });
     T(plane(3.3, 2.1), screenTex(0), { pos: [10.6, 2.25, -HD + 0.2], basic: true }); T(plane(1.7, 1.0), screenTex(1), { pos: [13.3, 2.8, -HD + 0.2], basic: true }); T(plane(1.7, 1.0), screenTex(2), { pos: [13.3, 1.7, -HD + 0.2], basic: true });
     // 任務看板，底下一排鐵櫃
-    p(box(3.9, 2.3, 0.12), PALE, { pos: [17.1, 2.45, -HD + 0.07], line: 0.022, shadow: false }); T(plane(3.66, 2.06), boardTex, { pos: [17.1, 2.45, -HD + 0.14] }); sign('任務看板', 1.5, { pos: [17.1, 3.95, -HD + 0.04] });
+    p(box(3.9, 2.3, 0.12), PALE, { pos: [17.1, 2.45, -HD + 0.07], line: 0.022, shadow: false }); T(plane(3.66, 2.06), boardTex, { pos: [17.1, 2.45, -HD + 0.14] });
     p(box(3.6, 1.2, 0.9), '#8fa2a4', { pos: [17.1, 0.6, -11.5] }); [15.9, 17.1, 18.3].forEach(x => { [0.85, 0.35].forEach(y => { p(box(1.08, 0.42, 0.03), '#a3b4b5', { pos: [x, y, -11.04], noLine: true, shadow: false }); p(box(0.34, 0.05, 0.05), SILVER, { pos: [x, y + 0.08, -11.02], noLine: true, shadow: false }); }); });
     p(box(0.7, 0.42, 0.36), TEAK, { pos: [16.2, 1.41, -11.5], line: 0.016 }); p(cyl(0.12, 0.12, 0.03, 12), '#efe3cc', { pos: [16.05, 1.42, -11.31], rot: [PI / 2, 0, 0], noLine: true, shadow: false }); p(cyl(0.012, 0.012, 0.6, 4), SILVER, { pos: [16.48, 1.85, -11.5], rot: [0, 0, -0.3], noLine: true, shadow: false });   // 老收音機
     // 作戰桌：黑鐵腳、厚木桌板，上面攤著地圖
@@ -357,7 +356,6 @@ const LOBBY = TW ? (() => {
   // ================= 門口（前面中間） =================
   T(plane(6, 3), tileA([3, 1.5]), { pos: [0, 0.012, 10.5], rot: FLOOR });
   [-2.7, 2.7].forEach(x => { p(box(0.34, 1.3, 0.34), TEAK, { pos: [x, 0.65, HD + 0.15], line: 0.026 }); p(sph(0.2, 10, 8), WARM, { glow: true, line: 0.02, pos: [x, 1.5, HD + 0.15] }); });   // 門口只有兩根矮柱和小燈，不擋鏡頭
-  p(box(0.1, 1.5, 0.1), WALNUT, { pos: [-3.9, 0.75, HD - 0.5], noLine: true }); p(box(2.0, 0.84, 0.08), '#e5cfa0', { pos: [-3.9, 1.75, HD - 0.5], line: 0.02 }); sign('總部大廳', 1.84, { pos: [-3.9, 1.75, HD - 0.45] }); round(-3.9, HD - 0.5, 0.3);
   p(box(3.0, 0.9, 0.8), PALE, { pos: [-5.6, 0.45, 11.4] }); [-6.3, -4.9].forEach(x => p(box(0.03, 0.7, 0.03), '#c99c62', { pos: [x + 0.7, 0.45, 10.99], noLine: true, shadow: false })); wall(-5.6, 11.4, 1.5, 0.45);   // 鞋櫃
   p(cyl(0.2, 0.16, 0.3, 10), POT, { pos: [-6.4, 1.05, 11.4], line: 0.016 }); [[0, 0.2], [0.14, 0.12], [-0.13, 0.1]].forEach(([a, b]) => p(sph(0.17, 8, 6), LEAF2, { pos: [-6.4 + a, 1.3 + b, 11.4 + a * 0.5], noLine: true }));
   p(cyl(0.28, 0.24, 0.7, 12), '#8fa2a4', { pos: [4.3, 0.35, 11.3], line: 0.022 }); [[RED, 0.1, 0.15], [NAVY, -0.1, -0.12], [MUST, 0.02, -0.2]].forEach(([c2, a, b]) => { p(cyl(0.05, 0.035, 1.0, 6), c2, { pos: [4.3 + a, 0.85, 11.3 + a], rot: [b, 0, a * 1.4], noLine: true }); p(new THREE.TorusGeometry(0.06, 0.016, 4, 8, PI), WALNUT, { pos: [4.3 + a * 1.7, 1.38, 11.3 + a + b * 0.5], noLine: true, shadow: false }); }); round(4.3, 11.3, 0.4);   // 傘桶
@@ -376,7 +374,7 @@ const LOBBY = TW ? (() => {
   // 種子認養箱：木箱裡插著幾包種子
   grp([25.5, 0, 10.5], 0.45, () => { p(box(1.0, 0.62, 0.74), '#c98a52', { pos: [0, 0.31, 0], line: 0.024 }); p(box(0.86, 0.04, 0.6), '#5b4636', { pos: [0, 0.6, 0], noLine: true, shadow: false });
     [[-0.26, RED], [0, MUST], [0.26, SAGE]].forEach(([a, c2], i) => { p(box(0.2, 0.34, 0.03), '#f7ecd0', { pos: [a, 0.74, 0.05 - i * 0.07], rot: [-0.2, 0, (i - 1) * 0.12], line: 0.012, shadow: false }); p(sph(0.06, 6, 5), c2, { pos: [a, 0.78, 0.075 - i * 0.07], scale: [1, 1, 0.3], noLine: true, shadow: false }); });
-    sign('種子箱', 0.84, { pos: [0, 0.3, 0.376] }); });
+    });
   round(25.5, 10.5, 0.65);
   // 大水缸：裝澆花的水（許願池在前院）
   p(new THREE.LatheGeometry([[0, 0], [0.55, 0], [0.92, 0.45], [0.98, 0.8], [0.8, 1.12], [0.86, 1.2], [0.7, 1.2]].map(([a, b]) => new THREE.Vector2(a, b)), 20), '#7d5a44', { pos: [23.3, 0, 9.6] });

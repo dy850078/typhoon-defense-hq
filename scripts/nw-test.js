@@ -339,7 +339,7 @@ async function main() {
     // 前院的許願池
     await place(S.well.x - 0.4, S.well.z + 2.7); await near('well');
     ok((await pa.textContent('.nw-hint')) === '許個願' && !!(await pa.$('.nw-hint.art img')), '前院的許願池冒出手繪的「許個願」紙條'); await shot(pa, 'home-2-well');
-    ok((await pa.locator('.nw-npc').count()) === 3, 'NPC 和許願池有手繪名牌');
+    ok((await pa.locator('.nw-npc').count()) === 2, '只有人物（導師、希臘少女）有手繪名牌，東西沒有');
     await place(S.greek.x + 4, S.greek.z + 3); await pa.waitForTimeout(700);
     const vis = () => pa.evaluate(() => [...document.querySelectorAll('.nw-npc')].filter(e => e.style.display !== 'none' && e.style.opacity === '1').map(e => e.alt).sort().join(','));
     ok(/希臘少女/.test(await vis()), '走到五步內，名牌淡入（' + (await vis()) + '）'); await shot(pa, 'home-2a-tags-near');

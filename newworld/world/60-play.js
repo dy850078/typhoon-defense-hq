@@ -181,7 +181,6 @@ const NW = (() => {
       part(g, new THREE.CylinderGeometry(0.08, 0.1, 1.9, 7), '#a8693f', { pos: [0, 0.95, 0], line: 0.022 });
       part(g, new THREE.BoxGeometry(1.5, 0.66, 0.09), '#f7ecd0', { pos: [0, 1.62, 0.07], rot: [0, 0, -0.04], line: 0.024, mat: [0, 1, 2, 3, 4, 5].map(i => (i === 4 ? new THREE.MeshToonMaterial({ map: t, gradientMap: RAMP }) : mat('#e5cfa0'))) });
       ROUNDS.push({ x, z, r: 0.25 }); };
-    sign(5.2, 3.0, Math.atan2(PN[0], PN[1]) + Math.PI + 0.25, '往總部'); sign(-12.5, -3.0, 0.5, '總部');
     // 長椅：面向小路，一張可以坐兩個人
     const SEATS = [], bench = (s, off) => { const [x, z] = P(s, off), g = new THREE.Group(), ry = Math.atan2(-PN[0] * Math.sign(off), -PN[1] * Math.sign(off)); g.position.set(x, 0, z); g.rotation.y = ry; G.add(g);
       part(g, new THREE.BoxGeometry(2.3, 0.12, 0.72), '#d79a61', { pos: [0, 0.55, 0], line: 0.022 });
@@ -224,7 +223,7 @@ const NW = (() => {
     HINT.classList.toggle('art', !!art); HINT.textContent = ''; if (!art) { HINT.textContent = lb; return; }
     const i = document.createElement('img'), sp = document.createElement('span'); i.src = art.url; i.width = art.w; i.height = art.h; i.alt = ''; sp.textContent = lb; HINT.append(i, sp); };
   // NPC 和地點的名牌：手繪紙條，飄在頭上
-  const NPCS = LOBBY ? [{ name: '職業導師', icon: 'act-mentor', x: LOBBY.SPOTS.mentorSeat.x, z: LOBBY.SPOTS.mentorSeat.z, y: 3.0, lob: true }, { name: '希臘少女', icon: 'act-greek', x: GREEK_AT.x, z: GREEK_AT.z, y: 2.62, lob: false }, { name: '許願池', icon: 'wish-coin', x: WELL.x, z: WELL.z, y: 2.75, lob: false }] : [];
+  const NPCS = LOBBY ? [{ name: '職業導師', icon: 'act-mentor', x: LOBBY.SPOTS.mentorSeat.x, z: LOBBY.SPOTS.mentorSeat.z, y: 3.0, lob: true }, { name: '希臘少女', icon: 'act-greek', x: GREEK_AT.x, z: GREEK_AT.z, y: 2.62, lob: false }] : [];
   const NPC_NEAR = 6;
   const placeNpcs = () => NPCS.forEach(n => { if (!n.el) { if (!window.NW_HINT) return; const a = window.NW_HINT.tag(n.icon, n.name); n.el = document.createElement('img'); n.el.className = 'nw-npc'; n.el.src = a.url; n.el.width = Math.round(a.w * 0.6); n.el.height = Math.round(a.h * 0.6); n.el.alt = n.name; n.el.style.opacity = '0'; LAB.appendChild(n.el); }   // 名牌縮成六成大
     PV.set(n.x, n.y, n.z).project(camera); const on = !!S.lob === n.lob && PV.z < 1 && Math.abs(PV.x) < 1.1 && Math.abs(PV.y) < 1.1 && !(NEAR && Math.hypot(NEAR.x - n.x, NEAR.z - n.z) < 1.2);   // 動作紙條冒出來的時候，名牌先讓位

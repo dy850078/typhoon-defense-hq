@@ -37,16 +37,16 @@ async function main() {
   ok(A.me && A.me.lv === 1 && !A.me.school && A.me.slots.join() === 'spark,blink,,', '新帳號是 1 等的芽，帶著兩招：' + (A.me && A.me.slots));
   ok(A.mobs.size >= 30, '練習場有怪：' + A.mobs.size + ' 隻');
   ok((await A.ask('cb:school', 'pm')).error, '1 等不能選學門');
-  // 芽：打一隻 1 等的果凍
-  const s0 = A.mob('slime'); A.at(s0.x + 2, s0.z); await wait(200); A.s.emit('cb:target', s0.id);
+  // 芽：打一隻 1 等的苔球
+  const s0 = A.mob('moss'); A.at(s0.x + 2, s0.z); await wait(200); A.s.emit('cb:target', s0.id);
   await wait(2600); ok(A.hits.some(h => h[0] === s0.id && h[1] > 0), '點怪會自動普攻');
   ok(await A.cast('spark', s0), '小火花放得出來'); ok(await A.cast('blink'), '歪歪瞬移放得出來');
   for (let i = 0; i < 80 && A.mobs.get(s0.id).hp > 0; i++) await wait(200);
-  ok(A.mobs.get(s0.id).hp === 0 && A.me.exp > 0, '打倒果凍拿到經驗：' + A.me.exp);
-  if (process.env.QUICK) { A.s.close(); } else {
+  ok(A.mobs.get(s0.id).hp === 0 && A.me.exp > 0, '打倒苔球拿到經驗：' + A.me.exp);
+  if (process.env.QUICK || process.env.ONLY === 'moves') { A.s.close(); } else {
   // 每個學門、每個專精都走一遍
   await wait(5300); await A.ask('cb:dbg', { lv: 60 });
-  const far = () => A.mob('shroom', 3), tgt = (i) => { const m = [...A.mobs.values()].filter(x => x.kind !== 'boss' && x.hp > 0).sort((a, b) => b.hp - a.hp)[i || 0]; A.at(m.x + 2, m.z); return m; };
+  const far = () => A.mob('puff', 3), tgt = (i) => { const m = [...A.mobs.values()].filter(x => !C3.MOBS[x.kind].boss && !C3.MOBS[x.kind].add && x.hp > 0).sort((a, b) => b.hp - a.hp)[i || 0]; A.at(m.x + 2, m.z); return m; };
   const rest = async () => { A.at(0, 10); await wait(300); await A.ask('cb:dbg', { lv: 60 }); };
   await rest();
   for (const sk of Object.keys(C3.SCHOOLS)) {
@@ -79,8 +79,46 @@ async function main() {
   ok(me2.lv === 60 && me2.school === 'ae' && me2.spec === 'puppeteer' && me2.schools.pm.got.length === 2, '重新連線，等級和職業都還在：' + me2.lv + ' 等 ' + C3.clsName(me2));
   s2.close();
   }
+  // ---- 怪的招 ----
+  {
+    const M = await player(); await M.ask('cb:dbg', { lv: 8 }); const seen = (P, k, mk, id) => P.fx.find(f => f.k === k && f.mk === mk && (!id || f.m === id));
+    const until = async (fn, ms) => { for (let i = 0; i < ms / 100; i++) { const v = fn(); if (v) return v; await wait(100); } return null; };
+    // 苔球：先預告，再滾過來撞人
+    const mo = M.mob('moss', 9); M.at(mo.x + 4, mo.z); await wait(200); M.s.emit('cb:target', mo.id); M.fx.length = 0; M.hits.length = 0;
+    const t1 = await until(() => seen(M, 'tele', 'roll', mo.id), 9000); ok(t1 && t1.x2 != null && t1.dur > 0, '苔球滾之前有預告（一條線）'); const hp0 = M.me.hp;
+    ok(await until(() => seen(M, 'mobMove', 'roll', mo.id), 2500), '預告完才滾'); await wait(700); ok(M.hits.some(h => h[0] === 'p:' + M.s.id && h[1] > 0), '站在線上會被撞到');
+    M.s.emit('cb:target', null); M.at(mo.x + 40, mo.z + 10); await wait(5600);
+    // 傘菇精：孢子圈讓人變慢，撒完要整理傘
+    await M.ask('cb:dbg', { lv: 12 }); await M.ask('cb:school', 'sc'); await M.ask('cb:slots', ['seal', 'pact', 'spark', null]);
+    const pu = M.mob('puff', 9); M.at(pu.x + 1.5, pu.z); await wait(200); M.s.emit('cb:target', pu.id); M.fx.length = 0;
+    ok(await until(() => seen(M, 'tele', 'spore', pu.id), 12000), '傘菇精撒孢子之前有預告（一個圈）');
+    ok(await until(() => M.fx.find(f => f.k === 'zone' && f.zk === 'spore'), 3000), '孢子圈出現'); ok(await until(() => M.me.slow === 1, 2500), '站在孢子裡會變慢');
+    ok(M.mobs.get(pu.id).fl & 2048 || await until(() => M.mobs.get(pu.id).fl & 2048, 800), '撒完孢子在整理傘');
+    M.at(pu.x + 9, pu.z); ok(await until(() => M.me.slow === 0, 6000), '走出來一下就恢復');
+    // 預告中被框住會被打斷
+    let cut = false; for (let n = 0; n < 4 && !cut; n++) { const q = M.mob('puff', 5 + n); if (!q || !q.hp) continue; M.at(q.x + 1.5, q.z); await wait(200); M.s.emit('cb:target', q.id); M.fx.length = 0;
+      if (await until(() => seen(M, 'tele', 'spore', q.id), 12000)) { M.s.emit('cb:cast', { i: 0, m: q.id }); cut = !!(await until(() => M.fx.find(f => f.k === 'mobStop' && f.m === q.id), 1500)); } M.at(q.x + 12, q.z); await wait(300); }
+    ok(cut, '預告中用結界框住，招就放不出來');
+    M.s.emit('cb:target', null); await M.ask('cb:dbg', { lv: 25 });
+    // 露水靈：遠遠地吐水珠
+    const de = M.mob('dew', 3); M.at(de.x + 5, de.z); await wait(200); M.s.emit('cb:target', de.id); M.fx.length = 0;
+    const sh = await until(() => M.fx.find(f => f.k === 'mobAtk' && f.m === de.id && f.shot), 8000), dm = M.mobs.get(de.id); ok(sh && Math.hypot(dm.x - (de.x + 5), dm.z - de.z) > 3, '露水靈站得遠遠的吐水珠');
+    M.s.emit('cb:target', null); M.at(de.x - 30, de.z - 30); await wait(5600);
+    // 老樹公：樹根、毒霧、補血解毒、開花
+    await M.ask('cb:school', 'pm'); await M.ask('cb:slots', ['potion', 'bubble', 'spark', null]); await M.ask('cb:dbg', { lv: 99 }); const keep = setInterval(() => M.s.emit('cb:dbg', { hp: 1 }), 1200);
+    const el = [...M.mobs.values()].find(m => m.kind === 'elder'); M.at(el.x + 5, el.z); await wait(200); M.s.emit('cb:target', el.id); M.fx.length = 0; await until(() => M.hits.some(h => h[0] === el.id), 3000); M.s.emit('cb:target', null);
+    const rt = await until(() => seen(M, 'tele', 'roots'), 9000); ok(rt && rt.spots.length >= 2, '老樹公的樹根有預告：' + (rt && rt.spots.length) + ' 個圈'); ok(await until(() => seen(M, 'mobMove', 'roots'), 2500), '樹根冒出來');
+    await M.ask('cb:dbg', { bossHp: 0.45 }); const fog = await until(() => M.fx.find(f => f.k === 'fog' && f.on), 2500); ok(fog, '半血以後起毒霧'); ok(await until(() => M.me.pois === 1, 3000), '站在霧裡會中毒');
+    M.hits.length = 0; await wait(1500); ok(M.hits.some(h => h[0] === 'p:' + M.s.id && h[2] === 'pois'), '中毒會一直扣血');
+    await M.ask('cb:dbg', { hp: 0.5 }); M.s.emit('cb:cast', { i: 0 }); ok(await until(() => M.me.pois === 0, 1500), '補血招可以解毒'); await wait(2500); ok(M.me.pois === 0, '解毒後有幾秒不會再中');
+    ok(await until(() => M.me.pois === 1, 6000), '時間過了又會中毒');
+    await M.ask('cb:dbg', { bossHp: 0.45 }); const bl = await until(() => seen(M, 'mobMove', 'bloom'), 12000); ok(bl, '老樹公開花');
+    if (bl) { M.hits.length = 0; await wait(1300); ok(M.hits.some(h => h[0] === el.id && h[1] < 0), '花活著的時候老樹公會回血'); M.s.emit('cb:target', bl.m); const b0 = M.mobs.get(bl.m); M.at(b0.x + 1, b0.z);
+      ok(await until(() => M.mobs.get(bl.m).hp === 0, 15000), '花打得掉'); }
+    clearInterval(keep); M.s.close();
+  }
   // 被怪打會扣血，倒下後回到入口
-  const Bp = await player(); await Bp.ask('cb:dbg', { lv: 2 }); const w = [...Bp.mobs.values()].filter(m => m.kind === 'wisp' && m.hp > 0).pop(); Bp.at(w.x + 1, w.z); await wait(200); Bp.s.emit('cb:target', w.id);
+  const Bp = await player(); await Bp.ask('cb:dbg', { lv: 2 }); const w = [...Bp.mobs.values()].filter(m => m.lv >= 50 && m.hp > 0).pop(); Bp.at(w.x + 1, w.z); await wait(200); Bp.s.emit('cb:target', w.id);
   let back = null; Bp.s.on('cb:back', (p) => { back = p; });
   for (let i = 0; i < 100 && !back; i++) await wait(200);
   if (!back) console.log(JSON.stringify([Bp.me, Bp.hits.slice(0, 5), Bp.fx.slice(0, 5), Bp.mobs.get(w.id)]));

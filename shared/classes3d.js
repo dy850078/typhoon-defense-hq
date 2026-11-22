@@ -69,24 +69,33 @@
   // 轉職門檻：10 等選學門；50 等、見習生熟練度練滿（打怪次數）再加收集信物，才能專精
   const GATE = { school: 10, spec: 50, mastery: 1200 };
   // 三轉任務：每個職業要收集的五樣東西 [名字, 要幾個, 哪一種怪會掉]
+  // 第三格是從哪裡掉：moss 苔球、puff 傘菇精、dew 露水靈、deep 霧林深處的怪、boss 霧林老樹公（順序不能動，存檔記的是第幾樣）
   const QUEST = {
-    skater: [['冰晶', 10, 'slime'], ['紫菇粉', 10, 'shroom'], ['石苔', 8, 'golem'], ['夜露', 6, 'wisp'], ['空香水瓶', 1, 'boss']],
-    healer: [['星星碎片', 10, 'slime'], ['軟菇絨', 10, 'shroom'], ['白石粉', 8, 'golem'], ['微光', 6, 'wisp'], ['玻璃燈罩', 1, 'boss']],
-    barrier: [['東方界石', 1, 'slime'], ['南方界石', 1, 'shroom'], ['西方界石', 1, 'golem'], ['北方界石', 1, 'wisp'], ['定界的樁', 1, 'boss']],
-    summoner: [['果凍墨', 10, 'slime'], ['菇皮紙', 10, 'shroom'], ['印章石', 8, 'golem'], ['會發光的緞帶', 6, 'wisp'], ['使魔想要的禮物', 1, 'boss']],
-    alchemist: [['黏稠的膠', 10, 'slime'], ['菇柄關節', 10, 'shroom'], ['石偶的甲片', 8, 'golem'], ['一小團影子', 6, 'wisp'], ['自己最怕的東西', 1, 'boss']],
-    puppeteer: [['果凍線', 10, 'slime'], ['菇絨棉', 10, 'shroom'], ['石針', 8, 'golem'], ['影子剪刀', 6, 'wisp'], ['沒有臉的人偶', 1, 'boss']],
+    skater: [['結霜的苔', 10, 'moss'], ['紫菇粉', 10, 'puff'], ['冰露', 8, 'dew'], ['深霧的香氣', 6, 'deep'], ['空香水瓶', 1, 'boss']],
+    healer: [['星星苔', 10, 'moss'], ['軟菇絨', 10, 'puff'], ['晨露', 8, 'dew'], ['微光', 6, 'deep'], ['玻璃燈罩', 1, 'boss']],
+    barrier: [['東方界石', 1, 'moss'], ['南方界石', 1, 'puff'], ['西方界石', 1, 'dew'], ['北方界石', 1, 'deep'], ['定界的樁', 1, 'boss']],
+    summoner: [['苔墨', 10, 'moss'], ['菇皮紙', 10, 'puff'], ['露水印泥', 8, 'dew'], ['會發光的緞帶', 6, 'deep'], ['使魔想要的禮物', 1, 'boss']],
+    alchemist: [['黏稠的苔膠', 10, 'moss'], ['菇柄關節', 10, 'puff'], ['凝露結晶', 8, 'dew'], ['一小團霧', 6, 'deep'], ['自己最怕的東西', 1, 'boss']],
+    puppeteer: [['苔絲線', 10, 'moss'], ['菇絨棉', 10, 'puff'], ['露珠針', 8, 'dew'], ['霧剪刀', 6, 'deep'], ['沒有臉的人偶', 1, 'boss']],
   };
-  const QUEST_RATE = { slime: 0.45, shroom: 0.45, golem: 0.4, wisp: 0.4, boss: 1 };
+  const QUEST_RATE = { moss: 0.45, puff: 0.45, dew: 0.4, deep: 0.4, boss: 1 };
+  const SRC = { moss: '苔球', puff: '傘菇精', dew: '露水靈', deep: '霧林深處', boss: '霧林老樹公' };
   // 練習場的怪：lv 等級、hp/atk 是同等級玩家的幾倍
   // drop：倒下時掉在地上的東西（p 機率、n 幾個、pool 從哪幾樣裡抽，都是背包裡本來就有的補品和雜物）。不管幾個人打，就掉這一份，先撿先贏
   const DROP_MS = 60000, PICK_R = 2.6;
+  // move：這種怪的招（cd 幾秒一次、tele 預告幾秒、range 離人多近才出招）。出招前一定有預告，預告中被框住、打暈、結冰就會被打斷
   const MOBS = {
-    slime: { name: '果凍', hp: 0.5, atk: 0.35, sp: 2.0, r: 0.6, drop: { p: 0.3, pool: ['water', 'noodle'] } },
-    shroom: { name: '香菇怪', hp: 0.7, atk: 0.45, sp: 2.2, r: 0.7, drop: { p: 0.35, pool: ['veggie', 'noodle', 'seedTomato'] } },
-    golem: { name: '石偶', hp: 1.1, atk: 0.55, sp: 1.8, r: 0.9, drop: { p: 0.45, pool: ['chicken', 'twig', 'seedGuava'] } },
-    wisp: { name: '影子', hp: 0.8, atk: 0.7, sp: 2.8, r: 0.6, drop: { p: 0.45, pool: ['bubbletea', 'seedApple'] } },
-    boss: { name: '大石偶', hp: 9, atk: 0.9, sp: 2.0, r: 1.6, boss: 1, drop: { p: 1, n: 3, pool: ['chicken', 'bubbletea', 'seedPineapple', 'seedApple'] } },
+    // 苔球：縮一下，然後直直滾過去撞人；被普攻打到會彈開一點
+    moss: { name: '苔球', hp: 0.5, atk: 0.35, sp: 2.0, r: 0.6, h: 1.0, bounce: 0.7, move: { k: 'roll', cd: 6, tele: 0.8, range: 7, len: 7, w: 1.1, dmg: 1.7 }, drop: { p: 0.3, pool: ['water', 'noodle'] } },
+    // 傘菇精：撒一圈瞌睡孢子（站在裡面走路和普攻都變慢），撒完要停下來整理傘，這時候受傷加倍
+    puff: { name: '傘菇精', hp: 0.7, atk: 0.45, sp: 2.2, r: 0.7, h: 1.5, move: { k: 'spore', cd: 9, tele: 1.2, range: 3.2, r: 3.4, dur: 4, dmg: 0.45, drowsy: 2.5, tidy: 2.5 }, drop: { p: 0.35, pool: ['veggie', 'noodle', 'seedTomato'] } },
+    // 露水靈：站遠遠的吐水珠，還會幫旁邊受傷的怪補血
+    dew: { name: '露水靈', hp: 0.75, atk: 0.5, sp: 2.4, r: 0.6, h: 1.5, shoot: 6.5, move: { k: 'mend', cd: 7, tele: 1.1, range: 99, r: 8, heal: 0.16 }, drop: { p: 0.45, pool: ['chicken', 'twig', 'seedGuava', 'bubbletea'] } },
+    // 老樹公身上開的花：不會動、不會打人，活著就一直幫老樹公回血
+    bloom: { name: '老樹公的花', hp: 0.55, atk: 0, sp: 0, r: 0.6, h: 1.3, add: 1, heal: 0.012 },
+    // 霧林老樹公：樹根從地下冒出來、開花回血、半血以後整片起毒霧（補血招可以解毒）
+    elder: { name: '霧林老樹公', hp: 10, atk: 0.9, sp: 1.6, r: 1.9, h: 5.6, boss: 1, roots: { cd: 6, tele: 1.3, r: 2.4, dmg: 1.9, far: 16 }, blooms: { cd: 22, n: 2, max: 3 }, fog: { at: 0.5, r: 16, dps: 0.02, clean: 5 },
+      drop: { p: 1, n: 3, pool: ['chicken', 'bubbletea', 'seedPineapple', 'seedApple'] } },
   };
   const clsName = (s) => (s && s.spec ? SPECS[s.spec].name : s && s.school ? '見習生' : '芽');
   const basicOf = (s) => BASIC[s && s.spec ? SPECS[s.spec].basic : s && s.school ? s.school : 'sprout'];
@@ -128,5 +137,5 @@
     return out;
   }
   const keyLabel = (k) => k === 'Space' ? '空白' : String(k || '').replace(/^(Digit|Key)/, '').replace(/^Numpad/, '數');
-  return { SCHOOLS, SPECS, BASIC, SK, FAMILIARS, LEVEL, GATE, QUEST, QUEST_RATE, MOBS, DROP_MS, PICK_R, KEYS, clsName, basicOf, basicKey, learned, electives, cleanSlots, autoSlots, keyOk, cleanKeys, keyLabel };
+  return { SCHOOLS, SPECS, BASIC, SK, FAMILIARS, LEVEL, GATE, QUEST, QUEST_RATE, SRC, MOBS, DROP_MS, PICK_R, KEYS, clsName, basicOf, basicKey, learned, electives, cleanSlots, autoSlots, keyOk, cleanKeys, keyLabel };
 });

@@ -34,20 +34,46 @@ function makeCombat(ctx) {
 
   // ---------- 怪 ----------
   const eyes = (g, y, z, dx, r, col) => [-1, 1].forEach(k => { part(g, sph(r, 8, 6), col || INK, { pos: [dx * k, y, z], scale: [1, 1.25, 0.5], noLine: true, shadow: false, mat: basic(col || INK) }); });
+  // 霧林的怪。g.anim(m, t)：每一格照狀態擺一下樣子（整理傘、蓄力、睡著）
+  const leaf = (g, x, y, z, ry, col, s = 1) => part(g, sph(0.16, 8, 6), col, { pos: [x, y, z], scale: [0.55 * s, 0.22 * s, 1.1 * s], rot: [0.5, ry, 0], noLine: true });
   const MODEL = {
-    slime: (g, lv) => { part(g, sph(0.55, 16, 12), lv > 4 ? '#f2b0a0' : '#8fb7d8', { pos: [0, 0.42, 0], scale: [1, 0.8, 1] }); eyes(g, 0.5, 0.46, 0.19, 0.1); [-1, 1].forEach(k => part(g, sph(0.08, 8, 6), '#f7a8c4', { pos: [0.32 * k, 0.38, 0.4], scale: [1, 0.6, 0.4], noLine: true, shadow: false })); },
-    shroom: (g, lv) => { part(g, sph(0.34), '#f3e9d2', { pos: [0, 0.38, 0], scale: [1, 1.15, 1] }); part(g, sph(0.62), lv > 13 ? '#b56bd0' : '#e58a8a', { pos: [0, 0.82, 0], scale: [1, 0.55, 1] });
-      [[0.25, 0.98, 0.3], [-0.3, 0.95, 0.15], [0.05, 1.08, -0.2]].forEach(p => part(g, sph(0.1, 8, 6), '#fbf7ee', { pos: p, scale: [1, 0.4, 1], noLine: true, shadow: false })); eyes(g, 0.42, 0.31, 0.13, 0.07); },
-    golem: (g, lv) => { const c = lv > 27 ? '#8a8f9c' : '#a8a39a'; part(g, GEO.box, c, { pos: [0, 0.75, 0], scale: [1.0, 0.95, 0.75] }); part(g, GEO.box, c, { pos: [0, 1.45, 0.05], scale: [0.62, 0.5, 0.56] });
-      [-1, 1].forEach(k => part(g, GEO.box, '#8d877d', { pos: [0.72 * k, 0.72, 0], scale: [0.36, 0.8, 0.4] })); eyes(g, 1.47, 0.3, 0.15, 0.09, '#ffd76a'); part(g, sph(0.22, 8, 6), '#7fae6a', { pos: [0.3, 1.26, 0.1], scale: [1.2, 0.4, 1], noLine: true }); },
-    wisp: (g) => { g.float = 0.5; part(g, sph(0.48, 14, 10), '#3d3552', { pos: [0, 0.6, 0], scale: [1, 1.2, 1] }); part(g, new THREE.ConeGeometry(0.4, 0.8, 8), '#3d3552', { pos: [0, 0.05, 0], rot: [Math.PI, 0, 0] }); eyes(g, 0.68, 0.42, 0.16, 0.08, '#d9f1ff'); },
-    boss: (g) => { MODEL.golem(g, 40); part(g, GEO.box, '#7fae6a', { pos: [0, 1.75, 0.05], scale: [0.7, 0.14, 0.62] }); [-1, 1].forEach(k => part(g, new THREE.ConeGeometry(0.14, 0.4, 5), '#e8dcc0', { pos: [0.24 * k, 1.95, 0.05], rot: [0, 0, -0.3 * k] })); g.sc = 2.3; },
+    // 苔球：毛茸茸的綠球，頭上兩片葉子，半瞇著眼（很懶）
+    moss: (g, lv) => { const c = lv > 30 ? '#5f9a8a' : lv > 4 ? '#7fb069' : '#9cc77a', d = lv > 30 ? '#4a7d70' : '#5f9655'; part(g, sph(0.56, 16, 12), c, { pos: [0, 0.5, 0], scale: [1, 0.88, 1] });
+      for (let i = 0; i < 9; i++) { const a = i * 2.4, y = 0.3 + (i % 3) * 0.22; part(g, sph(0.15, 6, 5), d, { pos: [Math.cos(a) * 0.46, y, Math.sin(a) * 0.46 - 0.08], scale: [1, 0.7, 1], noLine: true, shadow: false }); }
+      leaf(g, 0.08, 1.02, 0, 0.5, '#b8dc7a', 1.3); leaf(g, -0.1, 0.98, 0.02, -0.9, '#a5cf6a', 1.1); eyes(g, 0.52, 0.5, 0.18, 0.085); [-1, 1].forEach(k => part(g, GEO.box, c, { pos: [0.18 * k, 0.61, 0.52], scale: [0.2, 0.09, 0.06], noLine: true, shadow: false }));
+      part(g, sph(0.06, 6, 5), INK, { pos: [0, 0.38, 0.53], scale: [1.4, 0.5, 0.4], noLine: true, shadow: false, mat: basic(INK) }); },
+    // 傘菇精：白白的身體撐著一把菇傘；傘另外放一組，整理的時候會歪掉
+    puff: (g, lv) => { const cap = lv > 30 ? '#6a8fd0' : lv > 13 ? '#b56bd0' : '#e58a8a'; part(g, sph(0.33), '#f3e9d2', { pos: [0, 0.36, 0], scale: [1, 1.15, 1] }); eyes(g, 0.42, 0.3, 0.12, 0.07);
+      [-1, 1].forEach(k => part(g, sph(0.07, 6, 5), '#f7a8c4', { pos: [0.2 * k, 0.33, 0.27], scale: [1, 0.6, 0.4], noLine: true, shadow: false })); part(g, sph(0.09, 6, 5), '#f3e9d2', { pos: [0.3, 0.5, 0.12], noLine: true });
+      const u = new THREE.Group(); g.add(u); u.position.set(0.3, 0.5, 0.12); part(u, GEO.cyl, '#c9b48a', { pos: [0, 0.42, 0], scale: [0.035, 0.85, 0.035], noLine: true }); part(u, sph(0.62, 14, 8), cap, { pos: [-0.26, 0.86, -0.1], scale: [1, 0.5, 1] });
+      [[-0.02, 1.1, 0.2], [-0.5, 1.07, 0.05], [-0.22, 1.16, -0.32], [-0.3, 1.02, 0.36]].forEach(p => part(u, sph(0.1, 8, 6), '#fbf7ee', { pos: p, scale: [1, 0.4, 1], noLine: true, shadow: false }));
+      g.anim = (m, t) => { const tidy = m.fl & 2048, cast = m.fl & 4096; u.rotation.z = tidy ? -0.7 + Math.sin(t * 14) * 0.12 : cast ? Math.sin(t * 22) * 0.25 : Math.sin(t * 2 + m.ph) * 0.05; u.rotation.x = tidy ? 0.35 : 0; }; },
+    // 露水靈：半透明的水滴，飄在半空，眼角永遠掛著一滴淚
+    dew: (g, lv) => { g.float = 0.45; const c = lv > 30 ? '#8fb0f0' : '#8fd3ee', mat = new THREE.MeshToonMaterial({ color: c, transparent: true, opacity: 0.82 }); part(g, sph(0.46, 16, 12), c, { pos: [0, 0.5, 0], scale: [1, 1.05, 1], mat }); part(g, GEO.cone, c, { pos: [0, 1.08, 0], scale: [0.3, 0.56, 0.3], mat, noLine: true });
+      part(g, sph(0.13, 8, 6), '#ffffff', { pos: [-0.17, 0.72, 0.32], scale: [1, 1.3, 0.5], noLine: true, shadow: false, mat: basic('#ffffff') }); eyes(g, 0.5, 0.42, 0.16, 0.075); part(g, sph(0.05, 6, 5), '#dff6ff', { pos: [0.25, 0.36, 0.42], scale: [1, 1.5, 0.6], noLine: true, shadow: false, mat: basic('#dff6ff') });
+      g.anim = (m, t) => { g.rotation.z = Math.sin(t * 1.7 + m.ph) * 0.08; }; },
+    // 老樹公的花：一根莖、一圈花瓣、一張笑臉，左右搖
+    bloom: (g) => { part(g, GEO.cyl, '#6fa35c', { pos: [0, 0.4, 0], scale: [0.07, 0.8, 0.07], noLine: true }); leaf(g, 0.2, 0.3, 0, 1.2, '#8cc270', 1.5); leaf(g, -0.2, 0.42, 0, -1.2, '#8cc270', 1.4);
+      const f = new THREE.Group(); g.add(f); f.position.y = 0.95; for (let i = 0; i < 6; i++) { const a = i / 6 * PI2; part(f, sph(0.2, 8, 6), '#f6a8c8', { pos: [Math.cos(a) * 0.3, Math.sin(a) * 0.3, 0], scale: [1, 1, 0.45], noLine: true }); }
+      part(f, sph(0.24, 10, 8), '#ffe27a', { pos: [0, 0, 0.05], scale: [1, 1, 0.6] }); eyes(f, 0.03, 0.2, 0.08, 0.04); g.anim = (m, t) => { f.rotation.z = Math.sin(t * 3 + m.ph) * 0.25; g.rotation.z = Math.sin(t * 3 + m.ph) * 0.1; }; },
+    // 霧林老樹公：粗樹幹、一大蓬樹冠、白鬍子、粗眉毛，頭上戴著一圈花（牠的假髮）；常常講到一半就睡著
+    elder: (g) => { g.sc = 1.3; const bark = '#8a6a4a', dark = '#6f5238'; part(g, GEO.cyl, bark, { pos: [0, 1.3, 0], scale: [0.95, 2.6, 0.9] }); part(g, GEO.cyl, bark, { pos: [0, 0.3, 0], scale: [1.25, 0.6, 1.2] });
+      for (let i = 0; i < 6; i++) { const a = i / 6 * PI2 + 0.4; part(g, GEO.cone, dark, { pos: [Math.cos(a) * 1.25, 0.16, Math.sin(a) * 1.2], scale: [0.3, 1.1, 0.3], rot: [Math.sin(a) * -1.25, 0, Math.cos(a) * 1.25], noLine: true }); }
+      [[0, 3.3, 0, 1.75], [1.15, 2.95, 0.2, 1.1], [-1.2, 3.0, -0.1, 1.15], [0.2, 3.1, -1.0, 1.1], [-0.3, 4.15, 0.1, 1.05]].forEach((p, i) => part(g, sph(1, 14, 10), i % 2 ? '#6fa35c' : '#7fb069', { pos: [p[0], p[1], p[2]], scale: [p[3], p[3] * 0.8, p[3]] }));
+      const wig = new THREE.Group(); g.add(wig); wig.position.y = 5.05; for (let i = 0; i < 7; i++) { const a = i / 7 * PI2, f = new THREE.Group(); wig.add(f); f.position.set(Math.cos(a) * 0.62, Math.sin(i * 1.3) * 0.06, Math.sin(a) * 0.62); f.scale.setScalar(1.5);
+        for (let j = 0; j < 5; j++) { const b = j / 5 * PI2; part(f, sph(0.13, 6, 5), i % 2 ? '#f6a8c8' : '#ffd0e0', { pos: [Math.cos(b) * 0.17, 0, Math.sin(b) * 0.17], scale: [1, 0.5, 1], noLine: true, shadow: false }); } part(f, sph(0.11, 6, 5), '#ffe27a', { pos: [0, 0.04, 0], noLine: true, shadow: false }); }
+      const lids = []; [-1, 1].forEach(k => { part(g, sph(0.15, 10, 8), '#fbf7ee', { pos: [0.36 * k, 1.9, 0.86], scale: [1, 1, 0.5], noLine: true, shadow: false, mat: basic('#fbf7ee') }); part(g, sph(0.07, 8, 6), INK, { pos: [0.36 * k, 1.88, 0.94], scale: [1, 1, 0.5], noLine: true, shadow: false, mat: basic(INK) });
+        lids.push(part(g, sph(0.17, 10, 8), bark, { pos: [0.36 * k, 1.97, 0.9], scale: [1.05, 0.6, 0.5], noLine: true, shadow: false })); part(g, sph(0.2, 8, 6), '#fbf7ee', { pos: [0.38 * k, 2.2, 0.86], scale: [1.3, 0.36, 0.5], rot: [0, 0, -0.3 * k], noLine: true, shadow: false }); });
+      part(g, sph(0.17, 8, 6), dark, { pos: [0, 1.62, 0.98], scale: [0.8, 1.1, 0.8], noLine: true }); part(g, sph(0.5, 12, 8), '#fbf7ee', { pos: [0, 1.0, 0.86], scale: [1, 1.25, 0.45] }); [-1, 1].forEach(k => part(g, sph(0.3, 10, 8), '#fbf7ee', { pos: [0.36 * k, 1.22, 0.84], scale: [1, 1.1, 0.45], noLine: true }));
+      const arms = [-1, 1].map(k => { const a = new THREE.Group(); g.add(a); a.position.set(0.9 * k, 1.9, 0); part(a, GEO.cyl, bark, { pos: [0.55 * k, 0.2, 0], scale: [0.16, 1.3, 0.16], rot: [0, 0, -1.1 * k] }); part(a, sph(0.42, 10, 8), '#7fb069', { pos: [1.2 * k, 0.5, 0], scale: [1, 0.8, 1] }); return a; });
+      g.anim = (m, t) => { const busy = m.rootT > 0, nod = busy ? 0 : Math.max(0, Math.sin(t * 0.5 + 1)) > 0.86 ? 1 : 0; lids.forEach(l => { l.position.y = 1.97 - (nod ? 0.09 : 0); }); g.rotation.x = nod ? 0.06 : 0; wig.rotation.y = t * 0.3; wig.position.y = 5.05 + (m.hurtT > 0 ? 0.3 : 0);
+        arms.forEach((a, i) => { a.rotation.z = (i ? 1 : -1) * (busy ? -0.9 + Math.sin(t * 18) * 0.15 : Math.sin(t * 1.2 + i) * 0.08); }); }; },
   };
   const mkBar = () => { const b = document.createElement('div'), i = document.createElement('i'), n = document.createElement('span'); b.className = 'cb-bar'; b.append(n, i); b.hidden = true; LAB.appendChild(b); return { b, i, n }; };
   function addMob(d) {
     const g = new THREE.Group(), body = new THREE.Group(); g.add(body); MODEL[d.kind](body, d.lv); const sc = body.sc || 1; body.scale.setScalar(sc); G.add(g);
-    const h = (d.kind === 'golem' ? 1.8 : d.kind === 'shroom' ? 1.25 : 1.1) * sc, m = { id: d.id, kind: d.kind, lv: d.lv, x: d.x, z: d.z, tx: d.x, tz: d.z, hp: d.hp, max: d.max, fl: d.hp ? 0 : 256, g, body, h, sc, ph: Math.random() * 6, bar: mkBar(), fxo: {}, show: 0, f: 0, hurtT: 0 };
-    m.bar.n.textContent = 'Lv.' + d.lv + ' ' + C3.MOBS[d.kind].name; g.position.set(d.x, FY(d.x, d.z), d.z); g.visible = false; MOBS.set(d.id, m);
+    const h = (C3.MOBS[d.kind].h || 1.1) * sc, m = { id: d.id, kind: d.kind, lv: d.lv, x: d.x, z: d.z, tx: d.x, tz: d.z, hp: d.hp, max: d.max, fl: d.hp ? 0 : 256, g, body, h, sc, ph: Math.random() * 6, bar: mkBar(), fxo: {}, show: 0, f: 0, hurtT: 0 };
+    m.bar.n.textContent = C3.MOBS[d.kind].add ? C3.MOBS[d.kind].name : 'Lv.' + d.lv + ' ' + C3.MOBS[d.kind].name; g.position.set(d.x, FY(d.x, d.z), d.z); g.visible = false; MOBS.set(d.id, m);
   }
   // 掛在怪身上的狀態：框住、結冰、中毒、暈、被關進匣子
   const STATE = {
@@ -231,6 +257,22 @@ function makeCombat(ctx) {
         if (Math.random() < 0.3) rise(z.x + (Math.random() - 0.5) * R, z.z2, ['#ffe27a', '#ff9ec4', '#bfe9ff'][Math.random() * 3 | 0], 1, R * 0.5, 3.2, 0.08, 0.9, GEO.star); };
       g.curtain = true; return g; },
   };
+  // 瞌睡孢子：一圈淡黃色的霧，裡面一顆一顆孢子慢慢飄
+  ZONE.spore = (z) => { const g = new THREE.Group(), d = flat(mesh(GEO.disc, bm('#f3e08a', 0.28), g)); d.scale.setScalar(z.r); d.position.y = 0.05; const r = flat(mesh(GEO.ring, bm('#d9b84a', 0.8), g)); r.scale.setScalar(z.r); r.position.y = 0.06;
+    g.tick = (t, k) => { d.material.opacity = 0.28 * (k > 0.8 ? (1 - k) * 5 : 1); if (Math.random() < 0.35) rise(z.x, z.z2, '#f6e9a0', 1, z.r * 0.9, 1.6, 0.09, 1.1); }; return g; };
+  // 怪出招前的預告：地上一塊慢慢填滿的橘紅色（圓的或長條的），填滿就是生效
+  const warnMat = (op) => new THREE.MeshBasicMaterial({ color: '#ff7a5c', transparent: true, opacity: op, depthWrite: false, side: THREE.DoubleSide });
+  const warn = (x, z, r, dur) => { const g = new THREE.Group(); G.add(g); g.position.set(x, FY(x, z) + 0.07, z); const a = flat(mesh(GEO.disc, warnMat(0.16), g)), b = flat(mesh(GEO.disc, warnMat(0.42), g)), c = flat(mesh(GEO.ring, warnMat(0.9), g)); a.scale.setScalar(r); c.scale.setScalar(r);
+    return fx(g, dur, (k) => { b.scale.setScalar(Math.max(0.01, r * k)); }, () => { [a, b, c].forEach(o => o.material.dispose()); }); };
+  const warnLine = (x, z, x2, z2, w, dur) => { const g = new THREE.Group(); G.add(g); const l = Math.hypot(x2 - x, z2 - z); g.position.set(x, FY(x, z) + 0.07, z); g.rotation.y = Math.atan2(x2 - x, z2 - z); const mk = (op) => { const m = mesh(GEO.box, warnMat(op), g); m.scale.set(w * 2, 0.02, l); m.position.z = l / 2; return m; }; const a = mk(0.16), b = mk(0.42);
+    return fx(g, dur, (k) => { b.scale.z = Math.max(0.01, l * k); b.position.z = l * k / 2; }, () => { [a, b].forEach(o => o.material.dispose()); }); };
+  // 樹根：從地下竄出來的一叢尖刺
+  const rootsUp = (x, z, r) => { const g = new THREE.Group(); G.add(g); g.position.set(x, FY(x, z), z); for (let i = 0; i < 6; i++) { const a = i / 6 * PI2 + Math.random(), d = i ? r * (0.3 + Math.random() * 0.5) : 0, c = mesh(GEO.cone, bm(i % 2 ? '#8a6a4a' : '#6f5238'), g); c.scale.set(0.3, 1.6 + Math.random() * 1.2, 0.3); c.position.set(Math.cos(a) * d, 0, Math.sin(a) * d); c.rotation.set((Math.random() - 0.5) * 0.5, 0, (Math.random() - 0.5) * 0.5); c.h = c.scale.y; }
+    burst(x, FY(x, z) + 0.3, z, '#8a6a4a', 8, 3, 0.12, 0.5); return fx(g, 1.1, (k) => { const u = k < 0.15 ? k / 0.15 : k > 0.7 ? (1 - k) / 0.3 : 1; g.children.forEach(c => { c.scale.y = Math.max(0.01, c.h * u); c.position.y = c.scale.y / 2; }); }); };
+  // 老樹公的毒霧：整片紫綠色的霧，補血招可以解毒
+  let FOG = null; const setFog = (e) => { if (FOG) { G.remove(FOG.g); FOG = null; } if (!e.on) return; const g = new THREE.Group(); G.add(g); g.position.set(e.x, FY(e.x, e.z), e.z); const d = flat(mesh(GEO.disc, bm('#9a7fc8', 0.2), g)); d.scale.setScalar(e.r); d.position.y = 0.09;
+    const puffs = []; for (let i = 0; i < 26; i++) { const a = Math.random() * PI2, r = Math.sqrt(Math.random()) * e.r, m = mesh(GEO.sph, bm(i % 3 ? '#b59ad8' : '#9fc08a', 0.22), g); m.scale.set(2 + Math.random() * 2, 0.7 + Math.random() * 0.6, 2 + Math.random() * 2); m.position.set(Math.cos(a) * r, 0.5 + Math.random() * 1.2, Math.sin(a) * r); m.ph = Math.random() * 6; m.x0 = m.position.x; puffs.push(m); }
+    FOG = { g, puffs, x: e.x, z: e.z, r: e.r }; };
   const addZone = (z) => { if (ZONES.has(z.z) || !ZONE[z.zk]) return; const g = ZONE[z.zk](z); g.position.set(z.x, FY(z.x, z.z2), z.z2); G.add(g); ZONES.set(z.z, { g, z, t: 0 }); };
   const endZone = (id, f) => { const o = ZONES.get(id); if (!o) return; G.remove(o.g); ZONES.delete(id); };
 
@@ -279,15 +321,26 @@ function makeCombat(ctx) {
         setTimeout(() => { burst(e.x, gy + 2.5, e.z2, '#ffe27a', 14, 7, 0.16, 0.9, GEO.star); burst(e.x, gy + 2.5, e.z2, '#ff9ec4', 12, 6, 0.14, 0.9, GEO.box); burst(e.x, gy + 2.5, e.z2, '#bfe9ff', 12, 6, 0.14, 0.9, GEO.box); SHAKE = 0.35; }, 240);
         CUT = 0.3; [-1, 1].forEach(k => { const b = mesh(GEO.box, bm('#f4f1ea')); fx(b, 0.3, (kk, m) => { m.position.set(e.x, FY(e.x, e.z2) + 5.2, e.z2); m.scale.set(e.r * 2.2 * Math.min(1, kk * 4), 0.07, 0.3); m.rotation.set(0, 0.4, k * (0.5 - kk * 0.5)); }); }); ring(e.x, e.z2, e.r, '#ffe9a8', 0.6, 0.05); } },
     die: (e) => { const m = MOBS.get(e.m); if (m) { burst(m.x, FY(m.x, m.z) + m.h * 0.5, m.z, '#ffffff', 8, 2.5, 0.16, 0.5); if (TARGET === m.id) setTarget(null, true); } },
-    mobAtk: (e) => { const m = MOBS.get(e.m); if (m) m.atkT = 0.3; },
+    mobAtk: (e) => { const m = MOBS.get(e.m); if (!m) return; m.atkT = 0.3; if (e.shot) { const p = posOf(e.to); if (p) shot({ x: m.x, y: FY(m.x, m.z) + m.h * 0.7, z: m.z }, head(p, 1.1), '#8fd3ee', 0.28, 0.16, GEO.sph, 0.5, () => burst(p.x, FY(p.x, p.z) + 1.1, p.z, '#bfe9ff', 5, 1.6, 0.08, 0.35)); } },
+    tele: (e) => { const m = MOBS.get(e.m); if (m) { m.castT = e.dur; if (e.x2 != null) m.f = Math.atan2(e.x2 - m.x, e.z2 - m.z); }
+      if (e.mk === 'roll') warnLine(e.x, e.z, e.x2, e.z2, e.w, e.dur); else if (e.mk === 'spore') warn(e.x, e.z, e.r, e.dur); else if (e.mk === 'roots') { e.spots.forEach(s => warn(s[0], s[1], e.r, e.dur)); if (m) m.rootT = e.dur + 0.4; }
+      else if (e.mk === 'mend' && m) { const o = MOBS.get(e.to); ring(m.x, m.z, 1.2, '#9fe7a4', e.dur, 0.6); if (o) fx(mesh(GEO.sph, bm('#9fe7a4', 0.9)), e.dur, (k, b) => { b.position.set(m.x + (o.x - m.x) * k, FY(m.x, m.z) + 1 + Math.sin(k * Math.PI) * 1.2, m.z + (o.z - m.z) * k); b.scale.setScalar(0.14 + k * 0.1); }); } },
+    mobMove: (e) => { const m = MOBS.get(e.m);
+      if (e.mk === 'roots') { e.spots.forEach(s => rootsUp(s[0], s[1], e.r)); SHAKE = Math.max(SHAKE, 0.2); }
+      else if (e.mk === 'roll' && m) { m.rollT = 0.45; }
+      else if (e.mk === 'spore' && m) { burst(m.x, FY(m.x, m.z) + 1.2, m.z, '#f6e9a0', 14, 3.4, 0.1, 0.7); }
+      else if (e.mk === 'mend') { const o = MOBS.get(e.to); if (o) rise(o.x, o.z, '#9fe7a4', 8, 0.7, 2, 0.1, 0.8); }
+      else if (e.mk === 'bloom') { ring(e.x, e.z, 1.4, '#f6a8c8', 0.6); rise(e.x, e.z, '#ffd0e0', 8, 0.6, 2, 0.1, 0.8); } },
+    mobStop: (e) => { const m = MOBS.get(e.m); if (!m) return; m.castT = 0; burst(m.x, FY(m.x, m.z) + m.h, m.z, '#ffd76a', 6, 2, 0.1, 0.5, GEO.star); },
+    fog: (e) => setFog(e),
     lvup: (e, p) => { ring(p.x, p.z, 2.4, '#ffd76a', 0.9); rise(p.x, p.z, '#ffe27a', 16, 1, 3.4, 0.14, 1.2, GEO.star); num(p.x, FY(p.x, p.z) + 2.8, p.z, 'Lv.' + e.lv, 'lv'); },
     promote: (e, p) => { circle(p.x, p.z, 3, '#ffe9a8', 1.6); for (let i = 0; i < 3; i++) setTimeout(() => { const q = posOf(e.id) || p; ring(q.x, q.z, 3 + i, '#ffd76a', 0.9); rise(q.x, q.z, '#ffe27a', 14, 1.6, 4, 0.15, 1.3, GEO.star); }, i * 250); },
     down: (e, p) => { ring(p.x, p.z, 1.6, '#9a96a0', 0.8); },
   };
   let SPIN = 0, SHAKE = 0, CUT = 0; const NEEDLE = [];
-  function onFx(e) { const p = e.id ? posOf(e.id) : null; if (e.id && !p) return; if (S.lob) return; const k = e.k === 'pact2' ? 'pact2' : e.k; if (ON[k]) ON[k](e, p); }
-  function onHits(list) { if (S.lob) return; list.forEach(([id, d, kind]) => { if (id[0] === 'p') { const p = posOf(id.slice(2)); if (p) num(p.x, FY(p.x, p.z) + 2.4, p.z, d < 0 ? '+' + (-d) : String(d), d < 0 ? 'heal' : 'ow'); }
-    else { const m = MOBS.get(id); if (m && m.g.visible) num(m.x, FY(m.x, m.z) + m.h + 0.4, m.z, String(d), kind === 'dot' || kind === 'poison' ? 'poison' : kind === 'link' ? 'link' : ''); } }); }
+  function onFx(e) { if (e.k === 'fog') return setFog(e); const p = e.id ? posOf(e.id) : null; if (e.id && !p) return; if (S.lob) return; const k = e.k === 'pact2' ? 'pact2' : e.k; if (ON[k]) ON[k](e, p); }
+  function onHits(list) { if (S.lob) return; list.forEach(([id, d, kind]) => { if (id[0] === 'p') { const p = posOf(id.slice(2)); if (p) num(p.x, FY(p.x, p.z) + 2.4, p.z, d < 0 ? '+' + (-d) : String(d), d < 0 ? 'heal' : kind === 'pois' ? 'poison' : 'ow'); }
+    else { const m = MOBS.get(id); if (m && m.g.visible) num(m.x, FY(m.x, m.z) + m.h + 0.4, m.z, d < 0 ? '+' + (-d) : String(d), d < 0 ? 'heal' : kind === 'dot' || kind === 'poison' ? 'poison' : kind === 'link' ? 'link' : ''); } }); }
 
   // ---------- 每一格畫面 ----------
   function tick(dt) {
@@ -308,9 +361,12 @@ function makeCombat(ctx) {
       m.lift = (m.lift || 0) + ((lift ? 2.6 : 0) - (m.lift || 0)) * Math.min(1, dt * (lift ? 5 : 14));
       // 被提線的怪：像木偶一樣一頓一頓的
       const step = charm || lift ? Math.floor(t * 6) : 0, jerk = charm ? (step % 2 ? 0.28 : 0) : 0, tilt = charm || lift ? ((step * 37) % 7 - 3) * 0.08 : 0;
-      const hop = held ? 0 : m.kind === 'wisp' ? 0.5 + Math.sin(m.ph * 2) * 0.15 : Math.abs(Math.sin(m.ph * (d > 0.05 ? 6 : 2.4))) * (d > 0.05 ? 0.3 : 0.1);
+      const stay = C3.MOBS[m.kind].boss || C3.MOBS[m.kind].add, hop = held || stay ? 0 : m.body.float ? m.body.float + Math.sin(m.ph * 2) * 0.15 : Math.abs(Math.sin(m.ph * (d > 0.05 ? 6 : 2.4))) * (d > 0.05 ? 0.3 : 0.1);
       m.g.position.set(m.x, FY(m.x, m.z) + (charm ? jerk : hop) + m.lift + (m.air || 0), m.z); m.g.rotation.set(lift ? Math.max(0, Math.sin(t * 5 + m.x)) * 0.55 : 0, lift ? 0 : m.f, tilt);
       const sq = m.hurtT > 0 ? 1 + m.hurtT * 1.2 : 1, at = m.atkT > 0 ? 1 + Math.sin((0.3 - m.atkT) / 0.3 * Math.PI) * 0.25 : 1; m.body.scale.set(m.sc * sq * m.show, m.sc * (2 - sq) * at * m.show, m.sc * sq * m.show);
+      if (m.castT > 0) m.castT -= dt; if (m.rootT > 0) m.rootT -= dt; if (m.rollT > 0) { m.rollT -= dt; m.body.rotation.x += dt * 22; } else if (m.kind === 'moss') m.body.rotation.x = 0;
+      if (m.castT > 0 && !C3.MOBS[m.kind].boss) { const q = 1 + Math.sin(t * 30) * 0.06; m.body.scale.set(m.sc * 1.12 * q, m.sc * 0.8, m.sc * 1.12 * q); }
+      if (m.body.anim) m.body.anim(m, t);
       Object.values(m.fxo).forEach(o => { if (o.spin) o.rotation.y = t * o.spin; });
       const showBar = !dead && (m.hp < m.max || TARGET === m.id); m.bar.b.hidden = !showBar; if (showBar) { put2d(m.bar.b, m.x, FY(m.x, m.z) + m.h + 0.35 + m.lift, m.z); m.bar.i.style.width = Math.max(0, m.hp / m.max * 100).toFixed(0) + '%'; m.bar.b.classList.toggle('on', TARGET === m.id); }
       // 線：被縫住、被提線的怪連到操偶師的手上；被提線的有三條（頭和兩邊）
@@ -332,6 +388,7 @@ function makeCombat(ctx) {
       [-1, 1].forEach(sd => [-1, 1].forEach(j => { const a = hand(p, sd, id), sw = Math.sin(t * 2.2 + sd + j) * 0.04, x = a[0] + cf * j * 0.04, z = a[2] - sf * j * 0.04; drawThread(x, a[1], z, x + sw, a[1] - 0.3 - (j > 0 ? 0.08 : 0), z + sw * 0.5, 0, 0.018); })); });
     for (let i = thN; i < THREADS.length; i++) THREADS[i].forEach(s => { s.visible = false; });
     if (CUT > 0) CUT -= dt;
+    if (FOG) FOG.puffs.forEach(m => { m.position.x = m.x0 + Math.sin(t * 0.4 + m.ph) * 1.5; m.material.opacity = 0.22; });
     // 持續的東西
     ZONES.forEach((o, id) => { o.t += dt; const dur = o.dur || o.z.dur || 1; if (o.g.tick) o.g.tick(t, Math.min(1, o.t / dur)); if (o.t > dur + 1.5) endZone(id); });
     // 使魔和機甲跟著主人
@@ -358,7 +415,7 @@ function makeCombat(ctx) {
   return {
     tick, tap, shake: () => (SHAKE > 0 ? SHAKE : 0),
     // 連線那邊接過來的事件
-    init: (d, id, send) => { MYID = id; SEND = send; MEV = d.me; MOBS.forEach(m => { G.remove(m.g); m.bar.b.remove(); }); MOBS.clear(); [...WHO.keys()].forEach(dropWho); d.mobs.forEach(addMob); d.who.forEach(setWho); [...DROPS.keys()].forEach(id => dropGone({ id })); (d.drops || []).forEach(addDrop); HOLD = false; TARGET = null; onChange(); },
+    init: (d, id, send) => { MYID = id; SEND = send; MEV = d.me; MOBS.forEach(m => { G.remove(m.g); m.bar.b.remove(); }); MOBS.clear(); [...WHO.keys()].forEach(dropWho); d.mobs.forEach(addMob); d.who.forEach(setWho); [...DROPS.keys()].forEach(id => dropGone({ id })); (d.drops || []).forEach(addDrop); setFog(d.fog || {}); HOLD = false; TARGET = null; onChange(); },
     me: (d) => { const was = MEV; MEV = d; if (d.dead && TARGET) setTarget(null, true); onChange(was); },
     famPreview: (x, z) => [0, 1, 2].map(i => { const g = new THREE.Group(); FAM[i](g); G.add(g); g.position.set(x + (i - 1) * 1.9, FY(x, z), z); if (g.anim) g.anim(1); return g; }),   // 測試拍照用
     addDrop, dropGone, late, mobs: (l) => l.forEach(setMob), who: setWho, drop: dropWho, fx: onFx, hits: onHits,
@@ -369,6 +426,8 @@ function makeCombat(ctx) {
       if (s.aim && !m) { const n = nearest(s.range + 4); if (n) { m = n.id; setTarget(m); } else return 'far'; }
       SEND('cb:cast', { i, m }); return 'ok'; },
     onChange: (fn) => { onChange = fn; }, onToast: (fn) => { onToast = fn; },
-    debug: () => ({ mobs: [...MOBS.values()].map(m => ({ id: m.id, kind: m.kind, lv: m.lv, x: m.x, z: m.z, hp: m.hp, fl: m.fl, tied: m.tied })), who: [...WHO.values()].map(w => ({ id: w.id, fam: w.fam, mech: w.mech, spec: w.spec })), threads: thN, drops: [...DROPS.values()].map(o => ({ id: o.id, k: o.k, x: o.x, z: o.z })), fx: FX.length, zones: [...ZONES.keys()] }),
+    slow: () => (MEV && MEV.slow ? 0.55 : 1),
+    faceCam: () => MOBS.forEach(m => { m.f = Math.atan2(camera.position.x - m.x, camera.position.z - m.z); }),   // 測試拍照用：怪全部轉過來看鏡頭
+    debug: () => ({ fog: !!FOG, mobs: [...MOBS.values()].map(m => ({ id: m.id, kind: m.kind, lv: m.lv, x: m.x, z: m.z, hp: m.hp, max: m.max, fl: m.fl, tied: m.tied })), who: [...WHO.values()].map(w => ({ id: w.id, fam: w.fam, mech: w.mech, spec: w.spec })), threads: thN, drops: [...DROPS.values()].map(o => ({ id: o.id, k: o.k, x: o.x, z: o.z })), fx: FX.length, zones: [...ZONES.keys()] }),
   };
 }

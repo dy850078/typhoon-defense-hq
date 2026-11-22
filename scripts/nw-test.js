@@ -503,13 +503,13 @@ async function main() {
     const rest = async () => { await pg.evaluate(() => window.HQ_NEWWORLD.debugPlace(8, 14)); await pg.waitForTimeout(400); await ask('cb:dbg', { lv: 60 }); };
     // 找一隻還活著、血最多的怪，站到牠旁邊並選牠
     let reach = 3.2;
-    const aim = async (kind) => pg.evaluate(([k, reach]) => { const NW = window.HQ_NEWWORLD, m = NW.combat.debug().mobs.filter(x => (k ? x.kind === k : x.kind !== 'boss') && !(x.fl & 256)).sort((a, b) => b.hp - a.hp)[0]; NW.debugPlace(m.x - reach, m.z + 1.5); NW.combat.setTarget(m.id); return m; }, [kind, reach]);
+    const aim = async (kind) => pg.evaluate(([k, reach]) => { const NW = window.HQ_NEWWORLD, m = NW.combat.debug().mobs.filter(x => (k ? x.kind === k && x.lv <= 30 : x.kind !== 'elder' && x.kind !== 'bloom') && !(x.fl & 256)).sort((a, b) => b.hp - a.hp)[0]; NW.debugPlace(m.x - reach, m.z + 1.5); NW.combat.setTarget(m.id); return m; }, [kind, reach]);
     await pg.waitForFunction(() => window.HQ_NEWWORLD.combat && window.HQ_NEWWORLD.combat.view(), null, { timeout: 20000 });
     let h = await hud();
     ok(h.name === 'Lv.1 芽' && h.sk.join() === '小火花,歪歪瞬移,空的,空的', '一進來是 1 等的芽，帶著兩招：' + h.name + ' / ' + h.sk);
     ok((await dbg()).mobs.length > 30, '練習場有怪');
     await zoomIn(pg);
-    const m0 = await aim('slime'); await pg.waitForTimeout(2500); await shot('1-sprout');
+    const m0 = await aim('moss'); await pg.waitForTimeout(2500); await shot('1-sprout');
     h = await hud(); ok(h.nums > 0, '選了怪會自動普攻，看得到傷害數字');
     await pg.locator('.cb-sk').nth(0).dispatchEvent('pointerdown'); await pg.waitForTimeout(450); await shot('2-spark');
     ok((await view()).cd.spark, '按技能鈕放得出小火花，進入冷卻');
@@ -613,7 +613,7 @@ async function main() {
     await pg.waitForFunction(() => window.HQ_NEWWORLD.combat && window.HQ_NEWWORLD.combat.view(), null, { timeout: 20000 });
     await ask('cb:dbg', { lv: 60 }); await ask('cb:school', 'ae'); await ask('cb:dbg', { m: C3.GATE.mastery }); await ask('cb:quest', 'puppeteer'); await ask('cb:dbg', { quest: 1 }); await ask('cb:spec', 'puppeteer');
     await ask('cb:slots', ['stitch', 'string', 'curtain', 'spark']); await ask('cb:dbg', { lv: 6 }); await zoomIn(pg);   // 等級調低，怪才不會一下就倒
-    const aim = (reach) => pg.evaluate((reach) => { const NW = window.HQ_NEWWORLD, m = NW.combat.debug().mobs.filter(x => x.kind === 'slime' && !(x.fl & 256)).sort((a, b) => a.x - b.x)[0]; NW.debugPlace(m.x + reach, m.z + 0.5); NW.combat.setTarget(m.id); return m; }, reach);
+    const aim = (reach) => pg.evaluate((reach) => { const NW = window.HQ_NEWWORLD, m = NW.combat.debug().mobs.filter(x => x.kind === 'moss' && !(x.fl & 256)).sort((a, b) => a.x - b.x)[0]; NW.debugPlace(m.x + reach, m.z + 0.5); NW.combat.setTarget(m.id); return m; }, reach);
     await pg.evaluate(() => window.HQ_NEWWORLD.debugPlace(19, 14)); await pg.waitForTimeout(600); await shot('1-idle');
     ok((await view()).spec === 'puppeteer' && (await dbg()).threads === 4, '操偶師平常兩隻手各垂著兩條短線');
     await aim(4.5); await pg.waitForTimeout(600); await pg.locator('.cb-sk').nth(1).dispatchEvent('pointerdown'); await pg.waitForTimeout(700);
@@ -661,6 +661,36 @@ async function main() {
     ok(!pa.errors.length && !pb.errors.length, '沒有頁面錯誤' + [...pa.errors, ...pb.errors].slice(0, 3).join(' / '));
     await pa.context().close(); await pb.context().close();
   };
+  // 霧林的怪：每一種拍一張，再拍出招的樣子（預告圈、孢子、樹根、毒霧、花）
+  const mobsShow = async () => {
+    console.log('mobs');
+    const pg = await open(await account({ name: '小林' }), false), shot = (n) => pg.screenshot({ path: path.join(OUT, 'mobs-' + n + '.png') });
+    const ask = (ev, arg) => pg.evaluate(([e, a]) => window.NW_SK.ask(e, a), [ev, arg]), dbg = () => pg.evaluate(() => window.HQ_NEWWORLD.combat.debug()), view = () => pg.evaluate(() => window.HQ_NEWWORLD.combat.view());
+    await pg.waitForFunction(() => window.HQ_NEWWORLD.combat && window.HQ_NEWWORLD.combat.view(), null, { timeout: 20000 });
+    const d0 = await dbg(), kinds = [...new Set(d0.mobs.map(m => m.kind))].sort().join(); ok(kinds === 'bloom,dew,elder,moss,puff', '霧林的怪：' + kinds);
+    const by = (k, deep) => d0.mobs.filter(m => m.kind === k && (deep ? m.lv > 30 : m.lv <= 30)).sort((a, b) => b.lv - a.lv)[0];
+    const go = async (m, dx, dz, tgt) => { await pg.evaluate(([id, dx, dz, tgt]) => { const NW = window.HQ_NEWWORLD, m = NW.combat.debug().mobs.find(x => x.id === id); NW.debugPlace(m.x + dx, m.z + dz); NW.combat.setTarget(tgt ? id : null); }, [m.id, dx, dz, !!tgt]); await pg.waitForTimeout(700); await pg.evaluate(() => window.HQ_NEWWORLD.combat.faceCam()); await pg.waitForTimeout(250); };
+    await ask('cb:dbg', { lv: 99 }); await zoomIn(pg);
+    for (const k of ['moss', 'puff', 'dew']) { await go(by(k), 2.6, 1.2); await shot('1-' + k); }
+    await zoomIn(pg); await go(by('moss', true), 2.6, 1.2); await shot('1-deep');
+    const el = d0.mobs.find(m => m.kind === 'elder'); await go(el, 4.5, 5); await shot('2-elder');
+    // 出招：等級調低讓怪活久一點
+    await ask('cb:dbg', { lv: 14 }); const pu = by('puff'); await go(pu, 1.6, 0.4, true);
+    const flag = (id, f) => pg.waitForFunction(([id, f]) => { const m = window.HQ_NEWWORLD.combat.debug().mobs.find(x => x.id === id); return m && (m.fl & f); }, [pu.id, f], { timeout: 15000 }).then(() => true).catch(() => false);
+    ok(await flag(pu.id, 4096), '傘菇精開始蓄力（地上有預告圈）');
+    ok((await dbg()).zones.length >= 1 || await pg.waitForFunction(() => window.HQ_NEWWORLD.combat.debug().zones.length >= 1, null, { timeout: 4000 }).then(() => true).catch(() => false), '孢子圈畫出來了'); ok(await pg.waitForFunction(() => window.HQ_NEWWORLD.combat.view().slow === 1, null, { timeout: 4000 }).then(() => true).catch(() => false), '站在孢子裡：畫面收到變慢'); await shot('4-spore');
+    const pu2 = d0.mobs.filter(m => m.kind === 'puff' && m.lv <= 30 && m.id !== pu.id).sort((a, b) => b.lv - a.lv)[0]; await go(pu2, 1.6, 0.4, true); await pg.waitForFunction(([id]) => { const m = window.HQ_NEWWORLD.combat.debug().mobs.find(x => x.id === id); return m && (m.fl & 4096); }, [pu2.id], { timeout: 15000 }).catch(() => {}); await shot('3-spore-warn');
+    // 老樹公：樹根、毒霧、花
+    await pg.evaluate(() => { const NW = window.HQ_NEWWORLD; NW.combat.setTarget(null); NW.debugPlace(8, 14); }); await pg.waitForTimeout(5600); await ask('cb:dbg', { lv: 99 });
+    const keep = setInterval(() => ask('cb:dbg', { hp: 1 }).catch(() => {}), 1500);
+    await go(el, 5, 5.5, true); await pg.waitForTimeout(1500); await pg.evaluate(() => window.HQ_NEWWORLD.combat.setTarget(null)); await ask('cb:dbg', { bossHp: 0.45 });
+    ok(await pg.waitForFunction(() => window.HQ_NEWWORLD.combat.debug().fog, null, { timeout: 5000 }).then(() => true).catch(() => false), '毒霧畫出來了');
+    ok(await pg.waitForFunction(() => window.HQ_NEWWORLD.combat.debug().mobs.some(m => m.kind === 'bloom' && !(m.fl & 256)), null, { timeout: 15000 }).then(() => true).catch(() => false), '老樹公身邊開了花'); await shot('5-elder-fog');
+    await shot('6-elder-fight');
+    clearInterval(keep); ok(!pg.errors.length, '沒有頁面錯誤' + (pg.errors.length ? '：' + pg.errors.slice(0, 3).join(' / ') : ''));
+    await pg.context().close();
+  };
+  if (want === 'mobs') await mobsShow();
   if (want === 'loot') await loot();
   if (want === 'puppet') await puppet();
   if (want === 'hotbar') await hotbar(false);

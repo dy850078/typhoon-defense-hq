@@ -335,12 +335,12 @@ const NW = (() => {
     let jl = Math.hypot(jx, jy), wx = 0, wz = 0;
     if (jl > 0.15) { S.goal = null; const n = Math.min(1, jl) / jl; wx = (Math.cos(ANG) * jx + Math.sin(ANG) * jy) * n; wz = (-Math.sin(ANG) * jx + Math.cos(ANG) * jy) * n; }
     else if (S.goal) { // 點地面走路：朝目標走，到了就停；搖桿或鍵盤一動就取消
-      const me = S.ctrl === 'me', dx = S.goal.x - (me ? ME.x : S.x), dz = S.goal.z - (me ? ME.z : S.z), d = Math.hypot(dx, dz), step = (me ? (ACT.run ? 7 : 4.2) : 6.5) * dt;
+      const me = S.ctrl === 'me', dx = S.goal.x - (me ? ME.x : S.x), dz = S.goal.z - (me ? ME.z : S.z), d = Math.hypot(dx, dz), step = (me ? (ACT.run ? 7 : 4.2) * (CB ? CB.slow() : 1) : 6.5) * dt;
       if (d < S.goal.best - 0.01) { S.goal.best = d; S.goal.t = S.time; }   // 被擋住一陣子沒有更靠近，就不走了
       if (d < 0.12 || S.time - S.goal.t > 0.8) S.goal = null; else { const n = Math.min(1, d / step) / d; wx = dx * n; wz = dz * n; jl = 1; } }
     GOAL.visible = !!S.goal; if (S.goal) { GOAL.position.set(S.goal.x, 0.06 + FY(S.goal.x, S.goal.z), S.goal.z); const k = 1 + Math.sin(S.time * 6) * 0.12; GOAL.scale.set(k, k, k); }
     const moving = jl > 0.15 && S.ctrl === 'robot', meMoving = jl > 0.15 && S.ctrl === 'me'; S.meMv = meMoving;
-    if (ME) { if (meMoving) { const vx = wx, vz = wz, sp = ACT.run ? 7 : 4.2; ACT.pose = null;
+    if (ME) { if (meMoving) { const vx = wx, vz = wz, sp = (ACT.run ? 7 : 4.2) * (CB ? CB.slow() : 1); ACT.pose = null;
         const h = collide(LIMX(ME.x + vx * sp * dt, ME.z), LIMZ(ME.z + vz * sp * dt, ME.z), 0.45); ME.x = h.x; ME.z = h.z;
         let df = Math.atan2(vx, vz) - ME.face; df = Math.atan2(Math.sin(df), Math.cos(df)); ME.face += df * Math.min(1, dt * 9); }
       if (S.ctrl === 'me') { if (ACT.pose === 'wave' && S.time > ACT.until) ACT.pose = null;

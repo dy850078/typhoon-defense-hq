@@ -3,15 +3,19 @@
 // 存檔放在帳號的 save.nw：lv、exp、school、spec、schools、slots、quest（同一個物件裡別的欄位是背包那邊的，寫回去時要留著）
 const C3 = require('./shared/classes3d.js');
 const { SK, SPECS, SCHOOLS, LEVEL, GATE, QUEST, QUEST_RATE, MOBS, FAMILIARS } = C3;
+const NEVER = 8e15;   // 花平常是「倒下」的，等老樹公叫出來
 
 // 練習場在前院的東邊：四塊地，越遠的怪越強；中間是大石偶
 const FIELD = { x0: 17, x1: 66, z0: -6, z1: 60, gate: { x: 15, z: 14 } };
+// 霧林：苔球、傘菇精、露水靈各一區，中間是老樹公。src 是三轉信物算哪一種怪掉的（沒寫就是怪的種類）
+// 霧林深處是三種怪混在一起的高等區，等雲海高原開了就會搬過去
 const ZONES = [
-  { kind: 'slime', x: 26, z: 12, lv: [1, 1, 2, 2, 3, 4, 5, 6, 7, 8] },
-  { kind: 'shroom', x: 26, z: 44, lv: [9, 10, 11, 12, 13, 14, 15, 16, 18, 19] },
-  { kind: 'golem', x: 54, z: 46, lv: [20, 22, 24, 26, 28, 30, 32, 34] },
-  { kind: 'wisp', x: 54, z: 10, lv: [36, 38, 40, 43, 46, 49, 52, 55] },
-  { kind: 'boss', x: 41, z: 28, lv: [45] },
+  { kind: 'moss', x: 26, z: 12, lv: [1, 1, 2, 2, 3, 4, 5, 6, 7, 8] },
+  { kind: 'puff', x: 26, z: 44, lv: [9, 10, 11, 12, 13, 14, 15, 16, 18, 19] },
+  { kind: 'dew', x: 54, z: 46, lv: [20, 21, 22, 24, 25, 26, 28, 30] },
+  { kinds: ['moss', 'puff', 'dew'], src: 'deep', x: 54, z: 10, lv: [32, 34, 36, 38, 40, 43, 46, 49, 52, 55] },
+  { kind: 'elder', src: 'boss', x: 41, z: 28, lv: [30] },
+  { kind: 'bloom', x: 41, z: 28, lv: [30, 30, 30] },
 ];
 const TICK = 100, rnd = (a, b) => a + Math.random() * (b - a), dist = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
 
@@ -20,18 +24,19 @@ module.exports = function attach(nw, env) {
   const mobs = [], zones = [], byId = new Map();
   let hits = [], seq = 1;
   ZONES.forEach((z, zi) => z.lv.forEach((lv, i) => {
-    const a = i / z.lv.length * Math.PI * 2 + zi, r = z.kind === 'boss' ? 0 : 3 + (i % 3) * 3.2, d = MOBS[z.kind];
-    const m = { id: 'm' + (mobs.length + 1), kind: z.kind, lv, sx: z.x + Math.cos(a) * r, sz: z.z + Math.sin(a) * r, max: Math.round(LEVEL.hp(lv) * d.hp), atk: LEVEL.atk(lv) * d.atk, st: {}, dmgBy: new Map() };
-    m.x = m.sx; m.z = m.sz; m.hp = m.max; m.tx = m.x; m.tz = m.z; m.wait = rnd(0, 4); m.next = 0; m.dead = 0; m.sent = '';
+    const kind = z.kinds ? z.kinds[i % z.kinds.length] : z.kind, d = MOBS[kind], a = i / z.lv.length * Math.PI * 2 + zi, r = d.boss ? 0 : d.add ? 4.5 : 3 + (i % 3) * 3.2;
+    const m = { id: 'm' + (mobs.length + 1), kind, src: z.src || kind, lv, sx: z.x + Math.cos(a) * r, sz: z.z + Math.sin(a) * r, max: Math.round(LEVEL.hp(lv) * d.hp), atk: LEVEL.atk(lv) * d.atk, st: {}, dmgBy: new Map() };
+    m.x = m.sx; m.z = m.sz; m.hp = m.max; m.tx = m.x; m.tz = m.z; m.wait = rnd(0, 4); m.next = 0; m.dead = d.add ? NEVER : 0; m.sent = ''; m.mcd = 0;
     mobs.push(m); byId.set(m.id, m);
   }));
+  const ELDER = mobs.find(m => m.kind === 'elder'), BLOOMS = mobs.filter(m => m.kind === 'bloom');
   const alive = (m) => m && !m.dead;
   const near = (x, z, r, skip) => mobs.filter(m => alive(m) && m !== skip && Math.hypot(m.x - x, m.z - z) <= r + MOBS[m.kind].r);
   const ctrl = (m, s) => (MOBS[m.kind].boss ? s * 0.3 : s);   // 大石偶被控制的時間只有三成
   const each = (fn) => players.forEach(p => { if (p.cb) fn(p, p.cb); });
   const fx = (o) => nw.emit('cb:fx', o);
   const meView = (c) => ({ lv: c.lv, exp: c.exp, need: LEVEL.expFor(c.lv), hp: Math.round(c.hp), hpMax: c.hpMax, mp: Math.round(c.mp), mpMax: c.mpMax, school: c.school, spec: c.spec, schools: c.schools, slots: c.slots, keys: c.keys, quest: c.quest,
-    cd: c.cd, stage: Object.keys(c.stage).reduce((o, k) => { if (c.stage[k].until > now()) o[k] = c.stage[k].until; return o; }, {}), dead: c.dead > now() ? c.dead : 0, t: now() });
+    slow: c.drowsy > now() ? 1 : 0, pois: c.pois > now() ? 1 : 0, cd: c.cd, stage: Object.keys(c.stage).reduce((o, k) => { if (c.stage[k].until > now()) o[k] = c.stage[k].until; return o; }, {}), dead: c.dead > now() ? c.dead : 0, t: now() });
   const who = (p) => ({ id: p.id, lv: p.cb.lv, school: p.cb.school, spec: p.cb.spec, hp: Math.round(p.cb.hp), hpMax: p.cb.hpMax, fam: p.cb.fam.map(f => f.tier), mech: mechOf(p.cb) });
   const mechOf = (c) => (c.spec !== 'alchemist' ? 0 : c.buff.fear > now() ? 3 : c.buff.mech > now() ? 2 : 1);
   const tell = (p) => { p.cb.dirty = true; };
@@ -44,19 +49,22 @@ module.exports = function attach(nw, env) {
   function atkOf(c) { return LEVEL.atk(c.lv) * (1 + (c.buff.atk > now() ? c.buff.atkV : 0)); }
   function hurt(m, amount, p, kind, noShare) {
     if (!alive(m) || m.st.sealed > now() && kind !== 'box') return 0;
-    const t = now(); let d = amount * (1 + (m.st.vuln > t ? m.st.vulnV : 0)) * rnd(0.92, 1.08); d = Math.max(1, Math.round(d));
+    const t = now(); let d = amount * (1 + (m.st.vuln > t ? m.st.vulnV : 0)) * (m.st.tidy > t ? 2 : 1) * rnd(0.92, 1.08); d = Math.max(1, Math.round(d));
     m.hp -= d; hits.push([m.id, d, kind || '']);
-    if (p) { m.dmgBy.set(p.id, t); if (!m.aggro || !players.get(m.aggro) || m.st.charm) m.aggro = p.id; if (kind !== 'dot') p.cb.fight = t + 5000; }
+    if (p) { m.dmgBy.set(p.id, t); if (!m.aggro || !players.get(m.aggro) || m.st.charm) m.aggro = p.id; if (kind !== 'dot') p.cb.fight = t + 5000;
+      const B = MOBS[m.kind].bounce; if (B && kind === 'hit' && !m.cast && !m.dash && !(m.st.root > t || m.st.stun > t || m.st.freeze > t)) { const l = Math.hypot(m.x - p.x, m.z - p.z) || 1; m.x += (m.x - p.x) / l * B; m.z += (m.z - p.z) / l * B; } }
     if (!noShare && m.st.link > t) mobs.forEach(o => { if (o !== m && alive(o) && o.st.link > t && o.st.linkG === m.st.linkG) hurt(o, d * (m.st.linkV || 0.5) / (1 + (o.st.vuln > t ? o.st.vulnV : 0)), p, 'link', true); });
     if (m.hp <= 0) die(m);
     return d;
   }
   function die(m) {
-    const t = now(), d = MOBS[m.kind]; m.dead = t + (d.boss ? 90000 : 9000); m.hp = 0; m.st = {}; m.aggro = null;
+    const t = now(), d = MOBS[m.kind]; m.dead = d.add ? NEVER : t + (d.boss ? 90000 : 9000); m.hp = 0; m.st = {}; m.aggro = null; m.cast = null; m.dash = null;
+    if (m === ELDER) { m.roots = null; setFog(false); BLOOMS.forEach(b => { if (alive(b)) { b.dead = NEVER; b.hp = 0; b.st = {}; fx({ k: 'die', m: b.id }); } }); }
+    if (d.add) { m.dmgBy.clear(); return fx({ k: 'die', m: m.id }); }
     m.dmgBy.forEach((at, pid) => { const p = players.get(pid); if (!p || !p.cb || t - at > 20000) return; const c = p.cb, gap = c.lv - m.lv;
       gain(p, Math.round((8 + 3 * m.lv) * (d.boss ? 12 : 1) * (gap > 20 ? 0.1 : gap > 10 ? 0.3 : 1)));
       if (c.school) { const s = c.schools[c.school]; s.m = Math.min(GATE.mastery, (s.m || 0) + (d.boss ? 10 : 1)); }
-      if (c.quest && Math.random() < QUEST_RATE[m.kind]) { const q = QUEST[c.quest.spec], i = q.findIndex(x => x[2] === m.kind);
+      if (c.quest && Math.random() < QUEST_RATE[m.src]) { const q = QUEST[c.quest.spec], i = q.findIndex(x => x[2] === m.src);
         if (i >= 0 && c.quest.got[i] < q[i][1]) { c.quest.got[i]++; p.cbSock.emit('cb:loot', { name: q[i][0], n: c.quest.got[i], of: q[i][1] }); } }
       c.changed = true; tell(p); });
     m.dmgBy.clear(); fx({ k: 'die', m: m.id });
@@ -68,13 +76,46 @@ module.exports = function attach(nw, env) {
   function gain(p, n) { const c = p.cb; if (c.lv >= LEVEL.max) return; c.exp += n; let up = false;
     while (c.lv < LEVEL.max && c.exp >= LEVEL.expFor(c.lv)) { c.exp -= LEVEL.expFor(c.lv); c.lv++; up = true; }
     if (up) { stats(c); c.hp = c.hpMax; c.mp = c.mpMax; fx({ k: 'lvup', id: p.id, lv: c.lv }); whoAll(p); } }
-  function heal(p, amount) { const c = p.cb; if (c.dead > now()) return; const v = Math.round(Math.min(c.hpMax - c.hp, amount)); if (v <= 0) return; c.hp += v; hits.push(['p:' + p.id, -v, 'heal']); tell(p); }
+  function heal(p, amount) { const c = p.cb; if (c.dead > now()) return; if (c.pois > now()) { c.pois = 0; tell(p); } c.clean = now() + MOBS.elder.fog.clean * 1000; /* 補血招順便解毒，接下來幾秒不會再中 */ const v = Math.round(Math.min(c.hpMax - c.hp, amount)); if (v <= 0) return; c.hp += v; hits.push(['p:' + p.id, -v, 'heal']); tell(p); }
   function allies(x, z, r) { const out = []; each((p, c) => { if (c.dead <= now() && Math.hypot(p.x - x, p.z - z) <= r) out.push(p); }); return out; }
   function hitPlayer(p, amount, m) { const c = p.cb, t = now(); if (c.dead > t) return;
     let d = amount * (1 - (c.buff.guard > t ? c.buff.guardV : 0)) * (c.buff.bond > t && c.fam.length ? 0.7 : 1); d = Math.max(1, Math.round(d * rnd(0.9, 1.1)));
     c.hp -= d; c.fight = t + 5000; hits.push(['p:' + p.id, d, 'ow']);
-    if (c.hp <= 0) { c.hp = 0; c.dead = t + 4000; c.target = null; c.fam = []; mobs.forEach(o => { if (o.aggro === p.id) o.aggro = null; }); fx({ k: 'down', id: p.id }); whoAll(p); }
+    if (c.hp <= 0) down(p);
     tell(p); }
+  function down(p) { const c = p.cb; c.hp = 0; c.dead = now() + 4000; c.target = null; c.fam = []; c.pois = 0; c.drowsy = 0; mobs.forEach(o => { if (o.aggro === p.id) o.aggro = null; }); fx({ k: 'down', id: p.id }); whoAll(p); }
+
+  // ---- 怪的招：先預告（cb:fx tele），時間到才生效（cb:fx mobMove）----
+  const F1 = (v) => +v.toFixed(1);
+  const BEGIN = {
+    roll: (m, mv, p) => { const l = dist(p, m) || 1, x2 = m.x + (p.x - m.x) / l * mv.len, z2 = m.z + (p.z - m.z) / l * mv.len; return { x2, z2 }; },
+    spore: (m) => ({ x: m.x, z: m.z }),
+    mend: (m, mv) => { const o = mobs.filter(x => alive(x) && x !== m && !MOBS[x.kind].add && x.hp < x.max * 0.8 && dist(x, m) <= mv.r).sort((a, b) => a.hp / a.max - b.hp / b.max)[0]; return o ? { to: o.id } : null; },
+  };
+  const MOVE = {
+    roll: (m, mv, c) => { m.dash = { x0: m.x, z0: m.z, x1: c.x2, z1: c.z2, t0: now(), t1: now() + 450, hit: new Set(), mv }; },
+    spore: (m, mv, c) => { zones.push({ k: 'spore', id: 'z' + seq++, x: c.x, z: c.z, r: mv.r, until: now() + mv.dur * 1000, next: 0, atk: m.atk, mv }); m.st.tidy = now() + mv.tidy * 1000; },
+    mend: (m, mv, c) => { const o = byId.get(c.to); if (!alive(o)) return; const v = Math.round(Math.min(o.max - o.hp, o.max * mv.heal)); if (v > 0) { o.hp += v; hits.push([o.id, -v, 'heal']); } },
+  };
+  function tryMove(m, d, p, t) { const mv = d.move; if (!mv || m.mcd > t || dist(p, m) > mv.range) return false; const c = BEGIN[mv.k](m, mv, p); if (!c) { m.mcd = t + 1500; return false; }
+    m.cast = Object.assign(c, { k: mv.k, until: t + mv.tele * 1000 }); m.mcd = t + mv.cd * 1000 * rnd(0.85, 1.2);
+    fx({ k: 'tele', mk: mv.k, m: m.id, x: F1(m.x), z: F1(m.z), x2: c.x2 != null ? F1(c.x2) : undefined, z2: c.z2 != null ? F1(c.z2) : undefined, r: mv.r, w: mv.w, to: c.to, dur: mv.tele }); return true; }
+  // 老樹公：樹根、開花、毒霧
+  let FOG = false; const setFog = (on) => { if (FOG === on) return; FOG = on; fx({ k: 'fog', on: on ? 1 : 0, x: ELDER.sx, z: ELDER.sz, r: MOBS.elder.fog.r }); };
+  function elder(m, d, t, sec) {
+    const R = d.roots, B = d.blooms, near2 = []; each((p, c) => { if (c.dead <= t && dist(p, m) <= R.far) near2.push(p); });
+    if (m.roots && m.roots.until <= t) { const g = m.roots; m.roots = null; each((p, c) => { if (c.dead <= t && g.spots.some(s => Math.hypot(p.x - s[0], p.z - s[1]) <= R.r)) hitPlayer(p, m.atk * R.dmg, m); }); fx({ k: 'mobMove', mk: 'roots', m: m.id, spots: g.spots, r: R.r }); }
+    if (m.aggro && near2.length) {
+      if (!m.roots && (m.rcd || 0) <= t) { m.rcd = t + R.cd * 1000; const spots = near2.slice(0, 4).map(p => [F1(p.x), F1(p.z)]); for (let i = 0; i < 2; i++) { const a = Math.random() * 6.28, r = 3 + Math.random() * 5; spots.push([F1(m.x + Math.cos(a) * r), F1(m.z + Math.sin(a) * r)]); }
+        m.roots = { until: t + R.tele * 1000, spots }; fx({ k: 'tele', mk: 'roots', m: m.id, spots, r: R.r, dur: R.tele }); }
+      if (!m.bcd) m.bcd = t + 8000;
+      if (m.bcd <= t) { m.bcd = t + B.cd * 1000; const free = BLOOMS.filter(b => !alive(b)).slice(0, Math.max(0, Math.min(B.n, B.max - BLOOMS.filter(alive).length)));
+        free.forEach((b, i) => { const a = Math.random() * 6.28, r = 3.5 + Math.random() * 2; b.x = b.sx = m.x + Math.cos(a) * r; b.z = b.sz = m.z + Math.sin(a) * r; b.tx = b.x; b.tz = b.z; b.dead = 0; b.hp = b.max; b.st = {}; b.sent = ''; fx({ k: 'mobMove', mk: 'bloom', m: b.id, x: F1(b.x), z: F1(b.z) }); }); }
+    } else if (!m.aggro) { m.bcd = 0; if (m.hp >= m.max) BLOOMS.forEach(b => { if (alive(b)) { b.dead = NEVER; b.hp = 0; fx({ k: 'die', m: b.id }); } }); }
+    if (sec) { const n = BLOOMS.filter(alive).length; if (n && m.hp < m.max) { const v = Math.round(m.max * MOBS.bloom.heal * n); m.hp = Math.min(m.max, m.hp + v); hits.push([m.id, -v, 'heal']); }
+      if (m.hp <= m.max * d.fog.at) setFog(true); else if (!m.aggro) setFog(false);   // 起霧以後要等牠沒在打架才會散
+      if (FOG) each((p, c) => { if (c.dead <= t && Math.hypot(p.x - m.sx, p.z - m.sz) <= d.fog.r && !(c.clean > t) && !(c.pois > t + 1500)) { const was = c.pois > t; c.pois = t + 3000; if (!was) tell(p); } }); }
+  }
 
   // ---- 招式 ----
   const aoe = (p, x, z, r, mul, kind, each2) => near(x, z, r).forEach(m => { hurt(m, atkOf(p.cb) * mul, p, kind); if (each2 && alive(m)) each2(m); });
@@ -140,10 +181,12 @@ module.exports = function attach(nw, env) {
       if (c.dead && c.dead <= t) { c.dead = 0; c.hp = c.hpMax; c.mp = c.mpMax; p.cbSock.emit('cb:back', FIELD.gate); whoAll(p); tell(p); }
       if (c.dead) return;
       if (sec) { const rest = c.fight < t; const hp = Math.min(c.hpMax, c.hp + c.hpMax * (rest ? 0.06 : 0.004)), mp = Math.min(c.mpMax, c.mp + c.mpMax * (rest ? 0.08 : 0.025)); if (hp !== c.hp || mp !== c.mp) { c.hp = hp; c.mp = mp; tell(p); } }
+      if (sec && c.pois > t) { const v = Math.max(1, Math.round(c.hpMax * MOBS.elder.fog.dps)); c.hp -= v; c.fight = t + 5000; hits.push(['p:' + p.id, v, 'pois']); if (c.hp <= 0) down(p); tell(p); if (c.dead) return; }
+      if (c.drowsy && c.drowsy <= t) { c.drowsy = 0; tell(p); } if (c.pois && c.pois <= t) { c.pois = 0; tell(p); }
       const m = byId.get(c.target); if (c.target && !alive(m)) { c.target = null; p.cbSock.emit('cb:tgt', null); }
       const b = C3.basicOf(c), key = C3.basicKey(c);
       if (alive(m) && c.nextAtk <= t && dist(p, m) <= b.range + MOBS[m.kind].r + 0.6 && inField(p)) {
-        c.nextAtk = t + b.every * 1000; c.hitN = (c.hitN || 0) + 1;
+        c.nextAtk = t + b.every * 1000 * (c.drowsy > t ? 1.6 : 1); c.hitN = (c.hitN || 0) + 1;
         const mech = key === 'mecha' ? 1 + (c.buff.mech > t ? c.buff.mechV : 0) + (c.buff.fear > t ? c.buff.fearV : 0) : 1, slam = b.slam && c.hitN % b.slam === 0;
         if (slam) near(m.x, m.z, 2.6).forEach(o => { hurt(o, atkOf(c) * b.mul * mech * 1.3, p, 'slam'); if (alive(o)) o.st.taunt = t + 3000; });
         else hurt(m, atkOf(c) * b.mul * mech, p, 'hit');
@@ -158,6 +201,7 @@ module.exports = function attach(nw, env) {
     });
     // 場上的東西：星星燈、絕壁、封印之匣、謝幕
     for (let i = zones.length - 1; i >= 0; i--) { const z = zones[i], p = players.get(z.by), ok = p && p.cb;
+      if (z.k === 'spore' && z.next <= t) { z.next = t + 1000; each((q, c) => { if (c.dead <= t && Math.hypot(q.x - z.x, q.z - z.z) <= z.r) { hitPlayer(q, z.atk * z.mv.dmg); const was = c.drowsy > t; c.drowsy = t + z.mv.drowsy * 1000; if (!was) tell(q); } }); }
       if (z.k === 'lamp' && z.next <= t && ok) { z.next = t + 1000; allies(z.x, z.z, z.r).forEach(a => heal(a, a.cb.hpMax * z.s.heal)); aoe(p, z.x, z.z, z.r, z.s.dmg, 'star'); }
       if (z.k === 'cliff') { const hitNow = z.next <= t; if (hitNow) z.next = t + 1000; near(z.x, z.z, z.r).forEach(m => { const d = Math.hypot(m.x - z.x, m.z - z.z) || 0.01, k = (z.r + MOBS[m.kind].r) / d; m.x = z.x + (m.x - z.x) * k; m.z = z.z + (m.z - z.z) * k; if (hitNow && ok) hurt(m, atkOf(p.cb) * z.s.dmg, p, 'seal'); }); }
       if (z.until <= t) { zones.splice(i, 1);
@@ -168,23 +212,30 @@ module.exports = function attach(nw, env) {
     // 怪：中毒、亂晃、追人、打人、重生
     const out = [];
     mobs.forEach(m => {
-      if (m.dead) { if (m.dead <= t) { m.dead = 0; m.hp = m.max; m.x = m.sx; m.z = m.sz; m.st = {}; m.aggro = null; } }
+      if (m.dead) { if (m.dead <= t) { m.dead = 0; m.hp = m.max; m.x = m.sx; m.z = m.sz; m.st = {}; m.aggro = null; m.mcd = 0; } }
       else {
         const st = m.st, d = MOBS[m.kind];
         if (sec && st.poison && st.poison.until > t) hurt(m, st.poison.dps, players.get(st.poison.by), 'dot');
         if (!alive(m)) return;
-        const held = st.root > t || st.stun > t || st.freeze > t || st.sealed > t, sp = d.sp * (st.slow > t ? 1 - st.slowV : 1) * dt;
+        const held0 = st.root > t || st.stun > t || st.freeze > t || st.sealed > t;
+        if (m.cast) { if (held0) { m.cast = null; fx({ k: 'mobStop', m: m.id }); } else if (m.cast.until <= t) { const c = m.cast; m.cast = null; MOVE[c.k](m, d.move, c); fx({ k: 'mobMove', mk: c.k, m: m.id, x: F1(m.x), z: F1(m.z), r: d.move.r, dur: d.move.dur, to: c.to }); } }
+        if (m.dash) { const g = m.dash, k = Math.min(1, (t - g.t0) / (g.t1 - g.t0)); if (held0) m.dash = null; else { m.x = g.x0 + (g.x1 - g.x0) * k; m.z = g.z0 + (g.z1 - g.z0) * k;
+          each((q, c) => { if (c.dead <= t && !g.hit.has(q.id) && dist(q, m) <= g.mv.w + 0.4) { g.hit.add(q.id); hitPlayer(q, m.atk * g.mv.dmg, m); } }); if (k >= 1) { m.dash = null; m.next = t + 900; } } }
+        if (d.boss && m === ELDER) elder(m, d, t, sec);
+        const busy = !!(m.cast || m.dash) || st.tidy > t || d.add, held = held0 || busy, sp = d.sp * (st.slow > t ? 1 - st.slowV : 1) * dt;
         const go = (x, z, stop) => { const dx = x - m.x, dz = z - m.z, l = Math.hypot(dx, dz); if (l <= stop) return true; const k = Math.min(sp * (m.aggro || st.charm > t ? 1.6 : 0.6), l - stop) / l; m.x += dx * k; m.z += dz * k; return false; };
         if (st.charm > t) { const o = near(m.x, m.z, 8, m).sort((a, b) => dist(a, m) - dist(b, m))[0], by = players.get(st.charmBy);
           if (o && !held && go(o.x, o.z, d.r + MOBS[o.kind].r + 0.3) && m.next <= t) { m.next = t + 1300; hurt(o, m.atk * 3, by && by.cb ? by : null, 'hit'); fx({ k: 'mobAtk', m: m.id, to: o.id }); } }
         else { let p = m.aggro && players.get(m.aggro);
           if (p && (!p.cb || p.cb.dead > t || dist(p, m) > 22 || Math.hypot(m.x - m.sx, m.z - m.sz) > 26)) { p = null; m.aggro = null; }
-          if (p) { if (!held && go(p.x, p.z, d.r + 0.9) && m.next <= t && !(st.taunt > t)) { m.next = t + 1500; hitPlayer(p, m.atk * (st.weak > t ? 1 - st.weakV : 1), m); fx({ k: 'mobAtk', m: m.id, to: p.id }); }
+          if (p) { if (!held && !(st.taunt > t) && tryMove(m, d, p, t)) { /* 開始出招，這一格不動 */ }
+            else if (!held && go(p.x, p.z, d.shoot || d.r + 0.9) && m.next <= t && !(st.taunt > t)) { m.next = t + (d.shoot ? 1900 : 1500); hitPlayer(p, m.atk * (st.weak > t ? 1 - st.weakV : 1), m); fx({ k: 'mobAtk', m: m.id, to: p.id, shot: d.shoot ? 1 : 0 }); }
             else if (st.taunt > t && m.next <= t && !held) { m.next = t + 1500; fx({ k: 'mobAtk', m: m.id, to: p.id, mech: 1 }); } }
-          else if (!held) { if (m.hp < m.max && sec) m.hp = Math.min(m.max, m.hp + m.max * 0.1);
+          else if (d.add) { /* 花不會動也不會自己回血 */ }
+          else if (!held0 && !busy) { if (m.hp < m.max && sec) m.hp = Math.min(m.max, m.hp + m.max * 0.1);
             if (go(m.tx, m.tz, 0.2) && (m.wait -= dt) <= 0) { m.tx = m.sx + rnd(-3, 3); m.tz = m.sz + rnd(-3, 3); m.wait = rnd(2, 6); } } }
       }
-      const fl = m.dead ? 256 : (m.st.root > t ? 1 : 0) | (m.st.stun > t ? 2 : 0) | (m.st.freeze > t ? 4 : 0) | (m.st.poison && m.st.poison.until > t ? 8 : 0) | (m.st.link > t ? 16 : 0) | (m.st.charm > t ? 32 : 0) | (m.st.sealed > t ? 64 : 0) | (m.st.weak > t ? 128 : 0) | (m.st.lift > t ? 512 : 0) | (m.st.slow > t ? 1024 : 0);
+      const fl = m.dead ? 256 : (m.st.root > t ? 1 : 0) | (m.st.stun > t ? 2 : 0) | (m.st.freeze > t ? 4 : 0) | (m.st.poison && m.st.poison.until > t ? 8 : 0) | (m.st.link > t ? 16 : 0) | (m.st.charm > t ? 32 : 0) | (m.st.sealed > t ? 64 : 0) | (m.st.weak > t ? 128 : 0) | (m.st.lift > t ? 512 : 0) | (m.st.slow > t ? 1024 : 0) | (m.st.tidy > t ? 2048 : 0) | (m.cast ? 4096 : 0);
       const row = [m.id, +m.x.toFixed(1), +m.z.toFixed(1), Math.max(0, Math.round(m.hp)), fl, m.st.tied > t ? m.st.tiedBy : 0, m.st.link > t ? m.st.linkG : 0], key = row.join(',');
       if (key !== m.sent) { m.sent = key; out.push(row); }
     });
@@ -214,7 +265,7 @@ module.exports = function attach(nw, env) {
       const c = load(u); p.cb = c; p.cbUser = u; p.cbSock = socket;
       const ack = (fn, r) => { if (typeof fn === 'function') fn(r); }, done = (fn) => { c.changed = true; save(p); whoAll(p); socket.emit('cb:me', meView(c)); ack(fn, { ok: true }); };
       const busy = () => c.fight > now() || c.dead > now();
-      socket.emit('cb:init', { me: meView(c), field: FIELD, mobs: mobs.map(m => ({ id: m.id, kind: m.kind, lv: m.lv, x: m.x, z: m.z, hp: m.dead ? 0 : Math.round(m.hp), max: m.max })), who: [...players.values()].filter(q => q.cb).map(who), drops: [...drops.values()].map(dropView) });
+      socket.emit('cb:init', { me: meView(c), field: FIELD, mobs: mobs.map(m => ({ id: m.id, kind: m.kind, lv: m.lv, x: m.x, z: m.z, hp: m.dead ? 0 : Math.round(m.hp), max: m.max })), who: [...players.values()].filter(q => q.cb).map(who), fog: FOG ? { on: 1, x: ELDER.sx, z: ELDER.sz, r: MOBS.elder.fog.r } : null, drops: [...drops.values()].map(dropView) });
       mobs.forEach(m => { m.sent = ''; });
       socket.broadcast.emit('cb:who', who(p));
       socket.on('cb:target', (id) => { const m = byId.get(id); c.target = alive(m) ? m.id : null; });
@@ -240,6 +291,8 @@ module.exports = function attach(nw, env) {
         if (d.m != null && c.school) c.schools[c.school].m = Math.max(0, Math.min(GATE.mastery, d.m | 0));
         if (d.quest && c.quest) c.quest.got = QUEST[c.quest.spec].map(q => q[1]);
         if (typeof d.drop === 'string') { const o = { id: 'd' + seq++, k: d.drop, x: +(p.x + 1.2).toFixed(2), z: +p.z.toFixed(2), until: now() + (d.ms > 0 ? d.ms : C3.DROP_MS) }; drops.set(o.id, o); nw.emit('cb:drop', dropView(o)); }
+        if (d.bossHp > 0) ELDER.hp = Math.max(1, Math.round(ELDER.max * Math.min(1, d.bossHp)));   // 測試老樹公的下半場
+        if (d.hp > 0) { c.hp = Math.max(1, Math.round(c.hpMax * Math.min(1, d.hp))); tell(p); }
         if (d.reset) { Object.assign(c, { lv: 1, exp: 0, school: null, spec: null, schools: {}, quest: null, fam: [], stage: {} }); stats(c); c.slots = C3.autoSlots(c, []); }
         done(fn); });
     },

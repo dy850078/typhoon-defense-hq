@@ -197,7 +197,7 @@
     var qFold = false; try { qFold = localStorage.getItem('nw-quest-fold') === '1'; } catch (e) {}
     qbox.onclick = function () { qFold = !qFold; try { localStorage.setItem('nw-quest-fold', qFold ? '1' : '0'); } catch (e) {} drawQuest(); };
     function openQuest() { close(); qFold = false; drawQuest(); qbox.classList.remove('flash'); void qbox.offsetWidth; qbox.classList.add('flash'); }
-    var MOBN = function (k) { return C3.MOBS[k].name; };
+    var MOBN = function (k) { return C3.SRC[k] || ''; };
     function drawQuest() {
       var q = me && me.quest; qbox.hidden = !q; if (!q) return; var items = C3.QUEST[q.spec], have = 0, need = 0, done = questDone(q); items.forEach(function (it, i) { have += Math.min(q.got[i], it[1]); need += it[1]; });
       qbox.innerHTML = ''; qbox.className = 'note' + (qFold ? ' fold' : '') + (done ? ' done' : ''); var h = el('b', '', C3.SPECS[q.spec].name + '的試煉'); h.appendChild(el('span', '', have + '/' + need)); qbox.appendChild(h);

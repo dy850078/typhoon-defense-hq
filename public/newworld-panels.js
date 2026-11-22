@@ -121,7 +121,7 @@ window.NW_PANELS = function (NW, token, opt) {
     var list = el('div', 'wishes'); body.appendChild(list); var nav = el('div', 'acts pager'); body.appendChild(nav);
     var wishInfo = null, t = 0;
     function tabs(r) {
-      cats.innerHTML = ''; cats.appendChild(el('small', 'wlab', '只看')); [['', '全部']].concat(Object.keys(r.cats).map(function (k) { return [k, r.cats[k]]; })).forEach(function (c) {
+      cats.innerHTML = ''; cats.appendChild(el('small', 'wlab', '篩選')); [['', '全部']].concat(Object.keys(r.cats).map(function (k) { return [k, r.cats[k]]; })).forEach(function (c) {
         var b = el('button', 'wtab' + (wishQ.cat === c[0] ? ' on' : '') + (c[0] ? ' c-' + c[0] : ''), c[1]); b.type = 'button'; b.dataset.cat = c[0]; b.onclick = function () { wishQ.cat = c[0]; wishQ.page = 1; load(); }; cats.appendChild(b); });
       // 「我許的」也是篩選，跟類別放同一排，中間隔一條線
       cats.appendChild(el('i', 'wsep')); var m = el('button', 'wtab mine' + (wishQ.mine ? ' on' : ''), '我許的'); m.type = 'button'; m.id = 'wish-mine'; m.onclick = function () { wishQ.mine = !wishQ.mine; wishQ.page = 1; load(); }; cats.appendChild(m);

@@ -25,7 +25,8 @@ async function main() {
     s.on('cb:init', (d) => { P.me = d.me; d.mobs.forEach(m => P.mobs.set(m.id, m)); P.field = d.field; });
     s.on('cb:me', (d) => { P.me = d; });
     s.on('cb:mobs', (l) => l.forEach(a => { const m = P.mobs.get(a[0]); if (m) Object.assign(m, { x: a[1], z: a[2], hp: a[3], fl: a[4], tied: a[5] }); }));
-    s.on('cb:fx', (o) => P.fx.push(o)); s.on('cb:hit', (l) => P.hits.push(...l)); s.on('cb:loot', (o) => P.loot.push(o));
+    s.on('cb:fx', (o) => P.fx.push(o)); s.on('cb:hit', (l) => P.hits.push(...l)); s.on('cb:loot', (o) => P.loot.push(o)); P.party = null; P.inv = []; P.say = []; P.back = [];
+    s.on('cb:party', (v) => { P.party = v; }); s.on('cb:pinv', (v) => P.inv.push(v)); s.on('cb:say', (v) => P.say.push(v)); s.on('cb:back', (v) => P.back.push(v));
     P.ask = (ev, arg) => new Promise(r => s.emit(ev, arg, r));
     P.at = (x, z, f) => s.emit('move', { x, z, f: f || 0 });
     P.mob = (kind, i) => [...P.mobs.values()].filter(m => m.kind === kind)[i || 0];
@@ -43,7 +44,7 @@ async function main() {
   ok(await A.cast('spark', s0), '小火花放得出來'); ok(await A.cast('blink'), '歪歪瞬移放得出來');
   for (let i = 0; i < 80 && A.mobs.get(s0.id).hp > 0; i++) await wait(200);
   ok(A.mobs.get(s0.id).hp === 0 && A.me.exp > 0, '打倒苔球拿到經驗：' + A.me.exp);
-  if (process.env.QUICK || process.env.ONLY === 'moves') { A.s.close(); } else {
+  if (process.env.QUICK || process.env.ONLY) { A.s.close(); } else {
   // 每個學門、每個專精都走一遍
   await wait(5300); await A.ask('cb:dbg', { lv: 60 });
   const far = () => A.mob('puff', 3), tgt = (i) => { const m = [...A.mobs.values()].filter(x => !C3.MOBS[x.kind].boss && !C3.MOBS[x.kind].add && x.hp > 0).sort((a, b) => b.hp - a.hp)[i || 0]; A.at(m.x + 2, m.z); return m; };
@@ -80,7 +81,7 @@ async function main() {
   s2.close();
   }
   // ---- 怪的招 ----
-  {
+  if (!process.env.ONLY || process.env.ONLY === 'moves') {
     const M = await player(); await M.ask('cb:dbg', { lv: 8 }); const seen = (P, k, mk, id) => P.fx.find(f => f.k === k && f.mk === mk && (!id || f.m === id));
     const until = async (fn, ms) => { for (let i = 0; i < ms / 100; i++) { const v = fn(); if (v) return v; await wait(100); } return null; };
     // 苔球：先預告，再滾過來撞人
@@ -116,6 +117,41 @@ async function main() {
     if (bl) { M.hits.length = 0; await wait(1300); ok(M.hits.some(h => h[0] === el.id && h[1] < 0), '花活著的時候老樹公會回血'); M.s.emit('cb:target', bl.m); const b0 = M.mobs.get(bl.m); M.at(b0.x + 1, b0.z);
       ok(await until(() => M.mobs.get(bl.m).hp === 0, 15000), '花打得掉'); }
     clearInterval(keep); M.s.close();
+  }
+  // ---- 組隊、出力、倒下 ----
+  if (!process.env.ONLY || process.env.ONLY === 'party') {
+    const until = async (fn, ms) => { for (let i = 0; i < ms / 100; i++) { const v = fn(); if (v) return v; await wait(100); } return null; };
+    const X = await player(), Y = await player(), Z = await player(); await X.ask('cb:dbg', { lv: 12 }); await Y.ask('cb:dbg', { lv: 12 }); await Y.ask('cb:school', 'pm'); await Y.ask('cb:slots', ['potion', 'bubble', 'spark', null]);
+    const mossAt = (i) => X.mob('moss', i), kill = async (P, m) => { P.at(m.x + 3, m.z); await wait(200); P.s.emit('cb:target', m.id); await until(() => P.mobs.get(m.id).hp === 0, 12000); P.s.emit('cb:target', null); await wait(300); };
+    ok((await X.ask('cb:pinvite', X.s.id)).error, '不能邀請自己');
+    ok((await X.ask('cb:pinvite', Y.s.id)).ok && await until(() => Y.inv.length, 1000), '邀請會送到對方那邊：' + (Y.inv[0] && Y.inv[0].name));
+    ok((await Z.ask('cb:pinvite', Y.s.id)).error, '對方正在考慮別人的邀請時不能再邀');
+    ok((await Y.ask('cb:panswer', { from: X.s.id, yes: 1 })).ok && await until(() => X.party && Y.party && X.party.m.length === 2, 1500), '答應以後兩個人在同一隊');
+    ok(X.party.leader === X.s.id && X.party.share === 1 && X.party.m.every(m => m.name && m.hpMax > 0 && m.mpMax > 0), '隊伍名單有名字、血量、魔量，邀請的人是隊長，預設經驗平分');
+    ok((await Z.ask('cb:pinvite', Y.s.id)).error, '已經有隊伍的人不能再被邀');
+    ok((await Y.ask('cb:pshare', 0)).error, '只有隊長可以改經驗怎麼分');
+    // 均分：沒出手的隊友站在附近也有經驗；人多有加成
+    let m = mossAt(3); Y.at(m.x + 6, m.z + 2); await wait(200); let x0 = X.me.exp, y0 = Y.me.exp, ym = Y.me.schools.pm.m; await kill(X, m);
+    const dx = X.me.exp - x0, dy = Y.me.exp - y0; ok(dx > 0 && dy > 0 && Math.abs(dx - dy) <= 1, '均分：出手的和沒出手的拿一樣多：' + dx + ' / ' + dy); ok(Y.me.schools.pm.m === ym, '沒出力的人沒有熟練度');
+    // 各自：沒出手就沒有；補血算出力，有經驗也有熟練度
+    ok((await X.ask('cb:pshare', 0)).ok && await until(() => Y.party.share === 0, 1500), '隊長改成各拿各的'); m = mossAt(4); Y.at(m.x + 6, m.z + 2); await wait(200); y0 = Y.me.exp; await kill(X, m); ok(Y.me.exp === y0, '各自：沒出手的沒有經驗');
+    m = mossAt(5); Y.at(m.x + 4, m.z + 1); X.at(m.x + 3, m.z); await wait(200); y0 = Y.me.exp; ym = Y.me.schools.pm.m; X.s.emit('cb:target', m.id); await until(() => X.hits.some(h => h[0] === m.id), 3000); Y.s.emit('cb:cast', { i: 0 });
+    await until(() => X.mobs.get(m.id).hp === 0, 12000); await wait(300); X.s.emit('cb:target', null); ok(Y.me.exp > y0 && Y.me.schools.pm.m === ym + 1, '只補血沒打怪也算出力：有經驗、有熟練度');
+    // 倒下：附近有隊友就多等一下，隊友補血可以救起來，不扣經驗
+    await wait(5500); await X.ask('cb:dbg', { exp: 200 }); const big = [...X.mobs.values()].filter(q => q.lv >= 50 && q.hp > 0)[0]; X.at(big.x + 2, big.z); Y.at(big.x + 9, big.z + 9); await wait(200); X.fx.length = 0; X.s.emit('cb:target', big.id);
+    ok(await until(() => X.me.dead > 0, 20000), '被打倒了'); const left = X.me.dead - X.me.t; ok(left > 8000, '附近有隊友，倒下後等久一點讓人來救：' + Math.round(left / 1000) + ' 秒');
+    Y.at(X.me && big.x + 2.5, big.z + 0.5); await wait(300); Y.s.emit('cb:cast', { i: 0 }); ok(await until(() => X.fx.find(f => f.k === 'rise' && f.id === X.s.id), 2000) && await until(() => X.me.dead === 0 && X.me.hp > 0, 1500), '隊友的補血招把人救起來');
+    ok(X.me.exp === 200 && !X.back.length, '被救起來不扣經驗、不用回入口'); X.at(8, 14); Y.at(8, 15); await wait(400);
+    // 一個人倒下：幾秒後回入口，扣一成
+    ok((await Y.ask('cb:pleave')).ok && await until(() => !X.party && !Y.party, 1500), '剩一個人的時候隊伍就散了'); await wait(5500); await X.ask('cb:dbg', { exp: 200 }); await X.ask('cb:dbg', { hp: 1 });
+    X.at(big.x + 2, big.z); await wait(200); X.s.emit('cb:target', big.id); ok(await until(() => X.me.dead > 0, 20000) && X.me.dead - X.me.t < 5000, '自己一個人倒下，等的時間短');
+    const bk = await until(() => X.back[0], 7000); ok(bk && bk.lose === 20 && await until(() => X.me.exp === 180, 1500), '回到入口，扣掉這一級累積經驗的一成：' + (bk && bk.lose));
+    await X.ask('cb:dbg', { lv: 5 }); await X.ask('cb:dbg', { exp: 50 }); X.back.length = 0; await wait(300); X.at(big.x + 2, big.z); await wait(200); X.s.emit('cb:target', big.id); const b2 = await until(() => X.back[0], 30000); ok(b2 && b2.lose === 0, '10 等以下倒下不扣經驗');
+    // 王的血量跟著隊伍人數
+    await wait(5500); await X.ask('cb:dbg', { lv: 99 }); await X.ask('cb:pinvite', Y.s.id); await Y.ask('cb:panswer', { from: X.s.id, yes: 1 }); await X.ask('cb:pinvite', Z.s.id); await Z.ask('cb:panswer', { from: X.s.id, yes: 1 }); await until(() => X.party && X.party.m.length === 3, 1500);
+    const el = [...X.mobs.values()].find(q => q.kind === 'elder'), keep = setInterval(() => X.s.emit('cb:dbg', { hp: 1 }), 1200); [X, Y, Z].forEach((P, i) => P.at(el.x + 6, el.z + i)); await wait(300); X.fx.length = 0; X.s.emit('cb:target', el.id);
+    const mx = await until(() => X.fx.find(f => f.k === 'mobMax' && f.m === el.id), 4000); ok(mx && mx.max === Math.round(el.max * (1 + C3.PARTY.boss * 2)), '三個人一隊去打，老樹公的血變多：' + el.max + ' → ' + (mx && mx.max));
+    X.s.emit('cb:target', null); clearInterval(keep); [X, Y, Z].forEach(P => P.s.close());
   }
   // 被怪打會扣血，倒下後回到入口
   const Bp = await player(); await Bp.ask('cb:dbg', { lv: 2 }); const w = [...Bp.mobs.values()].filter(m => m.lv >= 50 && m.hp > 0).pop(); Bp.at(w.x + 1, w.z); await wait(200); Bp.s.emit('cb:target', w.id);

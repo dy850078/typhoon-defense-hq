@@ -83,6 +83,9 @@
   // 練習場的怪：lv 等級、hp/atk 是同等級玩家的幾倍
   // drop：倒下時掉在地上的東西（p 機率、n 幾個、pool 從哪幾樣裡抽，都是背包裡本來就有的補品和雜物）。不管幾個人打，就掉這一份，先撿先贏
   const DROP_MS = 60000, PICK_R = 2.6;
+  // 組隊：max 最多幾人、near 多近才分得到經驗、bonus 每多一個人整隊多拿多少、boss 每多一個人王的血多多少
+  // 倒下：lose 扣這一級已經累積的經驗的幾成、from 幾等以上才扣、wait 一個人倒下幾秒回入口、help 附近有隊友時多等幾秒讓人來救、up 被救起來有幾成血
+  const PARTY = { max: 8, near: 30, bonus: 0.15, boss: 0.5 }, DOWN = { lose: 0.1, from: 10, wait: 4, help: 10, up: 0.3 };
   // move：這種怪的招（cd 幾秒一次、tele 預告幾秒、range 離人多近才出招）。出招前一定有預告，預告中被框住、打暈、結冰就會被打斷
   const MOBS = {
     // 苔球：縮一下，然後直直滾過去撞人；被普攻打到會彈開一點
@@ -137,5 +140,5 @@
     return out;
   }
   const keyLabel = (k) => k === 'Space' ? '空白' : String(k || '').replace(/^(Digit|Key)/, '').replace(/^Numpad/, '數');
-  return { SCHOOLS, SPECS, BASIC, SK, FAMILIARS, LEVEL, GATE, QUEST, QUEST_RATE, SRC, MOBS, DROP_MS, PICK_R, KEYS, clsName, basicOf, basicKey, learned, electives, cleanSlots, autoSlots, keyOk, cleanKeys, keyLabel };
+  return { SCHOOLS, SPECS, BASIC, SK, FAMILIARS, LEVEL, GATE, QUEST, QUEST_RATE, SRC, MOBS, DROP_MS, PICK_R, PARTY, DOWN, KEYS, clsName, basicOf, basicKey, learned, electives, cleanSlots, autoSlots, keyOk, cleanKeys, keyLabel };
 });

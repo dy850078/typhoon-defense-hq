@@ -3,6 +3,7 @@
 // 存檔放在帳號的 save.nw：lv、exp、school、spec、schools、slots、quest（同一個物件裡別的欄位是背包那邊的，寫回去時要留著）
 const C3 = require('./shared/classes3d.js');
 const { SK, SPECS, SCHOOLS, LEVEL, GATE, QUEST, QUEST_RATE, MOBS, FAMILIARS } = C3;
+const { PARTY, DOWN } = C3;
 const NEVER = 8e15;   // 花平常是「倒下」的，等老樹公叫出來
 
 // 練習場在前院的東邊：四塊地，越遠的怪越強；中間是大石偶
@@ -25,7 +26,7 @@ module.exports = function attach(nw, env) {
   let hits = [], seq = 1;
   ZONES.forEach((z, zi) => z.lv.forEach((lv, i) => {
     const kind = z.kinds ? z.kinds[i % z.kinds.length] : z.kind, d = MOBS[kind], a = i / z.lv.length * Math.PI * 2 + zi, r = d.boss ? 0 : d.add ? 4.5 : 3 + (i % 3) * 3.2;
-    const m = { id: 'm' + (mobs.length + 1), kind, src: z.src || kind, lv, sx: z.x + Math.cos(a) * r, sz: z.z + Math.sin(a) * r, max: Math.round(LEVEL.hp(lv) * d.hp), atk: LEVEL.atk(lv) * d.atk, st: {}, dmgBy: new Map() };
+    const m = { id: 'm' + (mobs.length + 1), kind, src: z.src || kind, lv, sx: z.x + Math.cos(a) * r, sz: z.z + Math.sin(a) * r, max: Math.round(LEVEL.hp(lv) * d.hp), atk: LEVEL.atk(lv) * d.atk, st: {}, dmgBy: new Map(), dmgAmt: new Map(), helpBy: new Map() }; m.max0 = m.max;
     m.x = m.sx; m.z = m.sz; m.hp = m.max; m.tx = m.x; m.tz = m.z; m.wait = rnd(0, 4); m.next = 0; m.dead = d.add ? NEVER : 0; m.sent = ''; m.mcd = 0;
     mobs.push(m); byId.set(m.id, m);
   }));
@@ -51,7 +52,7 @@ module.exports = function attach(nw, env) {
     if (!alive(m) || m.st.sealed > now() && kind !== 'box') return 0;
     const t = now(); let d = amount * (1 + (m.st.vuln > t ? m.st.vulnV : 0)) * (m.st.tidy > t ? 2 : 1) * rnd(0.92, 1.08); d = Math.max(1, Math.round(d));
     m.hp -= d; hits.push([m.id, d, kind || '']);
-    if (p) { m.dmgBy.set(p.id, t); if (!m.aggro || !players.get(m.aggro) || m.st.charm) m.aggro = p.id; if (kind !== 'dot') p.cb.fight = t + 5000;
+    if (p) { m.dmgBy.set(p.id, t); m.dmgAmt.set(p.id, (m.dmgAmt.get(p.id) || 0) + d); if (!m.aggro || !players.get(m.aggro) || m.st.charm) m.aggro = p.id; if (kind !== 'dot') p.cb.fight = t + 5000;
       const B = MOBS[m.kind].bounce; if (B && kind === 'hit' && !m.cast && !m.dash && !(m.st.root > t || m.st.stun > t || m.st.freeze > t)) { const l = Math.hypot(m.x - p.x, m.z - p.z) || 1; m.x += (m.x - p.x) / l * B; m.z += (m.z - p.z) / l * B; } }
     if (!noShare && m.st.link > t) mobs.forEach(o => { if (o !== m && alive(o) && o.st.link > t && o.st.linkG === m.st.linkG) hurt(o, d * (m.st.linkV || 0.5) / (1 + (o.st.vuln > t ? o.st.vulnV : 0)), p, 'link', true); });
     if (m.hp <= 0) die(m);
@@ -59,15 +60,26 @@ module.exports = function attach(nw, env) {
   }
   function die(m) {
     const t = now(), d = MOBS[m.kind]; m.dead = d.add ? NEVER : t + (d.boss ? 90000 : 9000); m.hp = 0; m.st = {}; m.aggro = null; m.cast = null; m.dash = null;
-    if (m === ELDER) { m.roots = null; setFog(false); BLOOMS.forEach(b => { if (alive(b)) { b.dead = NEVER; b.hp = 0; b.st = {}; fx({ k: 'die', m: b.id }); } }); }
-    if (d.add) { m.dmgBy.clear(); return fx({ k: 'die', m: m.id }); }
-    m.dmgBy.forEach((at, pid) => { const p = players.get(pid); if (!p || !p.cb || t - at > 20000) return; const c = p.cb, gap = c.lv - m.lv;
-      gain(p, Math.round((8 + 3 * m.lv) * (d.boss ? 12 : 1) * (gap > 20 ? 0.1 : gap > 10 ? 0.3 : 1)));
+    if (m === ELDER) { m.roots = null; m.sized = 0; if (m.max !== m.max0) { m.max = m.max0; fx({ k: 'mobMax', m: m.id, max: m.max }); } setFog(false); BLOOMS.forEach(b => { if (alive(b)) { b.dead = NEVER; b.hp = 0; b.st = {}; fx({ k: 'die', m: b.id }); } }); }
+    if (d.add) { m.dmgBy.clear(); m.dmgAmt.clear(); m.helpBy.clear(); return fx({ k: 'die', m: m.id }); }
+    // 有出力的人：打過牠的，加上在旁邊補血、上護盾、控場、挨打的（helpBy）
+    const who2 = new Map(); let total = 0;
+    m.dmgBy.forEach((at, pid) => { const p = players.get(pid); if (p && p.cb && t - at <= 20000) { const a = m.dmgAmt.get(pid) || 0; who2.set(pid, a); total += a; } });
+    m.helpBy.forEach((at, pid) => { const p = players.get(pid); if (p && p.cb && t - at <= 20000 && !who2.has(pid)) who2.set(pid, 0); });
+    const base = (c) => { const gap = c.lv - m.lv; return (8 + 3 * m.lv) * (d.boss ? 12 : 1) * (gap > 20 ? 0.1 : gap > 10 ? 0.3 : 1); }, part = (pid) => (total > 0 ? who2.get(pid) / total : 1 / who2.size);
+    const exp = new Map(), pools = new Map();
+    who2.forEach((a, pid) => { const p = players.get(pid), P = partyOf(p);
+      if (P && P.share) pools.set(P, (pools.get(P) || 0) + part(pid)); else exp.set(pid, Math.max(part(pid), who2.size > 1 ? 0.3 : 1)); });   // 各自：照打掉的血量分，只幫忙沒打的也有三成
+    // 均分：這一隊打掉的份，加上人多的加成，附近活著的隊友平分（沒出手的也有）
+    pools.forEach((sh, P) => { const near = [...P.m].map(id => players.get(id)).filter(q => q && q.cb && q.cb.dead <= t && dist(q, m) <= PARTY.near); if (!near.length) return;
+      const each2 = sh * (1 + PARTY.bonus * (near.length - 1)) / near.length; near.forEach(q => exp.set(q.id, (exp.get(q.id) || 0) + each2)); });
+    exp.forEach((k, pid) => { const p = players.get(pid); gain(p, Math.max(1, Math.round(base(p.cb) * k))); p.cb.changed = true; tell(p); });
+    who2.forEach((a, pid) => { const p = players.get(pid), c = p.cb;
       if (c.school) { const s = c.schools[c.school]; s.m = Math.min(GATE.mastery, (s.m || 0) + (d.boss ? 10 : 1)); }
       if (c.quest && Math.random() < QUEST_RATE[m.src]) { const q = QUEST[c.quest.spec], i = q.findIndex(x => x[2] === m.src);
         if (i >= 0 && c.quest.got[i] < q[i][1]) { c.quest.got[i]++; p.cbSock.emit('cb:loot', { name: q[i][0], n: c.quest.got[i], of: q[i][1] }); } }
       c.changed = true; tell(p); });
-    m.dmgBy.clear(); fx({ k: 'die', m: m.id });
+    m.dmgBy.clear(); m.dmgAmt.clear(); m.helpBy.clear(); fx({ k: 'die', m: m.id });
     // 掉東西：一隻怪就掉牠那一份，掉在地上，誰先撿就是誰的
     const dr = d.drop; if (dr && Math.random() < dr.p) for (let i = 0; i < (dr.n || 1); i++) { const a = Math.random() * Math.PI * 2, r = 0.5 + Math.random() * (d.boss ? 1.8 : 0.7);
       const o = { id: 'd' + seq++, k: dr.pool[Math.floor(Math.random() * dr.pool.length)], x: +(m.x + Math.cos(a) * r).toFixed(2), z: +(m.z + Math.sin(a) * r).toFixed(2), until: t + C3.DROP_MS }; drops.set(o.id, o); nw.emit('cb:drop', dropView(o)); }
@@ -80,10 +92,26 @@ module.exports = function attach(nw, env) {
   function allies(x, z, r) { const out = []; each((p, c) => { if (c.dead <= now() && Math.hypot(p.x - x, p.z - z) <= r) out.push(p); }); return out; }
   function hitPlayer(p, amount, m) { const c = p.cb, t = now(); if (c.dead > t) return;
     let d = amount * (1 - (c.buff.guard > t ? c.buff.guardV : 0)) * (c.buff.bond > t && c.fam.length ? 0.7 : 1); d = Math.max(1, Math.round(d * rnd(0.9, 1.1)));
-    c.hp -= d; c.fight = t + 5000; hits.push(['p:' + p.id, d, 'ow']);
+    c.hp -= d; c.fight = t + 5000; hits.push(['p:' + p.id, d, 'ow']); if (m && m.helpBy) m.helpBy.set(p.id, t);
     if (c.hp <= 0) down(p);
     tell(p); }
-  function down(p) { const c = p.cb; c.hp = 0; c.dead = now() + 4000; c.target = null; c.fam = []; c.pois = 0; c.drowsy = 0; mobs.forEach(o => { if (o.aggro === p.id) o.aggro = null; }); fx({ k: 'down', id: p.id }); whoAll(p); }
+  function down(p) { const c = p.cb, t = now(), P = partyOf(p), mate = P && [...P.m].some(id => { const q = players.get(id); return q && q !== p && q.cb && q.cb.dead <= t && dist(q, p) <= PARTY.near; });
+    c.hp = 0; c.dead = t + (mate ? DOWN.help : DOWN.wait) * 1000; c.target = null; c.fam = []; c.pois = 0; c.drowsy = 0; mobs.forEach(o => { if (o.aggro === p.id) o.aggro = null; }); fx({ k: 'down', id: p.id }); whoAll(p); }
+  // 隊友的補血招可以把倒下的人救起來（不用回入口，也不扣經驗）
+  function raise(by, x, z, r) { const t = now(); let n = 0; each((q, c) => { if (q !== by && c.dead > t && Math.hypot(q.x - x, q.z - z) <= r) { c.dead = 0; c.hp = Math.round(c.hpMax * DOWN.up); c.fight = t + 3000; n++; fx({ k: 'rise', id: q.id, by: by.id }); whoAll(q); tell(q); } }); return n; }
+  // 出力：在還在打的怪旁邊放招（補血、護盾、控場都算），這隻怪倒下時就有份
+  function credit(p) { const t = now(); mobs.forEach(m => { if (alive(m) && (m.aggro || m.dmgBy.size) && dist(m, p) <= 16) m.helpBy.set(p.id, t); }); }
+
+  // ---- 組隊 ----
+  const parties = new Map(); let pseq = 1;
+  const partyOf = (p) => (p && p.cb && p.cb.party ? parties.get(p.cb.party) || null : null);
+  const pView = (P) => ({ id: P.id, leader: P.leader, share: P.share ? 1 : 0, m: [...P.m].map(id => { const q = players.get(id), c = q && q.cb; return c ? { id, name: q.name || '', lv: c.lv, school: c.school, spec: c.spec, hp: Math.round(c.hp), hpMax: c.hpMax, mp: Math.round(c.mp), mpMax: c.mpMax, dead: c.dead > now() ? 1 : 0 } : null; }).filter(Boolean) });
+  const pSend = (P, force) => { const v = pView(P), k = JSON.stringify(v); if (!force && k === P.sent) return; P.sent = k; P.m.forEach(id => { const q = players.get(id); if (q && q.cbSock) q.cbSock.emit('cb:party', v); }); };
+  const say = (p, text) => { if (p && p.cbSock) p.cbSock.emit('cb:say', text); };
+  function pLeave(p, why) { const P = partyOf(p); if (!P) return; P.m.delete(p.id); p.cb.party = null; if (p.cbSock) p.cbSock.emit('cb:party', null);
+    P.m.forEach(id => say(players.get(id), (p.name || '隊友') + (why || '離開隊伍了')));
+    if (P.m.size < 2) { P.m.forEach(id => { const q = players.get(id); if (q && q.cb) { q.cb.party = null; q.cbSock.emit('cb:party', null); } }); parties.delete(P.id); return; }
+    if (P.leader === p.id) P.leader = [...P.m][0]; pSend(P, true); }
 
   // ---- 怪的招：先預告（cb:fx tele），時間到才生效（cb:fx mobMove）----
   const F1 = (v) => +v.toFixed(1);
@@ -105,6 +133,10 @@ module.exports = function attach(nw, env) {
   function elder(m, d, t, sec) {
     const R = d.roots, B = d.blooms, near2 = []; each((p, c) => { if (c.dead <= t && dist(p, m) <= R.far) near2.push(p); });
     if (m.roots && m.roots.until <= t) { const g = m.roots; m.roots = null; each((p, c) => { if (c.dead <= t && g.spots.some(s => Math.hypot(p.x - s[0], p.z - s[1]) <= R.r)) hitPlayer(p, m.atk * R.dmg, m); }); fx({ k: 'mobMove', mk: 'roots', m: m.id, spots: g.spots, r: R.r }); }
+    // 王的血量跟著來打牠的那一隊人數調整：滿血剛開打的時候定下來，沒人打了就變回原樣
+    if (m.aggro && !m.sized) { const P = partyOf(players.get(m.aggro)), n2 = P ? [...P.m].filter(id => { const q = players.get(id); return q && q.cb && dist(q, m) <= PARTY.near; }).length : 1, max = Math.round(m.max0 * (1 + PARTY.boss * (Math.max(1, n2) - 1)));
+      m.sized = 1; if (max !== m.max) { m.hp = Math.round(m.hp / m.max * max); m.max = max; m.sent = ''; fx({ k: 'mobMax', m: m.id, max }); } }
+    else if (!m.aggro && m.sized && m.hp >= m.max) { m.sized = 0; if (m.max !== m.max0) { m.max = m.max0; m.hp = m.max; m.sent = ''; fx({ k: 'mobMax', m: m.id, max: m.max }); } }
     if (m.aggro && near2.length) {
       if (!m.roots && (m.rcd || 0) <= t) { m.rcd = t + R.cd * 1000; const spots = near2.slice(0, 4).map(p => [F1(p.x), F1(p.z)]); for (let i = 0; i < 2; i++) { const a = Math.random() * 6.28, r = 3 + Math.random() * 5; spots.push([F1(m.x + Math.cos(a) * r), F1(m.z + Math.sin(a) * r)]); }
         m.roots = { until: t + R.tele * 1000, spots }; fx({ k: 'tele', mk: 'roots', m: m.id, spots, r: R.r, dur: R.tele }); }
@@ -123,15 +155,15 @@ module.exports = function attach(nw, env) {
     spark: (p, c, s, m) => { hurt(m, atkOf(c) * s.dmg, p, 'fire'); },
     blink: () => {},
     bubble: (p, c, s, m) => { const t = now(); near(m.x, m.z, s.r).forEach(o => { hurt(o, atkOf(c) * s.dmg, p, 'poison'); if (alive(o)) o.st.poison = { until: t + s.dur * 1000, dps: atkOf(c) * s.dot, by: p.id }; }); },
-    potion: (p, c, s) => { const a = allies(p.x, p.z, s.r).sort((a, b) => a.cb.hp / a.cb.hpMax - b.cb.hp / b.cb.hpMax)[0] || p; heal(a, a.cb.hpMax * s.heal); return { to: a.id }; },
-    heart: (p, c, s) => { allies(p.x, p.z, s.r).forEach(a => heal(a, a.cb.hpMax * s.heal)); },
+    potion: (p, c, s) => { const a = allies(p.x, p.z, s.r).sort((a, b) => a.cb.hp / a.cb.hpMax - b.cb.hp / b.cb.hpMax)[0] || p; heal(a, a.cb.hpMax * s.heal); raise(p, p.x, p.z, s.r); return { to: a.id }; },
+    heart: (p, c, s) => { raise(p, p.x, p.z, s.r); allies(p.x, p.z, s.r).forEach(a => heal(a, a.cb.hpMax * s.heal)); },
     scent: (p, c, s) => { const t = now() + s.dur * 1000; near(p.x, p.z, s.r).forEach(m => { m.st.weak = t; m.st.weakV = s.weak; m.st.vuln = t; m.st.vulnV = Math.max(m.st.vulnV || 0, s.vuln); if (!m.aggro) m.aggro = p.id; }); },
     waltz: (p, c, s) => { const t = now() + s.dur * 1000; aoe(p, p.x, p.z, s.r, s.dmg, 'ice', m => { m.st.slow = t; m.st.slowV = s.slow; }); },
     ball: (p, c, s) => { aoe(p, p.x, p.z, s.r, s.dmg, 'ice', m => { m.st.freeze = now() + ctrl(m, s.freeze) * 1000; }); },
     corrode: (p, c, s, m) => { const t = now() + s.dur * 1000; hurt(m, atkOf(c) * s.dmg, p, 'poison'); if (alive(m)) { m.st.poison = { until: t, dps: atkOf(c) * s.dot, by: p.id }; m.st.vuln = t; m.st.vulnV = Math.max(m.st.vulnV || 0, s.vuln); } },
     firework: (p, c, s, m) => { const t = now(); near(m.x, m.z, s.r).forEach(o => hurt(o, atkOf(c) * s.dmg * (o.st.poison && o.st.poison.until > t ? s.poisoned : 1), p, 'poison')); },
     lamp: (p, c, s) => { zones.push({ k: 'lamp', id: 'z' + seq++, x: p.x, z: p.z, r: s.r, until: now() + s.dur * 1000, next: 0, by: p.id, s }); },
-    meteor: (p, c, s, m) => { const x = m.x, z = m.z; aoe(p, x, z, s.r, s.dmg, 'star'); allies(x, z, s.r + 1).concat(allies(p.x, p.z, 0.1)).filter((a, i, l) => l.indexOf(a) === i).forEach(a => heal(a, a.cb.hpMax * s.heal)); },
+    meteor: (p, c, s, m) => { const x = m.x, z = m.z; aoe(p, x, z, s.r, s.dmg, 'star'); raise(p, x, z, s.r + 1); allies(x, z, s.r + 1).concat(allies(p.x, p.z, 0.1)).filter((a, i, l) => l.indexOf(a) === i).forEach(a => heal(a, a.cb.hpMax * s.heal)); },
     seal: (p, c, s, m) => { hurt(m, atkOf(c) * s.dmg, p, 'seal'); if (alive(m)) m.st.root = now() + ctrl(m, s.root) * 1000; },
     lock: (p, c, s, m) => { const ids = []; near(m.x, m.z, s.r).forEach(o => { hurt(o, atkOf(c) * s.dmg, p, 'seal'); if (alive(o)) { o.st.root = now() + ctrl(o, s.root) * 1000; ids.push(o.id); } });
       c.stage.lock = { until: now() + s.root * 1000, ids, x: m.x, z: m.z }; return { r: s.r }; },
@@ -166,7 +198,7 @@ module.exports = function attach(nw, env) {
     if (s.aim && !two) { if (!m) m = byId.get(c.target); if (!alive(m)) m = near(p.x, p.z, s.range).sort((a, b) => dist(a, p) - dist(b, p))[0]; if (!m || dist(m, p) > s.range + 1.5) return p.cbSock.emit('cb:no', 'far'); }
     const r = CAST[k](p, c, s, m); if (r === false) return;
     if (!two) { c.mp -= s.mp; c.cd[k0] = t + s.cd * 1000; }
-    c.fight = t + 5000; if (m && s.aim && k !== 'string') c.target = c.target || m.id;
+    c.fight = t + 5000; credit(p); if (m && s.aim && k !== 'string') c.target = c.target || m.id;
     fx(Object.assign({ k, id: p.id, x: +(m && s.aim ? m.x : p.x).toFixed(1), z: +(m && s.aim ? m.z : p.z).toFixed(1), m: m ? m.id : null }, r || {})); tell(p);
   }
   const inField = (p) => p.x > FIELD.x0 - 4 && p.z > -38;
@@ -178,7 +210,8 @@ module.exports = function attach(nw, env) {
     const t = now(), dt = TICK / 1000, sec = ++n % 10 === 0;
     // 玩家：普攻、使魔、回魔、倒下後回到入口
     each((p, c) => {
-      if (c.dead && c.dead <= t) { c.dead = 0; c.hp = c.hpMax; c.mp = c.mpMax; p.cbSock.emit('cb:back', FIELD.gate); whoAll(p); tell(p); }
+      if (c.dead && c.dead <= t) { c.dead = 0; c.hp = c.hpMax; c.mp = c.mpMax; const lose = c.lv >= DOWN.from && c.lv < LEVEL.max ? Math.round(c.exp * DOWN.lose) : 0; if (lose > 0) { c.exp -= lose; c.changed = true; }
+        p.cbSock.emit('cb:back', Object.assign({ lose }, FIELD.gate)); whoAll(p); tell(p); }
       if (c.dead) return;
       if (sec) { const rest = c.fight < t; const hp = Math.min(c.hpMax, c.hp + c.hpMax * (rest ? 0.06 : 0.004)), mp = Math.min(c.mpMax, c.mp + c.mpMax * (rest ? 0.08 : 0.025)); if (hp !== c.hp || mp !== c.mp) { c.hp = hp; c.mp = mp; tell(p); } }
       if (sec && c.pois > t) { const v = Math.max(1, Math.round(c.hpMax * MOBS.elder.fog.dps)); c.hp -= v; c.fight = t + 5000; hits.push(['p:' + p.id, v, 'pois']); if (c.hp <= 0) down(p); tell(p); if (c.dead) return; }
@@ -202,7 +235,7 @@ module.exports = function attach(nw, env) {
     // 場上的東西：星星燈、絕壁、封印之匣、謝幕
     for (let i = zones.length - 1; i >= 0; i--) { const z = zones[i], p = players.get(z.by), ok = p && p.cb;
       if (z.k === 'spore' && z.next <= t) { z.next = t + 1000; each((q, c) => { if (c.dead <= t && Math.hypot(q.x - z.x, q.z - z.z) <= z.r) { hitPlayer(q, z.atk * z.mv.dmg); const was = c.drowsy > t; c.drowsy = t + z.mv.drowsy * 1000; if (!was) tell(q); } }); }
-      if (z.k === 'lamp' && z.next <= t && ok) { z.next = t + 1000; allies(z.x, z.z, z.r).forEach(a => heal(a, a.cb.hpMax * z.s.heal)); aoe(p, z.x, z.z, z.r, z.s.dmg, 'star'); }
+      if (z.k === 'lamp' && z.next <= t && ok) { z.next = t + 1000; raise(p, z.x, z.z, z.r); allies(z.x, z.z, z.r).forEach(a => heal(a, a.cb.hpMax * z.s.heal)); aoe(p, z.x, z.z, z.r, z.s.dmg, 'star'); }
       if (z.k === 'cliff') { const hitNow = z.next <= t; if (hitNow) z.next = t + 1000; near(z.x, z.z, z.r).forEach(m => { const d = Math.hypot(m.x - z.x, m.z - z.z) || 0.01, k = (z.r + MOBS[m.kind].r) / d; m.x = z.x + (m.x - z.x) * k; m.z = z.z + (m.z - z.z) * k; if (hitNow && ok) hurt(m, atkOf(p.cb) * z.s.dmg, p, 'seal'); }); }
       if (z.until <= t) { zones.splice(i, 1);
         if (z.k === 'box' && ok) z.ids.forEach(id => { const m = byId.get(id); if (alive(m)) { m.st.sealed = 0; hurt(m, atkOf(p.cb) * z.s.dmg, p, 'box'); } });
@@ -243,6 +276,7 @@ module.exports = function attach(nw, env) {
     if (hits.length) { nw.emit('cb:hit', hits); hits = []; }
     each((p, c) => { if (c.dirty) { c.dirty = false; p.cbSock.emit('cb:me', meView(c)); } });
     if (n % 10 === 0) { const t2 = now(); drops.forEach(o => { if (o.until <= t2) { drops.delete(o.id); nw.emit('cb:dropGone', { id: o.id }); } }); }
+    if (sec) parties.forEach(P => pSend(P));
     if (n % 300 === 0) each(save);
   }, TICK);
 
@@ -280,6 +314,19 @@ module.exports = function attach(nw, env) {
       socket.on('cb:spec', (sp, fn) => { if (busy()) return ack(fn, { error: '戰鬥中不能轉職' }); const S = SPECS[sp]; if (!S || S.school !== c.school) return ack(fn, { error: '要先進這個學門' }); const s = c.schools[c.school];
         if (!s.got.includes(sp)) { const q = c.quest; if (!q || q.spec !== sp || QUEST[sp].some((x, i) => q.got[i] < x[1])) return ack(fn, { error: '信物還沒收齊' }); s.got.push(sp); c.quest = null; fx({ k: 'promote', id: p.id }); }
         s.spec = sp; c.spec = sp; c.fam = []; c.stage = {}; c.slots = C3.autoSlots(c, c.slots); done(fn); });
+      // 組隊：邀請、回答、離開、隊長切換經驗怎麼分、隊長請人離開
+      socket.on('cb:pinvite', (id, fn) => { const q = players.get(id); if (!q || !q.cb || q === p) return ack(fn, { error: '找不到這個人' }); const P = partyOf(p);
+        if (P && P.leader !== p.id) return ack(fn, { error: '只有隊長可以邀請' }); if (P && P.m.size >= PARTY.max) return ack(fn, { error: '隊伍滿了' }); if (partyOf(q)) return ack(fn, { error: '對方已經有隊伍了' });
+        if (q.cb.inv && q.cb.inv.until > now() && q.cb.inv.from !== p.id) return ack(fn, { error: '對方正在考慮別人的邀請' });
+        q.cb.inv = { from: p.id, until: now() + 30000 }; q.cbSock.emit('cb:pinv', { from: p.id, name: p.name || '', sec: 30 }); ack(fn, { ok: true }); });
+      socket.on('cb:panswer', (d, fn) => { const inv = c.inv; c.inv = null; if (!inv || !d || inv.from !== d.from || inv.until < now()) return ack(fn, { error: '邀請過期了' }); const q = players.get(inv.from);
+        if (!q || !q.cb) return ack(fn, { error: '對方不在了' }); if (!d.yes) { say(q, (p.name || '對方') + '這次先不組隊'); return ack(fn, { ok: true }); }
+        if (partyOf(p)) return ack(fn, { error: '你已經有隊伍了' }); let P = partyOf(q); if (P && (P.leader !== q.id || P.m.size >= PARTY.max)) return ack(fn, { error: '隊伍滿了' });
+        if (!P) { P = { id: 'p' + pseq++, leader: q.id, share: true, m: new Set([q.id]), sent: '' }; parties.set(P.id, P); q.cb.party = P.id; }
+        P.m.add(p.id); c.party = P.id; P.m.forEach(id => { if (id !== p.id) say(players.get(id), (p.name || '新隊友') + '加入隊伍了'); }); pSend(P, true); ack(fn, { ok: true }); });
+      socket.on('cb:pleave', (x, fn) => { pLeave(p); ack(typeof x === 'function' ? x : fn, { ok: true }); });
+      socket.on('cb:pshare', (on, fn) => { const P = partyOf(p); if (!P || P.leader !== p.id) return ack(fn, { error: '只有隊長可以改' }); P.share = !!on; P.m.forEach(id => say(players.get(id), P.share ? '經驗改成全隊平分' : '經驗改成各拿各的')); pSend(P, true); ack(fn, { ok: true }); });
+      socket.on('cb:pkick', (id, fn) => { const P = partyOf(p), q = players.get(id); if (!P || P.leader !== p.id || !q || q === p || !P.m.has(id)) return ack(fn, { error: '只有隊長可以請人離開' }); pLeave(q, '被請出隊伍了'); say(q, '你被請出隊伍了'); ack(fn, { ok: true }); });
       // 撿地上的東西：要走到旁邊，背包放得下才撿得起來
       socket.on('cb:pick', (id, fn) => { const o = drops.get(id); if (!o) return ack(fn, { error: '被撿走了' }); if (c.dead > now()) return ack(fn, { error: '倒下的時候不能撿' });
         if (Math.hypot(p.x - o.x, p.z - o.z) > C3.PICK_R + 1) return ack(fn, { error: '太遠了，走近一點' });
@@ -292,11 +339,12 @@ module.exports = function attach(nw, env) {
         if (d.quest && c.quest) c.quest.got = QUEST[c.quest.spec].map(q => q[1]);
         if (typeof d.drop === 'string') { const o = { id: 'd' + seq++, k: d.drop, x: +(p.x + 1.2).toFixed(2), z: +p.z.toFixed(2), until: now() + (d.ms > 0 ? d.ms : C3.DROP_MS) }; drops.set(o.id, o); nw.emit('cb:drop', dropView(o)); }
         if (d.bossHp > 0) ELDER.hp = Math.max(1, Math.round(ELDER.max * Math.min(1, d.bossHp)));   // 測試老樹公的下半場
+        if (d.exp > 0) { c.exp = Math.min(LEVEL.expFor(c.lv) - 1, d.exp | 0); tell(p); }
         if (d.hp > 0) { c.hp = Math.max(1, Math.round(c.hpMax * Math.min(1, d.hp))); tell(p); }
         if (d.reset) { Object.assign(c, { lv: 1, exp: 0, school: null, spec: null, schools: {}, quest: null, fam: [], stage: {} }); stats(c); c.slots = C3.autoSlots(c, []); }
         done(fn); });
     },
-    leave(p) { if (!p.cb) return; p.cb.changed = true; save(p); mobs.forEach(m => { if (m.aggro === p.id) m.aggro = null; }); p.cb = null; },
+    leave(p) { if (!p.cb) return; pLeave(p); p.cb.changed = true; save(p); mobs.forEach(m => { if (m.aggro === p.id) m.aggro = null; }); p.cb = null; },
     // 戰鬥以外拿到的經驗（花園收成、被感謝）：人在線上就直接加，不在線上就加在存檔裡
     gainExp(u, n) { n = Math.round(Number(n) || 0); if (n <= 0 || !u) return;
       const p = [...players.values()].find(q => q.cb && q.cbUser === u); if (p) { gain(p, n); p.cb.changed = true; tell(p); return; }

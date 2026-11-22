@@ -690,6 +690,29 @@ async function main() {
     clearInterval(keep); ok(!pg.errors.length, '沒有頁面錯誤' + (pg.errors.length ? '：' + pg.errors.slice(0, 3).join(' / ') : ''));
     await pg.context().close();
   };
+  // 組隊：點人邀請、對方答應、兩邊都看得到隊伍名單、離開
+  const partyShow = async (phone) => {
+    console.log('party' + (phone ? '（手機）' : ''));
+    const pa = await open(await account({ name: '小隊長' }), phone), pb = await open(await account({ name: '小隊員' }), phone), tag = phone ? 'party-phone-' : 'party-';
+    const ask = (pg, ev, arg) => pg.evaluate(([e, a]) => window.NW_SK.ask(e, a), [ev, arg]);
+    for (const pg of [pa, pb]) await pg.waitForFunction(() => window.HQ_NEWWORLD.combat && window.HQ_NEWWORLD.combat.view(), null, { timeout: 30000 });
+    await ask(pa, 'cb:dbg', { lv: 30 }); await ask(pa, 'cb:school', 'pm'); await ask(pb, 'cb:dbg', { lv: 24 }); await ask(pb, 'cb:school', 'sc');
+    await pa.evaluate(() => window.HQ_NEWWORLD.debugPlace(22, 14)); await pb.evaluate(() => window.HQ_NEWWORLD.debugPlace(24, 15)); await pa.waitForTimeout(phone ? 6000 : 1500);   // 手機版兩個分頁一起開很慢，等鏡頭跟上
+    const tapAt = (x, y) => (phone ? pa.touchscreen.tap(x, y) : pa.mouse.click(x, y));
+    const at = await pa.evaluate(() => window.HQ_NEWWORLD.debugScreen(24, 0.9, 15)); await tapAt(at.x, at.y); await pa.waitForTimeout(500);
+    ok(await pa.evaluate(() => !document.getElementById('cb-pop').hidden), '點別的玩家會冒出「邀請組隊」'); await pa.screenshot({ path: path.join(OUT, tag + '1-invite.png') });
+    await tapAt(at.x, at.y); await pa.waitForTimeout(300); await pa.locator('#cb-pop button').dispatchEvent('click'); ok(await pb.waitForFunction(() => !document.getElementById('cb-inv').hidden, null, { timeout: 5000 }).then(() => true).catch(() => false), '對方收到邀請'); await pb.screenshot({ path: path.join(OUT, tag + '2-asked.png') });
+    await pb.locator('#cb-inv button.yes').dispatchEvent('click'); const list = (pg) => pg.evaluate(() => { const b = document.getElementById('cb-party'); return b.hidden ? null : [...b.querySelectorAll('.pm em')].map(e => e.textContent).join(); });
+    ok(await pa.waitForFunction(() => !document.getElementById('cb-party').hidden, null, { timeout: 5000 }).then(() => true).catch(() => false) && /小隊員/.test(await list(pa)) && /小隊長/.test(await list(pb)), '兩邊都看得到隊友：' + await list(pa) + ' / ' + await list(pb));
+    const box = await pa.evaluate(() => { const r = document.getElementById('cb-party').getBoundingClientRect(), c = document.getElementById('cb-me').getBoundingClientRect(); return { top: r.top, bottom: r.bottom, right: r.right, cb: c.bottom, w: innerWidth, h: innerHeight }; });
+    ok(box.top >= box.cb && box.bottom < box.h && box.right < box.w, '隊伍名單在狀態卡下面，沒有超出畫面'); await pa.screenshot({ path: path.join(OUT, tag + '3-list.png') });
+    await tapAt(at.x, at.y); await pa.waitForTimeout(400); ok(await pa.evaluate(() => document.getElementById('cb-pop').hidden), '已經是隊友就不會再冒邀請');
+    await pb.locator('#cb-party .pf button').nth(1).dispatchEvent('click'); ok(await pa.waitForFunction(() => document.getElementById('cb-party').hidden, null, { timeout: 5000 }).then(() => true).catch(() => false), '隊友離開以後名單收起來');
+    ok(!pa.errors.length && !pb.errors.length, '沒有頁面錯誤' + [...pa.errors, ...pb.errors].slice(0, 3).join(' / '));
+    await pa.context().close(); await pb.context().close();
+  };
+  if (want === 'party') await partyShow(false);
+  if (want === 'party-phone') await partyShow(true);
   if (want === 'mobs') await mobsShow();
   if (want === 'loot') await loot();
   if (want === 'puppet') await puppet();

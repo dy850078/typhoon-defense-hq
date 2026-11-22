@@ -10,7 +10,7 @@ function makeCombat(ctx) {
   const mesh = (geo, material, parent) => { const m = new THREE.Mesh(geo, material); (parent || G).add(m); return m; };
   const flat = (m) => { m.rotation.x = -Math.PI / 2; return m; };
   const posOf = (id) => { if (id === MYID) return ME; const o = OTH.get(id); return o ? { x: o.x, z: o.z, face: o.f } : null; };
-  let MYID = null, MEV = null, SEND = () => {}, onChange = () => {}, onToast = () => {};
+  let MYID = null, MEV = null, SEND = () => {}, onChange = () => {}, onToast = () => {}, onPlayer = () => {};
   const WHO = new Map(), MOBS = new Map(), ZONES = new Map();
 
   // ---------- 一次性的特效：每個特效是一個物件加一個「照進度擺樣子」的函式 ----------
@@ -100,9 +100,13 @@ function makeCombat(ctx) {
   const RAY = new THREE.Raycaster(), NDC = new THREE.Vector2(), GP = new THREE.Plane(new V3(0, 1, 0), 0), HP3 = new V3();
   // 點到怪：選牠當目標（走過去自動打）；回傳有沒有點到
   // 點畫面：怪和地上的東西都可能被點到，挑離手指最近的那一個（地上的東西小，讓它優先一點）
-  function tap(cx, cy) { if (!MEV || S.lob) return false; NDC.set(cx / W * 2 - 1, -(cy / H) * 2 + 1); RAY.setFromCamera(NDC, camera); let kind = '', hit = null, bs = 1;
+  // 點到別的玩家：跳出「邀請組隊」的小紙條（大廳裡也可以）
+  function tap(cx, cy) { if (!MEV) return false; NDC.set(cx / W * 2 - 1, -(cy / H) * 2 + 1); RAY.setFromCamera(NDC, camera); let kind = '', hit = null, bs = 1;
     const see = (k, o, x, y, z, r) => { PV.set(x, y, z); const sc = RAY.ray.distanceToPoint(PV) / r; if (sc < bs) { bs = sc; kind = k; hit = o; } };
+    OTH.forEach((o, id) => { if (WHO.has(id)) see('who', id, o.x, FY(o.x, o.z) + 0.9, o.z, 0.8); }); if (kind === 'who') bs *= 0.5;   // 人和怪疊在一起的時候，點到人優先
+    if (S.lob) { if (kind === 'who') { onPlayer(hit, cx, cy); return true; } onPlayer(null); return false; }
     MOBS.forEach(m => { if (!(m.fl & 256) && m.g.visible) see('mob', m, m.x, FY(m.x, m.z) + m.h * 0.5, m.z, Math.max(0.9, m.h * 0.6)); }); DROPS.forEach(o => see('drop', o, o.x, FY(o.x, o.z) + 0.3, o.z, 1.1));
+    if (kind === 'who') { onPlayer(hit, cx, cy); return true; } onPlayer(null);
     if (kind === 'drop') { WANT = hit.id; if (Math.hypot(hit.x - ME.x, hit.z - ME.z) <= C3.PICK_R) { pick(hit); return true; } return false; }   // 遠的話先讓人走過去，走到旁邊就撿
     WANT = null;
     if (kind !== 'mob') { if (TARGET && RAY.ray.intersectPlane(GP, HP3)) setTarget(null); return false; } HOLD = false; setTarget(hit.id); S.goal = null; return true; }
@@ -331,6 +335,8 @@ function makeCombat(ctx) {
       else if (e.mk === 'spore' && m) { burst(m.x, FY(m.x, m.z) + 1.2, m.z, '#f6e9a0', 14, 3.4, 0.1, 0.7); }
       else if (e.mk === 'mend') { const o = MOBS.get(e.to); if (o) rise(o.x, o.z, '#9fe7a4', 8, 0.7, 2, 0.1, 0.8); }
       else if (e.mk === 'bloom') { ring(e.x, e.z, 1.4, '#f6a8c8', 0.6); rise(e.x, e.z, '#ffd0e0', 8, 0.6, 2, 0.1, 0.8); } },
+    rise: (e, p) => { ring(p.x, p.z, 1.8, '#9fe7a4', 0.8); rise(p.x, p.z, '#bff2c2', 12, 0.8, 3, 0.12, 1.1, GEO.star); },
+    mobMax: (e) => { const m = MOBS.get(e.m); if (m) m.max = e.max; },
     mobStop: (e) => { const m = MOBS.get(e.m); if (!m) return; m.castT = 0; burst(m.x, FY(m.x, m.z) + m.h, m.z, '#ffd76a', 6, 2, 0.1, 0.5, GEO.star); },
     fog: (e) => setFog(e),
     lvup: (e, p) => { ring(p.x, p.z, 2.4, '#ffd76a', 0.9); rise(p.x, p.z, '#ffe27a', 16, 1, 3.4, 0.14, 1.2, GEO.star); num(p.x, FY(p.x, p.z) + 2.8, p.z, 'Lv.' + e.lv, 'lv'); },
@@ -425,7 +431,7 @@ function makeCombat(ctx) {
     cast: (i) => { if (!MEV || MEV.dead) return 'dead'; const k = MEV.slots[i], s = C3.SK[k]; if (!s) return 'none'; let m = TARGET;
       if (s.aim && !m) { const n = nearest(s.range + 4); if (n) { m = n.id; setTarget(m); } else return 'far'; }
       SEND('cb:cast', { i, m }); return 'ok'; },
-    onChange: (fn) => { onChange = fn; }, onToast: (fn) => { onToast = fn; },
+    onChange: (fn) => { onChange = fn; }, onToast: (fn) => { onToast = fn; }, onPlayer: (fn) => { onPlayer = fn; },
     slow: () => (MEV && MEV.slow ? 0.55 : 1),
     faceCam: () => MOBS.forEach(m => { m.f = Math.atan2(camera.position.x - m.x, camera.position.z - m.z); }),   // 測試拍照用：怪全部轉過來看鏡頭
     debug: () => ({ fog: !!FOG, mobs: [...MOBS.values()].map(m => ({ id: m.id, kind: m.kind, lv: m.lv, x: m.x, z: m.z, hp: m.hp, max: m.max, fl: m.fl, tied: m.tied })), who: [...WHO.values()].map(w => ({ id: w.id, fam: w.fam, mech: w.mech, spec: w.spec })), threads: thN, drops: [...DROPS.values()].map(o => ({ id: o.id, k: o.k, x: o.x, z: o.z })), fx: FX.length, zones: [...ZONES.keys()] }),

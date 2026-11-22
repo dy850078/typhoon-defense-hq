@@ -13,12 +13,24 @@
     CR.rect(x, 3.5, 3.5, 50, 50, r, 0.9); x.fillStyle = paper; x.fill(); CR.stroke(x, r, line, INK);
     return a[0].toDataURL();
   }
-  // 柚木條：標題列的底
+  // 柚木條：標題列的底。順著長邊走的木紋（深淺交錯的細線）、繞著木節彎過去的山形紋、一點一點的導管孔
   function wood() {
-    var a = cv(240, 40, 2), x = a[1], r = CR.rng(71);
-    x.fillStyle = '#a8693f'; x.fillRect(0, 0, 240, 40);
-    for (var i = 0; i < 9; i++) { var y = 3 + i * 4.3 + r() * 2; x.beginPath(); x.moveTo(0, y); for (var k = 1; k <= 8; k++) x.lineTo(k * 30, y + (r() - 0.5) * 2.6);
-      x.strokeStyle = i % 3 ? 'rgba(111,66,36,.5)' : 'rgba(214,160,110,.55)'; x.lineWidth = 0.8 + r() * 0.9; x.stroke(); }
+    var W = 480, H = 40, a = cv(W, H, 2), x = a[1], r = CR.rng(71), g = x.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, '#c08a52'); g.addColorStop(0.45, '#b0763f'); g.addColorStop(1, '#9a6233'); x.fillStyle = g; x.fillRect(0, 0, W, H);
+    // 幾條顏色深淺不同的寬帶（木頭一年一年長出來的色差）
+    for (var b = 0; b < 5; b++) { var by = r() * H, bh = 4 + r() * 9; x.fillStyle = b % 2 ? 'rgba(122,72,34,.16)' : 'rgba(226,176,116,.16)'; x.beginPath(); x.moveTo(0, by);
+      for (var bx = 0; bx <= W; bx += 40) x.lineTo(bx, by + Math.sin(bx * 0.012 + b) * 2.5); for (bx = W; bx >= 0; bx -= 40) x.lineTo(bx, by + bh + Math.sin(bx * 0.012 + b + 1) * 2.5); x.fill(); }
+    // 兩個木節：附近的木紋會繞著它鼓起來
+    var knots = [{ x: 120 + r() * 60, y: 13 + r() * 6, w: 46, h: 7 }, { x: 330 + r() * 70, y: 24 + r() * 6, w: 60, h: 8 }];
+    var bend = function (px, py) { var d = 0; knots.forEach(function (k) { var dx = (px - k.x) / k.w, dy = py - k.y, f = Math.exp(-dx * dx); d += f * k.h * dy / (Math.abs(dy) + 3.5) * Math.exp(-Math.abs(dy) / 16); }); return d; };
+    for (var i = 0; i < 34; i++) { var y0 = -2 + i * 1.32 + (r() - 0.5) * 1.2, ph = r() * 6, amp = 0.5 + r() * 1.1, dark = r() < 0.62;
+      x.beginPath(); for (var px = -4; px <= W + 4; px += 6) { var py = y0 + Math.sin(px * 0.009 + ph) * amp + Math.sin(px * 0.031 + ph * 2) * 0.35; py += bend(px, py); if (px < 0) x.moveTo(px, py); else x.lineTo(px, py); }
+      x.strokeStyle = dark ? 'rgba(98,56,26,' + (0.2 + r() * 0.3).toFixed(2) + ')' : 'rgba(236,190,132,' + (0.16 + r() * 0.22).toFixed(2) + ')'; x.lineWidth = 0.45 + r() * (dark ? 0.9 : 0.6); x.stroke(); }
+    knots.forEach(function (k) { x.beginPath(); x.ellipse(k.x, k.y, 5, 1.9, 0, 0, Math.PI * 2); x.fillStyle = 'rgba(92,52,24,.5)'; x.fill(); x.beginPath(); x.ellipse(k.x, k.y, 8.5, 3.3, 0, 0, Math.PI * 2); x.strokeStyle = 'rgba(92,52,24,.35)'; x.lineWidth = 0.7; x.stroke(); });
+    // 導管孔：順著木紋方向的小短線
+    for (var n = 0; n < 260; n++) { var qx = r() * W, qy = r() * H, ql = 2 + r() * 7; qy += bend(qx, qy); x.beginPath(); x.moveTo(qx, qy); x.lineTo(qx + ql, qy + (r() - 0.5) * 0.5); x.strokeStyle = 'rgba(84,46,20,' + (0.12 + r() * 0.2).toFixed(2) + ')'; x.lineWidth = 0.5; x.stroke(); }
+    // 上緣一點亮、下緣一點暗，像一塊有厚度的板子
+    x.fillStyle = 'rgba(255,236,200,.22)'; x.fillRect(0, 0, W, 2.2); x.fillStyle = 'rgba(60,32,14,.24)'; x.fillRect(0, H - 2.6, W, 2.6);
     return a[0].toDataURL();
   }
   // 花磚：米白底、綠色格線、紅色四瓣花（跟大廳地上那一款同一個花樣）

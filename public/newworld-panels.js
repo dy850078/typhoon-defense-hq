@@ -154,7 +154,7 @@ window.NW_PANELS = function (NW, token, opt) {
 
   // ---------- 背包和裝備：跟總部同一個背包 ----------
   var bagTab = 'food', bagSel = null;
-  function bag() { var body = frame('bag', '背包', '新世界自己的背包，跟總部的分開。補品現在還不能在新世界吃，先看和整理。'); wait(body); post('bag', { act: 'state' }).then(function (r) { if (cur === 'bag') drawBag(body, r); }); }
+  function bag() { var body = eqView ? frame('bag', '裝備') : frame('bag', '背包', '補品現在還不能在新世界吃，先看和整理。'); wait(body); post('bag', { act: 'state' }).then(function (r) { if (cur === 'bag') drawBag(body, r); }); }
   function bagDo(body, req, done) { post('bag', req).then(function (x) { if (cur !== 'bag') return;
     if (!x.ok) return post('bag', { act: 'state' }).then(function (s) { s.error = x.error; if (cur === 'bag') drawBag(body, s); });
     toast(x.text); bagSel = null; if (x.equip) NW.gear(x.equip); if (done) done(x); drawBag(body, x); }); }
@@ -162,6 +162,7 @@ window.NW_PANELS = function (NW, token, opt) {
   function drawBag(body, r) {
     if (!r.sections) return fail(body, r);
     body.innerHTML = '';
+    if (eqView) return drawEquip(body, r);
     var lv = el('p', 'dim', '等級 ' + r.level + (r.level >= r.levelMax ? '（滿級）' : '')); lv.id = 'bag-level'; body.appendChild(lv);
     var tabs = el('div', 'tabs');
     ['food', 'misc', 'gear'].forEach(function (s) { var S = r.sections[s], b = btn('', function () { bagTab = s; bagSel = null; drawBag(body, r); }, bagTab === s ? 'on' : ''); b.appendChild(el('b', '', S.name)); b.appendChild(el('small', '', S.used + ' / ' + S.slots + ' 格')); b.dataset.tab = s; tabs.appendChild(b); });
@@ -177,20 +178,39 @@ window.NW_PANELS = function (NW, token, opt) {
     if (sel) { var acts = el('div', 'acts'); acts.appendChild(el('b', '', sel.name + ' ×' + sel.n)); var t = btn('丟掉一個', function () { bagDo(body, { act: 'trash', kind: sel.kind, k: sel.k }); }); t.id = 'bag-trash'; acts.appendChild(t); body.appendChild(acts);
       body.appendChild(el('p', 'dim', '丟掉就不見了，撿不回來。')); }
   }
+  // 背包的裝備頁只放「沒穿在身上」的：穿上就從背包拿走，脫下才放回來（同一款有兩件，穿一件，背包還看得到一件）
+  function spare(r) { return r.gear.map(function (g) { return Object.assign({}, g, { left: g.n - (g.on ? 1 : 0) }); }).filter(function (g) { return g.left > 0; }); }
+  function gearGrid(body, r, list) {
+    var grid = el('div', 'grid');
+    list.forEach(function (g) { var c = cell('gear-' + g.id, g.name, g.left, 'r-' + g.rarity + (bagSel === g.id ? ' on' : '')); c.dataset.gear = g.id; c.onclick = function () { bagSel = bagSel === g.id ? null : g.id; drawBag(body, r); }; grid.appendChild(c); });
+    body.appendChild(grid);
+    var g = list.filter(function (x) { return x.id === bagSel; })[0];
+    if (g) { var acts = el('div', 'acts'); acts.appendChild(el('b', '', '【' + g.rarity + '】' + g.name + '　' + r.slots[g.slot]));
+      var e = btn('穿上', function () { eqSlot = eqView ? g.slot : eqSlot; bagDo(body, { act: 'equip', slot: g.slot, id: g.id }); }, 'main'); e.id = 'gear-equip'; acts.appendChild(e);
+      if (!eqView) acts.appendChild(btn('丟掉一件', function () { bagDo(body, { act: 'trash', kind: 'gear', k: g.id }); })); body.appendChild(acts); }
+  }
   function drawGear(body, r) {
+    var list = spare(r);
+    if (!list.length) return body.appendChild(el('p', 'dim', r.gear.length ? '背包裡沒有多的裝備，都穿在身上了。' : '還沒有裝備。大廳的扭蛋機、打怪和副本都會拿到。'));
+    gearGrid(body, r, list);
+    body.appendChild(el('p', 'dim', '穿在身上的不佔背包，要看或脫下請按右上的「裝備」。'));
+  }
+  // 裝備面板（右上的「裝備」）：身上四個部位；點一個部位，下面列出背包裡可以換上的
+  var eqView = false, eqSlot = null;
+  function drawEquip(body, r) {
+    var lv = el('p', 'dim', '點一個部位，可以脫下，或換上背包裡的裝備。'); body.appendChild(lv);
     var row = el('div', 'worn-row');
     Object.keys(r.slots).forEach(function (s) { var id = r.equip[s], g = id && r.gear.filter(function (x) { return x.id === id; })[0];
-      var c = g ? cell('gear-' + g.id, g.name, 0, 'worn r-' + g.rarity) : el('div', 'cell'); if (!g) c.appendChild(el('small', '', '沒穿')); c.insertBefore(el('small', '', r.slots[s]), c.firstChild); c.dataset.slot = s; c.dataset.worn = id || '';
-      if (g) { c.style.cursor = 'pointer'; c.onclick = function () { bagSel = bagSel === g.id ? null : g.id; drawBag(body, r); }; } row.appendChild(c); });
+      var c = g ? cell('gear-' + g.id, g.name, 0, 'worn r-' + g.rarity) : el('button', 'cell'); c.type = 'button'; if (!g) c.appendChild(el('small', '', '沒穿')); c.insertBefore(el('small', '', r.slots[s]), c.firstChild); c.dataset.slot = s; c.dataset.worn = id || '';
+      if (eqSlot === s) c.classList.add('on'); c.style.cursor = 'pointer'; c.onclick = function () { eqSlot = eqSlot === s ? null : s; bagSel = null; drawBag(body, r); }; row.appendChild(c); });
     body.appendChild(row);
-    if (!r.gear.length) return body.appendChild(el('p', 'dim', '還沒有裝備。大廳的扭蛋機、打怪和副本都會拿到。'));
-    var grid = el('div', 'grid');
-    r.gear.forEach(function (g) { var c = cell('gear-' + g.id, g.name, g.n, 'r-' + g.rarity + (g.on ? ' worn' : '') + (bagSel === g.id ? ' on' : '')); c.dataset.gear = g.id; c.onclick = function () { bagSel = bagSel === g.id ? null : g.id; drawBag(body, r); }; grid.appendChild(c); });
-    body.appendChild(grid);
-    var g = r.gear.filter(function (x) { return x.id === bagSel; })[0];
-    if (g) { var acts = el('div', 'acts'); acts.appendChild(el('b', '', '【' + g.rarity + '】' + g.name + '　' + r.slots[g.slot]));
-      var e = btn(g.on ? '脫下' : '穿上', function () { bagDo(body, { act: 'equip', slot: g.slot, id: g.on ? null : g.id }); }, 'main'); e.id = 'gear-equip'; acts.appendChild(e);
-      var t = btn('丟掉一件', function () { bagDo(body, { act: 'trash', kind: 'gear', k: g.id }); }); t.disabled = g.on && g.n < 2; acts.appendChild(t); body.appendChild(acts); }
+    if (r.error) body.appendChild(el('p', 'err', r.error));
+    var worn = eqSlot && r.equip[eqSlot] && r.gear.filter(function (x) { return x.id === r.equip[eqSlot]; })[0];
+    var list = spare(r).filter(function (g) { return !eqSlot || g.slot === eqSlot; });
+    if (worn && !bagSel) { var acts = el('div', 'acts'); acts.appendChild(el('b', '', '【' + worn.rarity + '】' + worn.name + '　' + r.slots[eqSlot]));
+      var e = btn('脫下，放回背包', function () { bagDo(body, { act: 'equip', slot: eqSlot, id: null }); }, 'main'); e.id = 'gear-equip'; acts.appendChild(e); body.appendChild(acts); }
+    body.appendChild(el('p', 'sub', eqSlot ? '背包裡的' + r.slots[eqSlot] + '：' : '背包裡的裝備：'));
+    if (!list.length) body.appendChild(el('p', 'dim', eqSlot ? '背包裡沒有這個部位的裝備。' : '背包裡沒有裝備。大廳的扭蛋機、打怪都會拿到。')); else gearGrid(body, r, list);
     body.appendChild(el('p', 'dim', '有些裝備的 3D 樣子還在做，穿上去暫時看不出來。'));
   }
 
@@ -248,12 +268,12 @@ window.NW_PANELS = function (NW, token, opt) {
     cur: function () { return cur; },
     refresh: function () { if (cur === 'bag') bag(); },
     open: function (kind, it, pin) {
-      if (pin && cur === (kind === 'gear' ? 'bag' : kind) && (kind !== 'gear' || bagTab === 'gear') && (kind !== 'bag' || bagTab !== 'gear')) return close();   // 右上的按鈕再按一次就是收起來
-      if (kind === 'gear' || (pin && kind === 'bag')) { bagTab = kind === 'gear' ? 'gear' : bagTab === 'gear' ? 'food' : bagTab; bagSel = null; bag(); pinned = true; return; }
+      if (pin && cur === (kind === 'gear' ? 'bag' : kind) && (kind !== 'gear' || eqView) && (kind !== 'bag' || !eqView)) return close();   // 右上的按鈕再按一次就是收起來
+      if (kind === 'gear' || (pin && kind === 'bag')) { eqView = kind === 'gear'; eqSlot = null; bagSel = null; bag(); pinned = true; return; }
       if (pin && kind === 'pet') { pet(); pinned = true; return; }
       if (pin && kind === 'juke') { juke(); pinned = true; return; }
       pinned = false;
       if (kind === 'mentor') mentor(); else if (kind === 'gacha') gacha(); else if (kind === 'plot') plot(it.i); else if (kind === 'seedbox') seedbox(); else if (kind === 'well') { wishPage = 1; well(); } else if (kind === 'juke') juke();
-      else if (kind === 'bag') { if (cur === 'bag') close(); else bag(); } else if (kind === 'pet') { if (cur === 'pet') close(); else pet(); } else if (cur) close();
+      else if (kind === 'bag') { if (cur === 'bag') close(); else { eqView = false; bag(); } } else if (kind === 'pet') { if (cur === 'pet') close(); else pet(); } else if (cur) close();
     } };
 };

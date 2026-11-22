@@ -489,7 +489,8 @@ async function main() {
     await pa.click('#panel [data-tab="gear"]'); await pa.waitForSelector('#panel [data-gear="mgDress"]'); await pa.waitForTimeout(300);
     ok((await pa.locator('#panel .grid [data-gear]').count()) === 3 && !!(await pa.$('#panel [data-gear="mgWings"] img')), '裝備那一頁有三件魔法少女裝備');
     ok((await pa.getAttribute('#panel .grid .cell', 'data-gear')) === 'mgWings', '稀有度高的排前面');
-    await pa.click('#panel [data-gear="mgDress"]'); await pa.click('#gear-equip'); await pa.waitForFunction(() => (document.querySelector('#panel [data-slot="outfit"]') || { dataset: {} }).dataset.worn === 'mgDress', null, { timeout: 30000 }).catch(() => {});
+    await pa.click('#panel [data-gear="mgDress"]'); await pa.click('#gear-equip'); await pa.waitForFunction(() => !document.querySelector('#panel [data-gear="mgDress"]'), null, { timeout: 30000 }).catch(() => {});
+    ok((await pa.locator('#panel .grid [data-gear]').count()) === 2 && !(await pa.$('#panel .worn-row')), '穿上的蓬蓬裙從背包拿走了，背包不顯示身上穿的');
     const st1 = await api('bag', { act: 'state' });
     ok(st1.equip.outfit === 'mgDress', '穿上蓬蓬裙，帳號記下來了');
     ok(!st1.gear.some(g => g.id === 'wzHat') && st1.items.find(x => x.k === 'apple').n === 2, '總部的裝備和補品沒有帶過來，是 3D 自己的一份');
@@ -498,6 +499,9 @@ async function main() {
     ok(!bad.ok, '正在穿的最後一件不能丟（' + bad.error + '）');
     await new Promise(r => setTimeout(r, 300));
     ok(!(await api('bag', { act: 'equip', slot: 'head', id: 'mgDress' })).ok, '裝備不能穿到別的部位');
+    await tap(pa, '#b-gear'); await pa.waitForSelector('#panel [data-slot="outfit"][data-worn="mgDress"]');
+    ok(!(await pa.$('#panel [data-gear="mgDress"]')) && !!(await pa.$('#panel [data-tab]')) === false, '右上的「裝備」看得到身上穿的蓬蓬裙'); await shot(pa, 'stay-3b-equip');
+    await pa.click('#panel [data-slot="head"]'); await pa.waitForTimeout(300); ok((await pa.locator('#panel .grid [data-gear]').count()) === 1 && !!(await pa.$('#panel [data-gear="mgBow"]')), '點頭飾那一格，只列出背包裡的頭飾');
     await pa.click('#panel [data-slot="outfit"]'); await pa.click('#gear-equip'); await pa.waitForFunction(() => (document.querySelector('#panel [data-slot="outfit"]') || { dataset: {} }).dataset.worn === '', null, { timeout: 30000 }).catch(() => {});
     ok(!(await api('bag', { act: 'state' })).equip.outfit && (await NW(pa, () => HQ_NEWWORLD.gearOn())) === ',,,', '脫下來也記得，身上也換回來');
     // 寵物

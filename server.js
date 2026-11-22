@@ -725,7 +725,7 @@ function startNewworldNet() {
           look: { glasses: Math.random() < 0.4, wings: false, cls: pick([null, null, 'summoner', 'skater']), hair: pick(['short', 'bowl', 'bob', 'long', 'airy', 'hime', 'bun', 'buns', 'buzz']), top: pick(['tee', 'dress', 'hoodie']),
             face: pick(['smile', 'dot', 'grin', 'cat']), hairCol: pick(['#2b2a33', '#6b4a32', '#c9772f', '#e6b85a']), skinCol: null, topCol: pick([null, '#4f7cc2', '#6baf7b', '#f6a3b4', '#f2c14e']) } };
         b.tx = b.x; b.tz = b.z; nwBots.push(b); nwPlayers.set(b.id, b); nw.emit('join', pub(b)); } });
-    socket.on('move', (d) => { if (!d || typeof d !== 'object') return; p.x = num(d.x, -70, 70); p.z = num(d.z, -70, 70); p.f = num(d.f, -7, 7); p.mv = Math.round(num(d.mv, 0, 2)); p.p = Math.round(num(d.p, 0, 2));   // mv：0 站著 1 走 2 跑；p：0 沒有 1 坐下 2 揮手
+    socket.on('move', (d) => { if (!d || typeof d !== 'object') return; p.x = num(d.x, -70, 70); p.z = num(d.z, -70, 126); p.f = num(d.f, -7, 7); p.mv = Math.round(num(d.mv, 0, 2)); p.p = Math.round(num(d.p, 0, 2));   // mv：0 站著 1 走 2 跑；p：0 沒有 1 坐下 2 揮手
      
       p.fm = Math.round(num(d.fm, 0, 2)); p.g = Math.round(num(d.g, 0, 999)); });   // fm：騎士的隊形；g：揮手指揮的次數（變了就播一次）
     socket.on('look', (d) => { const l = sanitizeLook3d(d); if (!l) return; p.look = l; p.tier = nwTier(u, l.cls); socket.emit('tier', p.tier); socket.broadcast.emit('look', { id: p.id, look: l, tier: p.tier }); });

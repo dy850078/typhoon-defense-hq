@@ -73,15 +73,15 @@
   // 三轉任務：每個職業要收集的五樣東西 [名字, 要幾個, 哪一種怪會掉]
   // 第三格是從哪裡掉：moss 苔球、puff 傘菇精、dew 露水靈、deep 霧林深處的怪、boss 霧林老樹公（順序不能動，存檔記的是第幾樣）
   const QUEST = {
-    skater: [['結霜的苔', 10, 'moss'], ['紫菇粉', 10, 'puff'], ['冰露', 8, 'dew'], ['深霧的香氣', 6, 'deep'], ['空香水瓶', 1, 'boss']],
+    skater: [['結霜的苔', 10, 'moss'], ['紫菇粉', 10, 'puff'], ['冰露', 8, 'dew'], ['雲上的香氣', 6, 'deep'], ['空香水瓶', 1, 'boss']],
     healer: [['星星苔', 10, 'moss'], ['軟菇絨', 10, 'puff'], ['晨露', 8, 'dew'], ['微光', 6, 'deep'], ['玻璃燈罩', 1, 'boss']],
     barrier: [['東方界石', 1, 'moss'], ['南方界石', 1, 'puff'], ['西方界石', 1, 'dew'], ['北方界石', 1, 'deep'], ['定界的樁', 1, 'boss']],
     summoner: [['苔墨', 10, 'moss'], ['菇皮紙', 10, 'puff'], ['露水印泥', 8, 'dew'], ['會發光的緞帶', 6, 'deep'], ['使魔想要的禮物', 1, 'boss']],
-    alchemist: [['黏稠的苔膠', 10, 'moss'], ['菇柄關節', 10, 'puff'], ['凝露結晶', 8, 'dew'], ['一小團霧', 6, 'deep'], ['自己最怕的東西', 1, 'boss']],
-    puppeteer: [['苔絲線', 10, 'moss'], ['菇絨棉', 10, 'puff'], ['露珠針', 8, 'dew'], ['霧剪刀', 6, 'deep'], ['沒有臉的人偶', 1, 'boss']],
+    alchemist: [['黏稠的苔膠', 10, 'moss'], ['菇柄關節', 10, 'puff'], ['凝露結晶', 8, 'dew'], ['一小團雲', 6, 'deep'], ['自己最怕的東西', 1, 'boss']],
+    puppeteer: [['苔絲線', 10, 'moss'], ['菇絨棉', 10, 'puff'], ['露珠針', 8, 'dew'], ['雲剪刀', 6, 'deep'], ['沒有臉的人偶', 1, 'boss']],
   };
   const QUEST_RATE = { moss: 0.45, puff: 0.45, dew: 0.4, deep: 0.4, boss: 1 };
-  const SRC = { moss: '苔球', puff: '傘菇精', dew: '露水靈', deep: '霧林深處', boss: '霧林老樹公' };
+  const SRC = { moss: '苔球', puff: '傘菇精', dew: '露水靈', deep: '雲海高原', boss: '霧林老樹公' };
   // 練習場的怪：lv 等級、hp/atk 是同等級玩家的幾倍
   // drop：倒下時掉在地上的東西（p 機率、n 幾個、pool 從哪幾樣裡抽，都是背包裡本來就有的補品和雜物）。不管幾個人打，就掉這一份，先撿先贏
   const DROP_MS = 60000, PICK_R = 2.6;
@@ -100,6 +100,16 @@
     bloom: { name: '老樹公的花', hp: 0.55, atk: 0, sp: 0, r: 0.6, h: 1.3, add: 1, heal: 0.012 },
     // 霧林老樹公：樹根從地下冒出來、開花回血、半血以後整片起毒霧（補血招可以解毒）
     elder: { name: '霧林老樹公', hp: 10, atk: 0.9, sp: 1.6, r: 1.9, h: 5.6, boss: 1, roots: { cd: 6, tele: 1.3, r: 2.4, dmg: 1.9, far: 16 }, blooms: { cd: 22, n: 2, max: 3 }, fog: { at: 0.5, r: 16, dps: 0.02, clean: 5 },
+      drop: { p: 1, n: 3, pool: ['chicken', 'bubbletea', 'seedPineapple', 'seedApple'] } },
+    // ---- 雲海高原 ----
+    // 棉雲羊：倒退幾步助跑，然後直線衝撞；撞完要喘一下，這時候受傷加倍
+    sheep: { name: '棉雲羊', hp: 0.8, atk: 0.5, sp: 2.3, r: 0.8, h: 1.5, move: { k: 'charge', cd: 7, tele: 1.1, range: 8, len: 10, w: 1.3, dmg: 1.8, back: 1.6, tidy: 2 }, drop: { p: 0.4, pool: ['noodle', 'veggie', 'bubbletea'] } },
+    // 風鈴鳥：飛在半空，繞一圈以後俯衝下來，地上的影子圈會先出現
+    bird: { name: '風鈴鳥', hp: 0.7, atk: 0.55, sp: 2.8, r: 0.6, h: 2.4, fly: 1.3, move: { k: 'dive', cd: 7, tele: 1.4, range: 9, r: 2.4, dmg: 1.9 }, drop: { p: 0.4, pool: ['twig', 'chicken', 'seedGuava'] } },
+    // 雷角鹿：擺姿勢蓄電，蓄滿放一道直線的雷
+    deer: { name: '雷角鹿', hp: 0.9, atk: 0.55, sp: 2.5, r: 0.8, h: 1.75, move: { k: 'bolt', cd: 8, tele: 1.5, range: 10, len: 13, w: 1.2, dmg: 2.1 }, drop: { p: 0.45, pool: ['chicken', 'bubbletea', 'seedApple'] } },
+    // 雲鯨：打哈欠把人吸過去再壓下來（跑出圈外，或靠庇護、絕壁擋）；唱歌有讀條，讀完全隊重傷，用任何控場招打中就能打斷，被打斷會委屈一下
+    whale: { name: '雲鯨', hp: 14, atk: 0.9, sp: 1.3, r: 2.6, h: 4.2, boss: 1, fly: 1.2, yawn: { cd: 17, tele: 3.2, r: 7.5, dmg: 2.8, pull: 2.0, far: 22, wall: 0.3 }, song: { cd: 26, tele: 4.5, dmg: 0.6, far: 30, sulk: 3.5 },
       drop: { p: 1, n: 3, pool: ['chicken', 'bubbletea', 'seedPineapple', 'seedApple'] } },
   };
   const clsName = (s) => (s && s.spec ? SPECS[s.spec].name : s && s.school ? '見習生' : '芽');

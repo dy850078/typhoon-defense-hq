@@ -905,12 +905,12 @@ async function main() {
     const pg = await open(await account({ name: '小林' }), false), shot = (n) => pg.screenshot({ path: path.join(OUT, 'mobs-' + n + '.png') });
     const ask = (ev, arg) => pg.evaluate(([e, a]) => window.NW_SK.ask(e, a), [ev, arg]), dbg = () => pg.evaluate(() => window.HQ_NEWWORLD.combat.debug()), view = () => pg.evaluate(() => window.HQ_NEWWORLD.combat.view());
     await pg.waitForFunction(() => window.HQ_NEWWORLD.combat && window.HQ_NEWWORLD.combat.view(), null, { timeout: 20000 });
-    const d0 = await dbg(), kinds = [...new Set(d0.mobs.map(m => m.kind))].sort().join(); ok(kinds === 'bloom,dew,elder,moss,puff', '霧林的怪：' + kinds);
+    const d0 = await dbg(), kinds = [...new Set(d0.mobs.map(m => m.kind))].sort().join(); ok(kinds === 'bird,bloom,deer,dew,elder,moss,puff,sheep,whale', '野地的怪：' + kinds);
     const by = (k, deep) => d0.mobs.filter(m => m.kind === k && (deep ? m.lv > 30 : m.lv <= 30)).sort((a, b) => b.lv - a.lv)[0];
     const go = async (m, dx, dz, tgt) => { await pg.evaluate(([id, dx, dz, tgt]) => { const NW = window.HQ_NEWWORLD, m = NW.combat.debug().mobs.find(x => x.id === id); NW.debugPlace(m.x + dx, m.z + dz); NW.combat.setTarget(tgt ? id : null); }, [m.id, dx, dz, !!tgt]); await pg.waitForTimeout(700); await pg.evaluate(() => window.HQ_NEWWORLD.combat.faceCam()); await pg.waitForTimeout(250); };
     await ask('cb:dbg', { lv: 99 }); await zoomIn(pg);
     for (const k of ['moss', 'puff', 'dew']) { await go(by(k), 2.6, 1.2); await shot('1-' + k); }
-    await zoomIn(pg); await go(by('moss', true), 2.6, 1.2); await shot('1-deep');
+
     const el = d0.mobs.find(m => m.kind === 'elder'); await go(el, 4.5, 5); await shot('2-elder');
     // 出招：等級調低讓怪活久一點
     await ask('cb:dbg', { lv: 14 }); const pu = by('puff'); await go(pu, 1.6, 0.4, true);
@@ -985,6 +985,30 @@ async function main() {
     ok(!pg.errors.length, '沒有頁面錯誤' + (pg.errors.length ? '：' + pg.errors.slice(0, 3).join(' / ') : '')); await pg.context().close();
   };
   if (want === 'famai') await famAi();
+  // 雲海高原：每一種怪拍一張，再拍出招的預告，還有雲鯨打哈欠和唱歌
+  const cloudShow = async () => {
+    console.log('cloud');
+    const pg = await open(await account({ name: '小雲' }), false), shot = (n) => pg.screenshot({ path: path.join(OUT, 'cloud-' + n + '.png') });
+    const ask = (ev, arg) => pg.evaluate(([e, a]) => window.NW_SK.ask(e, a), [ev, arg]), dbg = () => pg.evaluate(() => window.HQ_NEWWORLD.combat.debug());
+    await pg.waitForFunction(() => window.HQ_NEWWORLD.combat && window.HQ_NEWWORLD.combat.view(), null, { timeout: 20000 });
+    const d0 = await dbg(), by = (k) => d0.mobs.filter(m => m.kind === k).sort((a, b) => b.lv - a.lv)[0];
+    const go = async (m, dx, dz, tgt) => { await pg.evaluate(([id, dx, dz, tgt]) => { const NW = window.HQ_NEWWORLD, m = NW.combat.debug().mobs.find(x => x.id === id); NW.debugPlace(m.x + dx, m.z + dz); NW.combat.setTarget(tgt ? id : null); }, [m.id, dx, dz, !!tgt]); await pg.waitForTimeout(700); await pg.evaluate(() => window.HQ_NEWWORLD.combat.faceCam()); await pg.waitForTimeout(250); };
+    const flag = (id, f, ms) => pg.waitForFunction(([id, f]) => { const m = window.HQ_NEWWORLD.combat.debug().mobs.find(x => x.id === id); return m && (m.fl & f); }, [id, f], { timeout: ms || 20000 }).then(() => true).catch(() => false);
+    await ask('cb:dbg', { lv: 99 }); await zoomIn(pg);
+    await pg.evaluate(() => window.HQ_NEWWORLD.debugPlace(42, 74)); await pg.waitForTimeout(900); await zoomIn(pg); await shot('0-land'); await zoomIn(pg);
+    for (const k of ['sheep', 'bird', 'deer']) { await go(by(k), 2.8, 1.4); await shot('1-' + k); }
+    const wh = by('whale'); await go(wh, 6.5, 7); await shot('2-whale');
+    await ask('cb:dbg', { lv: 30 }); const keep = setInterval(() => ask('cb:dbg', { hp: 1 }).catch(() => {}), 1500);
+    for (const k of ['sheep', 'bird', 'deer']) { const m = d0.mobs.filter(x => x.kind === k).sort((a, b) => b.lv - a.lv)[1]; await go(m, 4, 1, true); await pg.waitForTimeout(1200); await pg.evaluate(() => window.HQ_NEWWORLD.combat.setTarget(null));
+      ok(await flag(m.id, 4096), C3n(k) + '出招前有預告'); await pg.waitForTimeout(250); await shot('3-' + k + '-warn'); await pg.evaluate(() => window.HQ_NEWWORLD.debugPlace(42, 96)); await pg.waitForTimeout(5800); }
+    await ask('cb:dbg', { lv: 99 }); await go(wh, 5, 5.5, true); await pg.waitForTimeout(1800); await ask('cb:dbg', { whale: 'yawn' });
+    ok(await flag(wh.id, 4096, 5000), '雲鯨開始打哈欠'); await pg.waitForTimeout(1500); await shot('4-whale-yawn'); await pg.waitForTimeout(2600); await shot('5-whale-slam');
+    await ask('cb:dbg', { whale: 'song' }); ok(await flag(wh.id, 4096, 5000), '雲鯨開始唱歌'); await pg.waitForTimeout(1800);
+    ok(await pg.evaluate(() => [...document.querySelectorAll('.cb-bar.cast')].some(b => !b.hidden)), '唱歌的讀條看得到'); await shot('6-whale-song');
+    clearInterval(keep); ok(!pg.errors.length, '沒有頁面錯誤' + (pg.errors.length ? '：' + pg.errors.slice(0, 3).join(' / ') : '')); await pg.context().close();
+  };
+  const C3n = (k) => require('../shared/classes3d.js').MOBS[k].name;
+  if (want === 'cloud') await cloudShow();
   if (want === 'idle') await idleShow();
   if (want === 'party') await partyShow(false);
   if (want === 'party-phone') await partyShow(true);

@@ -32,6 +32,13 @@ function makeCombat(ctx) {
   const circle = (x, z, r, col, dur) => { const g = new THREE.Group(); G.add(g); flat(g); [1, 0.72].forEach(s => { const m = mesh(GEO.ring, bm(col, 0.9), g); m.scale.setScalar(s); }); [0, Math.PI].forEach(a => { const m = mesh(GEO.tri, bm(col, 0.9), g); m.rotation.z = a; m.scale.setScalar(0.74); });
     return fx(g, dur, (k, o) => { o.position.set(x, FY(x, z) + 0.07, z); const s = r * Math.min(1, k * 6) * (k > 0.8 ? 1 - (k - 0.8) * 5 : 1); o.scale.set(s, s, s); o.rotation.z = k * 2; }); };
 
+  // ---------- 雲海高原：霧林南邊一塊淡淡的高地，邊上和地上散著雲 ----------
+  let PULLME = null;
+  { const C = { x0: 14, x1: 70, z0: 68, z1: 124 }, land = new THREE.Mesh(new THREE.PlaneGeometry(C.x1 - C.x0, C.z1 - C.z0), new THREE.MeshToonMaterial({ color: '#e3efe9' })); land.rotation.x = -Math.PI / 2; land.position.set((C.x0 + C.x1) / 2, 0.02, (C.z0 + C.z1) / 2); land.receiveShadow = true; G.add(land);
+    let sd = 7; const rr = () => { sd = (sd * 16807) % 2147483647; return sd / 2147483647; }, cm = new THREE.MeshToonMaterial({ color: '#ffffff' }), cloud = (x, z, s) => { const n = 3 + Math.floor(rr() * 3); for (let i = 0; i < n; i++) { const m = new THREE.Mesh(GEO.sph, cm), r = s * (0.6 + rr() * 0.6); m.position.set(x + (rr() - 0.5) * s * 2.2, r * 0.32, z + (rr() - 0.5) * s * 1.4); m.scale.set(r * 1.3, r * 0.6, r); G.add(m); } };
+    for (let x = C.x0; x <= C.x1; x += 4.5) { cloud(x + rr() * 2, C.z1 + 1, 2.2); if (x < 34 || x > 50) cloud(x + rr() * 2, C.z0 - 1, 1.8); } for (let z = C.z0; z <= C.z1; z += 4.5) { cloud(C.x0 - 1, z + rr() * 2, 2.0); cloud(C.x1 + 1, z + rr() * 2, 2.0); }
+    for (let i = 0; i < 26; i++) cloud(C.x0 + 4 + rr() * (C.x1 - C.x0 - 8), C.z0 + 4 + rr() * (C.z1 - C.z0 - 8), 0.5 + rr() * 0.5);
+    for (let z = 61; z < 68; z += 1.7) cloud(42 + (rr() - 0.5) * 3, z, 0.45); }
   // ---------- 怪 ----------
   const eyes = (g, y, z, dx, r, col) => [-1, 1].forEach(k => { part(g, sph(r, 8, 6), col || INK, { pos: [dx * k, y, z], scale: [1, 1.25, 0.5], noLine: true, shadow: false, mat: basic(col || INK) }); });
   // 霧林的怪。g.anim(m, t)：每一格照狀態擺一下樣子（整理傘、蓄力、睡著）
@@ -68,6 +75,40 @@ function makeCombat(ctx) {
       const arms = [-1, 1].map(k => { const a = new THREE.Group(); g.add(a); a.position.set(0.9 * k, 1.9, 0); part(a, GEO.cyl, bark, { pos: [0.55 * k, 0.2, 0], scale: [0.16, 1.3, 0.16], rot: [0, 0, -1.1 * k] }); part(a, sph(0.42, 10, 8), '#7fb069', { pos: [1.2 * k, 0.5, 0], scale: [1, 0.8, 1] }); return a; });
       g.anim = (m, t) => { const busy = m.rootT > 0, nod = busy ? 0 : Math.max(0, Math.sin(t * 0.5 + 1)) > 0.86 ? 1 : 0; lids.forEach(l => { l.position.y = 1.97 - (nod ? 0.09 : 0); }); g.rotation.x = nod ? 0.06 : 0; wig.rotation.y = t * 0.3; wig.position.y = 5.05 + (m.hurtT > 0 ? 0.3 : 0);
         arms.forEach((a, i) => { a.rotation.z = (i ? 1 : -1) * (busy ? -0.9 + Math.sin(t * 18) * 0.15 : Math.sin(t * 1.2 + i) * 0.08); }); }; },
+    // ---- 雲海高原 ----
+    // 棉雲羊：一團白白的雲毛，黑臉，小捲角；助跑的時候往後蹲，撞完會喘
+    sheep: (g) => { const wool = '#fbf7ee', dark = '#4a4350'; [[0, 0.78, 0, 0.62], [0.36, 0.86, -0.1, 0.42], [-0.36, 0.86, -0.1, 0.42], [0, 1.08, -0.18, 0.46], [0, 0.72, -0.48, 0.44], [0.24, 0.66, 0.3, 0.36], [-0.24, 0.66, 0.3, 0.36]].forEach(p => part(g, sph(1, 10, 8), wool, { pos: [p[0], p[1], p[2]], scale: [p[3], p[3] * 0.9, p[3]] }));
+      const hd = new THREE.Group(); g.add(hd); hd.position.set(0, 0.86, 0.58); part(hd, sph(0.3, 12, 9), dark, { scale: [0.9, 1, 0.95] }); eyes(hd, 0.06, 0.25, 0.11, 0.055, '#fffdf2'); part(hd, sph(0.2, 8, 6), wool, { pos: [0, 0.27, -0.06], scale: [1.2, 0.7, 1], noLine: true });
+      [-1, 1].forEach(k => { part(hd, sph(0.1, 6, 5), dark, { pos: [0.3 * k, 0.05, -0.04], scale: [1.5, 0.5, 0.8], rot: [0, 0, -0.5 * k], noLine: true }); part(hd, GEO.cone, '#e8c98a', { pos: [0.2 * k, 0.3, -0.02], scale: [0.07, 0.22, 0.07], rot: [0, 0, -0.7 * k], noLine: true }); });
+      [[-0.26, 0.3], [0.26, 0.3], [-0.26, -0.3], [0.26, -0.3]].forEach(p => part(g, GEO.cyl, dark, { pos: [p[0], 0.14, p[1]], scale: [0.07, 0.3, 0.07], noLine: true }));
+      g.anim = (m, t) => { const tidy = m.fl & 2048, cast = m.castT > 0; g.rotation.x = cast ? -0.25 : tidy ? 0.12 : 0; hd.rotation.x = cast ? 0.5 : tidy ? 0.3 + Math.sin(t * 16) * 0.12 : Math.sin(t * 1.5 + m.ph) * 0.06; if (tidy) { const q = 1 + Math.sin(t * 16) * 0.05; g.scale.set(m.sc * q, m.sc * (2 - q), m.sc * q); } }; },
+    // 風鈴鳥：圓滾滾的小鳥，肚子下面掛一個風鈴；平常飛在半空，俯衝前會先拉高
+    bird: (g) => { g.float = C3.MOBS.bird.fly; const c = '#8ec9e8', b = new THREE.Group(); g.add(b); part(b, sph(0.42, 14, 10), c, { pos: [0, 0.5, 0], scale: [1, 0.95, 1.05] }); part(b, sph(0.3, 10, 8), '#fbf7ee', { pos: [0, 0.42, 0.2], scale: [0.9, 0.8, 0.7], noLine: true });
+      eyes(b, 0.62, 0.36, 0.14, 0.06); part(b, GEO.cone, '#f2b53a', { pos: [0, 0.52, 0.46], scale: [0.09, 0.2, 0.09], rot: [Math.PI / 2, 0, 0], noLine: true }); part(b, GEO.cone, c, { pos: [0, 0.94, -0.05], scale: [0.08, 0.24, 0.08], rot: [-0.4, 0, 0], noLine: true }); part(b, GEO.cone, c, { pos: [0, 0.5, -0.5], scale: [0.2, 0.4, 0.06], rot: [-1.2, 0, 0], noLine: true });
+      const wings = [-1, 1].map(k => { const w = new THREE.Group(); b.add(w); w.position.set(0.36 * k, 0.56, 0); part(w, sph(0.3, 8, 6), '#6fb1d6', { pos: [0.24 * k, 0, 0], scale: [1, 0.16, 0.7] }); return w; });
+      const bell = new THREE.Group(); b.add(bell); bell.position.set(0, 0.12, 0); part(bell, GEO.cyl, '#c9b48a', { pos: [0, -0.1, 0], scale: [0.012, 0.2, 0.012], noLine: true, shadow: false }); part(bell, sph(0.13, 8, 6), '#f6d87a', { pos: [0, -0.26, 0], scale: [1, 0.9, 1] }); part(bell, GEO.box, '#fffdf2', { pos: [0, -0.5, 0], scale: [0.09, 0.2, 0.01], noLine: true, shadow: false });
+      g.anim = (m, t) => { const cast = m.castT > 0; wings.forEach((w, i) => { w.rotation.z = (i ? 1 : -1) * Math.sin(t * (cast ? 30 : 14) + m.ph) * 0.8; }); bell.rotation.z = Math.sin(t * 5 + m.ph) * 0.4; if (m.diveT > 0) m.diveT -= 0.016;
+        b.position.y += ((cast ? 1.6 : m.diveT > 0 ? -g.float + 0.1 : 0) - b.position.y) * (m.diveT > 0 ? 0.6 : 0.12); b.rotation.x = m.diveT > 0 ? 0.8 : cast ? -0.3 : 0; }; },
+    // 雷角鹿：淡紫色的小鹿，一對大角；蓄電的時候抬頭擺姿勢，角會越來越亮
+    deer: (g) => { g.sc = 1.25; const c = '#b9a6e0', d = '#8f7cc0', horn = new THREE.MeshBasicMaterial({ color: '#e8c98a' }); part(g, sph(0.5, 12, 9), c, { pos: [0, 0.95, 0], scale: [0.8, 0.78, 1.25] }); part(g, sph(0.3, 8, 6), '#fbf7ee', { pos: [0, 0.82, 0.36], scale: [0.8, 0.7, 0.8], noLine: true }); part(g, sph(0.12, 6, 5), '#fbf7ee', { pos: [0, 1.08, -0.62], noLine: true });
+      [[-0.22, 0.36], [0.22, 0.36], [-0.22, -0.4], [0.22, -0.4]].forEach(p => { part(g, GEO.cyl, d, { pos: [p[0], 0.32, p[1]], scale: [0.065, 0.66, 0.065], noLine: true }); });
+      const hd = new THREE.Group(); g.add(hd); hd.position.set(0, 1.3, 0.5); part(hd, GEO.cyl, c, { pos: [0, 0.12, 0], scale: [0.14, 0.5, 0.14], rot: [0.35, 0, 0], noLine: true }); part(hd, sph(0.27, 12, 9), c, { pos: [0, 0.48, 0.12], scale: [0.9, 0.95, 1.1] }); eyes(hd, 0.52, 0.36, 0.13, 0.055);
+      part(hd, sph(0.06, 6, 5), INK, { pos: [0, 0.42, 0.42], scale: [1.2, 0.8, 0.6], noLine: true, shadow: false, mat: basic(INK) }); [-1, 1].forEach(k => part(hd, sph(0.1, 6, 5), d, { pos: [0.27 * k, 0.56, 0], scale: [1.6, 0.5, 0.8], rot: [0, 0, 0.5 * k], noLine: true }));
+      const ant = [-1, 1].map(k => { const a = new THREE.Group(); hd.add(a); a.position.set(0.12 * k, 0.7, 0.02); [[0, 0.28, 0, 0.56, 0.2 * k], [0.14 * k, 0.42, 0, 0.3, -0.9 * k], [-0.06 * k, 0.56, 0, 0.26, 0.5 * k]].forEach(q => part(a, GEO.cyl, '#e8c98a', { pos: [q[0], q[1], q[2]], scale: [0.035, q[3], 0.035], rot: [0, 0, -q[4]], noLine: true, shadow: false, mat: horn })); return a; });
+      g.anim = (m, t) => { const cast = m.castT > 0, k = cast ? 1 - m.castT / (m.castD || 1.5) : 0; hd.rotation.x = cast ? -0.45 : Math.sin(t * 1.3 + m.ph) * 0.06; horn.color.set(cast ? (Math.sin(t * 30) > 0 ? '#fffbe0' : '#ffe27a') : '#e8c98a'); ant.forEach(a => a.scale.setScalar(1 + k * 0.35)); if (cast && Math.random() < 0.3) burst(m.x, FY(m.x, m.z) + m.h + 0.2, m.z, '#fff3a0', 1, 1.2, 0.06, 0.3, GEO.star); }; },
+    // 雲鯨：飄在半空的大白鯨，背上馱著幾朵雲，永遠一臉想睡；打哈欠嘴巴張很大，唱歌會冒音符
+    whale: (g) => { const c = '#a9cfe8', belly = '#fbf7ee', b = new THREE.Group(); g.add(b); b.position.y = 1.2; part(b, sph(1, 18, 14), c, { pos: [0, 1.5, 0], scale: [1.9, 1.45, 2.6] }); part(b, sph(1, 14, 10), belly, { pos: [0, 1.15, 0.25], scale: [1.7, 1.1, 2.3], noLine: true });
+      const tail = new THREE.Group(); b.add(tail); tail.position.set(0, 1.7, -2.4); part(tail, sph(0.6, 10, 8), c, { pos: [0, 0, -0.3], scale: [0.8, 0.6, 1.3] }); [-1, 1].forEach(k => part(tail, sph(0.6, 8, 6), c, { pos: [0.55 * k, 0.1, -1.0], scale: [1.1, 0.2, 0.7], rot: [0, 0.5 * k, 0] }));
+      const fins = [-1, 1].map(k => { const f = new THREE.Group(); b.add(f); f.position.set(1.7 * k, 1.0, 0.5); part(f, sph(0.6, 8, 6), c, { pos: [0.4 * k, 0, 0], scale: [1.2, 0.18, 0.6] }); return f; });
+      const lids = []; [-1, 1].forEach(k => { part(b, sph(0.17, 10, 8), INK, { pos: [1.25 * k, 1.75, 1.75], scale: [0.6, 1, 0.6], noLine: true, shadow: false, mat: basic(INK) }); lids.push(part(b, sph(0.2, 10, 8), c, { pos: [1.27 * k, 1.87, 1.76], scale: [0.7, 0.7, 0.7], noLine: true, shadow: false })); part(b, sph(0.2, 8, 6), '#f7a8c4', { pos: [1.3 * k, 1.4, 1.8], scale: [0.5, 0.6, 0.6], noLine: true, shadow: false }); });
+      const mouth = part(b, sph(0.5, 12, 9), '#e2788a', { pos: [0, 1.25, 2.4], scale: [1.2, 0.12, 0.4], noLine: true, shadow: false, mat: basic('#e2788a') });
+      [[0.3, 3.0, 0.2, 0.7], [-0.6, 2.95, -0.5, 0.55], [0.5, 2.9, -1.0, 0.5], [-0.2, 3.15, -0.2, 0.5]].forEach(p => part(b, sph(1, 8, 6), '#ffffff', { pos: [p[0], p[1], p[2]], scale: [p[3], p[3] * 0.7, p[3]], noLine: true }));
+      g.anim = (m, t) => { const yawn = m.yawnT > 0, song = m.songT > 0, sulk = m.fl & 2048; if (m.yawnT > 0) m.yawnT -= 0.016; if (m.songT > 0) m.songT -= 0.016; if (m.slamT > 0) m.slamT -= 0.016;
+        b.position.y += ((m.slamT > 0 ? -0.9 : yawn ? 2.2 : 1.2 + Math.sin(t * 1.1) * 0.25) - b.position.y) * (m.slamT > 0 ? 0.5 : 0.08); b.rotation.x = sulk ? 0.22 : yawn ? -0.18 : 0; b.rotation.z = sulk ? Math.sin(t * 20) * 0.03 : Math.sin(t * 0.8) * 0.04;
+        mouth.scale.set(yawn ? 1.5 : song ? 0.9 : 1.2, yawn ? 1.3 : song ? 0.5 + Math.abs(Math.sin(t * 6)) * 0.4 : 0.12, 0.4); lids.forEach(l => { l.position.y = sulk || yawn ? 1.8 : 1.87; });
+        tail.rotation.x = Math.sin(t * 1.6) * 0.25; fins.forEach((f, i) => { f.rotation.z = (i ? 1 : -1) * (0.2 + Math.sin(t * 1.6 + 1) * 0.25); });
+        if (song && Math.random() < 0.12) rise(m.x + (Math.random() - 0.5) * 3, m.z + 2, '#c9a2f2', 1, 1.5, 5, 0.22, 1.2, GEO.star);
+        if (yawn && Math.random() < 0.3) { const a = Math.random() * PI2, r = 6; fx(mesh(GEO.sph, bm('#ffffff', 0.7)), 0.5, (k, o) => { o.position.set(m.x + Math.cos(a) * r * (1 - k), FY(m.x, m.z) + 0.6 + k * 2.4, m.z + Math.sin(a) * r * (1 - k)); o.scale.setScalar(0.16 * (1 - k * 0.6)); }); } }; },
   };
   const mkBar = () => { const b = document.createElement('div'), i = document.createElement('i'), n = document.createElement('span'); b.className = 'cb-bar'; b.append(n, i); b.hidden = true; LAB.appendChild(b); return { b, i, n }; };
   function addMob(d) {
@@ -368,10 +409,18 @@ function makeCombat(ctx) {
         CUT = 0.3; [-1, 1].forEach(k => { const b = mesh(GEO.box, bm('#f4f1ea')); fx(b, 0.3, (kk, m) => { m.position.set(e.x, FY(e.x, e.z2) + 5.2, e.z2); m.scale.set(e.r * 2.2 * Math.min(1, kk * 4), 0.07, 0.3); m.rotation.set(0, 0.4, k * (0.5 - kk * 0.5)); }); }); ring(e.x, e.z2, e.r, '#ffe9a8', 0.6, 0.05); } },
     die: (e) => { const m = MOBS.get(e.m); if (m) { burst(m.x, FY(m.x, m.z) + m.h * 0.5, m.z, '#ffffff', 8, 2.5, 0.16, 0.5); if (TARGET === m.id) setTarget(null, true); } },
     mobAtk: (e) => { const m = MOBS.get(e.m); if (!m) return; m.atkT = 0.3; if (e.shot) { const p = e.f ? FAMS.get(e.f) : posOf(e.to); if (p) shot({ x: m.x, y: FY(m.x, m.z) + m.h * 0.7, z: m.z }, head(p, 1.1), '#8fd3ee', 0.28, 0.16, GEO.sph, 0.5, () => burst(p.x, FY(p.x, p.z) + 1.1, p.z, '#bfe9ff', 5, 1.6, 0.08, 0.35)); } },
-    tele: (e) => { const m = MOBS.get(e.m); if (m) { m.castT = e.dur; if (e.x2 != null) m.f = Math.atan2(e.x2 - m.x, e.z2 - m.z); }
-      if (e.mk === 'roll') warnLine(e.x, e.z, e.x2, e.z2, e.w, e.dur); else if (e.mk === 'spore') warn(e.x, e.z, e.r, e.dur); else if (e.mk === 'roots') { e.spots.forEach(s => warn(s[0], s[1], e.r, e.dur)); if (m) m.rootT = e.dur + 0.4; }
+    tele: (e) => { const m = MOBS.get(e.m); if (m) { m.castT = e.dur; m.castD = e.dur; if (e.x2 != null) m.f = Math.atan2(e.x2 - m.x, e.z2 - m.z); m.line = e; }
+      if (e.mk === 'roll' || e.mk === 'charge' || e.mk === 'bolt') warnLine(e.x, e.z, e.x2, e.z2, e.w, e.dur); else if (e.mk === 'dive') warn(e.x2, e.z2, e.r, e.dur);
+      else if (e.mk === 'yawn') { warn(e.x, e.z, e.r, e.dur); if (m) m.yawnT = e.dur; PULLME = { x: e.x, z: e.z, until: S.time + e.dur, sp: e.pull, far: e.far }; }
+      else if (e.mk === 'song') { if (m) { m.songT = e.dur; m.songD = e.dur; } } else if (e.mk === 'spore') warn(e.x, e.z, e.r, e.dur); else if (e.mk === 'roots') { e.spots.forEach(s => warn(s[0], s[1], e.r, e.dur)); if (m) m.rootT = e.dur + 0.4; }
       else if (e.mk === 'mend' && m) { const o = MOBS.get(e.to); ring(m.x, m.z, 1.2, '#9fe7a4', e.dur, 0.6); if (o) fx(mesh(GEO.sph, bm('#9fe7a4', 0.9)), e.dur, (k, b) => { b.position.set(m.x + (o.x - m.x) * k, FY(m.x, m.z) + 1 + Math.sin(k * Math.PI) * 1.2, m.z + (o.z - m.z) * k); b.scale.setScalar(0.14 + k * 0.1); }); } },
     mobMove: (e) => { const m = MOBS.get(e.m);
+      if (e.mk === 'charge' && m) burst(m.x, FY(m.x, m.z) + 0.3, m.z, '#fbf7ee', 8, 2.4, 0.14, 0.5);
+      if (e.mk === 'dive' && m) { m.diveT = 0.4; ring(e.x, e.z, e.r, '#8ec9e8', 0.45); burst(e.x, FY(e.x, e.z) + 0.3, e.z, '#dff6ff', 10, 3, 0.1, 0.5); }
+      if (e.mk === 'bolt' && m && m.line) { const l = m.line, len = Math.hypot(l.x2 - l.x, l.z2 - l.z), o = mesh(GEO.box, bm('#fff3a0', 0.95).clone()); o.rotation.y = Math.atan2(l.x2 - l.x, l.z2 - l.z); SHAKE = Math.max(SHAKE, 0.12);
+        fx(o, 0.3, (k, b2) => { b2.position.set((l.x + l.x2) / 2, FY(l.x, l.z) + 1.1, (l.z + l.z2) / 2); b2.scale.set(l.w * 1.6 * (1 - k) + 0.05, 0.5 * (1 - k) + 0.05, len); b2.material.opacity = 0.95 * (1 - k); }, (b2) => b2.material.dispose()); for (let i = 0; i < 5; i++) burst(l.x + (l.x2 - l.x) * i / 4, FY(l.x, l.z) + 1, l.z + (l.z2 - l.z) * i / 4, '#fff3a0', 3, 2, 0.08, 0.35, GEO.star); }
+      if (e.mk === 'yawn' && m) { m.yawnT = 0; m.slamT = 0.5; SHAKE = Math.max(SHAKE, 0.35); ring(e.x, e.z, e.r, '#ffffff', 0.6); burst(e.x, FY(e.x, e.z) + 0.4, e.z, '#ffffff', 22, 6, 0.2, 0.8); }
+      if (e.mk === 'song' && m) { m.songT = 0; SHAKE = Math.max(SHAKE, 0.3); ring(e.x, e.z, 16, '#c9a2f2', 0.9); ring(e.x, e.z, 9, '#c9a2f2', 0.7); }
       if (e.mk === 'roots') { e.spots.forEach(s => rootsUp(s[0], s[1], e.r)); SHAKE = Math.max(SHAKE, 0.2); }
       else if (e.mk === 'roll' && m) { m.rollT = 0.45; }
       else if (e.mk === 'spore' && m) { burst(m.x, FY(m.x, m.z) + 1.2, m.z, '#f6e9a0', 14, 3.4, 0.1, 0.7); }
@@ -379,7 +428,7 @@ function makeCombat(ctx) {
       else if (e.mk === 'bloom') { ring(e.x, e.z, 1.4, '#f6a8c8', 0.6); rise(e.x, e.z, '#ffd0e0', 8, 0.6, 2, 0.1, 0.8); } },
     rise: (e, p) => { ring(p.x, p.z, 1.8, '#9fe7a4', 0.8); rise(p.x, p.z, '#bff2c2', 12, 0.8, 3, 0.12, 1.1, GEO.star); },
     mobMax: (e) => { const m = MOBS.get(e.m); if (m) m.max = e.max; },
-    mobStop: (e) => { const m = MOBS.get(e.m); if (!m) return; m.castT = 0; burst(m.x, FY(m.x, m.z) + m.h, m.z, '#ffd76a', 6, 2, 0.1, 0.5, GEO.star); },
+    mobStop: (e) => { const m = MOBS.get(e.m); if (!m) return; m.castT = 0; m.songT = 0; m.yawnT = 0; burst(m.x, FY(m.x, m.z) + m.h, m.z, '#ffd76a', 6, 2, 0.1, 0.5, GEO.star); },
     fog: (e) => setFog(e),
     lvup: (e, p) => { ring(p.x, p.z, 2.4, '#ffd76a', 0.9); rise(p.x, p.z, '#ffe27a', 16, 1, 3.4, 0.14, 1.2, GEO.star); num(p.x, FY(p.x, p.z) + 2.8, p.z, 'Lv.' + e.lv, 'lv'); },
     promote: (e, p) => { circle(p.x, p.z, 3, '#ffe9a8', 1.6); for (let i = 0; i < 3; i++) setTimeout(() => { const q = posOf(e.id) || p; ring(q.x, q.z, 3 + i, '#ffd76a', 0.9); rise(q.x, q.z, '#ffe27a', 14, 1.6, 4, 0.15, 1.3, GEO.star); }, i * 250); },
@@ -395,17 +444,19 @@ function makeCombat(ctx) {
   function tick(dt) {
     const t = S.time, lob = !!S.lob; G.visible = !lob;
     for (let i = NUMS.length - 1; i >= 0; i--) { const n = NUMS[i]; n.t += dt; if (n.t > 0.9 || lob) { n.el.remove(); NUMS.splice(i, 1); continue; } if (put2d(n.el, n.x, n.y + n.t * 1.6, n.z)) n.el.style.opacity = String(Math.min(1, (0.9 - n.t) * 3)); }
-    if (lob) { MOBS.forEach(m => { m.bar.b.hidden = true; }); FAMS.forEach(f => { f.bar.b.hidden = true; }); return; }
+    if (lob) { MOBS.forEach(m => { m.bar.b.hidden = true; if (m.cbar) m.cbar.b.hidden = true; }); FAMS.forEach(f => { f.bar.b.hidden = true; }); return; }
     tickDrops(dt); badgeT -= dt; if (badgeT < 0) { badgeT = 1.5; WHO.forEach(badge); }   // 別人的名牌可能比職業資料晚到，隔一下再補一次
     for (let i = FX.length - 1; i >= 0; i--) { const f = FX[i]; f.t += dt; const k = f.t / f.dur; if (k >= 1) { if (f.o.parent) f.o.parent.remove(f.o); if (f.done) f.done(f.o); FX.splice(i, 1); } else f.step(k, f.o); }
     thN = 0;
+    // 雲鯨打哈欠：把自己往牠那邊吸（用走的走得出去）
+    if (PULLME && ME) { if (S.time > PULLME.until) PULLME = null; else if (!(MEV && MEV.dead)) { const dx = PULLME.x - ME.x, dz = PULLME.z - ME.z, d = Math.hypot(dx, dz); if (d < PULLME.far && d > 4) ctx.moveMe(ME.x + dx / d * PULLME.sp * dt, ME.z + dz / d * PULLME.sp * dt); } }
     // 怪
     MOBS.forEach(m => { const dead = !!(m.fl & 256), far = Math.hypot(m.x - ME.x, m.z - ME.z) > 46;
       m.show += ((dead ? 0 : 1) - m.show) * Math.min(1, dt * 8); m.g.visible = !far && m.show > 0.02;
       const dx = m.tx - m.x, dz = m.tz - m.z, d = Math.hypot(dx, dz);
       if (m.fling) { m.fling.t += dt / 0.3; const k = Math.min(1, m.fling.t); m.x = m.fling.x0 + (m.fling.x1 - m.fling.x0) * k; m.z = m.fling.z0 + (m.fling.z1 - m.fling.z0) * k; m.air = Math.sin(k * Math.PI) * 3; if (k >= 1) { m.fling = null; m.air = 0; } }
       else if (d > 12) { m.x = m.tx; m.z = m.tz; } else if (d > 0.01) { const k = Math.min(1, dt * 9); m.x += dx * k; m.z += dz * k; if (d > 0.08) { let df = Math.atan2(dx, dz) - m.f; df = Math.atan2(Math.sin(df), Math.cos(df)); m.f += df * Math.min(1, dt * 8); } }
-      if (!m.g.visible) { m.bar.b.hidden = true; return; }
+      if (!m.g.visible) { m.bar.b.hidden = true; if (m.cbar) m.cbar.b.hidden = true; return; }
       const held = m.fl & (1 | 2 | 4 | 64), charm = m.fl & 32, lift = m.fl & 512; m.ph += dt * (held ? 0 : 1); if (m.hurtT > 0) m.hurtT -= dt; if (m.atkT > 0) m.atkT -= dt;
       m.lift = (m.lift || 0) + ((lift ? 2.6 : 0) - (m.lift || 0)) * Math.min(1, dt * (lift ? 5 : 14));
       // 被提線的怪：像木偶一樣一頓一頓的
@@ -417,6 +468,7 @@ function makeCombat(ctx) {
       if (m.castT > 0 && !C3.MOBS[m.kind].boss) { const q = 1 + Math.sin(t * 30) * 0.06; m.body.scale.set(m.sc * 1.12 * q, m.sc * 0.8, m.sc * 1.12 * q); }
       if (m.body.anim) m.body.anim(m, t);
       Object.values(m.fxo).forEach(o => { if (o.spin) o.rotation.y = t * o.spin; });
+      if (m.songT > 0 && !dead) { if (!m.cbar) { m.cbar = mkBar(); m.cbar.b.classList.add('cast'); } m.cbar.b.hidden = false; put2d(m.cbar.b, m.x, FY(m.x, m.z) + m.h + 1.3, m.z); m.cbar.i.style.width = Math.min(100, (1 - m.songT / (m.songD || 1)) * 100).toFixed(0) + '%'; } else if (m.cbar) m.cbar.b.hidden = true;
       const showBar = !dead && (m.hp < m.max || TARGET === m.id); m.bar.b.hidden = !showBar; if (showBar) { put2d(m.bar.b, m.x, FY(m.x, m.z) + m.h + 0.35 + m.lift, m.z); m.bar.i.style.width = Math.max(0, m.hp / m.max * 100).toFixed(0) + '%'; m.bar.b.classList.toggle('on', TARGET === m.id); }
       // 線：被縫住、被提線的怪連到操偶師的手上；被提線的有三條（頭和兩邊）
       const top = FY(m.x, m.z) + m.h + m.lift + (charm ? jerk : 0);
@@ -464,7 +516,7 @@ function makeCombat(ctx) {
   return {
     tick, tap, shake: () => (SHAKE > 0 ? SHAKE : 0),
     // 連線那邊接過來的事件
-    init: (d, id, send) => { MYID = id; SEND = send; MEV = d.me; MOBS.forEach(m => { G.remove(m.g); m.bar.b.remove(); }); MOBS.clear(); [...WHO.keys()].forEach(dropWho); d.mobs.forEach(addMob); d.who.forEach(setWho); [...DROPS.keys()].forEach(id => dropGone({ id })); (d.drops || []).forEach(addDrop); setFog(d.fog || {}); HOLD = false; TARGET = null; onChange(); },
+    init: (d, id, send) => { MYID = id; SEND = send; MEV = d.me; MOBS.forEach(m => { G.remove(m.g); m.bar.b.remove(); if (m.cbar) m.cbar.b.remove(); }); MOBS.clear(); [...WHO.keys()].forEach(dropWho); d.mobs.forEach(addMob); d.who.forEach(setWho); [...DROPS.keys()].forEach(id => dropGone({ id })); (d.drops || []).forEach(addDrop); setFog(d.fog || {}); HOLD = false; TARGET = null; onChange(); },
     me: (d) => { const was = MEV; MEV = d; if (d.dead && TARGET) setTarget(null, true); onChange(was); },
     famPreview: (x, z) => [0, 1, 2].map(i => { const g = new THREE.Group(); FAM[i](g); G.add(g); g.position.set(x + (i - 1) * 1.9, FY(x, z), z); if (g.anim) g.anim(1); return g; }),   // 測試拍照用
     addDrop, dropGone, late, mobs: (l) => l.forEach(setMob), who: setWho, fams: setFams, drop: dropWho, fx: onFx, hits: onHits,

@@ -205,7 +205,7 @@ const NW = (() => {
   const FY = LOBBY ? LOBBY.floorY : () => 0, inLob = (z) => !!LOBBY && LOBBY.isIn(z);
   if (LOBBY) { WALLS.push(...LOBBY.walls); ROUNDS.push(...LOBBY.rounds); }
   const LIMX = (x, z0) => (inLob(z0) ? Math.max(LOBBY.min[0], Math.min(LOBBY.max[0], x)) : Math.max(-70, Math.min(70, x)));
-  const LIMZ = (z, z0) => (inLob(z0) ? Math.max(LOBBY.min[1], Math.min(LOBBY.max[1], z)) : Math.max(-36, Math.min(70, z)));   // 前院往北走不到大廳那一塊，要從門進去
+  const LIMZ = (z, z0) => (inLob(z0) ? Math.max(LOBBY.min[1], Math.min(LOBBY.max[1], z)) : Math.max(-36, Math.min(126, z)));   // 前院往北走不到大廳那一塊，要從門進去
   const SEATS = (DETAIL ? DETAIL.userData.SEATS : []).concat(LOBBY ? LOBBY.seats : []), JUKE = LOBBY ? LOBBY.JUKE : null;
   const sitY = (x, z) => { for (const s of SEATS) if (Math.hypot(x - s.x, z - s.z) < 0.5) return s.h ?? 0.2; return -0.3; };   // 坐椅子或坐地上，屁股的高度不一樣
   // 可以互動的東西：靠近會在上面冒出一張小紙條，點紙條或按 E

@@ -121,11 +121,12 @@ window.NW_PANELS = function (NW, token, opt) {
     var list = el('div', 'wishes'); body.appendChild(list); var nav = el('div', 'acts pager'); body.appendChild(nav);
     var wishInfo = null, t = 0;
     function tabs(r) {
-      cats.innerHTML = ''; [['', '全部']].concat(Object.keys(r.cats).map(function (k) { return [k, r.cats[k]]; })).forEach(function (c) {
+      cats.innerHTML = ''; cats.appendChild(el('small', 'wlab', '只看')); [['', '全部']].concat(Object.keys(r.cats).map(function (k) { return [k, r.cats[k]]; })).forEach(function (c) {
         var b = el('button', 'wtab' + (wishQ.cat === c[0] ? ' on' : '') + (c[0] ? ' c-' + c[0] : ''), c[1]); b.type = 'button'; b.dataset.cat = c[0]; b.onclick = function () { wishQ.cat = c[0]; wishQ.page = 1; load(); }; cats.appendChild(b); });
-      sorts.innerHTML = ''; [['', '最近更新'], ['likes', '最多愛心'], ['new', '最新許願']].forEach(function (c) {
-        var b = el('button', 'wtab' + (wishQ.sort === c[0] ? ' on' : ''), c[1]); b.type = 'button'; b.dataset.sort = c[0]; b.onclick = function () { wishQ.sort = c[0]; wishQ.page = 1; load(); }; sorts.appendChild(b); });
-      var m = el('button', 'wtab mine' + (wishQ.mine ? ' on' : ''), '我許的'); m.type = 'button'; m.id = 'wish-mine'; m.onclick = function () { wishQ.mine = !wishQ.mine; wishQ.page = 1; load(); }; sorts.appendChild(m);
+      // 「我許的」也是篩選，跟類別放同一排，中間隔一條線
+      cats.appendChild(el('i', 'wsep')); var m = el('button', 'wtab mine' + (wishQ.mine ? ' on' : ''), '我許的'); m.type = 'button'; m.id = 'wish-mine'; m.onclick = function () { wishQ.mine = !wishQ.mine; wishQ.page = 1; load(); }; cats.appendChild(m);
+      sorts.innerHTML = ''; sorts.appendChild(el('small', 'wlab', '排序')); [['', '最近更新'], ['likes', '最多愛心'], ['new', '最新許願']].forEach(function (c) {
+        var b = el('button', 'wsort' + (wishQ.sort === c[0] ? ' on' : ''), c[1]); b.type = 'button'; b.dataset.sort = c[0]; b.onclick = function () { wishQ.sort = c[0]; wishQ.page = 1; load(); }; sorts.appendChild(b); });
     }
     function load() {
       var seq = ++wishSeq; if (!list.children.length) list.appendChild(el('p', 'sub', '讀取中…'));

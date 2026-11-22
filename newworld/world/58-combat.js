@@ -39,6 +39,14 @@ function makeCombat(ctx) {
     for (let x = C.x0; x <= C.x1; x += 4.5) { cloud(x + rr() * 2, C.z1 + 1, 2.2); if (x < 34 || x > 50) cloud(x + rr() * 2, C.z0 - 1, 1.8); } for (let z = C.z0; z <= C.z1; z += 4.5) { cloud(C.x0 - 1, z + rr() * 2, 2.0); cloud(C.x1 + 1, z + rr() * 2, 2.0); }
     for (let i = 0; i < 26; i++) cloud(C.x0 + 4 + rr() * (C.x1 - C.x0 - 8), C.z0 + 4 + rr() * (C.z1 - C.z0 - 8), 0.5 + rr() * 0.5);
     for (let z = 61; z < 68; z += 1.7) cloud(42 + (rr() - 0.5) * 3, z, 0.45); }
+  // ---------- 星砂海岸：雲海再往南，一片沙灘，最南邊是海；沙上散著星星和貝殼 ----------
+  const BUBS = new Map(), HEARTS = new Map(); let SEA = null;
+  { const C = { x0: 14, x1: 70, z0: 128, z1: 184 }, sand = new THREE.Mesh(new THREE.PlaneGeometry(C.x1 - C.x0 + 30, C.z1 - C.z0 + 4), new THREE.MeshToonMaterial({ color: '#f6e6b8' })); sand.rotation.x = -Math.PI / 2; sand.position.set((C.x0 + C.x1) / 2, 0.021, (C.z0 + C.z1) / 2); sand.receiveShadow = true; G.add(sand);
+    SEA = new THREE.Mesh(new THREE.PlaneGeometry(160, 40), new THREE.MeshBasicMaterial({ color: '#6cc6d8', transparent: true, opacity: 0.86 })); SEA.rotation.x = -Math.PI / 2; SEA.position.set(42, 0.05, 198); G.add(SEA);
+    const foam = new THREE.Mesh(new THREE.PlaneGeometry(160, 1.4), new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.8 })); foam.rotation.x = -Math.PI / 2; foam.position.set(0, 0.01, 19.6); SEA.add(foam); SEA.foam = foam;
+    let sd = 11; const rr = () => { sd = (sd * 16807) % 2147483647; return sd / 2147483647; }, cols = ['#ffd76a', '#f6a8c8', '#fffdf2', '#8fe0e8'];
+    for (let i = 0; i < 70; i++) { const m = new THREE.Mesh(i % 3 ? GEO.star : GEO.sph, new THREE.MeshToonMaterial({ color: cols[i % 4] })), s = 0.16 + rr() * 0.14; m.position.set(C.x0 + rr() * (C.x1 - C.x0), 0.06, C.z0 + rr() * (C.z1 - C.z0 - 6)); m.scale.set(s, s * 0.3, s); m.rotation.y = rr() * 6; G.add(m); }
+    for (let i = 0; i < 9; i++) { const m = new THREE.Mesh(GEO.sph, new THREE.MeshToonMaterial({ color: i % 2 ? '#c9b89a' : '#b8a888' })), s = 0.7 + rr() * 0.9; m.position.set(i % 2 ? C.x0 - 2 - rr() * 4 : C.x1 + 2 + rr() * 4, s * 0.25, C.z0 + rr() * (C.z1 - C.z0)); m.scale.set(s * 1.3, s * 0.7, s); m.castShadow = true; G.add(m); } }
   // ---------- 怪 ----------
   const eyes = (g, y, z, dx, r, col) => [-1, 1].forEach(k => { part(g, sph(r, 8, 6), col || INK, { pos: [dx * k, y, z], scale: [1, 1.25, 0.5], noLine: true, shadow: false, mat: basic(col || INK) }); });
   // 霧林的怪。g.anim(m, t)：每一格照狀態擺一下樣子（整理傘、蓄力、睡著）
@@ -109,6 +117,33 @@ function makeCombat(ctx) {
         tail.rotation.x = Math.sin(t * 1.6) * 0.25; fins.forEach((f, i) => { f.rotation.z = (i ? 1 : -1) * (0.2 + Math.sin(t * 1.6 + 1) * 0.25); });
         if (song && Math.random() < 0.12) rise(m.x + (Math.random() - 0.5) * 3, m.z + 2, '#c9a2f2', 1, 1.5, 5, 0.22, 1.2, GEO.star);
         if (yawn && Math.random() < 0.3) { const a = Math.random() * PI2, r = 6; fx(mesh(GEO.sph, bm('#ffffff', 0.7)), 0.5, (k, o) => { o.position.set(m.x + Math.cos(a) * r * (1 - k), FY(m.x, m.z) + 0.6 + k * 2.4, m.z + Math.sin(a) * r * (1 - k)); o.scale.setScalar(0.16 * (1 - k * 0.6)); }); } }; },
+    // ---- 星砂海岸 ----
+    // 螢光水母：半透明的傘、幾條鬚，飄在半空一縮一縮；要放電的時候整隻閃黃光
+    jelly: (g) => { g.float = C3.MOBS.jelly.fly; const mat = new THREE.MeshBasicMaterial({ color: '#f6a8e0', transparent: true, opacity: 0.82 }), b = new THREE.Group(); g.add(b); part(b, new THREE.SphereGeometry(0.55, 14, 8, 0, PI2, 0, Math.PI * 0.55), '#f6a8e0', { pos: [0, 0.75, 0], mat, shadow: false }); part(b, sph(0.3, 10, 8), '#fff3fb', { pos: [0, 0.82, 0], scale: [1, 0.7, 1], noLine: true, shadow: false, mat: basic('#fff3fb') });
+      eyes(b, 0.78, 0.46, 0.15, 0.06); const legs = []; for (let i = 0; i < 6; i++) { const a = i / 6 * PI2, l = part(b, GEO.cyl, '#f6a8e0', { pos: [Math.cos(a) * 0.3, 0.38, Math.sin(a) * 0.3], scale: [0.03, 0.7, 0.03], noLine: true, shadow: false, mat }); l.a = a; legs.push(l); }
+      g.anim = (m, t) => { const cast = m.castT > 0, q = 1 + Math.sin(t * 3 + m.ph) * 0.12; b.scale.set(q, 2 - q, q); mat.color.set(cast && Math.sin(t * 34) > 0 ? '#fff3a0' : '#f6a8e0'); legs.forEach((l, i) => { l.rotation.z = Math.sin(t * 3 + i) * 0.2; }); b.rotation.z = Math.sin(t * 0.9 + m.ph) * 0.15; }; },
+    // 寄居寶箱蟹：橘紅色的螃蟹背著一個寶箱，兩隻大螯；要夾人的時候把螯舉高
+    crab: (g) => { const c = '#f08a5a', d = '#c9603a'; part(g, sph(0.6, 14, 10), c, { pos: [0, 0.45, 0.1], scale: [1.2, 0.6, 0.9] }); [-1, 1].forEach(k => { part(g, GEO.cyl, c, { pos: [0.22 * k, 0.82, 0.45], scale: [0.035, 0.3, 0.035], noLine: true }); part(g, sph(0.09, 8, 6), '#fffdf2', { pos: [0.22 * k, 1.0, 0.45], noLine: true, shadow: false, mat: basic('#fffdf2') }); part(g, sph(0.045, 6, 5), INK, { pos: [0.22 * k, 1.0, 0.52], noLine: true, shadow: false, mat: basic(INK) }); });
+      for (let i = 0; i < 6; i++) { const k = i < 3 ? -1 : 1, z = (i % 3 - 1) * 0.3; part(g, GEO.cyl, d, { pos: [0.75 * k, 0.24, z], scale: [0.05, 0.5, 0.05], rot: [0, 0, 0.9 * k], noLine: true }); }
+      const claws = [-1, 1].map(k => { const a = new THREE.Group(); g.add(a); a.position.set(0.62 * k, 0.5, 0.45); part(a, GEO.cyl, d, { pos: [0.12 * k, 0.05, 0.2], scale: [0.07, 0.4, 0.07], rot: [1.2, 0, 0], noLine: true }); part(a, sph(0.3, 10, 8), c, { pos: [0.18 * k, 0.12, 0.5], scale: [0.8, 0.75, 1.1] }); part(a, GEO.cone, c, { pos: [0.18 * k, 0.3, 0.72], scale: [0.1, 0.3, 0.1], rot: [1.0, 0, 0], noLine: true }); return a; });
+      const box = new THREE.Group(); g.add(box); box.position.set(0, 0.86, -0.18); box.rotation.y = 0.15; part(box, GEO.box, '#a8693f', { pos: [0, 0.22, 0], scale: [0.95, 0.44, 0.62] }); part(box, GEO.cyl, '#b87a4c', { pos: [0, 0.44, 0], scale: [0.31, 0.95, 0.31], rot: [0, 0, Math.PI / 2] }); [-0.3, 0.3].forEach(x => part(box, GEO.box, '#f2c84b', { pos: [x, 0.3, 0], scale: [0.08, 0.66, 0.66], noLine: true })); part(box, GEO.box, '#f2c84b', { pos: [0, 0.36, 0.32], scale: [0.14, 0.16, 0.05], noLine: true });
+      g.anim = (m, t) => { const cast = m.castT > 0, walk = Math.hypot(m.tx - m.x, m.tz - m.z) > 0.05; claws.forEach((a, i) => { a.rotation.x = cast ? -1.0 + Math.sin(t * 24) * 0.1 : Math.sin(t * 2 + i * 2) * 0.12; }); g.rotation.z = walk ? Math.sin(t * 12) * 0.06 : 0; box.rotation.z = Math.sin(t * 1.3 + m.ph) * 0.04 + (m.hurtT > 0 ? 0.2 : 0); }; },
+    // 小海妖：很小隻的人魚，藍綠色的頭髮和尾巴，飄在半空搖尾巴；吹泡泡的時候鼓著臉
+    siren: (g) => { g.float = 0.45; const hair = '#3fb6a8', tail = '#58c9d6', b = new THREE.Group(); g.add(b); part(b, sph(0.36, 14, 10), '#ffe2cf', { pos: [0, 1.1, 0] }); part(b, sph(0.4, 12, 9), hair, { pos: [0, 1.17, -0.08], scale: [1.05, 1, 1] }); [-1, 1].forEach(k => part(b, sph(0.16, 8, 6), hair, { pos: [0.34 * k, 0.9, -0.05], scale: [0.7, 1.6, 0.8], noLine: true }));
+      eyes(b, 1.08, 0.32, 0.13, 0.06); const mouth = part(b, sph(0.05, 6, 5), '#e2788a', { pos: [0, 0.94, 0.34], noLine: true, shadow: false, mat: basic('#e2788a') }); part(b, GEO.star, '#ffd76a', { pos: [0.26, 1.42, 0.12], scale: [0.1, 0.1, 0.04], noLine: true, shadow: false });
+      part(b, sph(0.22, 10, 8), '#ffe2cf', { pos: [0, 0.66, 0], scale: [1, 1.1, 0.8], noLine: true }); const tl = new THREE.Group(); b.add(tl); tl.position.set(0, 0.5, 0); part(tl, GEO.cone, tail, { pos: [0, -0.28, -0.06], scale: [0.24, 0.7, 0.2], rot: [Math.PI + 0.3, 0, 0] }); [-1, 1].forEach(k => part(tl, sph(0.16, 8, 6), '#8fe0e8', { pos: [0.14 * k, -0.66, -0.2], scale: [1, 0.25, 0.7], rot: [0, 0, 0.5 * k], noLine: true }));
+      g.anim = (m, t) => { const cast = m.castT > 0; tl.rotation.x = Math.sin(t * 4 + m.ph) * 0.35; b.rotation.z = Math.sin(t * 1.4 + m.ph) * 0.08; mouth.scale.setScalar(cast ? 2.2 + Math.sin(t * 20) * 0.3 : 1); }; },
+    // 黑潮人魚：深色長髮、暗紫色的尾巴，頭上一圈珊瑚冠，腳下一圈黑潮（護身的時候才有）；擱淺的時候趴在地上甩尾巴
+    mermaid: (g) => { const hair = '#2b2a4a', tail = '#5a3f8a', fin = '#8a6ad0', skin = '#f3e3ea', b = new THREE.Group(); g.add(b); b.position.y = 0.9; part(b, sph(0.62, 16, 12), skin, { pos: [0, 2.2, 0] }); part(b, sph(0.7, 14, 10), hair, { pos: [0, 2.3, -0.14], scale: [1.05, 1, 1] });
+      [-1, 1].forEach(k => { part(b, sph(0.3, 10, 8), hair, { pos: [0.6 * k, 1.55, -0.12], scale: [0.7, 2.6, 0.8] }); part(b, sph(0.1, 8, 6), '#b9a6f0', { pos: [0.23 * k, 2.2, 0.56], scale: [1, 1.3, 0.5], noLine: true, shadow: false, mat: basic('#b9a6f0') }); part(b, GEO.box, hair, { pos: [0.23 * k, 2.36, 0.56], scale: [0.26, 0.05, 0.05], rot: [0, 0, -0.25 * k], noLine: true, shadow: false }); });
+      part(b, sph(0.07, 6, 5), '#b0486a', { pos: [0, 1.96, 0.58], scale: [1.4, 0.6, 0.5], noLine: true, shadow: false, mat: basic('#b0486a') }); for (let i = 0; i < 5; i++) { const a = (i - 2) * 0.5; part(b, GEO.cone, '#e2788a', { pos: [Math.sin(a) * 0.5, 2.9 + Math.cos(a) * 0.1, 0.05], scale: [0.08, 0.36 + (i === 2 ? 0.16 : 0), 0.08], rot: [0, 0, -a * 0.6], noLine: true }); }
+      part(b, sph(0.42, 12, 9), skin, { pos: [0, 1.35, 0], scale: [1, 1.2, 0.8] }); part(b, sph(0.44, 12, 9), fin, { pos: [0, 1.38, 0], scale: [1.02, 0.62, 0.84], noLine: true }); const arms = [-1, 1].map(k => { const a = new THREE.Group(); b.add(a); a.position.set(0.42 * k, 1.55, 0.05); part(a, GEO.cyl, skin, { pos: [0.16 * k, -0.25, 0.08], scale: [0.09, 0.6, 0.09], rot: [0, 0, 0.5 * k], noLine: true }); return a; });
+      const tl = new THREE.Group(); b.add(tl); tl.position.set(0, 0.95, 0); part(tl, sph(0.46, 12, 9), tail, { pos: [0, -0.2, 0], scale: [1, 1.1, 0.85] }); part(tl, GEO.cone, tail, { pos: [0, -0.95, -0.2], scale: [0.4, 1.3, 0.34], rot: [Math.PI + 0.35, 0, 0] }); [-1, 1].forEach(k => part(tl, sph(0.4, 10, 8), fin, { pos: [0.3 * k, -1.6, -0.55], scale: [1, 0.2, 0.7], rot: [0, 0, 0.6 * k] }));
+      const aura = flat(mesh(GEO.disc, bm('#2b2a4a', 0.4), g)); aura.position.y = 0.06; aura.scale.setScalar(2.4); const aura2 = flat(mesh(GEO.ring, bm('#5a3f8a', 0.8), g)); aura2.position.y = 0.08; aura2.scale.setScalar(2.5);
+      g.anim = (m, t) => { const dry = m.fl & 2048, guard = m.fl & 8192, cast = m.castT > 0; aura.visible = aura2.visible = !!guard; aura2.rotation.z = t * 0.6; aura2.scale.setScalar(2.5 + Math.sin(t * 2) * 0.12);
+        b.position.y += ((dry ? -0.55 : 0.9 + Math.sin(t * 1.2) * 0.2) - b.position.y) * 0.1; b.rotation.x += ((dry ? 1.15 : 0) - b.rotation.x) * 0.12; tl.rotation.x = dry ? Math.sin(t * 9) * 0.5 : Math.sin(t * 2) * 0.25; b.rotation.z = Math.sin(t * 0.8) * 0.04;
+        arms.forEach((a, i) => { a.rotation.z = (i ? 1 : -1) * (cast ? 1.9 + Math.sin(t * 6) * 0.2 : dry ? 1.2 + Math.sin(t * 12) * 0.3 : Math.sin(t * 1.4 + i) * 0.12); });
+        if (cast && Math.random() < 0.25) rise(m.x + (Math.random() - 0.5) * 2, m.z, '#f6a8c8', 1, 1, 3.4, 0.16, 0.9, GEO.star); }; },
   };
   const mkBar = () => { const b = document.createElement('div'), i = document.createElement('i'), n = document.createElement('span'); b.className = 'cb-bar'; b.append(n, i); b.hidden = true; LAB.appendChild(b); return { b, i, n }; };
   function addMob(d) {
@@ -126,7 +161,7 @@ function makeCombat(ctx) {
     128: (m) => { const o = flat(mesh(GEO.ring, bm('#c9a2f2', 0.7), null)); o.scale.setScalar(m.sc * 0.9); o.position.y = 0.06; return o; },
     1024: (m) => { const o = flat(mesh(GEO.disc, bm('#bfe9ff', 0.5), null)); o.scale.setScalar(m.sc * 0.8); o.position.y = 0.05; return o; },
   };
-  const setMob = (a) => { const m = MOBS.get(a[0]); if (!m) return; m.tx = a[1]; m.tz = a[2]; if (a[3] < m.hp) m.hurtT = 0.25; m.hp = a[3]; const was = m.fl; m.fl = a[4]; m.tied = a[5]; m.link = a[6];
+  const setMob = (a) => { const m = MOBS.get(a[0]); if (!m) return; m.tx = a[1]; m.tz = a[2]; if (a[3] < m.hp) m.hurtT = 0.25; m.hp = a[3]; const was = m.fl; m.fl = a[4]; m.tied = a[5]; m.link = a[6]; if (a[7] != null) m.fS = a[7];
     if ((was & 256) && !(m.fl & 256)) { m.x = m.tx; m.z = m.tz; m.show = 0; }
     Object.keys(STATE).forEach(k => { const on = !!(m.fl & k) && !(m.fl & 256); if (on && !m.fxo[k]) { m.fxo[k] = STATE[k](m); m.g.add(m.fxo[k]); } else if (!on && m.fxo[k]) { m.g.remove(m.fxo[k]); delete m.fxo[k]; } }); };
   const PV = new V3(), put2d = (el, x, y, z) => { PV.set(x, y, z).project(camera); const on = PV.z < 1 && Math.abs(PV.x) < 1.1 && Math.abs(PV.y) < 1.1; el.style.display = on ? '' : 'none'; if (on) el.style.transform = 'translate(' + ((PV.x * 0.5 + 0.5) * W).toFixed(1) + 'px,' + ((-PV.y * 0.5 + 0.5) * H).toFixed(1) + 'px) translate(-50%,-100%)'; return on; };
@@ -412,9 +447,14 @@ function makeCombat(ctx) {
     tele: (e) => { const m = MOBS.get(e.m); if (m) { m.castT = e.dur; m.castD = e.dur; if (e.x2 != null) m.f = Math.atan2(e.x2 - m.x, e.z2 - m.z); m.line = e; }
       if (e.mk === 'roll' || e.mk === 'charge' || e.mk === 'bolt') warnLine(e.x, e.z, e.x2, e.z2, e.w, e.dur); else if (e.mk === 'dive') warn(e.x2, e.z2, e.r, e.dur);
       else if (e.mk === 'yawn') { warn(e.x, e.z, e.r, e.dur); if (m) m.yawnT = e.dur; PULLME = { x: e.x, z: e.z, until: S.time + e.dur, sp: e.pull, far: e.far }; }
-      else if (e.mk === 'song') { if (m) { m.songT = e.dur; m.songD = e.dur; } } else if (e.mk === 'spore') warn(e.x, e.z, e.r, e.dur); else if (e.mk === 'roots') { e.spots.forEach(s => warn(s[0], s[1], e.r, e.dur)); if (m) m.rootT = e.dur + 0.4; }
+      else if (e.mk === 'song') { if (m) { m.songT = e.dur; m.songD = e.dur; } }
+      else if (e.mk === 'zap') warn(e.x, e.z, e.r, e.dur); else if (e.mk === 'snap') warnLine(e.x, e.z, e.x2, e.z2, e.w, e.dur);
+      else if ((e.mk === 'bub' || e.mk === 'charm') && m) { const q = posOf(e.to); if (q) { ring(q.x, q.z, 1.4, e.mk === 'bub' ? '#8fe0e8' : '#f6a8c8', e.dur, 1.6); m.f = Math.atan2(q.x - m.x, q.z - m.z); } } else if (e.mk === 'spore') warn(e.x, e.z, e.r, e.dur); else if (e.mk === 'roots') { e.spots.forEach(s => warn(s[0], s[1], e.r, e.dur)); if (m) m.rootT = e.dur + 0.4; }
       else if (e.mk === 'mend' && m) { const o = MOBS.get(e.to); ring(m.x, m.z, 1.2, '#9fe7a4', e.dur, 0.6); if (o) fx(mesh(GEO.sph, bm('#9fe7a4', 0.9)), e.dur, (k, b) => { b.position.set(m.x + (o.x - m.x) * k, FY(m.x, m.z) + 1 + Math.sin(k * Math.PI) * 1.2, m.z + (o.z - m.z) * k); b.scale.setScalar(0.14 + k * 0.1); }); } },
     mobMove: (e) => { const m = MOBS.get(e.m);
+      if (e.mk === 'zap') { ring(e.x, e.z, e.r, '#fff3a0', 0.4); burst(e.x, FY(e.x, e.z) + 1.2, e.z, '#fff3a0', 14, 4, 0.1, 0.4, GEO.star); }
+      if (e.mk === 'snap' && m) { m.atkT = 0.3; const l = m.line; if (l) burst((l.x + l.x2) / 2, FY(l.x, l.z) + 0.6, (l.z + l.z2) / 2, '#f08a5a', 8, 3, 0.12, 0.4); }
+      if (e.mk === 'ebb') { ring(e.x, e.z, 7, '#8fe0e8', 0.9); ring(e.x, e.z, 4, '#bfe9ff', 0.7); }
       if (e.mk === 'charge' && m) burst(m.x, FY(m.x, m.z) + 0.3, m.z, '#fbf7ee', 8, 2.4, 0.14, 0.5);
       if (e.mk === 'dive' && m) { m.diveT = 0.4; ring(e.x, e.z, e.r, '#8ec9e8', 0.45); burst(e.x, FY(e.x, e.z) + 0.3, e.z, '#dff6ff', 10, 3, 0.1, 0.5); }
       if (e.mk === 'bolt' && m && m.line) { const l = m.line, len = Math.hypot(l.x2 - l.x, l.z2 - l.z), o = mesh(GEO.box, bm('#fff3a0', 0.95).clone()); o.rotation.y = Math.atan2(l.x2 - l.x, l.z2 - l.z); SHAKE = Math.max(SHAKE, 0.12);
@@ -426,6 +466,10 @@ function makeCombat(ctx) {
       else if (e.mk === 'spore' && m) { burst(m.x, FY(m.x, m.z) + 1.2, m.z, '#f6e9a0', 14, 3.4, 0.1, 0.7); }
       else if (e.mk === 'mend') { const o = MOBS.get(e.to); if (o) rise(o.x, o.z, '#9fe7a4', 8, 0.7, 2, 0.1, 0.8); }
       else if (e.mk === 'bloom') { ring(e.x, e.z, 1.4, '#f6a8c8', 0.6); rise(e.x, e.z, '#ffd0e0', 8, 0.6, 2, 0.1, 0.8); } },
+    bub: (e) => { const old = BUBS.get(e.id); if (old) G.remove(old.o); const o = mesh(GEO.sph, bm('#bfe9ff', 0.38).clone()); BUBS.set(e.id, { o, until: S.time + e.dur }); },
+    bubPop: (e, p) => { const b = BUBS.get(e.id); if (!b) return; G.remove(b.o); b.o.material.dispose(); BUBS.delete(e.id); burst(p.x, FY(p.x, p.z) + 1.2, p.z, '#dff6ff', 12, 3, 0.1, 0.45); },
+    charm: (e) => { HEARTS.set(e.id, S.time + e.dur); if (e.id === MYID) PULLME = { x: e.x, z: e.z, until: S.time + e.dur, sp: e.pull, far: 99, stop: 1.2, charm: 1 }; },
+    charmEnd: (e, p) => { HEARTS.delete(e.id); if (e.id === MYID && PULLME && PULLME.charm) PULLME = null; if (e.hit) { SHAKE = Math.max(SHAKE, 0.25); burst(p.x, FY(p.x, p.z) + 1.2, p.z, '#5a3f8a', 12, 3, 0.14, 0.5); } else burst(p.x, FY(p.x, p.z) + 2.2, p.z, '#f6a8c8', 6, 2, 0.1, 0.4, GEO.star); },
     rise: (e, p) => { ring(p.x, p.z, 1.8, '#9fe7a4', 0.8); rise(p.x, p.z, '#bff2c2', 12, 0.8, 3, 0.12, 1.1, GEO.star); },
     mobMax: (e) => { const m = MOBS.get(e.m); if (m) m.max = e.max; },
     mobStop: (e) => { const m = MOBS.get(e.m); if (!m) return; m.castT = 0; m.songT = 0; m.yawnT = 0; burst(m.x, FY(m.x, m.z) + m.h, m.z, '#ffd76a', 6, 2, 0.1, 0.5, GEO.star); },
@@ -438,7 +482,7 @@ function makeCombat(ctx) {
   function onFx(e) { if (e.k === 'fog') return setFog(e); if (e.id && WHO.has(e.id) && e.k !== 'lvup') WHO.get(e.id).actT = S.time; const p = e.id ? posOf(e.id) : null; if (e.id && !p) return; if (S.lob) return; const k = e.k === 'pact2' ? 'pact2' : e.k; if (ON[k]) ON[k](e, p); }
   function onHits(list) { if (S.lob) return; list.forEach(([id, d, kind]) => { if (id[0] === 'f' && id[1] === ':') { const f = FAMS.get(id.slice(2)); if (f) num(f.x, FY(f.x, f.z) + (f.g.H || 1.7) + 0.3, f.z, d < 0 ? '+' + (-d) : String(d), d < 0 ? 'heal' : 'ow'); return; }
     if (id[0] === 'p') { const p = posOf(id.slice(2)); if (p) num(p.x, FY(p.x, p.z) + 2.4, p.z, d < 0 ? '+' + (-d) : String(d), d < 0 ? 'heal' : kind === 'pois' ? 'poison' : 'ow'); }
-    else { const m = MOBS.get(id); if (m && m.g.visible) num(m.x, FY(m.x, m.z) + m.h + 0.4, m.z, d < 0 ? '+' + (-d) : String(d), d < 0 ? 'heal' : kind === 'dot' || kind === 'poison' ? 'poison' : kind === 'link' ? 'link' : ''); } }); }
+    else { const m = MOBS.get(id); if (m && m.g.visible) num(m.x, FY(m.x, m.z) + m.h + 0.4, m.z, d < 0 ? '+' + (-d) : String(d), d < 0 ? 'heal' : kind === 'dot' || kind === 'poison' ? 'poison' : kind === 'link' ? 'link' : kind === 'shell' ? 'shell' : ''); } }); }
 
   // ---------- 每一格畫面 ----------
   function tick(dt) {
@@ -448,14 +492,18 @@ function makeCombat(ctx) {
     tickDrops(dt); badgeT -= dt; if (badgeT < 0) { badgeT = 1.5; WHO.forEach(badge); }   // 別人的名牌可能比職業資料晚到，隔一下再補一次
     for (let i = FX.length - 1; i >= 0; i--) { const f = FX[i]; f.t += dt; const k = f.t / f.dur; if (k >= 1) { if (f.o.parent) f.o.parent.remove(f.o); if (f.done) f.done(f.o); FX.splice(i, 1); } else f.step(k, f.o); }
     thN = 0;
+    BUBS.forEach((b, id) => { const p = posOf(id); if (!p || S.time > b.until + 0.5) { G.remove(b.o); BUBS.delete(id); return; } const q = 1.35 + Math.sin(t * 5) * 0.06; b.o.position.set(p.x, FY(p.x, p.z) + 1.1, p.z); b.o.scale.set(q, 2.7 - q, q); });
+    HEARTS.forEach((until, id) => { const p = posOf(id); if (!p || S.time > until) { HEARTS.delete(id); return; } if (Math.random() < 0.2) rise(p.x, p.z, '#f6a8c8', 1, 0.4, 2.8, 0.12, 0.7, GEO.star); });
+    if (SEA) { SEA.position.z = 198 + Math.sin(t * 0.7) * 0.5; SEA.foam.material.opacity = 0.55 + Math.sin(t * 0.7) * 0.25; }
     // 雲鯨打哈欠：把自己往牠那邊吸（用走的走得出去）
-    if (PULLME && ME) { if (S.time > PULLME.until) PULLME = null; else if (!(MEV && MEV.dead)) { const dx = PULLME.x - ME.x, dz = PULLME.z - ME.z, d = Math.hypot(dx, dz); if (d < PULLME.far && d > 4) ctx.moveMe(ME.x + dx / d * PULLME.sp * dt, ME.z + dz / d * PULLME.sp * dt); } }
+    if (PULLME && ME) { if (S.time > PULLME.until) PULLME = null; else if (!(MEV && MEV.dead)) { const dx = PULLME.x - ME.x, dz = PULLME.z - ME.z, d = Math.hypot(dx, dz); if (d < PULLME.far && d > (PULLME.stop || 4)) ctx.moveMe(ME.x + dx / d * PULLME.sp * dt, ME.z + dz / d * PULLME.sp * dt); } }
     // 怪
     MOBS.forEach(m => { const dead = !!(m.fl & 256), far = Math.hypot(m.x - ME.x, m.z - ME.z) > 46;
       m.show += ((dead ? 0 : 1) - m.show) * Math.min(1, dt * 8); m.g.visible = !far && m.show > 0.02;
       const dx = m.tx - m.x, dz = m.tz - m.z, d = Math.hypot(dx, dz);
       if (m.fling) { m.fling.t += dt / 0.3; const k = Math.min(1, m.fling.t); m.x = m.fling.x0 + (m.fling.x1 - m.fling.x0) * k; m.z = m.fling.z0 + (m.fling.z1 - m.fling.z0) * k; m.air = Math.sin(k * Math.PI) * 3; if (k >= 1) { m.fling = null; m.air = 0; } }
-      else if (d > 12) { m.x = m.tx; m.z = m.tz; } else if (d > 0.01) { const k = Math.min(1, dt * 9); m.x += dx * k; m.z += dz * k; if (d > 0.08) { let df = Math.atan2(dx, dz) - m.f; df = Math.atan2(Math.sin(df), Math.cos(df)); m.f += df * Math.min(1, dt * 8); } }
+      else if (d > 12) { m.x = m.tx; m.z = m.tz; } else if (d > 0.01) { const k = Math.min(1, dt * 9); m.x += dx * k; m.z += dz * k; if (d > 0.08 && m.fS == null) { let df = Math.atan2(dx, dz) - m.f; df = Math.atan2(Math.sin(df), Math.cos(df)); m.f += df * Math.min(1, dt * 8); } }
+      if (m.fS != null) { let df = m.fS - m.f; df = Math.atan2(Math.sin(df), Math.cos(df)); m.f += df * Math.min(1, dt * 10); }   // 寶箱蟹面向哪邊聽伺服器的
       if (!m.g.visible) { m.bar.b.hidden = true; if (m.cbar) m.cbar.b.hidden = true; return; }
       const held = m.fl & (1 | 2 | 4 | 64), charm = m.fl & 32, lift = m.fl & 512; m.ph += dt * (held ? 0 : 1); if (m.hurtT > 0) m.hurtT -= dt; if (m.atkT > 0) m.atkT -= dt;
       m.lift = (m.lift || 0) + ((lift ? 2.6 : 0) - (m.lift || 0)) * Math.min(1, dt * (lift ? 5 : 14));
@@ -527,7 +575,7 @@ function makeCombat(ctx) {
       if (s.aim && !m) { const n = nearest(s.range + 4); if (n) { m = n.id; setTarget(m); } else return 'far'; }
       SEND('cb:cast', { i, m }); return 'ok'; },
     onChange: (fn) => { onChange = fn; }, onToast: (fn) => { onToast = fn; }, onPlayer: (fn) => { onPlayer = fn; },
-    slow: () => (MEV && MEV.slow ? 0.55 : 1), idleOf: (id) => (WHO.get(id || MYID) || {}).idleK || 0,
+    slow: () => (MEV && (MEV.bub || MEV.charm) ? 0 : MEV && MEV.slow ? 0.55 : 1), idleOf: (id) => (WHO.get(id || MYID) || {}).idleK || 0,
     faceCam: () => MOBS.forEach(m => { m.f = Math.atan2(camera.position.x - m.x, camera.position.z - m.z); }),   // 測試拍照用：怪全部轉過來看鏡頭
     debug: () => ({ fog: !!FOG, mobs: [...MOBS.values()].map(m => ({ id: m.id, kind: m.kind, lv: m.lv, x: m.x, z: m.z, hp: m.hp, max: m.max, fl: m.fl, tied: m.tied })), who: [...WHO.values()].map(w => ({ id: w.id, fam: w.fam, famAt: w.famG.map(f => ({ id: f.id, x: f.x, z: f.z, hp: f.hp, max: f.max })), mech: w.mech, spec: w.spec })), threads: thN, drops: [...DROPS.values()].map(o => ({ id: o.id, k: o.k, x: o.x, z: o.z })), fx: FX.length, zones: [...ZONES.keys()] }),
   };

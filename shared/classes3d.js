@@ -111,6 +111,16 @@
     // 雲鯨：打哈欠把人吸過去再壓下來（跑出圈外，或靠庇護、絕壁擋）；唱歌有讀條，讀完全隊重傷，用任何控場招打中就能打斷，被打斷會委屈一下
     whale: { name: '雲鯨', hp: 14, atk: 0.9, sp: 1.3, r: 2.6, h: 4.2, boss: 1, fly: 1.2, yawn: { cd: 17, tele: 3.2, r: 7.5, dmg: 2.8, pull: 2.0, far: 22, wall: 0.3 }, song: { cd: 26, tele: 4.5, dmg: 0.6, far: 30, sulk: 3.5 },
       drop: { p: 1, n: 3, pool: ['chicken', 'bubbletea', 'seedPineapple', 'seedApple'] } },
+    // ---- 星砂海岸 ----
+    // 螢光水母：橫著飄，靠太近會放電，被電到會麻一下（走路和普攻變慢）
+    jelly: { name: '螢光水母', hp: 0.8, atk: 0.55, sp: 2.0, r: 0.7, h: 2.1, fly: 0.8, move: { k: 'zap', cd: 6, tele: 0.8, range: 2.8, r: 2.9, dmg: 1.5, drowsy: 2 }, drop: { p: 0.4, pool: ['bubbletea', 'noodle', 'water'] } },
+    // 寄居寶箱蟹：背著寶箱，正面幾乎打不動（front 是正面受傷剩幾成、arc 是正面的範圍、turn 是牠轉身的速度），要繞到背後；夾人之前會舉起大螯
+    crab: { name: '寄居寶箱蟹', hp: 1.0, atk: 0.6, sp: 2.0, r: 0.9, h: 1.5, shell: { front: 0.2, arc: 1.75, turn: 1.3 }, move: { k: 'snap', cd: 7, tele: 1.0, range: 3.4, len: 4.6, w: 1.6, dmg: 2.0 }, drop: { p: 0.45, pool: ['chicken', 'twig', 'seedGuava'] } },
+    // 小海妖：遠遠地唱歌丟音符，還會吹一顆大泡泡把人包起來（dur 秒內不能動、不能出招），旁邊的隊友放任何一招就能把泡泡弄破
+    siren: { name: '小海妖', hp: 0.75, atk: 0.6, sp: 2.4, r: 0.6, h: 1.8, shoot: 6, move: { k: 'bub', cd: 10, tele: 1.1, range: 8, dur: 3.5, free: 8 }, drop: { p: 0.45, pool: ['chicken', 'bubbletea', 'seedApple'] } },
+    // 黑潮人魚：平常有黑潮護身，傷害只剩三成，要先讓牠怕痛（暗香、蝕骨這類）或自己有附魔；會魅惑一個人走向牠，走到就挨一下重的，隊友在旁邊放招可以叫醒；每隔一陣子退潮擱淺，這時候沒有護身、受傷加倍
+    mermaid: { name: '黑潮人魚', hp: 16, atk: 0.95, sp: 1.4, r: 1.6, h: 3.7, boss: 1, tide: { mul: 0.3 }, charm: { cd: 20, tele: 1.5, dur: 3.2, pull: 3.4, dmg: 2.6, far: 24, free: 8 }, ebb: { cd: 36, dur: 6 },
+      drop: { p: 1, n: 3, pool: ['chicken', 'bubbletea', 'seedPineapple', 'seedApple'] } },
   };
   const clsName = (s) => (s && s.spec ? SPECS[s.spec].name : s && s.school ? '見習生' : '芽');
   const basicOf = (s) => BASIC[s && s.spec ? SPECS[s.spec].basic : s && s.school ? s.school : 'sprout'];

@@ -47,7 +47,7 @@ async function main() {
   if (process.env.QUICK || process.env.ONLY) { A.s.close(); } else {
   // 每個學門、每個專精都走一遍
   await wait(5300); await A.ask('cb:dbg', { lv: 60 });
-  const far = () => A.mob('puff', 3), tgt = (i) => { const m = [...A.mobs.values()].filter(x => !C3.MOBS[x.kind].boss && !C3.MOBS[x.kind].add && x.hp > 0).sort((a, b) => b.hp - a.hp)[i || 0]; A.at(m.x + 2, m.z); return m; };
+  const far = () => A.mob('puff', 3), tgt = (i) => { const m = [...A.mobs.values()].filter(x => !C3.MOBS[x.kind].boss && !C3.MOBS[x.kind].add && x.lv <= 60 && x.hp > 0).sort((a, b) => b.hp - a.hp)[i || 0]; A.at(m.x + 2, m.z); return m; };
   const rest = async () => { A.at(0, 10); await wait(300); await A.ask('cb:dbg', { lv: 60 }); };
   await rest();
   for (const sk of Object.keys(C3.SCHOOLS)) {
@@ -126,7 +126,7 @@ async function main() {
     const summon = async () => { await S.ask('cb:dbg', { lv: 12 }); S.who = null; await S.cast('pact'); const w = await until(() => S.who && S.who.fam.length === 1 && S.who, 2000); return w ? w.fam[0] : null; };
     await S.ask('cb:dbg', { lv: 12 }); await S.ask('cb:school', 'sc'); await S.ask('cb:slots', ['seal', 'pact', 'spark', null]);
     // 主人很久沒動作：使魔不主動找怪
-    const mo = [...S.mobs.values()].filter(m => m.kind === 'moss' && m.lv <= 8 && m.hp > 0)[2]; go(mo.x + 5, mo.z); await wait(300); await S.ask('cb:dbg', { idle: 1 });
+    const mo = [...S.mobs.values()].filter(m => m.kind === 'moss' && m.lv <= 8 && m.hp > 0)[2]; go(mo.x + 3, mo.z); await wait(300); await S.ask('cb:dbg', { idle: 1 });
     let f = await summon(); ok(f && f[2] === Math.round(C3.LEVEL.hp(12) * C3.FAMILIARS[f[1]].hp) && f[5] === f[2], '叫出來的使魔有自己的血量：' + (f && f[5] + '/' + f[2]));
     S.fx.length = 0; await wait(3000); ok(!S.fx.some(x => x.k === 'fam'), '主人很久沒動作，使魔不會自己去惹怪');
     await S.ask('cb:dbg', { idle: 0 }); const a1 = await until(() => S.fx.find(x => x.k === 'fam' && x.f === f[0]), 6000); ok(a1, '主人沒鎖定怪，使魔自己去打附近的怪');
@@ -162,6 +162,37 @@ async function main() {
     await wait(4000); clearInterval(keep); await K.ask('cb:dbg', { lv: 99 }); K.fx.length = 0; await K.ask('cb:dbg', { whale: 'song' }); await until(() => seen('tele', 'song', wh.id), 2000); const hp0 = K.me.hp;
     ok(await until(() => seen('mobMove', 'song', wh.id), 7000), '沒人打斷就會唱完'); await wait(400); ok(K.me.hp <= hp0 - K.me.hpMax * 0.4, '唱完全場重傷：' + hp0 + ' → ' + K.me.hp);
     K.s.emit('cb:target', null); K.s.close();
+  }
+  // ---- 星砂海岸：螢光水母、寄居寶箱蟹、小海妖、黑潮人魚 ----
+  if (!process.env.ONLY || process.env.ONLY === 'coast') {
+    const until = async (fn, ms) => { for (let i = 0; i < ms / 100; i++) { const v = fn(); if (v) return v; await wait(100); } return null; };
+    const K = await player(); await K.ask('cb:dbg', { lv: 60 }); await K.ask('cb:school', 'pm'); await K.ask('cb:slots', ['bubble', 'potion', 'spark', null]);
+    const seen = (k, mk, id) => K.fx.find(f => f.k === k && f.mk === mk && f.m === id), keep = setInterval(() => K.s.emit('cb:dbg', { hp: 1 }), 1200), hitMe = () => K.hits.some(h => h[0] === 'p:' + K.s.id && h[1] > 0);
+    const poke = async (mo) => { K.fx.length = 0; K.hits.length = 0; K.s.emit('cb:target', mo.id); await until(() => K.mobs.get(mo.id).hp < mo.max, 5000); K.s.emit('cb:target', null); };
+    const kinds = ['jelly', 'crab', 'siren', 'mermaid'].map(k => [...K.mobs.values()].filter(m => m.kind === k).length).join(); ok(kinds === '10,10,10,1', '星砂海岸有螢光水母、寄居寶箱蟹、小海妖各十隻和一隻黑潮人魚：' + kinds);
+    // 水母：靠近會放電，被電到變慢
+    const je = K.mob('jelly', 9); K.at(je.x + 2, je.z); await wait(200); await poke(je); const z1 = await until(() => seen('tele', 'zap', je.id), 14000); ok(z1 && z1.r > 0, '螢光水母放電之前有預告');
+    ok(await until(() => seen('mobMove', 'zap', je.id), 3000), '螢光水母放電'); ok(await until(() => K.me.slow === 1, 1500), '被電到會麻一下（變慢）'); K.at(je.x + 50, je.z - 30); await wait(5600);
+    // 寶箱蟹：正面打不動，繞到背後才打得進去
+    await K.ask('cb:dbg', { lv: 75 }); const cr = K.mob('crab', 9); K.at(cr.x, cr.z + 5); await wait(200); await poke(cr); await wait(2500); K.hits.length = 0; K.s.emit('cb:target', cr.id);
+    const front = await until(() => K.hits.find(h => h[0] === cr.id && h[2] === 'shell'), 5000); ok(front, '從正面打寄居寶箱蟹，幾乎打不動：' + (front && front[1]));
+    const s1 = await until(() => seen('tele', 'snap', cr.id), 12000); ok(s1 && s1.x2 != null, '寄居寶箱蟹夾人之前有預告');
+    const cp = K.mobs.get(cr.id), dx = cp.x - (cr.x), dz = cp.z - (cr.z + 5), l = Math.hypot(dx, dz) || 1; K.hits.length = 0; K.at(cp.x + dx / l * 3, cp.z + dz / l * 3);   // 趁牠舉螯的時候繞到背後
+    const back = await until(() => K.hits.find(h => h[0] === cr.id && h[2] !== 'shell' && h[1] > 0), 3000); ok(back && front && back[1] > front[1] * 2.5, '繞到背後就打得進去：' + (back && back[1]));
+    K.s.emit('cb:target', null); K.at(cr.x + 60, cr.z - 60); await wait(5600);
+    // 小海妖：泡泡把人包起來，隊友放招可以弄破
+    await K.ask('cb:dbg', { lv: 90 }); const H = await player(); await H.ask('cb:dbg', { lv: 90 }); await H.ask('cb:school', 'pm'); await H.ask('cb:slots', ['bubble', 'potion', 'spark', null]);
+    const si = K.mob('siren', 9); K.at(si.x + 5, si.z); H.at(si.x + 7, si.z + 2); await wait(200); await poke(si); const b1 = await until(() => seen('tele', 'bub', si.id), 16000); ok(b1 && b1.to === K.s.id, '小海妖吹泡泡之前有預告');
+    ok(await until(() => K.me.bub === 1, 3000), '被泡泡包住'); const hp1 = K.mobs.get(si.id).hp; K.s.emit('cb:target', si.id); await wait(1300); ok(K.mobs.get(si.id).hp === hp1, '在泡泡裡不能打');
+    await H.cast('potion'); ok(await until(() => K.me.bub === 0, 800), '隊友放招，泡泡就破了'); K.s.emit('cb:target', null); K.at(si.x + 60, si.z - 80); H.at(si.x + 60, si.z - 80); await wait(5600);
+    // 黑潮人魚：護身、擱淺、魅惑
+    await K.ask('cb:dbg', { lv: 99 }); await H.ask('cb:dbg', { lv: 99 }); const me = K.mob('mermaid'); K.at(me.x + 5, me.z); H.at(me.x + 9, me.z + 3); await wait(200); K.hits.length = 0; K.s.emit('cb:target', me.id);
+    const g1 = await until(() => K.hits.find(h => h[0] === me.id && h[1] > 0), 4000); ok(K.mobs.get(me.id).fl & 8192, '黑潮人魚平常有黑潮護身');
+    await K.ask('cb:dbg', { mermaid: 'ebb' }); ok(await until(() => seen('mobMove', 'ebb', me.id), 2000), '退潮擱淺'); await wait(300); K.hits.length = 0;
+    const g2 = await until(() => K.hits.find(h => h[0] === me.id && h[1] > 0 && h[2] === 'hit'), 3000); ok(g1 && g2 && g2[1] > g1[1] * 4 && !(K.mobs.get(me.id).fl & 8192), '擱淺的時候沒有護身，受傷多很多：' + (g1 && g1[1]) + ' → ' + (g2 && g2[1]));
+    await wait(6200); K.fx.length = 0; await K.ask('cb:dbg', { mermaid: 'charm' }); const c1 = await until(() => seen('tele', 'charm', me.id), 2500); ok(c1, '黑潮人魚魅惑之前有預告');
+    const who = c1 && c1.to === K.s.id ? K : H, other = who === K ? H : K; ok(await until(() => who.me.charm === 1, 3000), '被魅惑了'); await other.cast('potion'); ok(await until(() => who.me.charm === 0, 800), '隊友放招就叫醒了');
+    clearInterval(keep); K.s.emit('cb:target', null); K.s.close(); H.s.close();
   }
   // ---- 組隊、出力、倒下 ----
   if (!process.env.ONLY || process.env.ONLY === 'party') {

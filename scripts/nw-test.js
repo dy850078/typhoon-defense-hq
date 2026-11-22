@@ -905,7 +905,7 @@ async function main() {
     const pg = await open(await account({ name: '小林' }), false), shot = (n) => pg.screenshot({ path: path.join(OUT, 'mobs-' + n + '.png') });
     const ask = (ev, arg) => pg.evaluate(([e, a]) => window.NW_SK.ask(e, a), [ev, arg]), dbg = () => pg.evaluate(() => window.HQ_NEWWORLD.combat.debug()), view = () => pg.evaluate(() => window.HQ_NEWWORLD.combat.view());
     await pg.waitForFunction(() => window.HQ_NEWWORLD.combat && window.HQ_NEWWORLD.combat.view(), null, { timeout: 20000 });
-    const d0 = await dbg(), kinds = [...new Set(d0.mobs.map(m => m.kind))].sort().join(); ok(kinds === 'bird,bloom,deer,dew,elder,moss,puff,sheep,whale', '野地的怪：' + kinds);
+    const d0 = await dbg(), kinds = [...new Set(d0.mobs.map(m => m.kind))].sort().join(); ok(kinds === 'bird,bloom,crab,deer,dew,elder,jelly,mermaid,moss,puff,sheep,siren,whale', '野地的怪：' + kinds);
     const by = (k, deep) => d0.mobs.filter(m => m.kind === k && (deep ? m.lv > 30 : m.lv <= 30)).sort((a, b) => b.lv - a.lv)[0];
     const go = async (m, dx, dz, tgt) => { await pg.evaluate(([id, dx, dz, tgt]) => { const NW = window.HQ_NEWWORLD, m = NW.combat.debug().mobs.find(x => x.id === id); NW.debugPlace(m.x + dx, m.z + dz); NW.combat.setTarget(tgt ? id : null); }, [m.id, dx, dz, !!tgt]); await pg.waitForTimeout(700); await pg.evaluate(() => window.HQ_NEWWORLD.combat.faceCam()); await pg.waitForTimeout(250); };
     await ask('cb:dbg', { lv: 99 }); await zoomIn(pg);
@@ -1009,6 +1009,29 @@ async function main() {
   };
   const C3n = (k) => require('../shared/classes3d.js').MOBS[k].name;
   if (want === 'cloud') await cloudShow();
+  // 星砂海岸：每一種怪拍一張，再拍出招的預告、泡泡，還有黑潮人魚的護身和擱淺
+  const coastShow = async () => {
+    console.log('coast');
+    const pg = await open(await account({ name: '小砂' }), false), shot = (n) => pg.screenshot({ path: path.join(OUT, 'coast-' + n + '.png') });
+    const ask = (ev, arg) => pg.evaluate(([e, a]) => window.NW_SK.ask(e, a), [ev, arg]), dbg = () => pg.evaluate(() => window.HQ_NEWWORLD.combat.debug());
+    await pg.waitForFunction(() => window.HQ_NEWWORLD.combat && window.HQ_NEWWORLD.combat.view(), null, { timeout: 20000 });
+    const d0 = await dbg(), by = (k, i) => d0.mobs.filter(m => m.kind === k).sort((a, b) => b.lv - a.lv)[i || 0];
+    const go = async (m, dx, dz, tgt) => { await pg.evaluate(([id, dx, dz, tgt]) => { const NW = window.HQ_NEWWORLD, m = NW.combat.debug().mobs.find(x => x.id === id); NW.debugPlace(m.x + dx, m.z + dz); NW.combat.setTarget(tgt ? id : null); }, [m.id, dx, dz, !!tgt]); await pg.waitForTimeout(700); await pg.evaluate(() => window.HQ_NEWWORLD.combat.faceCam()); await pg.waitForTimeout(250); };
+    const flag = (id, f, ms) => pg.waitForFunction(([id, f]) => { const m = window.HQ_NEWWORLD.combat.debug().mobs.find(x => x.id === id); return m && (m.fl & f); }, [id, f], { timeout: ms || 20000 }).then(() => true).catch(() => false);
+    await ask('cb:dbg', { lv: 99 }); await pg.evaluate(() => window.HQ_NEWWORLD.debugPlace(42, 172)); await pg.waitForTimeout(900); await shot('0-land'); await zoomIn(pg);
+    for (const k of ['jelly', 'crab', 'siren']) { await go(by(k), 2.8, 1.4); await shot('1-' + k); }
+    const me = by('mermaid'); await go(me, 5, 5.5); await shot('2-mermaid');
+    const keep = setInterval(() => ask('cb:dbg', { hp: 1 }).catch(() => {}), 1500);
+    for (const [k, lv] of [['jelly', 60], ['crab', 75], ['siren', 85]]) { await ask('cb:dbg', { lv }); const m = by(k, 1); await go(m, k === 'jelly' ? 1.8 : 3.5, 1, true); await pg.waitForTimeout(1200); await pg.evaluate(() => window.HQ_NEWWORLD.combat.setTarget(null));
+      ok(await flag(m.id, 4096), C3n(k) + '出招前有預告'); if (k !== 'siren') { await pg.waitForTimeout(250); await shot('3-' + k + '-warn'); }
+      if (k === 'siren') { ok(await pg.waitForFunction(() => window.HQ_NEWWORLD.combat.view().bub === 1, null, { timeout: 4000 }).then(() => true).catch(() => false), '被泡泡包住'); await pg.waitForTimeout(300); await shot('4-bubble'); }
+      await pg.evaluate(() => window.HQ_NEWWORLD.debugPlace(42, 150)); await pg.waitForTimeout(5800); }
+    await ask('cb:dbg', { lv: 99 }); await go(me, 4.5, 5, true); await pg.waitForTimeout(1800); ok(await flag(me.id, 8192, 4000), '黑潮人魚腳下有黑潮'); await shot('5-mermaid-guard');
+    await ask('cb:dbg', { mermaid: 'ebb' }); ok(await flag(me.id, 2048, 4000), '黑潮人魚擱淺'); await pg.waitForTimeout(1500); await shot('6-mermaid-ebb'); await pg.waitForTimeout(5500);
+    await go(me, 12, 8, true); await ask('cb:dbg', { mermaid: 'charm' }); ok(await pg.waitForFunction(() => window.HQ_NEWWORLD.combat.view().charm === 1, null, { timeout: 6000 }).then(() => true).catch(() => false), '被魅惑：畫面收到'); await shot('7-mermaid-charm');
+    clearInterval(keep); ok(!pg.errors.length, '沒有頁面錯誤' + (pg.errors.length ? '：' + pg.errors.slice(0, 3).join(' / ') : '')); await pg.context().close();
+  };
+  if (want === 'coast') await coastShow();
   if (want === 'idle') await idleShow();
   if (want === 'party') await partyShow(false);
   if (want === 'party-phone') await partyShow(true);

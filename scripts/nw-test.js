@@ -268,6 +268,20 @@ async function main() {
     ok(Math.abs(l1 - 0.7) < 0.02 && Math.abs(l2 + 0.7) < 0.02, '大廳左右各只能轉約 40 度（' + l1.toFixed(2) + '、' + l2.toFixed(2) + '）');
     ok(!pg.errors.length, '頁面沒有錯誤' + (pg.errors.length ? '：' + pg.errors.join(' / ') : ''));
     await pg.context().close();
+    // 手機：兩根手指扭（跟 Google 地圖一樣）；一根手指點地板還是走路
+    const pp = await open(a, true), cdp = await pp.context().newCDPSession(pp), vp = pp.viewportSize(), cx = vp.width / 2, cy = vp.height * 0.45;
+    const pts = (t, r) => [{ x: cx + Math.cos(t) * r, y: cy + Math.sin(t) * r, id: 0 }, { x: cx - Math.cos(t) * r, y: cy - Math.sin(t) * r, id: 1 }];
+    const twist = async (to) => { await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: pts(0, 70) });
+      for (let i = 1; i <= 10; i++) { await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: pts(to * i / 10, 70) }); await pp.waitForTimeout(30); }
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }); await pp.waitForTimeout(900); };
+    const m0 = await NW(pp, () => HQ_NEWWORLD.net.me());
+    await twist(1.0); const t1 = await NW(pp, () => HQ_NEWWORLD.camAngle()); ok(Math.abs(t1 - 1.0) < 0.06, '手機：兩根手指順時針扭，畫面跟著順時針轉（' + t1.toFixed(2) + '）'); await shot(pp, 'turn-6-phone-twist');
+    await twist(-0.5); const t2 = await NW(pp, () => HQ_NEWWORLD.camAngle()); ok(Math.abs(t2 - 0.5) < 0.06, '手機：往回扭就轉回來（' + t2.toFixed(2) + '）');
+    await twist(0.05); ok(Math.abs((await NW(pp, () => HQ_NEWWORLD.camAngle())) - t2) < 0.01, '手機：兩指只是點一下、沒有扭，鏡頭不動');
+    const m1 = await NW(pp, () => HQ_NEWWORLD.net.me()); ok(Math.hypot(m1.x - m0.x, m1.z - m0.z) < 0.05, '手機：扭的時候人不會走');
+    await pp.touchscreen.tap(vp.width * 0.3, vp.height * 0.6); await pp.waitForTimeout(2000);
+    const m2 = await NW(pp, () => HQ_NEWWORLD.net.me()); ok(Math.hypot(m2.x - m1.x, m2.z - m1.z) > 0.5, '手機：一根手指點地板還是會走過去（走了 ' + Math.hypot(m2.x - m1.x, m2.z - m1.z).toFixed(2) + '）'); await shot(pp, 'turn-7-phone-tap');
+    ok(!pp.errors.length, '手機頁面沒有錯誤'); await pp.context().close();
   };
 
   // ---- 總部大廳：前院和室內是分開的兩區 ----

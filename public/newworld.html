@@ -175,7 +175,7 @@
       <button class="opt" type="button" id="b-zoom">鏡頭遠近<small id="s-zoom">遠</small></button>
       <button class="opt" type="button" id="b-quality">畫質<small id="s-quality">中</small></button>
       <button class="opt" type="button" id="b-lines">外框線<small id="s-lines">開</small></button>
-      <button class="opt" type="button" id="b-turn">鏡頭回正<small>按住滑鼠右鍵拖可以轉</small></button>
+      <button class="opt" type="button" id="b-turn">鏡頭回正<small id="s-turn">按住滑鼠右鍵拖可以轉</small></button>
     </div>
     <p class="sub">手機會燙的話，把畫質調低、外框線關掉。</p>
     <div class="acts"><a class="opt" href="hq.html">回總部</a></div>
@@ -372,6 +372,7 @@
       $('b-quality').onclick = function () { $('s-quality').textContent = NW.nextQuality(); };
       $('b-lines').onclick = function () { $('s-lines').textContent = NW.lines(); };
       $('b-turn').onclick = function () { NW.turnReset(); };
+      if (window.matchMedia && matchMedia('(pointer:coarse)').matches) $('s-turn').textContent = '兩根手指在畫面上扭可以轉';
       NW.onStats(function (s) { $('stats').textContent = '每秒 ' + s.fps + ' 張　繪製 ' + s.calls + ' 次　' + Math.round(s.tris / 1000) + 'k 面'; });
       // 搖桿
       var stick = $('stick'), knob = $('knob'), id = null;
@@ -391,6 +392,15 @@
       cv.addEventListener('pointermove', function (e) { if (!turn || turn.id !== e.pointerId) return; NW.turn(-(e.clientX - turn.x) * 0.0065); turn.x = e.clientX; });
       var turnEnd = function (e) { if (turn && turn.id === e.pointerId) { turn = null; cv.style.cursor = ''; } };
       cv.addEventListener('pointerup', turnEnd); cv.addEventListener('pointercancel', turnEnd);
+      // 手機：兩根手指放在畫面上扭（跟 Google 地圖轉地圖一樣），畫面跟著手指轉。先扭超過一點點才開始算，免得兩指點一下就歪掉
+      var fingers = {}, twist = null;
+      var twistAng = function () { var k = Object.keys(fingers); if (k.length !== 2) return null; var a = fingers[k[0]], b = fingers[k[1]]; return Math.atan2(b.y - a.y, b.x - a.x); };
+      cv.addEventListener('pointerdown', function (e) { if (e.pointerType !== 'touch') return; fingers[e.pointerId] = { x: e.clientX, y: e.clientY }; var a = twistAng(); twist = a == null ? null : { last: a, sum: 0, on: false }; if (twist) tap = null; });
+      cv.addEventListener('pointermove', function (e) { if (!fingers[e.pointerId]) return; fingers[e.pointerId] = { x: e.clientX, y: e.clientY }; var a = twistAng(); if (a == null || !twist) return;
+        var d = Math.atan2(Math.sin(a - twist.last), Math.cos(a - twist.last)); twist.last = a;
+        if (!twist.on) { twist.sum += d; if (Math.abs(twist.sum) < 0.1) return; twist.on = true; d = twist.sum; } NW.turn(d); });
+      var fingerUp = function (e) { if (!fingers[e.pointerId]) return; delete fingers[e.pointerId]; if (twist) tap = null; twist = null; };   // 剛剛是兩指的話，放開不算點地板
+      cv.addEventListener('pointerup', fingerUp); cv.addEventListener('pointercancel', fingerUp);
       cv.addEventListener('pointerup', function (e) { if (tap && tap.id === e.pointerId && Math.hypot(e.clientX - tap.x, e.clientY - tap.y) < 12) NW.walkTo(e.clientX, e.clientY); tap = null; });
       cv.addEventListener('pointercancel', function () { tap = null; });
       window.addEventListener('keydown', function (e) { if (e.target && /^(INPUT|TEXTAREA)$/.test(e.target.tagName)) return; NW.key(e.key.length === 1 ? e.key.toLowerCase() : e.key, true); });

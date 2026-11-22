@@ -38,29 +38,102 @@ window.NW_PANELS = function (NW, token, opt) {
   }
 
   // ---------- 扭蛋機 ----------
-  function gacha(last) {
-    var body = frame('gacha', '扭蛋機', '用新世界的扭蛋券，扭到的裝備放進新世界的背包。');
-    wait(body);
-    post('gacha', { act: 'state' }).then(function (r) { if (cur === 'gacha') drawGacha(body, r, last); });
+  // 卡池（期間限定／常駐）在 shared/gacha.js，開關和日期在管理員頁；這裡畫橫幅、內容物，播扭蛋動畫
+  var GA = window.HQ_GACHA_ART, CR = window.HQ_CRAYON, TIP = window.NW_TIP;
+  var gp = { pool: null, pick: null, busy: false };
+  var BAN = { magical: { bg: ['#ffe3f1', '#e9dcff'], ink: '#b04aa6', star: '#ffd45c' } }, BAN0 = { bg: ['#fff1cc', '#ffe0c2'], ink: '#a3622a', star: '#ffffff' };
+  function ease(t) { return 1 - Math.pow(1 - t, 3); }
+  function play(ms, step) { return new Promise(function (done) { var t0 = performance.now(); (function f() { requestAnimationFrame(function (now) { var t = ms <= 1 ? 1 : Math.min(1, (now - t0) / ms); step(t); if (t < 1) f(); else done(); }); })(); }); }
+  function paint(cv, draw) { var x = cv.getContext('2d'); x.setTransform(1, 0, 0, 1, 0, 0); x.clearRect(0, 0, cv.width, cv.height); draw(x); }
+  function drawMachine(cv, o) { if (GA && CR) paint(cv, function (x) { var k = cv.width / 64; x.scale(k, k); GA.machine(x, CR.rng(11), o); }); }
+  function star4(x, cx, cy, s, col) { x.beginPath(); for (var a = 0; a < 8; a++) { var r = a % 2 ? s * 0.34 : s, t = a * Math.PI / 4 - Math.PI / 2; x[a ? 'lineTo' : 'moveTo'](cx + Math.cos(t) * r, cy + Math.sin(t) * r); } x.closePath(); x.fillStyle = col; x.fill(); }
+  // 卡池橫幅的底圖：粉彩漸層、一個魔法陣、散落的星星（裝備圖另外疊在上面）
+  function banner(po) {
+    var c = BAN[po.series] || BAN0, cv = el('canvas'); cv.width = 720; cv.height = 220; var x = cv.getContext('2d'), r = CR ? CR.rng(po.key.length * 37 + 5) : Math.random;
+    var g = x.createLinearGradient(0, 0, 720, 220); g.addColorStop(0, c.bg[0]); g.addColorStop(1, c.bg[1]); x.fillStyle = g; x.fillRect(0, 0, 720, 220);
+    x.globalAlpha = 0.5; x.strokeStyle = '#fff'; x.lineWidth = 5; [92, 72].forEach(function (R) { x.beginPath(); x.arc(560, 112, R, 0, Math.PI * 2); x.stroke(); });
+    x.lineWidth = 3; x.beginPath(); for (var k = 0; k < 6; k++) { var t = k * Math.PI * 4 / 5 - Math.PI / 2; x[k ? 'lineTo' : 'moveTo'](560 + Math.cos(t) * 72, 112 + Math.sin(t) * 72); } x.stroke(); x.globalAlpha = 1;
+    for (var n = 0; n < 16; n++) star4(x, 20 + r() * 680, 14 + r() * 192, 4 + r() * 9, n % 3 ? '#ffffff' : c.star);
+    return cv;
   }
-  function drawGacha(body, r, last) {
-    if (!r.ok && r.tickets == null) return fail(body, r);
-    body.innerHTML = '';
+  function leftText(ms) { var d = Math.floor(ms / 86400000), h = Math.ceil(ms / 3600000); return d >= 1 ? '剩 ' + d + ' 天' : h > 1 ? '剩 ' + h + ' 小時' : '最後 1 小時'; }
+  function have(it) { return it.own > 0 || it.worn; }
+  function gacha() {
+    var body = frame('gacha', '扭蛋機'); gp.busy = false;
+    wait(body);
+    post('gacha', { act: 'state' }).then(function (r) { if (cur === 'gacha') drawGacha(body, r); });
+  }
+  function gachaDo(body, req) { return post('gacha', req).then(function (x) { if (cur !== 'gacha') return null;
+    if (!x.ok) return post('gacha', { act: 'state' }).then(function (s) { s.error = x.error; if (cur === 'gacha') drawGacha(body, s); return null; });
+    return x; }); }
+  function drawGacha(body, r) {
+    if (!r.pools) return fail(body, r);
+    body.innerHTML = ''; P.querySelectorAll('.gp-stage').forEach(function (e) { e.remove(); });
     var row = el('div', 'line'), ti = icon('item-gachaTicket', 30); if (ti) row.appendChild(ti);
-    row.appendChild(el('b', '', '扭蛋券 ' + r.tickets + ' 張')); row.appendChild(el('span', 'dim', '再 ' + (r.pityMax - r.pity) + ' 次內一定有 SSR')); row.dataset.tickets = r.tickets; row.id = 'gacha-tickets'; body.appendChild(row);
-    if (last) { var res = el('div', 'result r-' + last.rarity), gi = icon('gear-' + last.item, 44); if (gi) res.appendChild(gi);
-      var t = el('span'); t.appendChild(el('b', '', '【' + last.rarity + '】' + last.name)); t.appendChild(el('small', '', (last.fresh ? '第一次拿到！' : '已經有了，多一件') + (last.pityHit ? '（保底）' : ''))); res.appendChild(t); body.appendChild(res); }
+    row.appendChild(el('b', '', '扭蛋券 ' + r.tickets + ' 張')); row.dataset.tickets = r.tickets; row.id = 'gacha-tickets';
+    if (TIP) row.appendChild(TIP.info('扭蛋券打倒頭目有機會掉。重複的扭蛋裝備 ' + r.recycle + ' 件可以換 1 張，花園寶石 1 顆可以換 ' + r.gemTickets + ' 張。'));
+    var pity = el('span', 'dim gp-pity', r.pityMax - r.pity <= 1 ? '下一次一定是 SSR' : '再 ' + (r.pityMax - r.pity) + ' 次內一定有 SSR'); row.appendChild(pity);
+    if (TIP) row.appendChild(TIP.info('機率：R ' + r.rates.R + '%、SR ' + r.rates.SR + '%、SSR ' + r.rates.SSR + '%。連續 ' + r.pityMax + ' 次沒有 SSR，下一次一定是你正在扭的卡池裡的 SSR，而且先給還沒有的。保底次數所有卡池一起算。'));
+    if (!r.pools.length) { body.appendChild(row); var no = el('p', 'gp-none', '現在沒有開放的卡池，等下一檔吧。'); no.id = 'gacha-none'; body.appendChild(no); if (r.error) body.appendChild(el('p', 'err', r.error)); return; }
+    var po = r.pools.filter(function (x) { return x.key === gp.pool; })[0] || r.pools[0]; gp.pool = po.key;
+    var bans = el('div', 'gp-bans' + (r.pools.length > 1 ? ' many' : ''));
+    r.pools.forEach(function (x) {
+      var b = el('button', 'gp-ban' + (x.key === po.key ? ' on' : '')); b.type = 'button'; b.dataset.pool = x.key; b.style.setProperty('--ink', (BAN[x.series] || BAN0).ink); b.appendChild(banner(x));
+      var art = el('span', 'gp-art'); x.items.forEach(function (it) { var im = icon('gear-' + it.id); if (im) { im.className = 'r-' + it.rarity; art.appendChild(im); } }); b.appendChild(art);
+      var tx = el('span', 'gp-tx'); tx.appendChild(el('em', x.limited ? 'lim' : '', x.limited ? '期間限定' : '常駐')); tx.appendChild(el('b', '', x.name)); if (x.note) tx.appendChild(el('small', '', x.note));
+      if (x.left != null) { var lf = el('i', '', leftText(x.left)); lf.dataset.left = x.left; tx.appendChild(lf); }
+      b.appendChild(tx); b.onclick = function () { if (gp.busy || gp.pool === x.key) return; gp.pool = x.key; gp.pick = null; drawGacha(body, r); }; bans.appendChild(b);
+    });
+    body.appendChild(bans); body.appendChild(row);
     if (r.error) body.appendChild(el('p', 'err', r.error));
-    var go = function (act) { return function () { post('gacha', { act: act }).then(function (x) { if (cur !== 'gacha') return;
-      if (!x.ok) return post('gacha', { act: 'state' }).then(function (s) { s.error = x.error; drawGacha(body, s, null); });
-      if (act === 'recycle') toast('回收了' + x.used.join('、') + '，換到一張扭蛋券'); if (act === 'gem') toast('用一顆' + x.gem + '換了 ' + x.gemTickets + ' 張扭蛋券');
-      drawGacha(body, x, act === 'spin' ? x : null); }); }; };
-    var acts = el('div', 'acts');
-    var b1 = btn('扭一次', go('spin'), 'main'); b1.disabled = r.tickets < 1; b1.id = 'gacha-spin'; acts.appendChild(b1);
-    var b2 = btn('回收重複的（' + r.recycle + ' 件換 1 張）', go('recycle')); b2.disabled = r.spares < r.recycle; acts.appendChild(b2);
-    var b3 = btn('寶石換券（1 顆換 ' + r.gemTickets + ' 張）', go('gem')); b3.disabled = r.gems < 1; acts.appendChild(b3);
-    body.appendChild(acts);
-    body.appendChild(el('p', 'dim', '重複的扭蛋裝備 ' + r.spares + ' 件、花園寶石 ' + r.gems + ' 顆。扭蛋券打倒頭目有機會掉。'));
+    var top = el('div', 'gp-top'), cv = el('canvas', 'gp-machine'); cv.width = 192; cv.height = 312; drawMachine(cv, {}); top.appendChild(cv);
+    var side = el('div', 'gp-side');
+    var b1 = btn(r.tickets < 1 ? '沒有扭蛋券' : '投一張券，扭一次', function () { spin(body, po, cv); }, 'main'); b1.disabled = r.tickets < 1; b1.id = 'gacha-spin'; side.appendChild(b1);
+    var swap = function (act) { return function () { if (gp.busy) return; gachaDo(body, { act: act }).then(function (x) { if (!x) return;
+      toast(act === 'recycle' ? '回收了' + x.used.join('、') + '，換到一張扭蛋券' : '用一顆' + x.gem + '換了 ' + x.gemTickets + ' 張扭蛋券'); drawGacha(body, x); }); }; };
+    var b2 = btn('回收重複的（' + r.spares + ' 件）', swap('recycle')); b2.disabled = r.spares < r.recycle; b2.id = 'gacha-recycle'; side.appendChild(b2);
+    var b3 = btn('寶石換券（' + r.gems + ' 顆）', swap('gem')); b3.disabled = r.gems < 1; b3.id = 'gacha-gem'; side.appendChild(b3);
+    top.appendChild(side); body.appendChild(top);
+    var n = po.items.filter(have).length; body.appendChild(el('h3', 'gp-h', '這個卡池裡有　' + n + ' / ' + po.items.length));
+    var grid = el('div', 'gp-grid'), pick = el('div', 'gp-pick');
+    var show = function (it) { pick.innerHTML = ''; if (!it) return; var im = icon('gear-' + it.id, 72); if (im) pick.appendChild(im);
+      var t = el('span'); t.appendChild(el('b', '', '【' + it.rarity + '】' + it.name)); t.appendChild(el('small', '', po.name + '・' + it.slot + '　' + (it.worn ? '穿在身上' : it.own > 0 ? '背包裡有 ' + it.own + ' 件' : '還沒有'))); pick.appendChild(t); };
+    po.items.forEach(function (it) { var c = el('button', 'gp-it r-' + it.rarity + (have(it) ? ' have' : ' none') + (gp.pick === it.id ? ' on' : '')); c.type = 'button'; c.dataset.id = it.id;
+      var im = icon('gear-' + it.id, 52); if (im) c.appendChild(im); c.appendChild(el('em', '', it.rarity)); c.appendChild(el('span', '', it.name)); if (it.own > 1) c.appendChild(el('i', '', '×' + it.own));
+      c.onclick = function () { gp.pick = gp.pick === it.id ? null : it.id; grid.querySelectorAll('.gp-it').forEach(function (e) { e.classList.toggle('on', e.dataset.id === gp.pick); }); show(gp.pick ? it : null); }; grid.appendChild(c);
+      if (gp.pick === it.id) show(it); });
+    body.appendChild(grid); body.appendChild(pick);
+  }
+  // 扭一次：先跟伺服器要結果，再播動畫（轉把 → 蛋滾出來 → 晃一晃打開 → 裝備跳出來）；點一下畫面可以跳過
+  function spin(body, po, cv) {
+    if (gp.busy) return; gp.busy = true; var go = document.getElementById('gacha-spin'); if (go) go.disabled = true;
+    gachaDo(body, { act: 'spin', pool: po.key }).then(function (x) {
+      if (!x) { gp.busy = false; return; }
+      var calm = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches, skip = calm || !GA || !CR;
+      var stage = el('div', 'gp-stage r-' + x.rarity); stage.dataset.item = x.item; P.scrollTop = 0; P.appendChild(stage); stage.onclick = function () { skip = true; };
+      var rays = el('div', 'gp-rays'); stage.appendChild(rays);
+      var mc = el('canvas', 'gp-machine big'); mc.width = 256; mc.height = 416; stage.appendChild(mc); stage.appendChild(el('small', 'gp-skip', '點一下跳過'));
+      var egg = el('canvas', 'gp-egg'); egg.width = 320; egg.height = 320;
+      var dur = function (ms) { return skip ? 1 : ms; };
+      var drawEgg = function (k, wob, open) { paint(egg, function (c) { c.translate(160, 170); c.scale(k, k); c.rotate(wob); GA.capsule(c, CR.rng(3), 0, 0, 70, x.rarity, 5, open); }); };
+      var seq = skip ? Promise.resolve() : play(dur(900), function (t) { drawMachine(mc, { turn: ease(t) * Math.PI * 3 }); })
+        .then(function () { return play(dur(280), function (t) { drawMachine(mc, { turn: Math.PI * 3, egg: t > 0.3 ? x.rarity : null }); }); })
+        .then(function () { mc.remove(); stage.insertBefore(egg, stage.firstChild.nextSibling); return play(dur(260), function (t) { drawEgg(0.3 + ease(t) * 0.7, 0, 0); }); })
+        .then(function () { return play(dur(x.rarity === 'SSR' ? 1300 : 900), function (t) { drawEgg(1, Math.sin(t * Math.PI * (x.rarity === 'SSR' ? 9 : 6)) * 0.22 * (1 - t * 0.5), 0); }); })
+        .then(function () { return play(dur(320), function (t) { drawEgg(1, 0, ease(t)); }); });
+      seq.then(function () {
+        if (cur !== 'gacha' || !stage.isConnected) { gp.busy = false; return; }
+        mc.remove(); egg.remove(); stage.querySelectorAll('.gp-skip').forEach(function (e) { e.remove(); }); stage.onclick = null; stage.classList.add('out');
+        if (x.rarity !== 'R') for (var n = 0; n < (x.rarity === 'SSR' ? 14 : 6); n++) { var sp = el('i', 'gp-spark'); sp.style.left = (8 + Math.random() * 84) + '%'; sp.style.top = (6 + Math.random() * 80) + '%'; sp.style.animationDelay = (Math.random() * 1.4).toFixed(2) + 's'; stage.appendChild(sp); }
+        var out = el('div', 'gp-out'); out.appendChild(el('em', '', x.pityHit ? '保底！' : x.fresh ? '新的！' : '重複了'));
+        var im = icon('gear-' + x.item, 116); if (im) out.appendChild(im); out.appendChild(el('b', '', '【' + x.rarity + '】' + x.name));
+        out.appendChild(el('small', '', po.name + (x.fresh ? '' : '・重複的 ' + x.recycle + ' 件可以換 1 張券')));
+        var acts = el('div', 'acts'), wear = btn('穿上', function () { wear.disabled = true; post('bag', { act: 'equip', slot: x.slot, id: x.item }).then(function (e) { if (e.ok) { if (e.equip) NW.gear(e.equip); toast('穿上了' + x.name); } else toast(e.error); if (cur === 'gacha') { gp.busy = false; gacha(); } }); }, 'main'); wear.id = 'gacha-wear';
+        var again = btn(x.tickets > 0 ? '再扭一次' : '好', function () { gp.busy = false; drawGacha(body, x); if (x.tickets > 0) { var c2 = body.querySelector('.gp-machine'); if (c2) spin(body, po, c2); } }); again.id = 'gacha-again';
+        var back = btn('收起來', function () { gp.busy = false; drawGacha(body, x); }); back.id = 'gacha-back';
+        acts.appendChild(wear); acts.appendChild(again); if (x.tickets > 0) acts.appendChild(back); out.appendChild(acts); stage.appendChild(out);
+      });
+    });
   }
 
   // ---------- 公共花園 ----------

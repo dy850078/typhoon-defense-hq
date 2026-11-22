@@ -14,8 +14,9 @@
 
   // pity 是距離上一次 SSR 已經扭了幾次；owned 是身上有的裝備 id
   // 回傳 { id, pity }：pity 是扭完之後的新值
-  function spin(pity, owned) {
-    const all = pool(), have = new Set(owned || []);
+  // ids 有給的話只在那幾件裡面抽（新世界的卡池）；沒給就是整台機器（總部）
+  function spin(pity, owned, ids) {
+    const all = ids && ids.length ? ids : pool(), have = new Set(owned || []);
     const of = (rar) => all.filter(id => G().GEAR[id].rarity === rar);
     let rar;
     if ((pity || 0) + 1 >= PITY) rar = 'SSR';
@@ -40,7 +41,22 @@
     return out;
   }
 
-  const gacha = { TICKET, DROP_RATE, RATES, PITY, RECYCLE, GEM_TICKETS, pool, spin, spares };
+  // ---------- 新世界的卡池 ----------
+  // 一個卡池是一個扭蛋系列；limited 是期間限定（管理員頁設開關和起訖日），保底次數所有卡池共用
+  // 小巫師還在調長相，先不放進新世界的卡池
+  const POOLS = { magical: { name: '魔法少女', series: 'magical', limited: true, note: '星星、緞帶和蓬蓬裙' } };
+  const poolIds = (key) => POOLS[key] ? pool().filter(id => G().GEAR[id].series === POOLS[key].series) : [];
+  const DAY = /^\d{4}-\d{2}-\d{2}$/;
+  const dayOk = (d) => d === '' || (DAY.test(d) && !isNaN(Date.parse(d + 'T00:00:00+08:00')));
+  // cfg 是管理員存的 { on, from, to }（日期是台灣時間的 YYYY-MM-DD，to 當天算到 23:59）；沒設過就是一直開著
+  // 回傳 { open, soon, over, left }：left 是離結束還有幾毫秒（沒設結束日是 null）
+  function poolState(key, cfg, now) {
+    const c = cfg || {}, on = c.on !== false, t0 = c.from && dayOk(c.from) ? Date.parse(c.from + 'T00:00:00+08:00') : null, t1 = c.to && dayOk(c.to) ? Date.parse(c.to + 'T00:00:00+08:00') + 86400000 : null;
+    const soon = t0 != null && now < t0, over = t1 != null && now >= t1;
+    return { open: !!POOLS[key] && on && !soon && !over, on, soon, over, from: c.from || '', to: c.to || '', left: t1 != null && !over ? t1 - now : null };
+  }
+
+  const gacha = { TICKET, DROP_RATE, RATES, PITY, RECYCLE, GEM_TICKETS, pool, spin, spares, POOLS, poolIds, poolState, dayOk };
   if (typeof module !== 'undefined' && module.exports) module.exports = gacha;
   else root.HQ_GACHA = gacha;
 })(this);

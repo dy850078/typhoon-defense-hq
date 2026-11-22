@@ -66,6 +66,12 @@ td.wish button.x { flex-shrink: 0; width: 22px; height: 22px; min-height: 0; pad
 .tab-head h2 { font-size: 24px; margin: 0; }
 .tab-head .note { margin: 2px 0 0; }
 .tab:not(.on) { display: none; }
+.gp-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; padding: 10px 0; border-top: 1px solid var(--line); }
+.gp-row > div { flex: 1 1 180px; display: flex; flex-direction: column; gap: 2px; }
+.gp-row label { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; }
+.gp-row input[type=date] { width: auto; margin: 0; }
+.gp-row input[type=checkbox] { width: 20px; height: 20px; margin: 0; }
+.gp-st { color: var(--muted); }
 label.switch { flex-direction: row; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 0; border-top: 1px solid var(--line); cursor: pointer; }
 label.switch span { display: flex; flex-direction: column; gap: 2px; }
 label.switch b { font-size: 16px; }
@@ -153,6 +159,12 @@ label.switch input:checked::after { left: 25px; }
       <label class="switch"><span><b>寵物</b><small>關著的時候只有管理員看得到寵物、領養得到，也進得去可愛生物休息區。改完請大家重新整理一次。</small></span><input type="checkbox" id="pets-open" role="switch"></label>
       <p class="msg" id="pets-msg"></p>
     </form>
+    <section class="card" id="gp-card">
+      <h2 style="margin: 0">新世界扭蛋卡池</h2>
+      <p class="note" style="margin: 4px 0 12px">每個卡池可以開關、設開始和結束日期（台灣時間，結束日當天算到 23:59）。日期留空就是不限。時間到了卡池會自己收起來。</p>
+      <div id="gp-rows"></div>
+      <p class="msg" id="gp-msg"></p>
+    </section>
     <section class="card">
       <h2 style="margin: 0">新世界測試頁</h2>
       <p class="note" style="margin: 4px 0 0">3D 淡黑線版的試玩場景，跟總部分開。管理員，還有在帳號清單按了「開放新世界」的帳號才進得去（要先用那個帳號登入）。<a href="newworld.html" target="_blank" rel="noopener">打開新世界測試頁</a></p>
@@ -385,6 +397,28 @@ label.switch input:checked::after { left: 25px; }
       renderGarden(r.garden || []);
       showTurn(r.turn);
       $('pets-open').checked = !!r.petsOpen;
+      renderPools(r.gachaPools || []);
+    });
+  }
+  // 新世界扭蛋卡池：每個卡池一列（開關、開始日、結束日、儲存）
+  function renderPools(list) {
+    var box = $('gp-rows'); box.textContent = '';
+    list.forEach(function (p) {
+      var row = document.createElement('form'); row.className = 'gp-row'; row.dataset.key = p.key;
+      var name = document.createElement('b'); name.textContent = p.name + (p.limited ? '（期間限定）' : '（常駐）') + '　' + p.count + ' 件';
+      var st = document.createElement('small'); st.className = 'gp-st'; st.textContent = !p.on ? '關著' : p.soon ? '還沒開始' : p.over ? '已經結束' : p.left != null ? (p.left >= 86400000 ? '開放中，剩 ' + Math.floor(p.left / 86400000) + ' 天' : '開放中，今天結束') : '開放中';
+      var on = document.createElement('input'); on.type = 'checkbox'; on.checked = !!p.on; on.setAttribute('aria-label', '開放');
+      var from = document.createElement('input'); from.type = 'date'; from.value = p.from || ''; from.setAttribute('aria-label', '開始日');
+      var to = document.createElement('input'); to.type = 'date'; to.value = p.to || ''; to.setAttribute('aria-label', '結束日');
+      var lab = function (text, node) { var l = document.createElement('label'); l.append(text, node); return l; };
+      var save = document.createElement('button'); save.type = 'submit'; save.textContent = '儲存';
+      var head = document.createElement('div'); head.append(name, st);
+      row.append(head, lab('開放 ', on), lab('開始 ', from), lab('結束 ', to), save);
+      row.addEventListener('submit', function (e) { e.preventDefault(); save.disabled = true;
+        api('/api/admin/gacha-pool', { key: p.key, on: on.checked, from: from.value, to: to.value }).then(function (r) { save.disabled = false;
+          if (r.ok) { renderPools(r.gachaPools); say('gp-msg', p.name + '卡池存好了', true); } else say('gp-msg', r.error || '儲存失敗');
+        }).catch(function () { save.disabled = false; say('gp-msg', '儲存失敗'); }); });
+      box.appendChild(row);
     });
   }
   // 功能開關：一切就存，失敗就切回去

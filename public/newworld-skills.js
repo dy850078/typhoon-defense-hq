@@ -64,7 +64,7 @@
     sock.on('cb:init', function (d) { off = Date.now() - d.me.t; CB.init(d, sock.id, function (ev, arg, fn) { if (fn) sock.emit(ev, arg, fn); else sock.emit(ev, arg); }); });
     sock.on('cb:drop', function (d) { CB.addDrop(d); }); sock.on('cb:dropGone', function (e) { CB.dropGone(e); }); CB.onToast(toast);
     sock.on('cb:me', function (d) { off = Date.now() - d.t; CB.me(d); });
-    sock.on('cb:mobs', function (l) { CB.mobs(l); }); sock.on('cb:who', function (d) { CB.who(d); }); sock.on('cb:fx', function (e) { CB.fx(e); }); sock.on('cb:hit', function (l) { CB.hits(l); });
+    sock.on('cb:mobs', function (l) { CB.mobs(l); }); sock.on('cb:who', function (d) { CB.who(d); }); sock.on('cb:fams', function (l) { CB.fams(l); }); sock.on('cb:fx', function (e) { CB.fx(e); }); sock.on('cb:hit', function (l) { CB.hits(l); });
     sock.on('leave', function (id) { CB.drop(id); }); sock.on('cb:back', function (p) { CB.back(p); if (p && p.lose > 0) toast('倒下了，少了 ' + p.lose + ' 點經驗'); });
     sock.on('cb:say', function (t) { toast(String(t)); }); sock.on('cb:party', function (v) { party = v; drawParty(); }); sock.on('cb:pinv', function (v) { showInv(v); }); sock.on('cb:tgt', function () { CB.setTarget(null, true); });
     sock.on('cb:loot', function (o) { toast('拿到 ' + o.name + '（' + o.n + '/' + o.of + '）'); });

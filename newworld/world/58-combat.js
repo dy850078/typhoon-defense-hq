@@ -194,14 +194,17 @@ function makeCombat(ctx) {
   // 名字前面的職業徽章（芽、學門、專精各一個手繪圖示）；名牌是 60-play.js 的，這裡只把圖交過去
   const badge = (w) => { const IC = window.HQ_ICONS, u = IC ? IC.url('nwc-' + (w.spec || w.school || 'sprout')) : null; if (u && ctx.badge) ctx.badge(w.id === MYID, w.id, u); };
   let badgeT = 0;
+  const FAMS = new Map(), dropFam = (f) => { burst(f.x, 1, f.z, '#ffe9a8', 6, 1.5, 0.1, 0.4); G.remove(f.g); f.bar.b.remove(); FAMS.delete(f.id); };
+  const setFams = (l) => l.forEach(([id, x, z, hp]) => { const f = FAMS.get(id); if (f) { f.tx = x; f.tz = z; f.hp = hp; } });
   function setWho(d) { let w = WHO.get(d.id); if (!w) { w = { id: d.id, fam: [], famG: [], mech: 0 }; WHO.set(d.id, w); } Object.assign(w, { lv: d.lv, school: d.school, spec: d.spec, hp: d.hp, hpMax: d.hpMax }); badge(w);
     const p = posOf(d.id) || { x: 0, z: 0 };
-    if (d.fam.join() !== w.fam.join()) { w.famG.forEach(f => { burst(f.x, 1, f.z, '#ffe9a8', 6, 1.5, 0.1, 0.4); G.remove(f.g); }); w.fam = d.fam.slice();
-      w.famG = d.fam.map((tier) => { const g = new THREE.Group(); FAM[tier](g); G.add(g); circle(p.x, p.z + 1, tier === 3 ? 2.6 : 1.3, '#9fdc9a', 0.9); return { g, tier, x: p.x + 1.6, z: p.z + 1, f: 0, ph: Math.random() * 6, hit: 0 }; }); }
+    if (d.fam.map(a => a[0]).join() !== w.famG.map(f => f.id).join()) { const old = new Map(w.famG.map(f => [f.id, f]));   // 使魔照編號對，沒變的留著，不見的才收掉
+      w.famG = d.fam.map(([id, tier, max, x, z, hp]) => { const o = old.get(id); if (o) { old.delete(id); return o; } const g = new THREE.Group(); FAM[tier](g); G.add(g); circle(x, z, tier === 3 ? 2.6 : 1.3, '#9fdc9a', 0.9); const f = { id, g, tier, max, hp, x, z, tx: x, tz: z, f: 0, ph: Math.random() * 6, hit: 0, bar: mkBar() }; FAMS.set(id, f); return f; });
+      old.forEach(f => dropFam(f)); w.fam = d.fam.map(a => a[1]); }
     if (d.mech && !w.mechG) { w.mechG = { g: mkMecha(), x: p.x + 1.5, z: p.z + 1.5, f: 0, hit: 0, sc: 1, arm: 0 }; G.add(w.mechG.g); circle(p.x + 1.5, p.z + 1.5, 2, '#c9a2f2', 0.9); }
     if (!d.mech && w.mechG) { G.remove(w.mechG.g); w.mechG = null; }
     w.mech = d.mech; }
-  const dropWho = (id) => { const w = WHO.get(id); if (!w) return; w.famG.forEach(f => G.remove(f.g)); if (w.mechG) G.remove(w.mechG.g); WHO.delete(id); };
+  const dropWho = (id) => { const w = WHO.get(id); if (!w) return; w.famG.forEach(f => { G.remove(f.g); f.bar.b.remove(); FAMS.delete(f.id); }); if (w.mechG) G.remove(w.mechG.g); WHO.delete(id); };
 
   // ---------- 操偶師的線：從手指到怪，會隨距離拉緊、放鬆 ----------
   const THREADS = [], TH_MAT = bm('#ffe9a8', 0.95, true), SEG = 6;
@@ -346,7 +349,7 @@ function makeCombat(ctx) {
     lock2: (e) => { endZone('lock:' + e.id); const side = e.r * 1.6, o = new THREE.LineSegments(GEO.wire, lm('#ffffff')); G.add(o); fx(o, 0.28, (k, m) => { const s = side * (1 - k * k); m.scale.set(s + 0.05, 2.6 * (1 - k) + 0.05, s + 0.05); m.position.set(e.x, FY(e.x, e.z) + 1.3 * (1 - k), e.z); }, () => { burst(e.x, 0.6, e.z, '#7fb4ff', 18, 6, 0.18, 0.6, GEO.box); ring(e.x, e.z, e.r * 1.3, '#d5e8ff', 0.5, 0.05); }); },
     pact: (e, p) => { ring(p.x, p.z, 1.6, '#9fdc9a', 0.6); }, pact2: (e, p) => { ring(p.x, p.z, 1.8, '#9fdc9a', 0.6); }, envoy: (e, p) => { circle(p.x, p.z, 4, '#ffe9a8', 1.4); rise(p.x, p.z, '#ffe9a8', 20, 3, 4, 0.14, 1.4, GEO.star); },
     bond: (e, p) => { ring(p.x, p.z, 2.2, '#ff9ec4', 0.6); const w = WHO.get(e.id); if (w) w.famG.forEach(f => { rise(f.x, f.z, '#ff9ec4', 8, 0.6, 2.6, 0.12, 0.9); f.bond = C3.SK.bond.dur; }); },
-    fam: (e) => { const w = WHO.get(e.id), f = w && w.famG[e.i], b = mobAt(e.m); if (!f || !b) return; f.hit = 0.3; shot({ x: f.x, y: f.g.H ? f.g.H * 0.7 : 1.2, z: f.z }, b, f.tier === 3 ? '#ffe9a8' : '#9fdc9a', 0.25, f.tier === 3 ? 0.4 : 0.2, GEO.star, 0.4, () => { burst(b.x, b.y, b.z, '#9fdc9a', 4, 2, 0.1, 0.35, GEO.star); if (f.tier === 3) ring(b.x, b.z, 3, '#ffe9a8', 0.4); }); },
+    fam: (e) => { const f = FAMS.get(e.f), b = mobAt(e.m); if (!f || !b) return; f.hit = 0.3; f.f = Math.atan2(b.x - f.x, b.z - f.z); shot({ x: f.x, y: f.g.H ? f.g.H * 0.7 : 1.2, z: f.z }, b, f.tier === 3 ? '#ffe9a8' : '#9fdc9a', 0.25, f.tier === 3 ? 0.4 : 0.2, GEO.star, 0.4, () => { burst(b.x, b.y, b.z, '#9fdc9a', 4, 2, 0.1, 0.35, GEO.star); if (f.tier === 3) ring(b.x, b.z, 3, '#ffe9a8', 0.4); }); },
     transmute: (e) => { const r = C3.SK.transmute.r; circle(e.x, e.z, r, '#ffd76a', 1.0); const g = new THREE.Group(); G.add(g); const c = '#a8a39a'; const palm = mesh(GEO.box, bm(c), g); palm.scale.set(1.5, 1.5, 1.3); [-0.5, 0, 0.5].forEach(x => { const k = mesh(GEO.box, bm('#8d877d'), g); k.scale.set(0.4, 0.5, 1.2); k.position.set(x, -0.8, 0.1); }); const arm = mesh(GEO.box, bm('#8d877d'), g); arm.scale.set(1.0, 4, 1.0); arm.position.y = 2.6;
       fx(g, 0.75, (k, o) => { const y = k < 0.35 ? 7 : k < 0.5 ? 7 - (k - 0.35) / 0.15 * 6 : 1 + (k > 0.8 ? (k - 0.8) * 30 : 0); o.position.set(e.x, FY(e.x, e.z) + y, e.z); o.visible = k > 0.3; }); setTimeout(() => { ring(e.x, e.z, r * 1.2, '#ffd76a', 0.45, 0.1); burst(e.x, 0.3, e.z, '#8d877d', 10, 4, 0.16); SHAKE = 0.25; }, 370); },
     enchant: (e, p) => { const r = C3.SK.enchant.r; ring(p.x, p.z, r, '#ffd76a', 0.6); [p].concat([...WHO.keys()].filter(id => id !== e.id).map(posOf).filter(q => q && Math.hypot(q.x - p.x, q.z - p.z) <= r)).forEach(q => { circle(q.x, q.z, 1.0, '#ffd76a', 1.0); rise(q.x, q.z, '#ffe27a', 8, 0.6, 2.4, 0.1, 1, GEO.box); }); },
@@ -364,7 +367,7 @@ function makeCombat(ctx) {
         setTimeout(() => { burst(e.x, gy + 2.5, e.z2, '#ffe27a', 14, 7, 0.16, 0.9, GEO.star); burst(e.x, gy + 2.5, e.z2, '#ff9ec4', 12, 6, 0.14, 0.9, GEO.box); burst(e.x, gy + 2.5, e.z2, '#bfe9ff', 12, 6, 0.14, 0.9, GEO.box); SHAKE = 0.35; }, 240);
         CUT = 0.3; [-1, 1].forEach(k => { const b = mesh(GEO.box, bm('#f4f1ea')); fx(b, 0.3, (kk, m) => { m.position.set(e.x, FY(e.x, e.z2) + 5.2, e.z2); m.scale.set(e.r * 2.2 * Math.min(1, kk * 4), 0.07, 0.3); m.rotation.set(0, 0.4, k * (0.5 - kk * 0.5)); }); }); ring(e.x, e.z2, e.r, '#ffe9a8', 0.6, 0.05); } },
     die: (e) => { const m = MOBS.get(e.m); if (m) { burst(m.x, FY(m.x, m.z) + m.h * 0.5, m.z, '#ffffff', 8, 2.5, 0.16, 0.5); if (TARGET === m.id) setTarget(null, true); } },
-    mobAtk: (e) => { const m = MOBS.get(e.m); if (!m) return; m.atkT = 0.3; if (e.shot) { const p = posOf(e.to); if (p) shot({ x: m.x, y: FY(m.x, m.z) + m.h * 0.7, z: m.z }, head(p, 1.1), '#8fd3ee', 0.28, 0.16, GEO.sph, 0.5, () => burst(p.x, FY(p.x, p.z) + 1.1, p.z, '#bfe9ff', 5, 1.6, 0.08, 0.35)); } },
+    mobAtk: (e) => { const m = MOBS.get(e.m); if (!m) return; m.atkT = 0.3; if (e.shot) { const p = e.f ? FAMS.get(e.f) : posOf(e.to); if (p) shot({ x: m.x, y: FY(m.x, m.z) + m.h * 0.7, z: m.z }, head(p, 1.1), '#8fd3ee', 0.28, 0.16, GEO.sph, 0.5, () => burst(p.x, FY(p.x, p.z) + 1.1, p.z, '#bfe9ff', 5, 1.6, 0.08, 0.35)); } },
     tele: (e) => { const m = MOBS.get(e.m); if (m) { m.castT = e.dur; if (e.x2 != null) m.f = Math.atan2(e.x2 - m.x, e.z2 - m.z); }
       if (e.mk === 'roll') warnLine(e.x, e.z, e.x2, e.z2, e.w, e.dur); else if (e.mk === 'spore') warn(e.x, e.z, e.r, e.dur); else if (e.mk === 'roots') { e.spots.forEach(s => warn(s[0], s[1], e.r, e.dur)); if (m) m.rootT = e.dur + 0.4; }
       else if (e.mk === 'mend' && m) { const o = MOBS.get(e.to); ring(m.x, m.z, 1.2, '#9fe7a4', e.dur, 0.6); if (o) fx(mesh(GEO.sph, bm('#9fe7a4', 0.9)), e.dur, (k, b) => { b.position.set(m.x + (o.x - m.x) * k, FY(m.x, m.z) + 1 + Math.sin(k * Math.PI) * 1.2, m.z + (o.z - m.z) * k); b.scale.setScalar(0.14 + k * 0.1); }); } },
@@ -384,14 +387,15 @@ function makeCombat(ctx) {
   };
   let SPIN = 0, SHAKE = 0, CUT = 0; const NEEDLE = [];
   function onFx(e) { if (e.k === 'fog') return setFog(e); if (e.id && WHO.has(e.id) && e.k !== 'lvup') WHO.get(e.id).actT = S.time; const p = e.id ? posOf(e.id) : null; if (e.id && !p) return; if (S.lob) return; const k = e.k === 'pact2' ? 'pact2' : e.k; if (ON[k]) ON[k](e, p); }
-  function onHits(list) { if (S.lob) return; list.forEach(([id, d, kind]) => { if (id[0] === 'p') { const p = posOf(id.slice(2)); if (p) num(p.x, FY(p.x, p.z) + 2.4, p.z, d < 0 ? '+' + (-d) : String(d), d < 0 ? 'heal' : kind === 'pois' ? 'poison' : 'ow'); }
+  function onHits(list) { if (S.lob) return; list.forEach(([id, d, kind]) => { if (id[0] === 'f' && id[1] === ':') { const f = FAMS.get(id.slice(2)); if (f) num(f.x, FY(f.x, f.z) + (f.g.H || 1.7) + 0.3, f.z, d < 0 ? '+' + (-d) : String(d), d < 0 ? 'heal' : 'ow'); return; }
+    if (id[0] === 'p') { const p = posOf(id.slice(2)); if (p) num(p.x, FY(p.x, p.z) + 2.4, p.z, d < 0 ? '+' + (-d) : String(d), d < 0 ? 'heal' : kind === 'pois' ? 'poison' : 'ow'); }
     else { const m = MOBS.get(id); if (m && m.g.visible) num(m.x, FY(m.x, m.z) + m.h + 0.4, m.z, d < 0 ? '+' + (-d) : String(d), d < 0 ? 'heal' : kind === 'dot' || kind === 'poison' ? 'poison' : kind === 'link' ? 'link' : ''); } }); }
 
   // ---------- 每一格畫面 ----------
   function tick(dt) {
     const t = S.time, lob = !!S.lob; G.visible = !lob;
     for (let i = NUMS.length - 1; i >= 0; i--) { const n = NUMS[i]; n.t += dt; if (n.t > 0.9 || lob) { n.el.remove(); NUMS.splice(i, 1); continue; } if (put2d(n.el, n.x, n.y + n.t * 1.6, n.z)) n.el.style.opacity = String(Math.min(1, (0.9 - n.t) * 3)); }
-    if (lob) { MOBS.forEach(m => { m.bar.b.hidden = true; }); return; }
+    if (lob) { MOBS.forEach(m => { m.bar.b.hidden = true; }); FAMS.forEach(f => { f.bar.b.hidden = true; }); return; }
     tickDrops(dt); badgeT -= dt; if (badgeT < 0) { badgeT = 1.5; WHO.forEach(badge); }   // 別人的名牌可能比職業資料晚到，隔一下再補一次
     for (let i = FX.length - 1; i >= 0; i--) { const f = FX[i]; f.t += dt; const k = f.t / f.dur; if (k >= 1) { if (f.o.parent) f.o.parent.remove(f.o); if (f.done) f.done(f.o); FX.splice(i, 1); } else f.step(k, f.o); }
     thN = 0;
@@ -438,7 +442,7 @@ function makeCombat(ctx) {
     ZONES.forEach((o, id) => { o.t += dt; const dur = o.dur || o.z.dur || 1; if (o.g.tick) o.g.tick(t, Math.min(1, o.t / dur)); if (o.t > dur + 1.5) endZone(id); });
     // 使魔和機甲跟著主人
     WHO.forEach(w => { const p = posOf(w.id); if (!p) return; const f = p.face || 0, tgt = w.id === MYID && TARGET ? MOBS.get(TARGET) : null;
-      w.famG.forEach((o, i) => { const side = (i % 2 ? -1 : 1) * (o.tier === 3 ? 3.4 : 2.0); follow(o, p.x - Math.sin(f) * 0.8 + Math.cos(f) * side, p.z - Math.cos(f) * 0.8 - Math.sin(f) * side, dt, 3.5); o.ph += dt; if (o.hit > 0) o.hit -= dt; if (o.bond > 0) o.bond -= dt;
+      w.famG.forEach((o) => { follow(o, o.tx, o.tz, dt, 9); o.ph += dt; const hb = o.hp < o.max; o.bar.b.hidden = !hb; if (hb) { put2d(o.bar.b, o.x, FY(o.x, o.z) + (o.g.H || 1.7) + 0.45, o.z); o.bar.i.style.width = Math.max(0, o.hp / o.max * 100).toFixed(0) + '%'; } if (o.hit > 0) o.hit -= dt; if (o.bond > 0) o.bond -= dt;
         o.g.position.set(o.x, FY(o.x, o.z) + 0.12 + Math.sin(o.ph * 2.2) * 0.1 + (o.hit > 0 ? Math.sin(o.hit / 0.3 * Math.PI) * 0.35 : 0), o.z); o.g.rotation.set(0, o.f, Math.sin(o.ph * 1.6) * 0.04); if (o.g.anim) o.g.anim(o.ph); if (o.bond > 0 && Math.random() < 0.15) rise(o.x, o.z, '#ff9ec4', 1, 0.5, 2, 0.08, 0.7); });
       const M = w.mechG; if (M) { const big = w.mech === 3 ? 2 : 1; M.sc += (big - M.sc) * Math.min(1, dt * 3); const tm = M.hit > 0 ? MOBS.get(M.tm) : null; if (M.hit > 0) M.hit -= dt; if (M.guard > 0) M.guard -= dt;
         const gx = tm ? tm.x - Math.sin(M.f) * (1.6 * M.sc) : M.guard > 0 ? p.x + Math.sin(f) * 1.6 : p.x + Math.sin(f) * 1.2 + Math.cos(f) * 2.0, gz = tm ? tm.z - Math.cos(M.f) * (1.6 * M.sc) : M.guard > 0 ? p.z + Math.cos(f) * 1.6 : p.z + Math.cos(f) * 1.2 - Math.sin(f) * 2.0;
@@ -463,7 +467,7 @@ function makeCombat(ctx) {
     init: (d, id, send) => { MYID = id; SEND = send; MEV = d.me; MOBS.forEach(m => { G.remove(m.g); m.bar.b.remove(); }); MOBS.clear(); [...WHO.keys()].forEach(dropWho); d.mobs.forEach(addMob); d.who.forEach(setWho); [...DROPS.keys()].forEach(id => dropGone({ id })); (d.drops || []).forEach(addDrop); setFog(d.fog || {}); HOLD = false; TARGET = null; onChange(); },
     me: (d) => { const was = MEV; MEV = d; if (d.dead && TARGET) setTarget(null, true); onChange(was); },
     famPreview: (x, z) => [0, 1, 2].map(i => { const g = new THREE.Group(); FAM[i](g); G.add(g); g.position.set(x + (i - 1) * 1.9, FY(x, z), z); if (g.anim) g.anim(1); return g; }),   // 測試拍照用
-    addDrop, dropGone, late, mobs: (l) => l.forEach(setMob), who: setWho, drop: dropWho, fx: onFx, hits: onHits,
+    addDrop, dropGone, late, mobs: (l) => l.forEach(setMob), who: setWho, fams: setFams, drop: dropWho, fx: onFx, hits: onHits,
     back: (p) => { ctx.moveMe(p.x, p.z, true); S.goal = null; },
     target: () => TARGET, setTarget, nearest, view: () => MEV, field: () => ctx.field,
     // 技能鈕：要選怪的招沒有目標就抓最近的一隻
@@ -473,6 +477,6 @@ function makeCombat(ctx) {
     onChange: (fn) => { onChange = fn; }, onToast: (fn) => { onToast = fn; }, onPlayer: (fn) => { onPlayer = fn; },
     slow: () => (MEV && MEV.slow ? 0.55 : 1), idleOf: (id) => (WHO.get(id || MYID) || {}).idleK || 0,
     faceCam: () => MOBS.forEach(m => { m.f = Math.atan2(camera.position.x - m.x, camera.position.z - m.z); }),   // 測試拍照用：怪全部轉過來看鏡頭
-    debug: () => ({ fog: !!FOG, mobs: [...MOBS.values()].map(m => ({ id: m.id, kind: m.kind, lv: m.lv, x: m.x, z: m.z, hp: m.hp, max: m.max, fl: m.fl, tied: m.tied })), who: [...WHO.values()].map(w => ({ id: w.id, fam: w.fam, mech: w.mech, spec: w.spec })), threads: thN, drops: [...DROPS.values()].map(o => ({ id: o.id, k: o.k, x: o.x, z: o.z })), fx: FX.length, zones: [...ZONES.keys()] }),
+    debug: () => ({ fog: !!FOG, mobs: [...MOBS.values()].map(m => ({ id: m.id, kind: m.kind, lv: m.lv, x: m.x, z: m.z, hp: m.hp, max: m.max, fl: m.fl, tied: m.tied })), who: [...WHO.values()].map(w => ({ id: w.id, fam: w.fam, famAt: w.famG.map(f => ({ id: f.id, x: f.x, z: f.z, hp: f.hp, max: f.max })), mech: w.mech, spec: w.spec })), threads: thN, drops: [...DROPS.values()].map(o => ({ id: o.id, k: o.k, x: o.x, z: o.z })), fx: FX.length, zones: [...ZONES.keys()] }),
   };
 }

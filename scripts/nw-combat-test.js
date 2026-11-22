@@ -118,6 +118,28 @@ async function main() {
       ok(await until(() => M.mobs.get(bl.m).hp === 0, 15000), '花打得掉'); }
     clearInterval(keep); M.s.close();
   }
+  // ---- 使魔：自己走動打怪、有血量、太遠會回來 ----
+  if (!process.env.ONLY || process.env.ONLY === 'fam') {
+    const until = async (fn, ms) => { for (let i = 0; i < ms / 100; i++) { const v = fn(); if (v) return v; await wait(100); } return null; };
+    const S = await player(); S.who = null; S.fams = new Map(); S.s.on('cb:who', (d) => { if (d.id === S.s.id) S.who = d; }); S.s.on('cb:fams', (l) => l.forEach(a => S.fams.set(a[0], a)));
+    let me = { x: 0, z: 0 }; const go = (x, z) => { me = { x, z }; S.at(x, z); }, far = (a, b) => Math.hypot(a.x - b.x, a.z - b.z), fpos = (id) => { const a = S.fams.get(id); return a ? { x: a[1], z: a[2], hp: a[3] } : null; };
+    const summon = async () => { await S.ask('cb:dbg', { lv: 12 }); S.who = null; await S.cast('pact'); const w = await until(() => S.who && S.who.fam.length === 1 && S.who, 2000); return w ? w.fam[0] : null; };
+    await S.ask('cb:dbg', { lv: 12 }); await S.ask('cb:school', 'sc'); await S.ask('cb:slots', ['seal', 'pact', 'spark', null]);
+    // 主人很久沒動作：使魔不主動找怪
+    const mo = [...S.mobs.values()].filter(m => m.kind === 'moss' && m.lv <= 8 && m.hp > 0)[2]; go(mo.x + 5, mo.z); await wait(300); await S.ask('cb:dbg', { idle: 1 });
+    let f = await summon(); ok(f && f[2] === Math.round(C3.LEVEL.hp(12) * C3.FAMILIARS[f[1]].hp) && f[5] === f[2], '叫出來的使魔有自己的血量：' + (f && f[5] + '/' + f[2]));
+    S.fx.length = 0; await wait(3000); ok(!S.fx.some(x => x.k === 'fam'), '主人很久沒動作，使魔不會自己去惹怪');
+    await S.ask('cb:dbg', { idle: 0 }); const a1 = await until(() => S.fx.find(x => x.k === 'fam' && x.f === f[0]), 6000); ok(a1, '主人沒鎖定怪，使魔自己去打附近的怪');
+    S.hits.length = 0; ok(await until(() => S.hits.find(h => h[0] === 'f:' + f[0] && h[1] > 0), 12000), '使魔惹的怪回頭打使魔，使魔會扣血');
+    // 太遠會跑回來；更遠直接出現在身邊
+    go(me.x - 15, me.z); const back = await until(() => { const q = fpos(f[0]); return q && far(q, me) < 5; }, 6000); ok(back, '主人走遠，使魔放下怪跑回來');
+    go(me.x, me.z + 30); ok(await until(() => { const q = fpos(f[0]); return q && far(q, me) < 3; }, 1500), '離得太遠，使魔直接回到主人身邊');
+    // 補血補得到使魔；血量歸零就消失
+    const H = await player(); await H.ask('cb:dbg', { lv: 12 }); await H.ask('cb:school', 'pm'); await H.ask('cb:slots', ['bubble', 'potion', 'spark', null]); H.at(me.x + 1, me.z); await wait(300);
+    await S.ask('cb:dbg', { famHit: 0.5 }); S.hits.length = 0; await H.cast('potion'); ok(await until(() => S.hits.find(h => h[0] === 'f:' + f[0] && h[1] < 0), 1500), '補血招補得到使魔');
+    await S.ask('cb:dbg', { famHit: 3 }); ok(await until(() => S.who && S.who.fam.length === 0, 1500), '使魔血量歸零就消失');
+    S.s.close(); H.s.close();
+  }
   // ---- 組隊、出力、倒下 ----
   if (!process.env.ONLY || process.env.ONLY === 'party') {
     const until = async (fn, ms) => { for (let i = 0; i < ms / 100; i++) { const v = fn(); if (v) return v; await wait(100); } return null; };

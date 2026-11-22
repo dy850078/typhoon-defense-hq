@@ -506,19 +506,49 @@ nwRoute('garden', { READ: ['state', 'info'],
     return { item: k, text: `領到一包${MAP.ITEMS[k].name}` };
   },
 });
+// 新世界的許願池：跟總部同一份資料，功能也一樣齊（留言、修改、收回、管理員改狀態）。改狀態在這裡再檢查一次管理員
+const nwVoter = (u) => 'u:' + u.username.toLowerCase();
+const nwWishInfo = (u) => ({ left: wishes.left(u.username), perDay: wishes.PER_DAY, titleLen: wishes.TITLE_LEN, bodyLen: wishes.BODY_LEN, commentLen: wishes.COMMENT_LEN, cats: WISH_CAT, statuses: WISH_STATUS, admin: !!u.admin });
+const nwTell = (username, text) => { const k = String(username).toLowerCase(); nwPlayers.forEach(q => { if (q.user && String(q.user).toLowerCase() === k) io.of('/newworld').to(q.id).emit('cb:say', text); }); };
+const nwWishChanged = () => { io.emit('wishes'); io.of('/newworld').emit('wishes'); };
+const nwWishOne = (id, u) => { const w = wishes.get(id, nwVoter(u), u.username); return w ? Object.assign({ wish: w }, nwWishInfo(u)) : { error: '這個願望已經不在了' }; };
 nwRoute('wishes', { READ: ['list', 'get'],
-  list: (A, b, u) => Object.assign(wishes.query(b, 'u:' + u.username.toLowerCase(), u.username),
-    { left: wishes.left(u.username), perDay: wishes.PER_DAY, titleLen: wishes.TITLE_LEN, bodyLen: wishes.BODY_LEN, cats: WISH_CAT, statuses: WISH_STATUS }),
-  get: (A, b, u) => { const w = wishes.get(Number(b.id), 'u:' + u.username.toLowerCase(), u.username); return w ? { wish: w, cats: WISH_CAT, statuses: WISH_STATUS } : { error: '這個願望已經不在了' }; },
+  list: (A, b, u) => Object.assign(wishes.query(b, nwVoter(u), u.username), nwWishInfo(u)),
+  get: (A, b, u) => nwWishOne(Number(b.id), u),
   add: ({ p }, b, u, req) => {
     const r = wishes.add(u.username, p.name, b);
     if (r.error) return r;
     pushChat({ system: true, text: `${p.name} 在許願池許了一個願：【${WISH_CAT[r.wish.cat]}】${r.wish.title}`, t: Date.now() });
     newWishMail(r.wish, { handshake: { headers: req.headers } });
-    io.emit('wishes');
+    nwWishChanged();
     return { id: r.wish.id };
   },
-  like: (A, b, u) => { const r = wishes.like(Number(b.id), 'u:' + u.username.toLowerCase()); if (!r.error) io.emit('wishes'); return r; },
+  edit: (A, b, u) => { const r = wishes.edit(Number(b.id), u.username, b); if (r.error) return r; nwWishChanged(); return { id: r.wish.id }; },
+  withdraw: (A, b, u) => { const r = wishes.withdraw(Number(b.id), u.username); if (r.error) return r; nwWishChanged(); return {}; },
+  like: (A, b, u) => { const r = wishes.like(Number(b.id), nwVoter(u)); if (!r.error) nwWishChanged(); return r; },
+  comment: ({ p }, b, u, req) => {
+    const admin = !!u.admin, r = wishes.comment(Number(b.id), u.username, p.name, admin, b.text);
+    if (r.error) return r;
+    // 管理員回覆了：願望的作者在線上就跳提示（總部和新世界都通知），並照總部的規則寄信
+    const by = String(r.wish.by).toLowerCase();
+    if (admin && by !== u.username.toLowerCase()) {
+      const text = `管理員回覆了你的願望「${r.wish.title}」`;
+      players.forEach((q, id) => { if (q.account && q.account.username.toLowerCase() === by) tell(id, text); });
+      nwTell(by, text);
+      wishReplyMail(r.wish, r.comment, { handshake: { headers: req.headers } });
+    }
+    nwWishChanged();
+    return nwWishOne(r.wish.id, u);
+  },
+  uncomment: (A, b, u) => { const r = wishes.uncomment(Number(b.id), Number(b.cid), u.username, !!u.admin); if (r.error) return r; nwWishChanged(); return nwWishOne(Number(b.id), u); },
+  status: (A, b, u) => {
+    if (!u.admin) return { error: '只有管理員可以改狀態' };
+    const r = wishes.setStatus(Number(b.id), String(b.status || ''));
+    if (r.error) return r;
+    wishStatusChanged(r);
+    nwWishChanged();
+    return nwWishOne(r.wish.id, u);
+  },
 });
 // ---- 新世界：背包、裝備、寵物（讀寫 3D 自己的存檔）、點歌（跟總部同一份歌單）----
 const nwItemName = (k) => (MAP.ITEMS[k] && MAP.ITEMS[k].name) || k;
@@ -965,6 +995,7 @@ function wishStatusChanged(r) {
   if (r.wish.status === 'done') pushChat({ system: true, text: `許願池：「${r.wish.title}」完成了！謝謝 ${r.wish.name} 的願望`, t: Date.now() });
   const by = String(r.wish.by).toLowerCase();
   players.forEach((q, id) => { if (q.account && q.account.username.toLowerCase() === by) tell(id, `你的願望「${r.wish.title}」變成${WISH_STATUS[r.wish.status]}了`); });
+  nwTell(by, `你的願望「${r.wish.title}」變成${WISH_STATUS[r.wish.status]}了`);   // 人在新世界也收得到
 }
 
 // ---------------- 視訊房間 ----------------

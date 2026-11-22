@@ -55,7 +55,7 @@ async function main() {
   };
   const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
   const open = async (acc, phone) => {
-    const ctx = await browser.newContext(phone ? { ...devices['iPhone 13'] } : { viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1 });
+    const ctx = await browser.newContext(phone ? { ...devices['iPhone 13'] } : { viewport: { width: 1280, height: 800 }, deviceScaleFactor: Number(process.env.DSF) || 1 });
     const pg = await ctx.newPage(); pg.errors = [];
     pg.on('pageerror', e => pg.errors.push(e.message));
     await pg.goto(B + '/'); await pg.evaluate(([t, u]) => { localStorage.setItem('hq-token', t); localStorage.setItem('hq-user', u); }, [acc.token, acc.name]);
@@ -232,11 +232,14 @@ async function main() {
     // 按鍵設定：模擬鍵盤（電腦）
     if (!phone) {
       await T('#cb-book .ch-tab[data-tab=book]'); await T('#cb-keys');
-      ok(await E(() => document.querySelectorAll('#cb-book .kb-k').length === 37 && document.querySelectorAll('#cb-book .kb-k.taken').length === 5 && document.querySelectorAll('#cb-book .kb-k.used').length === 4), '按鍵設定是一張鍵盤：走路和互動的 5 個鍵是灰的，已經綁的 4 個鍵有標');
+      ok(await E(() => document.querySelectorAll('#cb-book .kb-k').length === 49 && document.querySelectorAll('#cb-book .kb-k.taken').length === 8 && document.querySelectorAll('#cb-book .kb-k.used').length === 4), '按鍵設定是一張鍵盤：走路和互動的 5 個鍵是灰的，已經綁的 4 個鍵有標');
       await T('#cb-book .kb-slot[data-i="2"]'); await T('#cb-book .kb-k[data-code=KeyW]'); ok((await view()).keys[2] === 'Digit3', '灰的鍵點了沒有用');
       await T('#cb-book .kb-k[data-code=KeyR]'); await pg.waitForTimeout(300); ok((await view()).keys[2] === 'KeyR', '點快捷格再點鍵盤上的 R：第 3 格綁到 R'); await shot(pg, tag + '-7-keys');
       ok(await E(() => document.querySelector('#cb-book .kb-k[data-code=KeyR] i').textContent === '3' && document.querySelectorAll('.cb-sk kbd')[2].textContent === 'R'), '鍵盤上的 R 標著 3，快捷列的提示也變成 R');
       await T('#cb-book .kb-slot[data-i="0"]'); await T('#cb-book .kb-k[data-code=KeyR]'); await pg.waitForTimeout(300); let v = await view(); ok(v.keys[0] === 'KeyR' && v.keys[2] === 'Digit1', '點到別格用過的鍵，兩格互換');
+      await T('#cb-book .kb-slot[data-i="1"]'); await T('#cb-book .kb-k[data-code=F5]'); ok((await view()).keys[1] === 'Digit2', 'F5 是瀏覽器的鍵，點了沒有用');
+      await T('#cb-book .kb-k[data-code=F2]'); await pg.waitForTimeout(300); ok((await view()).keys[1] === 'F2' && await E(() => document.querySelectorAll('.cb-sk kbd')[1].textContent === 'F2'), '第 2 格可以綁到 F2'); await shot(pg, tag + '-7b-fkeys');
+      ok(await E(() => ['#cb-book .kb-k.used i', '#cb-book .ch-tab i'].every((q) => [...document.querySelectorAll(q)].every((n) => { const r = document.createRange(); r.selectNodeContents(n); const t = r.getBoundingClientRect(), o = n.getBoundingClientRect(); return Math.abs((t.left + t.right) - (o.left + o.right)) <= 1.5 && Math.abs((t.top + t.bottom) - (o.top + o.bottom)) <= 1.5; }))), '紅點裡的數字在正中間');
       await T('#cb-book .go'); await pg.waitForTimeout(300); ok((await view()).keys.join() === 'Digit1,Digit2,Digit3,Digit4', '恢復成 1 2 3 4');
     } else ok(!(await pg.$('#cb-keys')), '手機沒有按鍵設定');
     await T('#cb-book .ch-tab[data-tab=class]'); ok(await E(() => !!document.querySelector('#cb-book .tree') && !document.querySelector('#cb-book .dbg')), '職業分頁是原本的職業樹，管理員測試鈕不在這裡了'); await shot(pg, tag + '-8-class');

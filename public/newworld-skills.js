@@ -51,7 +51,7 @@
     '#cb-book .ch-tabs{display:flex;gap:5px;margin:0 0 9px;border-bottom:2px solid #2b2a33;padding:0 2px}',
     '#cb-book .ch-tab{all:unset;box-sizing:border-box;position:relative;display:flex;align-items:center;gap:5px;padding:6px 12px 5px;cursor:pointer;font-weight:700;font-size:13px;line-height:1.2;font-family:inherit;color:#2b2a33;border:1.5px solid rgba(43,42,51,.45);border-bottom:0;border-radius:10px 8px 0 0;background:#efe7d3;opacity:.75;margin-bottom:-2px}',
     '#cb-book .ch-tab img{width:22px;height:22px}#cb-book .ch-tab.on{background:#fbf6e9;opacity:1;border-color:#2b2a33;border-width:2px;padding-bottom:6px}#cb-book .ch-tab:hover{opacity:1}',
-    '#cb-book .ch-tab i,#cb-book .q-cat i{font-weight:700;font-size:10px;line-height:15px;font-family:inherit;font-style:normal;min-width:15px;height:15px;box-sizing:border-box;padding:0 3px;border-radius:8px;background:#e2506a;color:#fff;text-align:center}',
+    '#cb-book .ch-tab i,#cb-book .q-cat i{display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:10px;line-height:1;font-family:inherit;font-style:normal;font-variant-numeric:tabular-nums;min-width:16px;height:16px;box-sizing:border-box;padding:0 4px;border-radius:8px;background:#e2506a;color:#fff}',
     '#cb-book .bk-head{display:flex;align-items:center;gap:5px;margin:0 0 4px}#cb-book .bk-head .tip{margin:0}',
     '#cb-book h3.sec{display:flex;align-items:center;gap:7px;font-size:13px;opacity:1;margin:11px 0 5px;padding-bottom:3px;border-bottom:2px solid var(--c,#8a8378)}#cb-book h3.sec:first-of-type{margin-top:4px}',
     '#cb-book h3.sec em{font-style:normal;font-size:11px;color:#fff;background:var(--c,#8a8378);padding:1px 8px;border-radius:9px 7px 10px 6px}#cb-book h3.sec.lock{border-bottom-style:dashed;opacity:.8}#cb-book h3.sec.lock em{background:none;color:#2b2a33;border:1.5px dashed var(--c,#8a8378)}',
@@ -61,10 +61,10 @@
     // 按鍵設定：一張鍵盤
     '#cb-book .kb-slots{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:6px 0 10px}#cb-book .kb-slot{all:unset;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 2px;border:1.5px solid rgba(43,42,51,.45);border-radius:9px 6px 10px 7px;background:#fff;cursor:pointer;font-size:11px;font-weight:700}',
     '#cb-book .kb-slot img{width:32px;height:32px}#cb-book .kb-slot.on{background:#f3d27a;border-color:#2b2a33}#cb-book kbd{min-width:20px;box-sizing:border-box;padding:1px 6px;border:1.5px solid #2b2a33;border-radius:5px 4px 6px 4px;background:#fffaf0;font-weight:700;font-size:12px;line-height:1.4;font-family:inherit;text-align:center;box-shadow:0 2px 0 rgba(43,42,51,.35)}',
-    '#cb-book .kb{display:flex;flex-direction:column;gap:5px;align-items:center;padding:10px 8px;border:1.5px solid #2b2a33;border-radius:12px 9px 13px 8px;background:#e9dfc8;margin-bottom:8px}#cb-book .kb-row{display:flex;gap:5px}#cb-book .kb-row.r1{margin-left:14px}#cb-book .kb-row.r2{margin-left:28px}#cb-book .kb-row.r3{margin-left:-14px}',
-    '#cb-book .kb-k{all:unset;box-sizing:border-box;position:relative;width:38px;height:36px;display:grid;place-items:center;cursor:pointer;font-weight:700;font-size:13px;line-height:1;font-family:inherit;color:#2b2a33;background:#fffdf5;border:1.5px solid #2b2a33;border-radius:7px 5px 8px 5px;box-shadow:0 3px 0 rgba(43,42,51,.4)}',
+    '#cb-book .kb{display:flex;flex-direction:column;gap:4px;align-items:center;padding:9px 8px 8px;border:1.5px solid #2b2a33;border-radius:12px 9px 13px 8px;background:#e9dfc8;margin-bottom:8px}#cb-book .kb-row{display:flex;gap:5px}#cb-book .kb-row.r0{margin-bottom:5px}#cb-book .kb-row.r2{margin-left:14px}#cb-book .kb-row.r3{margin-left:28px}#cb-book .kb-row.r4{margin-left:-14px}',
+    '#cb-book .kb-k{all:unset;box-sizing:border-box;position:relative;width:38px;height:32px;display:grid;place-items:center;cursor:pointer;font-weight:700;font-size:13px;line-height:1;font-family:inherit;color:#2b2a33;background:#fffdf5;border:1.5px solid #2b2a33;border-radius:7px 5px 8px 5px;box-shadow:0 3px 0 rgba(43,42,51,.4)}',
     '#cb-book .kb-k:hover{background:#fff1cc}#cb-book .kb-k:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(43,42,51,.4)}#cb-book .kb-k.space{width:210px}#cb-book .kb-k.used{background:#f3d27a}#cb-book .kb-k.taken{background:#d8d2c2;color:#8a8378;cursor:not-allowed;box-shadow:0 2px 0 rgba(43,42,51,.25);border-style:dashed}',
-    '#cb-book .kb-k i{position:absolute;right:-5px;top:-7px;font-weight:700;font-size:10px;line-height:15px;font-family:inherit;font-style:normal;width:15px;height:15px;border-radius:50%;background:#c9562a;color:#fff;text-align:center}',
+    '#cb-book .kb-k i{position:absolute;right:-5px;top:-7px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:10px;line-height:1;font-family:inherit;font-style:normal;width:16px;height:16px;border-radius:50%;background:#c9562a;color:#fff}',
     // 任務
     '#cb-book .q-cats{display:flex;gap:6px;margin:0 0 9px}#cb-book .q-cat{all:unset;box-sizing:border-box;display:flex;align-items:center;gap:5px;cursor:pointer;font-weight:700;font-size:12px;line-height:1.2;font-family:inherit;padding:5px 13px;border:1.5px solid rgba(43,42,51,.4);background:#fff;border-radius:11px 8px 12px 7px/8px 12px 7px 11px}#cb-book .q-cat.on{background:#2b2a33;border-color:#2b2a33;color:#fff7e6}',
     '#cb-book .q-cols{display:grid;grid-template-columns:1fr;gap:10px}#cb-book .q-h{margin:2px 0 5px;font-size:12px}#cb-book .q-h.doing{color:#a34400}#cb-book .q-h.open{color:#2c5596;margin-top:10px}#cb-book .q-none{opacity:.6;font-size:12px;margin:8px 0}',
@@ -124,7 +124,7 @@
     var keysOf = function () { return (me && me.keys) || C3.KEYS; };
     window.addEventListener('keydown', function (e) { if (/INPUT|TEXTAREA/.test((e.target || {}).tagName || '')) return;
       if (binding) { e.preventDefault(); e.stopPropagation(); if (e.code === 'Escape') { binding = false; bindSlot = -1; drawBook(); } else if (bindSlot >= 0 && !e.repeat) bind(bindSlot, e.code); return; }
-      var i = keysOf().indexOf(e.code); if (i >= 0 && !e.repeat && !editing()) press(i); }, true);
+      var i = keysOf().indexOf(e.code); if (i >= 0 && /^F\d/.test(e.code)) e.preventDefault(); if (i >= 0 && !e.repeat && !editing()) press(i); }, true);
     var dead = el('div'); dead.id = 'cb-dead'; dead.hidden = true; var deadNote = el('div', 'note'); dead.appendChild(deadNote); document.body.appendChild(dead);
     function staged(k) { return !!(me && me.stage && me.stage[k] > Date.now() - off); }
     var stageSig = '';
@@ -182,14 +182,14 @@
     function openBook() { mode = 'book'; pickSlot = -1; pickSkill = ''; binding = false; bindSlot = -1; drawBook(); }
     // 技能書只列學會的招式；要帶哪四招，是把招式放到主畫面的快捷列上（滑鼠用拖的，手機點一招再點格子）
     // 技能書：分四段（芽、學門、專精、選修），每段標題用學門的顏色；還沒學到的那一階只列一排灰灰的小圖示
-    var KB = [['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7', 'Digit8', 'Digit9', 'Digit0'], ['KeyQ', 'KeyW', 'KeyE', 'KeyR', 'KeyT', 'KeyY', 'KeyU', 'KeyI', 'KeyO', 'KeyP'], ['KeyA', 'KeyS', 'KeyD', 'KeyF', 'KeyG', 'KeyH', 'KeyJ', 'KeyK', 'KeyL'], ['KeyZ', 'KeyX', 'KeyC', 'KeyV', 'KeyB', 'KeyN', 'KeyM'], ['Space']];
+    var KB = [['F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'F10', 'F11', 'F12'], ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7', 'Digit8', 'Digit9', 'Digit0'], ['KeyQ', 'KeyW', 'KeyE', 'KeyR', 'KeyT', 'KeyY', 'KeyU', 'KeyI', 'KeyO', 'KeyP'], ['KeyA', 'KeyS', 'KeyD', 'KeyF', 'KeyG', 'KeyH', 'KeyJ', 'KeyK', 'KeyL'], ['KeyZ', 'KeyX', 'KeyC', 'KeyV', 'KeyB', 'KeyN', 'KeyM'], ['Space']];
     function drawKeys(body) {
       body.appendChild(el('small', 'tip', bindSlot < 0 ? '先點快捷列的一格，再點下面鍵盤上的鍵（直接按鍵盤也可以）' : '第 ' + (bindSlot + 1) + ' 格要用哪個鍵？點下面的鍵，或直接按鍵盤'));
       var keys = keysOf(), pick = el('div', 'kb-slots'); me.slots.forEach(function (k, i) { var b = el('button', 'kb-slot' + (bindSlot === i ? ' on' : '')); b.type = 'button'; b.dataset.i = i; var im = icon(k ? 'nw-' + k : ''); if (!k) im.style.visibility = 'hidden';
         b.append(im, el('span', '', '第 ' + (i + 1) + ' 格'), el('kbd', '', C3.keyLabel(keys[i]))); b.onclick = function () { bindSlot = i; drawBook(); }; pick.appendChild(b); }); body.appendChild(pick);
       var kb = el('div', 'kb'); KB.forEach(function (row, ri) { var r = el('div', 'kb-row r' + ri); row.forEach(function (code) { var at = keys.indexOf(code), ok = C3.keyOk(code), b = el('button', 'kb-k' + (at >= 0 ? ' used' : '') + (!ok ? ' taken' : '') + (code === 'Space' ? ' space' : ''), C3.keyLabel(code)); b.type = 'button'; b.dataset.code = code;
           if (at >= 0) b.appendChild(el('i', '', at + 1));
-          if (!ok) { b.setAttribute('aria-disabled', 'true'); if (TIPS) TIPS.attach(b, code === 'KeyE' ? '互動用的鍵，不能綁' : '走路用的鍵，不能綁'); }
+          if (!ok) { b.setAttribute('aria-disabled', 'true'); if (TIPS) TIPS.attach(b, code === 'KeyE' ? '互動用的鍵，不能綁' : /^F/.test(code) ? '瀏覽器自己要用的鍵，不能綁' : '走路用的鍵，不能綁'); }
           b.onclick = function () { if (!ok) return; if (bindSlot < 0) return toast('先點快捷列的一格'); bind(bindSlot, code); }; r.appendChild(b); }); kb.appendChild(r); });
       body.appendChild(kb);
       var rs = el('button', 'go note', '恢復成 1 2 3 4'); rs.onclick = function () { setKeys(C3.KEYS.slice()); }; body.appendChild(rs);
@@ -240,7 +240,7 @@
       window.addEventListener('pointermove', move); window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up); }
     function send(next) { ask('cb:slots', next).then(function (r) { if (r && r.error) toast(r.error); pickSlot = -1; pickSkill = ''; setTimeout(function () { if (mode === 'book') drawBook(); }, 60); }); }
     function setKeys(next) { bindSlot = -1; ask('cb:keys', next).then(function (r) { if (r && r.error) toast(r.error); setTimeout(function () { if (mode === 'book') drawBook(); }, 60); }); }
-    function bind(i, code) { if (!C3.keyOk(code)) return toast(/^Key[WASDE]$/.test(code) ? '這個鍵留給走路和互動用，換一個' : '這個鍵不能用，換一個');
+    function bind(i, code) { if (!C3.keyOk(code)) return toast(/^Key[WASDE]$/.test(code) ? '這個鍵留給走路和互動用，換一個' : /^F(5|11|12)$/.test(code) ? '這個鍵瀏覽器自己要用，換一個' : '這個鍵不能用，換一個');
       var next = keysOf().slice(), at = next.indexOf(code); if (at >= 0) next[at] = next[i]; next[i] = code; setKeys(next); }
     function put(i, k) { var next = me.slots.slice(), at = next.indexOf(k); if (at >= 0) next[at] = next[i]; next[i] = k;
       if (i !== 3 && C3.learned(me).indexOf(k) < 0) { toast('選修的招只能放在最後一格'); pickSkill = ''; pickSlot = -1; drawBook(); return; }

@@ -315,6 +315,21 @@ const NW = (() => {
   const tickGreek = (dt) => { if (!GREEK || S.lob) return; STD.tick(GREEK, dt, 0); const B = GREEK.B, f = GREEK.H.rotation.y;
     aim(B.upper_armR, B.lower_armR, 0.12, 0.18, 1, f); aim(B.lower_armR, B.handR, 0.75, 0.62, 0.22, f); };
   const YARD = LOBBY ? scene.children.filter(o => o.visible && !o.isLight && o !== sun.target && o !== R && o !== GOAL && o !== LOBBY.G && !(ME && o === ME.c.H) && !RIDER_FX.includes(o)) : [], SKY = scene.background;
+  // 擋住人的高東西（房子、樹）變半透明：鏡頭可以轉了以後，人會走到它們後面
+  // 只挑不會動的高東西（一開始就在場景裡、比人高、佔地不大）；太大的一整群（例如整片野外）往下一層找
+  const OCC = [], occBox = new THREE.Box3(), occSize = new V3();
+  { const hasSkin = (o) => { let k = false; o.traverse(c => { if (c.isSkinnedMesh) k = true; }); return k; };
+    const add = (o, depth) => { if (!o.visible || o.isInstancedMesh || o.isLight || (!o.isGroup && !o.isMesh) || hasSkin(o)) return; occBox.setFromObject(o); if (occBox.isEmpty()) return; occBox.getSize(occSize);
+      if (occSize.y < 2.6) return; if (Math.max(occSize.x, occSize.z) > 14) { if (depth < 2) o.children.slice().forEach(c => add(c, depth + 1)); return; }
+      const ms = []; o.traverse(c => { if (c.isMesh && !c.isInstancedMesh) ms.push(c); }); if (ms.length) OCC.push({ o, box: occBox.clone(), ms, a: 1, mats: null }); };
+    YARD.forEach(o => add(o, 0)); }
+  const occRay = new THREE.Ray(), occHit = new V3(), occHead = new V3();
+  const occFade = (c, a) => { if (!c.mats) { c.mats = c.ms.map(m => { const line = !Array.isArray(m.material) && !!m.material.isShaderMaterial; if (!line) { m.material = Array.isArray(m.material) ? m.material.map(x => x.clone()) : m.material.clone(); [].concat(m.material).forEach(x => { x.transparent = true; }); } return line; }); }   // 第一次要變淡才把材質複製一份，免得別的東西跟著變
+    c.a = a; const solid = a > 0.985; c.ms.forEach((m, i) => { if (c.mats[i]) { m.visible = solid && S.lines; return; } [].concat(m.material).forEach(x => { x.opacity = solid ? 1 : a; x.depthWrite = solid; }); }); };
+  const tickOcc = (dt) => { if (!ME || !OCC.length) return; const on = !S.lob && S.ctrl === 'me' && !S.dbgCam;
+    occHead.set(ME.x, ME.y + 1.0, ME.z); const far = on ? occHead.distanceTo(camera.position) - 0.6 : 0; if (on) { occRay.origin.copy(camera.position); occRay.direction.copy(occHead).sub(camera.position).normalize(); }
+    OCC.forEach(c => { const hit = on && occRay.intersectBox(c.box, occHit) && occHit.distanceTo(camera.position) < far, to = hit ? 0.28 : 1;
+      if (Math.abs(c.a - to) < 0.004) { if (c.a !== to) occFade(c, to); return; } occFade(c, c.a + (to - c.a) * Math.min(1, dt * 8)); }); };
   const setZone = (lob) => { S.lob = lob; YARD.forEach(o => { o.visible = !lob; }); LOBBY.G.visible = lob; LOBX.forEach(o => { o.visible = lob; }); scene.background = lob ? LOBBY.bg : SKY; S.goal = null; if (lob) { S.angT = ANG0 + Math.atan2(Math.sin(S.angT - ANG0), Math.cos(S.angT - ANG0)); clampAng(); S.ang = S.angT; }   // 進大廳：鏡頭轉回大廳看得到的範圍
     S.camT.set(ME.x, 1.3 + FY(ME.x, ME.z), ME.z); };
   A.boy.visible = false;   // 舊的小男孩不再出現：騎士就是玩家自己的標準人物
@@ -372,6 +387,7 @@ const NW = (() => {
     if (S.ctrl === 'me') S.camT.lerp(bp0.set(ME.x, 1.3 + FY(ME.x, ME.z), ME.z), Math.min(1, dt * 5));   // 騎士的鏡頭看整台機器人
     else S.camT.lerp(bp0.set(S.x - 0.8, 3.6 + shake * 0.07, S.z + 3.2), Math.min(1, dt * 5));
     camera.position.set(S.camT.x + Math.sin(S.ang) * cam.dist * far, cam.hgt * far, S.camT.z + Math.cos(S.ang) * cam.dist * far); camera.lookAt(S.camT);
+    tickOcc(dt);
     if (S.dbgCam) { const d = S.dbgCam; camera.position.set(ME.x + Math.sin(d.ang) * d.dist, d.hgt, ME.z + Math.cos(d.ang) * d.dist); camera.lookAt(ME.x, d.look ?? 1.1, ME.z); }   // 測試截圖用的近鏡頭
     camera.updateMatrixWorld(); if (!NEAR) nearIt = null;
     if (NEAR && ACT.pose !== 'sit') { PV.set(NEAR.x, NEAR.y, NEAR.z).project(camera); HINT.hidden = false; showHint(NEAR);   // 坐著的時候不顯示紙條（走路就會站起來）
@@ -449,8 +465,9 @@ const NW = (() => {
     turn: (d) => { S.angT += d; clampAng(); return S.angT; },
     turnReset: () => { S.angT = ANG0 + Math.round((S.ang - ANG0) / (Math.PI * 2)) * Math.PI * 2; },   // 回正：轉最近的那一圈回去，不會多繞
     camAngle: () => S.ang - ANG0,
+    faded: () => OCC.filter(c => c.a < 0.6).length, occCount: () => OCC.length,   // 測試用：現在有幾樣東西變半透明、總共有幾樣會變
     nextQuality: () => { S.quality = (S.quality + 1) % QUALITY.length; applyQuality(); return QUALITY[S.quality].name; },
-    lines: () => { S.lines = !S.lines; outlines.forEach(o => { o.visible = S.lines; }); if (STD) STD.lines(S.lines); return S.lines ? '開' : '關'; },
+    lines: () => { S.lines = !S.lines; outlines.forEach(o => { o.visible = S.lines; }); OCC.forEach(c => { if (c.a < 0.985) occFade(c, c.a); }); if (STD) STD.lines(S.lines); return S.lines ? '開' : '關'; },
     // 標準人物：換操控的角色、換裝
     hasStd: !!ME, ctrlName: () => CLS_NAME[S.ctrl === 'robot' ? 'rider' : ''], isRider: () => S.ctrl === 'robot',
     walkTo: (cx, cy) => { if (CB && S.ctrl === 'me' && CB.tap(cx, cy)) return true; NDC.set(cx / W * 2 - 1, -(cy / H) * 2 + 1); RAY.setFromCamera(NDC, camera);

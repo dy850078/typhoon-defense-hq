@@ -260,6 +260,12 @@ async function main() {
     await pg.keyboard.down('ArrowUp'); await pg.waitForTimeout(1200); await pg.keyboard.up('ArrowUp'); await pg.waitForTimeout(300);
     const after = await NW(pg, () => HQ_NEWWORLD.net.me()), th = (await ang()) + 0.62, fx = -Math.sin(th), fz = -Math.cos(th), dx = after.x - before.x, dz = after.z - before.z, len = Math.hypot(dx, dz);
     ok(len > 0.4 && (dx * fx + dz * fz) / len > 0.95, '轉了鏡頭之後按「上」，人往畫面的上方走（走了 ' + len.toFixed(1) + '，方向吻合 ' + ((dx * fx + dz * fz) / len).toFixed(2) + '）');
+    // 擋住人的房子和樹變半透明，走出來就變回來
+    await NW(pg, () => HQ_NEWWORLD.turnReset()); await settle();
+    ok((await NW(pg, () => HQ_NEWWORLD.occCount())) >= 5 && (await NW(pg, () => HQ_NEWWORLD.faded())) === 0, '空地上沒有東西變半透明（會變的有 ' + (await NW(pg, () => HQ_NEWWORLD.occCount())) + ' 樣）');
+    await place(-15.5, -11.5); await pg.waitForTimeout(1200); const fd = await NW(pg, () => HQ_NEWWORLD.faded());
+    ok(fd >= 1, '走到房子後面，擋住人的東西變半透明（' + fd + ' 樣）'); await shot(pg, 'turn-8-behind-house');
+    await place(6, 14); await pg.waitForTimeout(1200); ok((await NW(pg, () => HQ_NEWWORLD.faded())) === 0, '走出來就變回不透明');
     // 大廳：只能左右各轉一點，不會轉到牆後面
     const L = await NW(pg, () => HQ_NEWWORLD.lobby());
     await place(L.spawn.x, L.spawn.z - 3); await pg.waitForFunction(() => HQ_NEWWORLD.zone() === 'lobby', null, { timeout: 30000 }).catch(() => {});

@@ -817,6 +817,26 @@ async function main() {
     ok(!pa.errors.length && !pb.errors.length, '沒有頁面錯誤' + [...pa.errors, ...pb.errors].slice(0, 3).join(' / '));
     await pa.context().close(); await pb.context().close();
   };
+  // 待機動作：每個職業站著不動都有自己的小動作；一走路就回到一般動作
+  const idleShow = async () => {
+    console.log('idle');
+    const C3 = require('../shared/classes3d.js'), pg = await open(await account({ name: '小待' }), false), ask = (ev, arg) => pg.evaluate(([e, a]) => window.NW_SK.ask(e, a), [ev, arg]);
+    await pg.waitForFunction(() => window.HQ_NEWWORLD.combat && window.HQ_NEWWORLD.combat.view(), null, { timeout: 20000 });
+    await pg.evaluate(() => { window.HQ_NEWWORLD.debugPlace(19, 16); window.HQ_NEWWORLD.debugFace(0.62); window.HQ_NEWWORLD.debugCam({ ang: 0.95, dist: 8.5, hgt: 2.8, look: 1.05 }); });
+    const idleK = () => pg.evaluate(() => window.HQ_NEWWORLD.combat.idleOf()), settle = () => pg.waitForFunction(() => window.HQ_NEWWORLD.combat.idleOf() > 0.95, null, { timeout: 90000 }).then(() => true).catch(() => false);
+    const vp = pg.viewportSize(), clip = { x: vp.width / 2 - 230, y: vp.height / 2 - 270, width: 460, height: 520 }, shots = [];
+    const one = async (key, name) => { await pg.waitForFunction(() => window.HQ_NEWWORLD.combat.idleOf() < 0.3, null, { timeout: 8000 }).catch(() => {});   /* 轉職的特效會打斷上一個職業的待機，等它真的斷掉再等新的 */
+      ok(await settle(), name + '：站著不動會進入待機動作'); await pg.waitForTimeout(700); const f = path.join(OUT, 'idle-' + key + '.png'); await pg.screenshot({ path: f, clip }); shots.push(f); };
+    await one('sprout', '芽'); await ask('cb:dbg', { lv: 60 });
+    for (const sk of ['pm', 'sc', 'ae']) { await ask('cb:school', sk); await one(sk, '見習生・' + C3.SCHOOLS[sk].name);
+      for (const sp of C3.SCHOOLS[sk].specs) { await ask('cb:dbg', { m: C3.GATE.mastery }); await ask('cb:quest', sp); await ask('cb:dbg', { quest: 1 }); await ask('cb:spec', sp); if (sp === 'alchemist') await pg.evaluate(() => window.HQ_NEWWORLD.debugCam({ ang: 0.1, dist: 8.5, hgt: 2.8, look: 1.05 })); if (sp === 'puppeteer') await pg.evaluate(() => window.HQ_NEWWORLD.debugCam({ ang: 0.95, dist: 8.5, hgt: 2.8, look: 1.05 }));
+        if (sp === 'summoner') { await pg.evaluate(() => { window.HQ_NEWWORLD.debugPlace(19, 16); window.HQ_NEWWORLD.debugFace(0.62); }); await pg.locator('.cb-sk').nth(1).dispatchEvent('pointerdown'); await pg.waitForTimeout(1500); }
+        await one(sp, C3.SPECS[sp].name); } }
+    await pg.evaluate(() => window.HQ_NEWWORLD.key('ArrowRight', true)); await pg.waitForFunction(() => window.HQ_NEWWORLD.combat.idleOf() < 0.3, null, { timeout: 30000 }).catch(() => {}); ok(await idleK() < 0.3, '一走路就離開待機動作：' + (await idleK()).toFixed(2)); await pg.evaluate(() => window.HQ_NEWWORLD.key('ArrowRight', false));
+    ok(!pg.errors.length, '沒有頁面錯誤' + (pg.errors.length ? '：' + pg.errors.slice(0, 3).join(' / ') : ''));
+    fs.writeFileSync(path.join(OUT, 'idle-list.json'), JSON.stringify(shots)); await pg.context().close();
+  };
+  if (want === 'idle') await idleShow();
   if (want === 'party') await partyShow(false);
   if (want === 'party-phone') await partyShow(true);
   if (want === 'mobs') await mobsShow();

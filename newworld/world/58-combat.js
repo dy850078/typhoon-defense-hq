@@ -217,16 +217,55 @@ function makeCombat(ctx) {
   const bonesOf = (c) => { if (!c._cbB) { c._cbB = {}; c.g.traverse(o => { if (o.isBone) c._cbB[o.name] = o; }); } return c._cbB; };
   const aimBone = (bone, child, dx, dy, dz, f, w) => { bone.updateWorldMatrix(true, true); bone.getWorldPosition(HA); child.getWorldPosition(HB); HB.sub(HA).normalize(); HD.set(dx, dy, dz).normalize().applyAxisAngle(UP, f);
     HQ1.setFromUnitVectors(HB, HD); HQ2.identity().slerp(HQ1, w); bone.getWorldQuaternion(HQ1); HQ2.multiply(HQ1); bone.parent.getWorldQuaternion(HQ1).invert(); bone.quaternion.copy(HQ1.multiply(HQ2)); };
+  // ---------- 待機動作：站著不動兩秒，每個職業擺自己的小動作（只動手、頭、身體，不加任何道具）----------
+  // 方向是角色自己的座標：x 右邊（左手是負的）、y 上、z 前面。arm(哪一邊, 上臂朝哪, 前臂朝哪)
+  const IE = new THREE.Euler(), IQ = new THREE.Quaternion(), IQ0 = new THREE.Quaternion();
+  const turn = (bone, x, y, z, k) => { if (!bone) return; IQ.setFromEuler(IE.set(x, y, z)); IQ0.identity().slerp(IQ, k); bone.quaternion.multiply(IQ0); };
+  const pulse = (t, every, len, off = 0) => { const u = ((t + off) % every) / len; return u < 1 ? Math.sin(u * Math.PI) : 0; };   // 每隔 every 秒做一次、一次 len 秒的小動作（0→1→0）
+  const mix = (a, b, k) => [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k];
+  const IDLE = {
+    // 芽：左看右看，偶爾踮一下腳
+    sprout: (I, t) => { I.head(0, Math.sin(t * 0.8) * 0.55, 0); I.lift(pulse(t, 4.2, 0.7) * 0.09); },
+    // 毒與藥：一手托著下巴歪頭想事情，另一手在腿邊輕點
+    pm: (I, t) => { I.arm(1, [0.3, -0.75, 0.6], [-0.42, 0.88, 0.3]); I.arm(-1, [-0.2, -1, 0.05], [-0.15, -1, 0.12 + Math.sin(t * 7) * 0.1]); I.head(0.05, 0.12, -0.2 + Math.sin(t * 0.7) * 0.05); },
+    // 封印與契約：單手豎在胸前，指尖畫小圈；另一手背在身後
+    sc: (I, t) => { I.arm(1, [0.32, -0.8, 0.55], [-0.3 + Math.cos(t * 2.4) * 0.12, 0.9, 0.42 + Math.sin(t * 2.4) * 0.12]); I.arm(-1, [-0.3, -0.9, -0.35], [0.5, -0.6, -0.6]); I.head(0.06, 0, 0); },
+    // 鍊金與附魔：雙手在身前互搓，隔一陣子甩甩手腕
+    ae: (I, t) => { const sh = pulse(t, 5.5, 1.1), rub = Math.sin(t * 9) * 0.1; [-1, 1].forEach(sd => I.arm(sd, [sd * 0.38, -0.75, 0.55], mix([-sd * 0.8, 0.12 + rub * sd, 0.6], [sd * 0.25, -0.5 + Math.sin(t * 26 + sd) * 0.22, 0.85], sh))); I.head(0.12 * (1 - sh), 0, 0); },
+    // 陵媒：一手插腰，重心換腳像在冰上滑一小步，偶爾撥一下頭髮
+    skater: (I, t) => { const hair = pulse(t, 6.5, 1.5, 2), sw = Math.sin(t * 0.9); I.arm(-1, [-0.9, -0.42, -0.15], [0.8, -0.45, 0.38]); I.arm(1, mix([0.3, -0.95, 0.05], [0.5, 0.15, 0.45], hair), mix([0.1, -1, 0.15], [-0.4, 0.9, 0.05], hair));
+      I.hips(0, 0, sw * 0.09); I.slide(sw * 0.14); I.head(0, sw * 0.12, -sw * 0.06 + hair * 0.12); },
+    // 聖癒者：雙手交握在胸前，輕輕左右搖
+    healer: (I, t) => { const sw = Math.sin(t * 1.3); [-1, 1].forEach(sd => I.arm(sd, [sd * 0.34, -0.82, 0.5], [-sd * 0.82, 0.5, 0.42])); I.hips(0, sw * 0.14, 0); I.head(0.08, -sw * 0.08, sw * 0.07); },
+    // 結界師：雙手抱胸站得很穩，偶爾抬手往前推一下
+    barrier: (I, t) => { const push = pulse(t, 7, 1.0, 3); I.arm(-1, [-0.34, -0.88, 0.42], [0.96, 0.1, 0.32]); I.arm(1, mix([0.34, -0.88, 0.42], [0.2, -0.05, 1], push), mix([-0.96, 0.18, 0.3], [0, 0.12, 1], push)); I.head(-0.04, 0, 0); },
+    // 召喚師：低頭看身邊的使魔，伸手摸一下；沒有使魔的時候朝空中招手
+    summoner: (I, t, w) => { if (w.famG && w.famG.length) { I.arm(1, [0.8, -0.55, 0.15], [0.75, -0.6 + Math.sin(t * 4) * 0.16, 0.2]); I.head(0.32, -0.55, 0); I.hips(0, -0.12, -0.05); }
+      else { I.arm(1, [0.5, 0.75, 0.3], [Math.sin(t * 5) * 0.5, 1, 0.15]); I.head(-0.28, 0, 0); } },
+    // 鍊金術師：雙手叉腰，回頭看機甲，點點頭
+    alchemist: (I, t) => { const look = pulse(t, 6, 2.6, 1); [-1, 1].forEach(sd => I.arm(sd, [sd * 0.9, -0.42, -0.15], [-sd * 0.8, -0.45, 0.38])); I.head(look * Math.sin(t * 7) * 0.1, look * 0.85, 0); I.hips(0, look * 0.2, 0); },
+  };
+  const IDL = new Map();
+  function idle(dt, t) {
+    WHO.forEach(w => { const c = charOf(w.id), p = posOf(w.id); if (!c || !p) return; let s = IDL.get(w.id); if (!s) { s = { x: p.x, z: p.z, still: 0, k: 0 }; IDL.set(w.id, s); }
+      const mine = w.id === MYID, moved = Math.hypot(p.x - s.x, p.z - s.z) > 0.002 || (mine && ctx.moving()); s.x = p.x; s.z = p.z; s.still = moved ? 0 : s.still + dt;
+      const key = w.spec || w.school || 'sprout', ok = s.still > 2 && t - (w.actT || -9) > 2.5 && w.hp > 0 && !ctx.posed(mine, w.id) && !(mine && (TARGET || (MEV && MEV.dead)));
+      s.k += ((ok ? 1 : 0) - s.k) * Math.min(1, dt * (ok ? 3 : 10)); w.idleK = s.k; if (s.k < 0.02 || key === 'puppeteer') return;   // 操偶師的手在下面另外擺
+      const B = bonesOf(c), f = p.face || 0, k = s.k, fn = IDLE[key]; if (!fn || !B.upper_armL || !B.handL) return;
+      fn({ arm: (sd, u, l) => { const n = sd < 0 ? 'L' : 'R'; aimBone(B['upper_arm' + n], B['lower_arm' + n], -u[0], u[1], u[2], f, k); aimBone(B['lower_arm' + n], B['hand' + n], -l[0], l[1], l[2], f, k); } /* 模型面向 +z 的時候右手邊是 -x，所以 x 要反過來 */,
+        head: (x, y, z) => turn(B.head, x * 1, y, z, k), hips: (x, y, z) => turn(B.spine || B.hips, x, y, z, k), lift: (h) => { c.H.position.y += h * k; }, slide: (d) => { c.H.position.x += Math.cos(f) * d * k; c.H.position.z -= Math.sin(f) * d * k; } }, t + (c.ph || 0), w); });
+    IDL.forEach((s, id) => { if (!WHO.has(id)) IDL.delete(id); });
+  }
   function late(dt) {
-    const t = S.time;
+    const t = S.time; idle(dt, t);
     WHO.forEach(w => { if (w.spec !== 'puppeteer') { HANDS.delete(w.id); return; }
       const c = charOf(w.id), p = posOf(w.id); if (!c || !p) return; const B = bonesOf(c); if (!B.upper_armL || !B.handL) return;
       let h = HANDS.get(w.id); if (!h) { h = { k: 0, up: 0, yank: 0, L: [-0.42, 1.0, 0.1], R: [0.42, 1.0, 0.1] }; HANDS.set(w.id, h); }
-      const up = [...ZONES.values()].some(o => o.g.curtain && o.z.id === w.id && o.t < (o.z.dur || 2)) ? 1 : 0, want = up || h.yank > 0 || PULL.get(w.id) ? 1 : 0;
-      h.k += (want - h.k) * Math.min(1, dt * 9); h.up += (up - h.up) * Math.min(1, dt * 7); if (h.yank > 0) h.yank -= dt;
+      const up = [...ZONES.values()].some(o => o.g.curtain && o.z.id === w.id && o.t < (o.z.dur || 2)) ? 1 : 0, idling = (w.idleK || 0) > 0.5 && !up && !(h.yank > 0) && !PULL.get(w.id), want = up || h.yank > 0 || PULL.get(w.id) || idling ? 1 : 0;
+      h.idl = idling; h.k += (want - h.k) * Math.min(1, dt * (idling ? 3 : 9)); h.up += (up - h.up) * Math.min(1, dt * 7); if (h.yank > 0) h.yank -= dt;
       const f = p.face || 0, y = h.yank > 0 ? Math.sin((1 - h.yank / 0.45) * Math.PI) : 0, gy = FY(p.x, p.z);
       [['L', -1], ['R', 1]].forEach(([n, sd]) => { const ua = B['upper_arm' + n], la = B['lower_arm' + n], hd = B['hand' + n];
-        if (h.k > 0.02) { const bob = (Math.sin(t * 9 + sd) * 0.1 + (Math.floor(t * 6) % 2 ? 0.1 : -0.1) * sd) * (1 - h.up), sway = h.up * Math.sin(t * 2) * 0.25;   // 一手高一手低，跟著偶一頓一頓
+        if (h.k > 0.02) { const bob = (idling ? Math.sin(t * 5 + sd * 1.3) * 0.07 + Math.sin(t * 23 + sd) * 0.015 : Math.sin(t * 9 + sd) * 0.1 + (Math.floor(t * 6) % 2 ? 0.1 : -0.1) * sd) * (1 - h.up), sway = h.up * Math.sin(t * 2) * 0.25;   // 一手高一手低，跟著偶一頓一頓
           aimBone(ua, la, sd * (0.5 + h.up * 0.25) + y * 1.3 + sway, 0.1 + bob + h.up * 1.2, 0.85 - h.up * 0.5 + y * 0.2, f, h.k);
           aimBone(la, hd, sd * (0.18 + h.up * 0.2) + y * 1.6 + sway, 0.5 + bob * 1.5 + h.up * 1.4, 0.8 - h.up * 0.55, f, h.k); }
         la.updateWorldMatrix(true, true); la.getWorldPosition(HA); hd.getWorldPosition(HB); HD.copy(HB).sub(HA).normalize().multiplyScalar(0.1); HB.add(HD);
@@ -344,7 +383,7 @@ function makeCombat(ctx) {
     down: (e, p) => { ring(p.x, p.z, 1.6, '#9a96a0', 0.8); },
   };
   let SPIN = 0, SHAKE = 0, CUT = 0; const NEEDLE = [];
-  function onFx(e) { if (e.k === 'fog') return setFog(e); const p = e.id ? posOf(e.id) : null; if (e.id && !p) return; if (S.lob) return; const k = e.k === 'pact2' ? 'pact2' : e.k; if (ON[k]) ON[k](e, p); }
+  function onFx(e) { if (e.k === 'fog') return setFog(e); if (e.id && WHO.has(e.id) && e.k !== 'lvup') WHO.get(e.id).actT = S.time; const p = e.id ? posOf(e.id) : null; if (e.id && !p) return; if (S.lob) return; const k = e.k === 'pact2' ? 'pact2' : e.k; if (ON[k]) ON[k](e, p); }
   function onHits(list) { if (S.lob) return; list.forEach(([id, d, kind]) => { if (id[0] === 'p') { const p = posOf(id.slice(2)); if (p) num(p.x, FY(p.x, p.z) + 2.4, p.z, d < 0 ? '+' + (-d) : String(d), d < 0 ? 'heal' : kind === 'pois' ? 'poison' : 'ow'); }
     else { const m = MOBS.get(id); if (m && m.g.visible) num(m.x, FY(m.x, m.z) + m.h + 0.4, m.z, d < 0 ? '+' + (-d) : String(d), d < 0 ? 'heal' : kind === 'dot' || kind === 'poison' ? 'poison' : kind === 'link' ? 'link' : ''); } }); }
 
@@ -390,7 +429,7 @@ function makeCombat(ctx) {
     // 操偶師的飛針後面拖著線
     for (let i = NEEDLE.length - 1; i >= 0; i--) { const n = NEEDLE[i]; n.t -= dt; const p = posOf(n.id), b = mobAt(n.m); if (n.t <= 0 || !p || !b) { NEEDLE.splice(i, 1); continue; } const h = hand(p, 1, n.id), k = Math.min(1, (0.32 - n.t) / 0.2); drawThread(h[0], h[1], h[2], h[0] + (b.x - h[0]) * k, h[1] + (b.y - h[1]) * k, h[2] + (b.z - h[2]) * k, 0.2); }
     // 操偶師手上沒牽著東西的時候，指尖垂著幾條短線，一眼看得出是操偶師
-    HANDS.forEach((h, id) => { if (h.k > 0.5) return; const p = posOf(id); if (!p) return; const cf = Math.cos(p.face || 0), sf = Math.sin(p.face || 0);
+    HANDS.forEach((h, id) => { if (h.k > 0.5 && !h.idl) return; const p = posOf(id); if (!p) return; const cf = Math.cos(p.face || 0), sf = Math.sin(p.face || 0);
       [-1, 1].forEach(sd => [-1, 1].forEach(j => { const a = hand(p, sd, id), sw = Math.sin(t * 2.2 + sd + j) * 0.04, x = a[0] + cf * j * 0.04, z = a[2] - sf * j * 0.04; drawThread(x, a[1], z, x + sw, a[1] - 0.3 - (j > 0 ? 0.08 : 0), z + sw * 0.5, 0, 0.018); })); });
     for (let i = thN; i < THREADS.length; i++) THREADS[i].forEach(s => { s.visible = false; });
     if (CUT > 0) CUT -= dt;
@@ -432,7 +471,7 @@ function makeCombat(ctx) {
       if (s.aim && !m) { const n = nearest(s.range + 4); if (n) { m = n.id; setTarget(m); } else return 'far'; }
       SEND('cb:cast', { i, m }); return 'ok'; },
     onChange: (fn) => { onChange = fn; }, onToast: (fn) => { onToast = fn; }, onPlayer: (fn) => { onPlayer = fn; },
-    slow: () => (MEV && MEV.slow ? 0.55 : 1),
+    slow: () => (MEV && MEV.slow ? 0.55 : 1), idleOf: (id) => (WHO.get(id || MYID) || {}).idleK || 0,
     faceCam: () => MOBS.forEach(m => { m.f = Math.atan2(camera.position.x - m.x, camera.position.z - m.z); }),   // 測試拍照用：怪全部轉過來看鏡頭
     debug: () => ({ fog: !!FOG, mobs: [...MOBS.values()].map(m => ({ id: m.id, kind: m.kind, lv: m.lv, x: m.x, z: m.z, hp: m.hp, max: m.max, fl: m.fl, tied: m.tied })), who: [...WHO.values()].map(w => ({ id: w.id, fam: w.fam, mech: w.mech, spec: w.spec })), threads: thN, drops: [...DROPS.values()].map(o => ({ id: o.id, k: o.k, x: o.x, z: o.z })), fx: FX.length, zones: [...ZONES.keys()] }),
   };

@@ -1032,6 +1032,18 @@ async function main() {
     clearInterval(keep); ok(!pg.errors.length, '沒有頁面錯誤' + (pg.errors.length ? '：' + pg.errors.slice(0, 3).join(' / ') : '')); await pg.context().close();
   };
   if (want === 'coast') await coastShow();
+  // 黑潮人魚近照：正面、側面、魅惑、擱淺
+  const mermaidShow = async () => {
+    console.log('mermaid');
+    const pg = await open(await account({ name: '小砂' }), false), ask = (ev, arg) => pg.evaluate(([e, a]) => window.NW_SK.ask(e, a), [ev, arg]);
+    await pg.waitForFunction(() => window.HQ_NEWWORLD.combat && window.HQ_NEWWORLD.combat.view(), null, { timeout: 20000 });
+    const me = (await pg.evaluate(() => window.HQ_NEWWORLD.combat.debug())).mobs.find(m => m.kind === 'mermaid'), vp = pg.viewportSize(), clip = { x: vp.width / 2 - 300, y: vp.height / 2 - 380, width: 600, height: 720 };
+    const cam = async (ang, n, dist) => { await pg.evaluate(([x0, z0, ang, dist]) => { const NW = window.HQ_NEWWORLD, mm = NW.combat.debug().mobs.find(m => m.kind === 'mermaid'), x = mm.x, z = mm.z; const d = dist || 10; NW.debugPlace(x - Math.sin(ang) * 2.6, z - Math.cos(ang) * 2.6); NW.debugCam({ ang, dist: d, hgt: 3, look: d > 10 ? 2.1 : 2.9 }); }, [me.x, me.z, ang, dist]); await pg.waitForTimeout(500); await pg.evaluate(() => window.HQ_NEWWORLD.combat.faceCam()); await pg.waitForTimeout(150); await pg.screenshot({ path: path.join(OUT, 'mermaid-' + n + '.png'), clip }); };
+    await ask('cb:dbg', { lv: 99 }); await pg.evaluate(() => { const g = window.HQ_NEWWORLD.debugMe(); if (g) g.visible = false; });
+    await cam(0, '1-front', 13); await cam(0, '2-close', 8); await cam(0.9, '3-side', 13); await ask('cb:dbg', { mermaid: 'charm' }); await pg.waitForTimeout(700); await cam(0.5, '4-charm', 13);
+    ok(!pg.errors.length, '沒有頁面錯誤' + (pg.errors.length ? '：' + pg.errors.slice(0, 3).join(' / ') : '')); await pg.context().close();
+  };
+  if (want === 'mermaid') await mermaidShow();
   if (want === 'idle') await idleShow();
   if (want === 'party') await partyShow(false);
   if (want === 'party-phone') await partyShow(true);

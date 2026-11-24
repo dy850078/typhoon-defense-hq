@@ -11,6 +11,7 @@
 | `40-town.js` | 小屋、樹、石頭、示範用的角色和怪 |
 | `50-standard-character.js` | 標準人物：換裝、職業服裝、表情、動作混合、釋放記憶體 |
 | `55-lobby.js` | 前院兩層小樓的外觀、總部大廳（室內）的格局和家具；家具併成幾塊一起畫 |
+| `57-mermaid.js` | 黑潮人魚的模型（`buildMermaid`，照 ZS 的設定圖建的；臉和音符的小圖由 `newworld/assets/src/build_mermaid.py` 產生，放在 `public/nw-art/`） |
 | `58-combat.js` | 練習場的戰鬥畫面：怪、血條、傷害數字、招式特效、使魔、夢魘機甲、操偶師的線（`makeCombat`，由 `60-play.js` 呼叫） |
 | `60-play.js` | 操作、多人同步、職業、召喚物、場景細節、互動、鏡頭、對外的介面 |
 

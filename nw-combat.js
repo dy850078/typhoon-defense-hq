@@ -7,7 +7,7 @@ const { PARTY, DOWN } = C3;
 const NEVER = 8e15;   // 花平常是「倒下」的，等老樹公叫出來
 
 // 練習場在前院的東邊：四塊地，越遠的怪越強；中間是大石偶
-const FIELD = { x0: 17, x1: 66, z0: -6, z1: 60, gate: { x: 15, z: 14 }, cloud: { x0: 14, x1: 70, z0: 68, z1: 124 } };   // cloud：雲海高原那一塊（在霧林南邊）
+const FIELD = { x0: 17, x1: 66, z0: -6, z1: 60, gate: { x: 15, z: 14 }, cloud: { x0: 14, x1: 70, z0: 68, z1: 124 }, coast: { x0: 14, x1: 70, z0: 128, z1: 184 } };   // cloud：雲海高原那一塊（在霧林南邊）
 // 霧林：苔球、傘菇精、露水靈各一區，中間是老樹公。src 是三轉信物算哪一種怪掉的（沒寫就是怪的種類）
 // 雲海高原：棉雲羊、風鈴鳥、雷角鹿各一區，最裡面是雲鯨。這三種怪算三轉信物的 deep 那一種
 const ZONES = [
@@ -20,6 +20,11 @@ const ZONES = [
   { kind: 'bird', src: 'deep', x: 56, z: 82, lv: [40, 41, 42, 43, 44, 45, 46, 48, 49, 50] },
   { kind: 'deer', src: 'deep', x: 28, z: 110, lv: [50, 51, 52, 53, 54, 55, 56, 58, 59, 60] },
   { kind: 'whale', src: 'whale', x: 55, z: 110, lv: [60] },
+  // 星砂海岸：螢光水母、寄居寶箱蟹、小海妖，最裡面靠海的是黑潮人魚
+  { kind: 'jelly', x: 28, z: 140, lv: [60, 61, 62, 63, 64, 65, 66, 68, 69, 70] },
+  { kind: 'crab', x: 56, z: 142, lv: [70, 71, 72, 73, 74, 75, 76, 78, 79, 80] },
+  { kind: 'siren', x: 28, z: 168, lv: [80, 81, 82, 83, 84, 85, 86, 88, 89, 90] },
+  { kind: 'mermaid', x: 55, z: 170, lv: [90] },
 ];
 const TICK = 100, rnd = (a, b) => a + Math.random() * (b - a), dist = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
 
@@ -27,20 +32,21 @@ module.exports = function attach(nw, env) {
   const { accounts, players } = env, now = () => Date.now();
   const mobs = [], zones = [], byId = new Map();
   let hits = [], seq = 1;
-  ZONES.forEach((z, zi) => z.lv.forEach((lv, i) => {
+  // 還沒準備好上線的怪（MOBS[kind].hold）先不放出來；測試用 NW_ALL_MOBS=1 可以照樣放
+  ZONES.filter(z => process.env.NW_ALL_MOBS || !(z.kind && MOBS[z.kind].hold)).forEach((z, zi) => z.lv.forEach((lv, i) => {
     const kind = z.kinds ? z.kinds[i % z.kinds.length] : z.kind, d = MOBS[kind], a = i / z.lv.length * Math.PI * 2 + zi, r = d.boss ? 0 : d.add ? 4.5 : 3 + (i % 3) * 3.2;
     const m = { id: 'm' + (mobs.length + 1), kind, src: z.src || kind, lv, sx: z.x + Math.cos(a) * r, sz: z.z + Math.sin(a) * r, max: Math.round(LEVEL.hp(lv) * d.hp), atk: LEVEL.atk(lv) * d.atk, st: {}, dmgBy: new Map(), dmgAmt: new Map(), helpBy: new Map() }; m.max0 = m.max;
-    m.x = m.sx; m.z = m.sz; m.hp = m.max; m.tx = m.x; m.tz = m.z; m.wait = rnd(0, 4); m.next = 0; m.dead = d.add ? NEVER : 0; m.sent = ''; m.mcd = 0;
+    m.x = m.sx; m.z = m.sz; m.hp = m.max; m.tx = m.x; m.tz = m.z; m.wait = rnd(0, 4); m.next = 0; m.dead = d.add ? NEVER : 0; m.sent = ''; m.mcd = 0; m.f = 0;
     mobs.push(m); byId.set(m.id, m);
   }));
-  const ELDER = mobs.find(m => m.kind === 'elder'), WHALE = mobs.find(m => m.kind === 'whale'), BLOOMS = mobs.filter(m => m.kind === 'bloom');
+  const ELDER = mobs.find(m => m.kind === 'elder'), WHALE = mobs.find(m => m.kind === 'whale'), MERMAID = mobs.find(m => m.kind === 'mermaid'), BLOOMS = mobs.filter(m => m.kind === 'bloom');
   const alive = (m) => m && !m.dead;
   const near = (x, z, r, skip) => mobs.filter(m => alive(m) && m !== skip && Math.hypot(m.x - x, m.z - z) <= r + MOBS[m.kind].r);
   const ctrl = (m, s) => (MOBS[m.kind].boss ? s * 0.3 : s);   // 大石偶被控制的時間只有三成
   const each = (fn) => players.forEach(p => { if (p.cb) fn(p, p.cb); });
   const fx = (o) => nw.emit('cb:fx', o);
   const meView = (c) => ({ lv: c.lv, exp: c.exp, need: LEVEL.expFor(c.lv), hp: Math.round(c.hp), hpMax: c.hpMax, mp: Math.round(c.mp), mpMax: c.mpMax, school: c.school, spec: c.spec, schools: c.schools, slots: c.slots, keys: c.keys, quest: c.quest,
-    slow: c.drowsy > now() ? 1 : 0, pois: c.pois > now() ? 1 : 0, cd: c.cd, stage: Object.keys(c.stage).reduce((o, k) => { if (c.stage[k].until > now()) o[k] = c.stage[k].until; return o; }, {}), dead: c.dead > now() ? c.dead : 0, t: now() });
+    slow: c.drowsy > now() ? 1 : 0, pois: c.pois > now() ? 1 : 0, bub: c.bubble > now() ? 1 : 0, charm: c.charm > now() ? 1 : 0, cd: c.cd, stage: Object.keys(c.stage).reduce((o, k) => { if (c.stage[k].until > now()) o[k] = c.stage[k].until; return o; }, {}), dead: c.dead > now() ? c.dead : 0, t: now() });
   const who = (p) => ({ id: p.id, lv: p.cb.lv, school: p.cb.school, spec: p.cb.spec, hp: Math.round(p.cb.hp), hpMax: p.cb.hpMax, fam: p.cb.fam.map(f => [f.id, f.tier, f.max, +f.x.toFixed(1), +f.z.toFixed(1), Math.round(f.hp)]), mech: mechOf(p.cb) });
   const mechOf = (c) => (c.spec !== 'alchemist' ? 0 : c.buff.fear > now() ? 3 : c.buff.mech > now() ? 2 : 1);
   const tell = (p) => { p.cb.dirty = true; };
@@ -53,7 +59,11 @@ module.exports = function attach(nw, env) {
   function atkOf(c) { return LEVEL.atk(c.lv) * (1 + (c.buff.atk > now() ? c.buff.atkV : 0)); }
   function hurt(m, amount, p, kind, noShare) {
     if (!alive(m) || m.st.sealed > now() && kind !== 'box') return 0;
-    const t = now(); let d = amount * (1 + (m.st.vuln > t ? m.st.vulnV : 0)) * (m.st.tidy > t ? 2 : 1) * rnd(0.92, 1.08); d = Math.max(1, Math.round(d));
+    const t = now(), D = MOBS[m.kind]; let d = amount * (1 + (m.st.vuln > t ? m.st.vulnV : 0)) * (m.st.tidy > t ? 2 : 1) * rnd(0.92, 1.08);
+    // 寶箱蟹：從正面打幾乎打不動。黑潮人魚：有黑潮護身的時候只吃三成（牠怕痛、擱淺，或打的人有附魔就照常）
+    if (D.shell && p && !(m.st.tidy > t)) { let a = Math.atan2(p.x - m.x, p.z - m.z) - m.f; a = Math.abs(Math.atan2(Math.sin(a), Math.cos(a))); if (a < D.shell.arc) { d *= D.shell.front; kind = 'shell'; } }
+    if (D.tide && !(m.st.tidy > t) && !(m.st.vuln > t) && !(p && p.cb.buff.atk > t)) d *= D.tide.mul;
+    d = Math.max(1, Math.round(d));
     m.hp -= d; hits.push([m.id, d, kind || '']);
     if (p) { m.dmgBy.set(p.id, t); m.dmgAmt.set(p.id, (m.dmgAmt.get(p.id) || 0) + d); if (!m.aggro || !players.get(m.aggro) || m.st.charm) m.aggro = p.id; if (kind !== 'dot') p.cb.fight = t + 5000; if (kind !== 'fam' && kind !== 'dot' && kind !== 'link') m.selfT = t;
       const B = MOBS[m.kind].bounce; if (B && kind === 'hit' && !m.cast && !m.dash && !(m.st.root > t || m.st.stun > t || m.st.freeze > t)) { const l = Math.hypot(m.x - p.x, m.z - p.z) || 1; m.x += (m.x - p.x) / l * B; m.z += (m.z - p.z) / l * B; } }
@@ -63,7 +73,7 @@ module.exports = function attach(nw, env) {
   }
   function die(m) {
     const t = now(), d = MOBS[m.kind]; m.dead = d.add ? NEVER : t + (d.boss ? 90000 : 9000); m.hp = 0; m.st = {}; m.aggro = null; m.cast = null; m.dash = null; m.foe = null; m.selfT = 0;
-    if (MOBS[m.kind].boss) { m.sized = 0; m.ycd = 0; m.scd = 0; if (m.max !== m.max0) { m.max = m.max0; fx({ k: 'mobMax', m: m.id, max: m.max }); } }
+    if (MOBS[m.kind].boss) { m.sized = 0; m.ycd = 0; m.scd = 0; m.ccd = 0; m.ecd = 0; if (m.max !== m.max0) { m.max = m.max0; fx({ k: 'mobMax', m: m.id, max: m.max }); } }
     if (m === ELDER) { m.roots = null; setFog(false); BLOOMS.forEach(b => { if (alive(b)) { b.dead = NEVER; b.hp = 0; b.st = {}; fx({ k: 'die', m: b.id }); } }); }
     if (d.add) { m.dmgBy.clear(); m.dmgAmt.clear(); m.helpBy.clear(); return fx({ k: 'die', m: m.id }); }
     // 有出力的人：打過牠的，加上在旁邊補血、上護盾、控場、挨打的（helpBy）
@@ -92,7 +102,9 @@ module.exports = function attach(nw, env) {
   function gain(p, n) { const c = p.cb; if (c.lv >= LEVEL.max) return; c.exp += n; let up = false;
     while (c.lv < LEVEL.max && c.exp >= LEVEL.expFor(c.lv)) { c.exp -= LEVEL.expFor(c.lv); c.lv++; up = true; }
     if (up) { stats(c); c.hp = c.hpMax; c.mp = c.mpMax; fx({ k: 'lvup', id: p.id, lv: c.lv }); whoAll(p); } }
-  function heal(p, amount) { const c = p.cb; if (c.dead > now()) return; if (c.pois > now()) { c.pois = 0; tell(p); } c.clean = now() + MOBS.elder.fog.clean * 1000; /* 補血招順便解毒，接下來幾秒不會再中 */ const v = Math.round(Math.min(c.hpMax - c.hp, amount)); if (v <= 0) return; c.hp += v; hits.push(['p:' + p.id, -v, 'heal']); tell(p); }
+  function heal(p, amount) { const c = p.cb; if (c.dead > now()) return; wake(p); if (c.pois > now()) { c.pois = 0; tell(p); } c.clean = now() + MOBS.elder.fog.clean * 1000; /* 補血招順便解毒，接下來幾秒不會再中 */ const v = Math.round(Math.min(c.hpMax - c.hp, amount)); if (v <= 0) return; c.hp += v; hits.push(['p:' + p.id, -v, 'heal']); tell(p); }
+  // 被泡泡包住、被魅惑：隊友補血，或在旁邊放任何一招，就會醒
+  function wake(p) { const c = p.cb, t = now(); if (c.bubble > t) { c.bubble = 0; fx({ k: 'bubPop', id: p.id }); tell(p); } if (c.charm > t) { c.charm = 0; fx({ k: 'charmEnd', id: p.id }); tell(p); } }
   function allies(x, z, r) { const out = []; each((p, c) => { if (c.dead <= now() && Math.hypot(p.x - x, p.z - z) <= r) out.push(p); }); return out; }
   function hitPlayer(p, amount, m) { const c = p.cb, t = now(); if (c.dead > t) return;
     let d = amount * (1 - (c.buff.guard > t ? c.buff.guardV : 0)) * (c.buff.bond > t && c.fam.length ? 0.7 : 1); d = Math.max(1, Math.round(d * rnd(0.9, 1.1)));
@@ -100,7 +112,7 @@ module.exports = function attach(nw, env) {
     if (c.hp <= 0) down(p);
     tell(p); }
   function down(p) { const c = p.cb, t = now(), P = partyOf(p), mate = P && [...P.m].some(id => { const q = players.get(id); return q && q !== p && q.cb && q.cb.dead <= t && dist(q, p) <= PARTY.near; });
-    c.hp = 0; c.dead = t + (mate ? DOWN.help : DOWN.wait) * 1000; c.target = null; c.fam = []; c.pois = 0; c.drowsy = 0; mobs.forEach(o => { if (o.aggro === p.id) o.aggro = null; }); fx({ k: 'down', id: p.id }); whoAll(p); }
+    c.hp = 0; c.dead = t + (mate ? DOWN.help : DOWN.wait) * 1000; c.target = null; c.fam = []; c.pois = 0; c.drowsy = 0; c.bubble = 0; c.charm = 0; mobs.forEach(o => { if (o.aggro === p.id) o.aggro = null; }); fx({ k: 'down', id: p.id }); whoAll(p); }
   // 隊友的補血招可以把倒下的人救起來（不用回入口，也不扣經驗）
   function raise(by, x, z, r) { const t = now(); let n = 0; each((q, c) => { if (q !== by && c.dead > t && Math.hypot(q.x - x, q.z - z) <= r) { c.dead = 0; c.hp = Math.round(c.hpMax * DOWN.up); c.fight = t + 3000; n++; fx({ k: 'rise', id: q.id, by: by.id }); whoAll(q); tell(q); } }); return n; }
   // 出力：在還在打的怪旁邊放招（補血、護盾、控場都算），這隻怪倒下時就有份
@@ -146,6 +158,9 @@ module.exports = function attach(nw, env) {
   const BEGIN = {
     roll: (m, mv, p) => { const l = dist(p, m) || 1, x2 = m.x + (p.x - m.x) / l * mv.len, z2 = m.z + (p.z - m.z) / l * mv.len; return { x2, z2 }; },
     spore: (m) => ({ x: m.x, z: m.z }),
+    zap: (m) => ({ x: m.x, z: m.z }),
+    snap: (m, mv, p) => { const l = dist(p, m) || 1; m.f = Math.atan2(p.x - m.x, p.z - m.z); return { x2: m.x + (p.x - m.x) / l * mv.len, z2: m.z + (p.z - m.z) / l * mv.len }; },
+    bub: (m, mv, p) => (p.cb && !(p.cb.bubble > now()) ? { pid: p.id, to: p.id } : null),
     charge: (m, mv, p) => { const l = dist(p, m) || 1, ux = (p.x - m.x) / l, uz = (p.z - m.z) / l; return { ux, uz, x2: m.x + ux * (mv.len - mv.back), z2: m.z + uz * (mv.len - mv.back) }; },
     dive: (m, mv, p) => ({ x2: p.x, z2: p.z }),
     bolt: (m, mv, p) => { const l = dist(p, m) || 1; return { x2: m.x + (p.x - m.x) / l * mv.len, z2: m.z + (p.z - m.z) / l * mv.len }; },
@@ -157,6 +172,10 @@ module.exports = function attach(nw, env) {
     dive: (m, mv, c) => { m.x = c.x2; m.z = c.z2; const t = now(); each((q, cc) => { if (cc.dead <= t && Math.hypot(q.x - c.x2, q.z - c.z2) <= mv.r) hitPlayer(q, m.atk * mv.dmg, m); }); eachFam((f, o) => { if (Math.hypot(f.x - c.x2, f.z - c.z2) <= mv.r) hitFam(f, o, m.atk * mv.dmg); }); m.next = t + 1200; },
     bolt: (m, mv, c) => { const t = now(), dx = c.x2 - m.x, dz = c.z2 - m.z, L2 = dx * dx + dz * dz || 1, off = (q) => { const k = Math.max(0, Math.min(1, ((q.x - m.x) * dx + (q.z - m.z) * dz) / L2)); return Math.hypot(q.x - m.x - dx * k, q.z - m.z - dz * k); };
       each((q, cc) => { if (cc.dead <= t && off(q) <= mv.w) hitPlayer(q, m.atk * mv.dmg, m); }); eachFam((f, o) => { if (off(f) <= mv.w) hitFam(f, o, m.atk * mv.dmg); }); m.next = t + 1000; },
+    zap: (m, mv, c) => { const t = now(); each((q, cc) => { if (cc.dead <= t && Math.hypot(q.x - c.x, q.z - c.z) <= mv.r) { hitPlayer(q, m.atk * mv.dmg, m); if (cc.dead <= t) { const was = cc.drowsy > t; cc.drowsy = t + mv.drowsy * 1000; if (!was) tell(q); } } }); eachFam((f, o) => { if (Math.hypot(f.x - c.x, f.z - c.z) <= mv.r) hitFam(f, o, m.atk * mv.dmg); }); },
+    snap: (m, mv, c) => MOVE.bolt(m, mv, c),
+    bub: (m, mv, c) => { const q = players.get(c.pid), t = now(); if (!q || !q.cb || q.cb.dead > t || dist(q, m) > mv.range + 4) return; q.cb.bubble = t + mv.dur * 1000; tell(q); fx({ k: 'bub', id: q.id, dur: mv.dur }); },
+    charm: (m, mv, c) => { const q = players.get(c.pid), t = now(); if (!q || !q.cb || q.cb.dead > t || dist(q, m) > mv.far) return; q.cb.charm = t + mv.dur * 1000; q.cb.charmBy = m.id; tell(q); fx({ k: 'charm', id: q.id, m: m.id, x: F1(m.x), z: F1(m.z), dur: mv.dur, pull: mv.pull }); },
     // 雲鯨打哈欠：圈裡的人挨一下重的（有庇護的自己會減傷；站在絕壁的圈裡只吃一小部分）
     yawn: (m, mv) => { const t = now(), wall = (q) => (zones.some(z => z.k === 'cliff' && Math.hypot(q.x - z.x, q.z - z.z) <= z.r + 1) ? mv.wall : 1);
       each((q, cc) => { if (cc.dead <= t && dist(q, m) <= mv.r) hitPlayer(q, m.atk * mv.dmg * wall(q), m); }); eachFam((f, o) => { if (dist(f, m) <= mv.r) hitFam(f, o, m.atk * mv.dmg * wall(f)); }); m.next = t + 1500; },
@@ -182,6 +201,16 @@ module.exports = function attach(nw, env) {
     const begin = (k, mv, hard) => { m.cast = { k, mv, hard, until: t + mv.tele * 1000 }; fx({ k: 'tele', mk: k, m: m.id, x: F1(m.x), z: F1(m.z), r: mv.r, far: mv.far, pull: mv.pull, dur: mv.tele }); };
     if (m.ycd <= t) { m.ycd = t + d.yawn.cd * 1000; if (m.scd < t + 5000) m.scd = t + 5000; begin('yawn', d.yawn, 1); }
     else if (m.scd <= t) { m.scd = t + d.song.cd * 1000; begin('song', d.song, 0); }
+  }
+  // 黑潮人魚：魅惑（挑一個人走向牠）、退潮擱淺（一陣子沒有護身，受傷加倍）
+  function mermaid(m, d, t) {
+    if (!m.aggro) { m.ccd = 0; m.ecd = 0; return; }
+    if (!m.ccd) { m.ccd = t + 8000; m.ecd = t + 20000; }
+    if (m.cast || m.st.tidy > t) return;
+    if (m.ecd <= t) { m.ecd = t + d.ebb.cd * 1000; m.st.tidy = t + d.ebb.dur * 1000; if (m.ccd < t + 9000) m.ccd = t + 9000; fx({ k: 'mobMove', mk: 'ebb', m: m.id, x: F1(m.x), z: F1(m.z), dur: d.ebb.dur }); }
+    else if (m.ccd <= t) { m.ccd = t + d.charm.cd * 1000; const l = []; each((q, c) => { if (c.dead <= t && !(c.charm > t) && dist(q, m) <= d.charm.far) l.push(q); }); if (!l.length) return;
+      const q = (l.length > 1 ? l.filter(x => x.id !== m.aggro) : l)[Math.floor(Math.random() * (l.length > 1 ? l.length - 1 : 1))] || l[0];
+      m.cast = { k: 'charm', mv: d.charm, hard: 1, pid: q.id, until: t + d.charm.tele * 1000 }; fx({ k: 'tele', mk: 'charm', m: m.id, x: F1(m.x), z: F1(m.z), to: q.id, dur: d.charm.tele }); }
   }
   // 老樹公：樹根、開花、毒霧
   let FOG = false; const setFog = (on) => { if (FOG === on) return; FOG = on; fx({ k: 'fog', on: on ? 1 : 0, x: ELDER.sx, z: ELDER.sz, r: MOBS.elder.fog.r }); };
@@ -244,14 +273,14 @@ module.exports = function attach(nw, env) {
   };
   CAST.pact2 = CAST.pact;
   function cast(p, slot, tgt) {
-    const c = p.cb, t = now(), k0 = c.slots[slot], s = SK[k0]; if (!s || c.dead > t || !inField(p)) return;
+    const c = p.cb, t = now(), k0 = c.slots[slot], s = SK[k0]; if (!s || c.dead > t || !inField(p) || c.bubble > t || c.charm > t) return;
     const two = s.next && c.stage[k0] && c.stage[k0].until > t, k = two ? k0 + '2' : k0;
     if (!two && ((c.cd[k0] || 0) > t || c.mp < s.mp)) return;
     let m = byId.get(tgt); if (!alive(m)) m = null;
     if (s.aim && !two) { if (!m) m = byId.get(c.target); if (!alive(m)) m = near(p.x, p.z, s.range).sort((a, b) => dist(a, p) - dist(b, p))[0]; if (!m || dist(m, p) > s.range + 1.5) return p.cbSock.emit('cb:no', 'far'); }
     const r = CAST[k](p, c, s, m); if (r === false) return;
     if (!two) { c.mp -= s.mp; c.cd[k0] = t + s.cd * 1000; }
-    c.fight = t + 5000; c.act = t; credit(p); if (m && s.aim && k !== 'string') c.target = c.target || m.id;
+    c.fight = t + 5000; c.act = t; credit(p); each((q, cc) => { if (q !== p && (cc.bubble > t || cc.charm > t) && dist(q, p) <= MOBS.siren.move.free) wake(q); }); if (m && s.aim && k !== 'string') c.target = c.target || m.id;
     fx(Object.assign({ k, id: p.id, x: +(m && s.aim ? m.x : p.x).toFixed(1), z: +(m && s.aim ? m.z : p.z).toFixed(1), m: m ? m.id : null }, r || {})); tell(p);
   }
   const inField = (p) => p.x > FIELD.x0 - 4 && p.z > -38;
@@ -268,10 +297,12 @@ module.exports = function attach(nw, env) {
       if (c.dead) return;
       if (sec) { const rest = c.fight < t; const hp = Math.min(c.hpMax, c.hp + c.hpMax * (rest ? 0.06 : 0.004)), mp = Math.min(c.mpMax, c.mp + c.mpMax * (rest ? 0.08 : 0.025)); if (hp !== c.hp || mp !== c.mp) { c.hp = hp; c.mp = mp; tell(p); } }
       if (sec && c.pois > t) { const v = Math.max(1, Math.round(c.hpMax * MOBS.elder.fog.dps)); c.hp -= v; c.fight = t + 5000; hits.push(['p:' + p.id, v, 'pois']); if (c.hp <= 0) down(p); tell(p); if (c.dead) return; }
+      if (c.bubble && c.bubble <= t) { c.bubble = 0; fx({ k: 'bubPop', id: p.id }); tell(p); }
+      if (c.charm) { const mm = byId.get(c.charmBy); if (c.charm <= t || !alive(mm)) { c.charm = 0; fx({ k: 'charmEnd', id: p.id }); tell(p); } else if (dist(p, mm) <= MOBS[mm.kind].r + 1.3) { c.charm = 0; fx({ k: 'charmEnd', id: p.id, hit: 1 }); hitPlayer(p, mm.atk * MOBS[mm.kind].charm.dmg, mm); tell(p); if (c.dead) return; } }
       if (c.drowsy && c.drowsy <= t) { c.drowsy = 0; tell(p); } if (c.pois && c.pois <= t) { c.pois = 0; tell(p); }
       const m = byId.get(c.target); if (c.target && !alive(m)) { c.target = null; p.cbSock.emit('cb:tgt', null); }
       const b = C3.basicOf(c), key = C3.basicKey(c);
-      if (alive(m) && c.nextAtk <= t && dist(p, m) <= b.range + MOBS[m.kind].r + 0.6 && inField(p)) {
+      if (alive(m) && c.nextAtk <= t && dist(p, m) <= b.range + MOBS[m.kind].r + 0.6 && inField(p) && !(c.bubble > t) && !(c.charm > t)) {
         c.nextAtk = t + b.every * 1000 * (c.drowsy > t ? 1.6 : 1); c.act = t; c.hitN = (c.hitN || 0) + 1;
         const mech = key === 'mecha' ? 1 + (c.buff.mech > t ? c.buff.mechV : 0) + (c.buff.fear > t ? c.buff.fearV : 0) : 1, slam = b.slam && c.hitN % b.slam === 0;
         if (slam) near(m.x, m.z, 2.6).forEach(o => { hurt(o, atkOf(c) * b.mul * mech * 1.3, p, 'slam'); if (alive(o)) o.st.taunt = t + 3000; });
@@ -310,7 +341,7 @@ module.exports = function attach(nw, env) {
         if (m.dash) { const g = m.dash, k = Math.min(1, (t - g.t0) / (g.t1 - g.t0)); if (held0) m.dash = null; else { m.x = g.x0 + (g.x1 - g.x0) * k; m.z = g.z0 + (g.z1 - g.z0) * k;
           each((q, c) => { if (c.dead <= t && !g.hit.has(q.id) && dist(q, m) <= g.mv.w + 0.4) { g.hit.add(q.id); hitPlayer(q, m.atk * g.mv.dmg, m); } }); eachFam((f, o) => { if (!g.hit.has(f.id) && dist(f, m) <= g.mv.w + 0.4) { g.hit.add(f.id); hitFam(f, o, m.atk * g.mv.dmg); } }); if (k >= 1) { m.dash = null; m.next = t + 900; if (g.mv.tidy) st.tidy = t + g.mv.tidy * 1000; } } }
         if (d.boss) bossSize(m);
-        if (m === ELDER) elder(m, d, t, sec); else if (m === WHALE) whale(m, d, t);
+        if (m === ELDER) elder(m, d, t, sec); else if (m === WHALE) whale(m, d, t); else if (m === MERMAID) mermaid(m, d, t);
         const busy = !!(m.cast || m.dash) || st.tidy > t || d.add, held = held0 || busy, sp = d.sp * (st.slow > t ? 1 - st.slowV : 1) * dt;
         const go = (x, z, stop) => { const dx = x - m.x, dz = z - m.z, l = Math.hypot(dx, dz); if (l <= stop) return true; const k = Math.min(sp * (m.aggro || st.charm > t ? 1.6 : 0.6), l - stop) / l; m.x += dx * k; m.z += dz * k; return false; };
         if (st.charm > t) { const o = near(m.x, m.z, 8, m).sort((a, b) => dist(a, m) - dist(b, m))[0], by = players.get(st.charmBy);
@@ -318,6 +349,7 @@ module.exports = function attach(nw, env) {
         else { let p = m.aggro && players.get(m.aggro);
           if (p && (!p.cb || p.cb.dead > t || dist(p, m) > 22 || Math.hypot(m.x - m.sx, m.z - m.sz) > 26)) { p = null; m.aggro = null; }
           if (p) { const fo = famFoe(m, p, t), q = fo || p;
+            if (d.shell && !held) { let a = Math.atan2(q.x - m.x, q.z - m.z) - m.f; a = Math.atan2(Math.sin(a), Math.cos(a)); const mx = d.shell.turn * dt; m.f += Math.max(-mx, Math.min(mx, a)); }
             if (!held && !(st.taunt > t) && tryMove(m, d, q, t)) { /* 開始出招，這一格不動 */ }
             else if (!held && go(q.x, q.z, d.shoot || d.r + 0.9) && m.next <= t && !(st.taunt > t)) { m.next = t + (d.shoot ? 1900 : 1500); const dmg = m.atk * (st.weak > t ? 1 - st.weakV : 1); if (fo) hitFam(fo, p, dmg); else hitPlayer(p, dmg, m); fx({ k: 'mobAtk', m: m.id, to: p.id, f: fo ? fo.id : undefined, shot: d.shoot ? 1 : 0 }); }
             else if (st.taunt > t && m.next <= t && !held) { m.next = t + 1500; fx({ k: 'mobAtk', m: m.id, to: p.id, mech: 1 }); } }
@@ -325,8 +357,8 @@ module.exports = function attach(nw, env) {
           else if (!held0 && !busy) { if (m.hp < m.max && sec) m.hp = Math.min(m.max, m.hp + m.max * 0.1);
             if (go(m.tx, m.tz, 0.2) && (m.wait -= dt) <= 0) { m.tx = m.sx + rnd(-3, 3); m.tz = m.sz + rnd(-3, 3); m.wait = rnd(2, 6); } } }
       }
-      const fl = m.dead ? 256 : (m.st.root > t ? 1 : 0) | (m.st.stun > t ? 2 : 0) | (m.st.freeze > t ? 4 : 0) | (m.st.poison && m.st.poison.until > t ? 8 : 0) | (m.st.link > t ? 16 : 0) | (m.st.charm > t ? 32 : 0) | (m.st.sealed > t ? 64 : 0) | (m.st.weak > t ? 128 : 0) | (m.st.lift > t ? 512 : 0) | (m.st.slow > t ? 1024 : 0) | (m.st.tidy > t ? 2048 : 0) | (m.cast ? 4096 : 0);
-      const row = [m.id, +m.x.toFixed(1), +m.z.toFixed(1), Math.max(0, Math.round(m.hp)), fl, m.st.tied > t ? m.st.tiedBy : 0, m.st.link > t ? m.st.linkG : 0], key = row.join(',');
+      const fl = m.dead ? 256 : (m.st.root > t ? 1 : 0) | (m.st.stun > t ? 2 : 0) | (m.st.freeze > t ? 4 : 0) | (m.st.poison && m.st.poison.until > t ? 8 : 0) | (m.st.link > t ? 16 : 0) | (m.st.charm > t ? 32 : 0) | (m.st.sealed > t ? 64 : 0) | (m.st.weak > t ? 128 : 0) | (m.st.lift > t ? 512 : 0) | (m.st.slow > t ? 1024 : 0) | (m.st.tidy > t ? 2048 : 0) | (m.cast ? 4096 : 0) | (MOBS[m.kind].tide && !(m.st.tidy > t) && !(m.st.vuln > t) ? 8192 : 0);
+      const row = [m.id, +m.x.toFixed(1), +m.z.toFixed(1), Math.max(0, Math.round(m.hp)), fl, m.st.tied > t ? m.st.tiedBy : 0, m.st.link > t ? m.st.linkG : 0], key = (MOBS[m.kind].shell ? row.push(+m.f.toFixed(1)) : 0, row.join(','));
       if (key !== m.sent) { m.sent = key; out.push(row); }
     });
     if (out.length) nw.emit('cb:mobs', out);
@@ -397,6 +429,7 @@ module.exports = function attach(nw, env) {
         if (d.quest && c.quest) c.quest.got = QUEST[c.quest.spec].map(q => q[1]);
         if (typeof d.drop === 'string') { const o = { id: 'd' + seq++, k: d.drop, x: +(p.x + 1.2).toFixed(2), z: +p.z.toFixed(2), until: now() + (d.ms > 0 ? d.ms : C3.DROP_MS) }; drops.set(o.id, o); nw.emit('cb:drop', dropView(o)); }
         if (d.bossHp > 0) ELDER.hp = Math.max(1, Math.round(ELDER.max * Math.min(1, d.bossHp)));
+        if (d.mermaid && MERMAID) { if (d.mermaid === 'ebb') MERMAID.ecd = 1; else { MERMAID.ccd = 1; MERMAID.ecd = now() + 30000; } }   // 測試：叫黑潮人魚馬上擱淺或魅惑
         if (d.whale) { if (d.whale === 'yawn') { WHALE.ycd = 1; } else { WHALE.scd = 1; WHALE.ycd = now() + 30000; } }   // 測試：叫雲鯨馬上打哈欠或唱歌   // 測試老樹公的下半場
         if (d.idle != null) c.dbgIdle = d.idle ? 1 : 0;   // 測試：當作主人很久沒動作
         if (d.famHit > 0) c.fam.slice().forEach(f => hitFam(f, p, f.max * d.famHit));   // 測試：使魔扣血

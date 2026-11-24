@@ -37,7 +37,7 @@ async function main() {
   { const dir = path.join(__dirname, '..', 'newworld', 'world'), src = fs.readdirSync(dir).filter(n => /\.js$/.test(n)).sort().map(n => fs.readFileSync(path.join(dir, n), 'utf8')).join('');
     try { new (require('vm').Script)(src, { filename: 'newworld/world/*.js' }); } catch (e) { console.log('  FAIL 場景程式語法：' + e.message); process.exit(1); } }
   const data = fs.mkdtempSync(path.join(os.tmpdir(), 'nw-data-'));
-  const srv = spawn(process.execPath, ['server.js'], { cwd: ROOT, env: { ...process.env, PORT: String(PORT), ADMIN_PASSWORD: PW, DATA_DIR: data }, stdio: 'ignore' });
+  const srv = spawn(process.execPath, ['server.js'], { cwd: ROOT, env: { ...process.env, NW_ALL_MOBS: '1', PORT: String(PORT), ADMIN_PASSWORD: PW, DATA_DIR: data }, stdio: 'ignore' });
   const stop = () => { try { srv.kill('SIGKILL'); } catch (e) {} try { fs.rmSync(data, { recursive: true, force: true, maxRetries: 5 }); } catch (e) {} };
   process.on('exit', stop);
   for (let i = 0; i < 50; i++) { try { await fetch(B + '/config'); break; } catch (e) { await new Promise(r => setTimeout(r, 200)); } }

@@ -32,7 +32,8 @@ module.exports = function attach(nw, env) {
   const { accounts, players } = env, now = () => Date.now();
   const mobs = [], zones = [], byId = new Map();
   let hits = [], seq = 1;
-  ZONES.forEach((z, zi) => z.lv.forEach((lv, i) => {
+  // 還沒準備好上線的怪（MOBS[kind].hold）先不放出來；測試用 NW_ALL_MOBS=1 可以照樣放
+  ZONES.filter(z => process.env.NW_ALL_MOBS || !(z.kind && MOBS[z.kind].hold)).forEach((z, zi) => z.lv.forEach((lv, i) => {
     const kind = z.kinds ? z.kinds[i % z.kinds.length] : z.kind, d = MOBS[kind], a = i / z.lv.length * Math.PI * 2 + zi, r = d.boss ? 0 : d.add ? 4.5 : 3 + (i % 3) * 3.2;
     const m = { id: 'm' + (mobs.length + 1), kind, src: z.src || kind, lv, sx: z.x + Math.cos(a) * r, sz: z.z + Math.sin(a) * r, max: Math.round(LEVEL.hp(lv) * d.hp), atk: LEVEL.atk(lv) * d.atk, st: {}, dmgBy: new Map(), dmgAmt: new Map(), helpBy: new Map() }; m.max0 = m.max;
     m.x = m.sx; m.z = m.sz; m.hp = m.max; m.tx = m.x; m.tz = m.z; m.wait = rnd(0, 4); m.next = 0; m.dead = d.add ? NEVER : 0; m.sent = ''; m.mcd = 0; m.f = 0;
@@ -428,7 +429,7 @@ module.exports = function attach(nw, env) {
         if (d.quest && c.quest) c.quest.got = QUEST[c.quest.spec].map(q => q[1]);
         if (typeof d.drop === 'string') { const o = { id: 'd' + seq++, k: d.drop, x: +(p.x + 1.2).toFixed(2), z: +p.z.toFixed(2), until: now() + (d.ms > 0 ? d.ms : C3.DROP_MS) }; drops.set(o.id, o); nw.emit('cb:drop', dropView(o)); }
         if (d.bossHp > 0) ELDER.hp = Math.max(1, Math.round(ELDER.max * Math.min(1, d.bossHp)));
-        if (d.mermaid) { if (d.mermaid === 'ebb') MERMAID.ecd = 1; else { MERMAID.ccd = 1; MERMAID.ecd = now() + 30000; } }   // 測試：叫黑潮人魚馬上擱淺或魅惑
+        if (d.mermaid && MERMAID) { if (d.mermaid === 'ebb') MERMAID.ecd = 1; else { MERMAID.ccd = 1; MERMAID.ecd = now() + 30000; } }   // 測試：叫黑潮人魚馬上擱淺或魅惑
         if (d.whale) { if (d.whale === 'yawn') { WHALE.ycd = 1; } else { WHALE.scd = 1; WHALE.ycd = now() + 30000; } }   // 測試：叫雲鯨馬上打哈欠或唱歌   // 測試老樹公的下半場
         if (d.idle != null) c.dbgIdle = d.idle ? 1 : 0;   // 測試：當作主人很久沒動作
         if (d.famHit > 0) c.fam.slice().forEach(f => hitFam(f, p, f.max * d.famHit));   // 測試：使魔扣血

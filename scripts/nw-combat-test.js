@@ -13,7 +13,7 @@ const wait = (ms) => new Promise(r => setTimeout(r, ms));
 
 async function main() {
   const data = fs.mkdtempSync(path.join(os.tmpdir(), 'nw-data-'));
-  const srv = spawn(process.execPath, ['server.js'], { cwd: ROOT, env: { ...process.env, PORT: String(PORT), ADMIN_PASSWORD: PW, DATA_DIR: data }, stdio: ['ignore', 'ignore', process.env.NW_TEST_LOG ? fs.openSync(process.env.NW_TEST_LOG, 'w') : 'ignore'] });
+  const srv = spawn(process.execPath, ['server.js'], { cwd: ROOT, env: { ...process.env, NW_ALL_MOBS: '1', PORT: String(PORT), ADMIN_PASSWORD: PW, DATA_DIR: data }, stdio: ['ignore', 'ignore', process.env.NW_TEST_LOG ? fs.openSync(process.env.NW_TEST_LOG, 'w') : 'ignore'] });
   process.on('exit', () => { try { srv.kill('SIGKILL'); } catch (e) {} try { fs.rmSync(data, { recursive: true, force: true }); } catch (e) {} });
   for (let i = 0; i < 50; i++) { try { await fetch(B + '/config'); break; } catch (e) { await wait(200); } }
   const ad = await post('/api/admin/login', { password: PW });

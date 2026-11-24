@@ -416,21 +416,28 @@ function nwRoute(name, acts) {
   });
 }
 const gardenChanged = () => { const st = garden.state(); io.emit('garden', st); io.of('/newworld').emit('garden', st); };
+const nwPool = (key, now) => GACHA.poolState(key, (settings.gachaPools || {})[key], now);
 nwRoute('gacha', { READ: ['state'],
-  view: (A) => ({ tickets: A.p.inv[GACHA.TICKET] || 0, pity: A.p.gachaPity, pityMax: GACHA.PITY, spares: GACHA.spares(A.p.gear).length, recycle: GACHA.RECYCLE, gemTickets: GACHA.GEM_TICKETS,
+  view: (A, u, now) => ({ rates: GACHA.RATES,
+    pools: Object.keys(GACHA.POOLS).map(key => Object.assign({ key, name: GACHA.POOLS[key].name, note: GACHA.POOLS[key].note, series: GACHA.POOLS[key].series, limited: !!GACHA.POOLS[key].limited }, nwPool(key, now),
+      { items: GACHA.poolIds(key).map(id => ({ id, name: GEAR.GEAR[id].name, rarity: GEAR.GEAR[id].rarity, slot: GEAR.SLOTS[GEAR.GEAR[id].slot], own: A.p.gear[id] || 0, worn: A.p.equip[GEAR.GEAR[id].slot] === id }))
+        .sort((a, b) => GEAR.rank(b.rarity) - GEAR.rank(a.rarity)) })).filter(x => x.open),
+    tickets: A.p.inv[GACHA.TICKET] || 0, pity: A.p.gachaPity, pityMax: GACHA.PITY, spares: GACHA.spares(A.p.gear).length, recycle: GACHA.RECYCLE, gemTickets: GACHA.GEM_TICKETS,
     gems: Object.keys(MAP.ITEMS).filter(k => MAP.ITEMS[k].gem).reduce((n, k) => n + (A.p.inv[k] || 0), 0) }),
   state: () => ({}),
   // 扭一次：新世界沒有地上掉落物，裝備區滿了就不給扭（總部是掉在腳邊）
-  spin: ({ p }) => {
+  spin: ({ p }, b, u, req, now) => {
+    const key = String(b.pool || ''), ids = GACHA.poolIds(key);
+    if (!ids.length || !nwPool(key, now).open) return { error: '這個卡池現在沒有開放' };
     if ((p.inv[GACHA.TICKET] || 0) < 1) return { error: '沒有扭蛋券了，打倒頭目有機會掉' };
-    if (GACHA.pool().some(id => !BAG.canAdd(p, 'gear', id))) return { error: '背包的裝備區滿了，先丟掉一些再來' };
+    if (ids.some(id => !BAG.canAdd(p, 'gear', id))) return { error: '背包的裝備區滿了，先丟掉一些再來' };
     p.inv[GACHA.TICKET]--;
-    const r = GACHA.spin(p.gachaPity, BAG.ownedOf(p.gear)), pityHit = p.gachaPity + 1 >= GACHA.PITY;
+    const r = GACHA.spin(p.gachaPity, BAG.ownedOf(p.gear), ids), pityHit = p.gachaPity + 1 >= GACHA.PITY;
     p.gachaPity = r.pity;
     const g = GEAR.GEAR[r.id], fresh = !p.gear[r.id];
     LOOT.give(p, 'gear', r.id, true);
     if (g.rarity === 'SSR') pushChat({ system: true, text: `${p.name} 在扭蛋機扭到了【SSR】${g.name}！`, t: Date.now() });
-    return { item: r.id, name: g.name, rarity: g.rarity, fresh, pityHit };
+    return { item: r.id, name: g.name, rarity: g.rarity, slot: g.slot, fresh, pityHit };
   },
   recycle: ({ p }) => {
     const sp = GACHA.spares(p.gear).slice(0, GACHA.RECYCLE);
@@ -823,7 +830,7 @@ app.post('/api/admin/login', (req, res) => {
 app.get('/api/admin/state', (req, res) => {
   if (!isAdmin(req)) return res.status(401).json({ ok: false });
   const online = new Set([...players.values()].map(p => p.account && p.account.username));
-  res.json({ ok: true, party: partyInfo(), petsOpen: !!settings.petsOpen, notice: noticeState(), wishes: wishes.all(), garden: garden.list(), turn: turnState(), accounts: accounts.list().map(a => Object.assign(a, { online: online.has(a.username) })) });
+  res.json({ ok: true, party: partyInfo(), petsOpen: !!settings.petsOpen, gachaPools: gachaPoolList(), notice: noticeState(), wishes: wishes.all(), garden: garden.list(), turn: turnState(), accounts: accounts.list().map(a => Object.assign(a, { online: online.has(a.username) })) });
 });
 app.post('/api/admin/settings', (req, res) => {
   if (!isAdmin(req)) return res.status(401).json({ ok: false });
@@ -834,6 +841,18 @@ app.post('/api/admin/settings', (req, res) => {
   saveSettings();
   io.emit('party', partyInfo());
   res.json({ ok: true, party: partyInfo() });
+});
+// 新世界的扭蛋卡池：開關和起訖日（台灣時間的日期，留空就是不限）
+const gachaPoolList = () => Object.keys(GACHA.POOLS).map(key => Object.assign({ key, name: GACHA.POOLS[key].name, limited: !!GACHA.POOLS[key].limited, count: GACHA.poolIds(key).length }, GACHA.poolState(key, (settings.gachaPools || {})[key], Date.now())));
+app.post('/api/admin/gacha-pool', (req, res) => {
+  if (!isAdmin(req)) return res.status(401).json({ ok: false });
+  const b = req.body || {}, key = String(b.key || ''), from = String(b.from || ''), to = String(b.to || '');
+  if (!Object.prototype.hasOwnProperty.call(GACHA.POOLS, key)) return res.status(400).json({ ok: false, error: '沒有這個卡池' });
+  if (!GACHA.dayOk(from) || !GACHA.dayOk(to)) return res.status(400).json({ ok: false, error: '日期格式不對' });
+  if (from && to && from > to) return res.status(400).json({ ok: false, error: '結束日要在開始日之後' });
+  settings.gachaPools = Object.assign({}, settings.gachaPools, { [key]: { on: !!b.on, from, to } });
+  saveSettings();
+  res.json({ ok: true, gachaPools: gachaPoolList() });
 });
 // 寵物功能開放給所有人／只給管理員（重新整理後生效）
 app.post('/api/admin/pets', (req, res) => {
@@ -950,6 +969,7 @@ app.post('/api/admin/newworld-give', (req, res) => {
   add(p.inv, b.inv, k => !!MAP.ITEMS[k], INV_MAX); add(p.furn, b.furn, k => !!DECOR.DECOR[k], 50); add(p.gear, b.gear, k => !!GEAR.GEAR[k], 99);
   Object.keys(p.gear).forEach(id => { if (!p.seen.includes(id)) p.seen.push(id); });
   if (b.pet) p.pet = PETS.withTemper(PETS.sanitize(b.pet));
+  if (b.pity != null) p.gachaPity = clamp(Math.floor(Number(b.pity)) || 0, 0, GACHA.PITY - 1);   // 測試用：直接設保底算到第幾次
   nwWrite(u, p);
   res.json({ ok: true });
 });

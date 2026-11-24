@@ -177,6 +177,72 @@ async function main() {
     await pa.context().close();
   };
 
+  // ---- 扭蛋機：卡池橫幅、內容物格子、扭蛋動畫、保底、管理員開關和日期 ----
+  const gachaT = async (phone) => {
+    const tag = phone ? 'gacha-phone' : 'gacha'; console.log(tag);
+    const acc = await account({ name: '小扭', hair: 'bob' }, true, { inv: { gachaTicket: 90 } }), pg = await open(acc, phone);
+    const api = (body) => post('/api/newworld/gacha', body, { Authorization: 'Bearer ' + acc.token });
+    const adm = (body) => post('/api/admin/gacha-pool', body, { 'x-admin-token': ad.token });
+    const E = (fn, arg) => pg.evaluate(fn, arg), T = async (sel) => { await tap(pg, sel); await pg.waitForTimeout(350); };
+    const openP = async () => { await E(() => window.NW_UI.open('gacha')); await pg.waitForFunction(() => !!document.querySelector('#panel .gp-ban, #gacha-none'), null, { timeout: 30000 }).catch(() => {}); await pg.waitForTimeout(500); };
+    const day = (d) => new Date(Date.now() + 8 * 3600000 + d * 86400000).toISOString().slice(0, 10);
+    await E(() => { const g = HQ_NEWWORLD.spots().gacha; HQ_NEWWORLD.debugPlace(g.x, g.z + 0.9); }); await pg.waitForFunction(() => HQ_NEWWORLD.near() === 'gacha', null, { timeout: 30000 }).catch(() => {});
+    const st0 = await api({ act: 'state' });
+    ok(st0.pools.length === 1 && st0.pools[0].key === 'magical' && st0.pools[0].limited && st0.pools[0].items.length === 3 && st0.pools[0].items[0].rarity === 'SSR', '新世界只開魔法少女一個卡池（期間限定，3 件，SSR 排最前面）');
+    ok(!st0.pools[0].items.some(i => /^wz/.test(i.id)), '小巫師不在新世界的卡池裡');
+    ok((await api({ act: 'spin', pool: 'wizard' })).error && (await api({ act: 'spin' })).error, '扭不存在的卡池、沒指定卡池都會被擋');
+    // 管理員設日期：還有 3 天
+    await new Promise(r => setTimeout(r, 300));
+    const set = await adm({ key: 'magical', on: true, from: day(-1), to: day(2) });
+    ok(set.ok && set.gachaPools[0].open && set.gachaPools[0].left > 2 * 86400000, '管理員設了起訖日，卡池開著，離結束 2 天多');
+    ok(!(await adm({ key: 'magical', on: true, from: day(3), to: day(1) })).ok && !(await adm({ key: 'nope', on: true })).ok && !(await post('/api/admin/gacha-pool', { key: 'magical', on: false })).ok, '日期顛倒、不存在的卡池、沒有管理員身分都改不了');
+    await openP();
+    ok(await E(() => { const b = document.querySelector('#panel .gp-ban'); return !!b && !!b.querySelector('canvas') && b.querySelectorAll('.gp-art img').length === 3 && b.querySelector('.gp-tx b').textContent === '魔法少女' && b.querySelector('.gp-tx em').textContent === '期間限定' && /^剩 2 天$/.test(b.querySelector('.gp-tx i').textContent); }), '面板最上面是卡池橫幅：系列主視覺、「期間限定」、「剩 2 天」');
+    ok(await E(() => document.querySelectorAll('#panel .gp-it').length === 3 && document.querySelectorAll('#panel .gp-it.none').length === 3 && /0 \/ 3/.test(document.querySelector('#panel .gp-h').textContent)), '內容物三格，還沒有的是灰的，標 0 / 3');
+    ok(await E(() => document.getElementById('gacha-tickets').dataset.tickets === '90' && document.querySelectorAll('#gacha-tickets .nw-i').length === 2 && !/65%/.test(document.getElementById('panel').textContent)), '券數和保底在一行，機率收在小 i 裡');
+    await T('#panel .gp-it[data-id=mgWings]'); ok(await E(() => /緞帶星星翅膀/.test(document.querySelector('#panel .gp-pick').textContent) && /還沒有/.test(document.querySelector('#panel .gp-pick').textContent)), '點一格看大圖、名字、有沒有');
+    await shot(pg, tag + '-1-pool');
+    // 扭一次：動畫 → 結果
+    await T('#gacha-spin'); await pg.waitForSelector('#panel .gp-stage', { timeout: 30000 }).catch(() => {}); await pg.waitForTimeout(700); await shot(pg, tag + '-2-turn');
+    ok(await E(() => !!document.querySelector('#panel .gp-stage canvas') && !document.querySelector('#panel .gp-out')), '按了先播動畫（轉把、蛋），結果還沒出來');
+    await pg.waitForSelector('#panel .gp-out', { timeout: 30000 }).catch(() => {}); await pg.waitForTimeout(600); await shot(pg, tag + '-3-result');
+    const first = await E(() => document.querySelector('#panel .gp-stage').dataset.item);
+    ok(await E(() => { const o = document.querySelector('#panel .gp-out'); return !!o && !!o.querySelector('img') && /^【(R|SR|SSR)】/.test(o.querySelector('b').textContent) && o.querySelector('em').textContent === '新的！' && !!document.getElementById('gacha-wear') && document.getElementById('gacha-again').textContent === '再扭一次'; }), '動畫播完：裝備跳出來，標「新的！」，有「穿上」和「再扭一次」');
+    let st = await api({ act: 'state' }); ok(st.tickets === 89, '扭一次少一張券');
+    await T('#gacha-wear'); await pg.waitForFunction(() => !document.querySelector('#panel .gp-stage') && !!document.querySelector('#panel .gp-it.have'), null, { timeout: 30000 }).catch(() => {}); await pg.waitForTimeout(400);
+    st = await api({ act: 'state' }); ok(st.pools[0].items.find(i => i.id === first).worn && await E((id) => document.querySelector('#panel .gp-it[data-id=' + id + ']').classList.contains('have'), first), '「穿上」直接穿到身上，回到卡池那一格亮起來');
+    // 保底前一抽，從畫面扭：一定是這個卡池的 SSR
+    for (let i = 0; i < 6; i++) { await new Promise(r => setTimeout(r, 270)); st = await api({ act: 'spin', pool: 'magical' }); }
+    ok(st.tickets === 83 && st.pools[0].items.every(i => /^mg/.test(i.id)) && !['wzHat', 'wzRobe', 'wzWand'].some(id => (st.item || '') === id), '再扭 6 次：都是魔法少女的');
+    await post('/api/admin/newworld-give', { username: acc.name, pity: 19 }, { 'x-admin-token': ad.token }); st = await api({ act: 'state' });
+    ok(st.pity === 19, '把保底設到前一抽（保底 ' + st.pity + '）');
+    await openP(); ok(await E(() => document.querySelector('#panel .gp-pity').textContent === '下一次一定是 SSR'), '面板寫「下一次一定是 SSR」');
+    await T('#gacha-spin'); await pg.waitForSelector('#panel .gp-stage', { timeout: 30000 }).catch(() => {}); await pg.waitForTimeout(300); await T('#panel .gp-stage');
+    await pg.waitForSelector('#panel .gp-out', { timeout: 30000 }).catch(() => {}); await pg.waitForTimeout(900); await shot(pg, tag + '-4-ssr');
+    ok(await E(() => { const s = document.querySelector('#panel .gp-stage'); return s.classList.contains('r-SSR') && s.dataset.item === 'mgWings' && s.querySelectorAll('.gp-spark').length >= 10 && /保底|新的|重複/.test(s.querySelector('.gp-out em').textContent); }), '保底那一抽是魔法少女的 SSR，有光芒和星星；動畫點一下可以跳過');
+    await T('#gacha-back'); ok(await E(() => !document.querySelector('#panel .gp-stage') && !!document.querySelector('#panel .gp-it[data-id=mgWings].have')), '「收起來」回到卡池，SSR 那格亮了');
+    // 重複的換券
+    st = await api({ act: 'state' }); const before = st.tickets;
+    if (st.spares >= 2) { await T('#gacha-recycle'); await pg.waitForFunction((n) => document.getElementById('gacha-tickets').dataset.tickets === String(n + 1), before, { timeout: 30000 }).catch(() => {}); ok((await api({ act: 'state' })).tickets === before + 1, '重複的 2 件換 1 張券'); }
+    await shot(pg, tag + '-5-owned');
+    // 管理員把卡池關掉／日期過了：面板沒有卡池，伺服器也擋
+    await adm({ key: 'magical', on: true, from: day(-5), to: day(-1) });
+    await new Promise(r => setTimeout(r, 300)); ok((await api({ act: 'spin', pool: 'magical' })).error === '這個卡池現在沒有開放', '結束日過了，伺服器不給扭');
+    await openP(); ok(await E(() => !!document.getElementById('gacha-none') && !document.querySelector('#panel .gp-ban') && !document.getElementById('gacha-spin')), '面板寫現在沒有開放的卡池'); await shot(pg, tag + '-6-closed');
+    await adm({ key: 'magical', on: false, from: '', to: '' }); ok((await api({ act: 'state' })).pools.length === 0, '管理員關掉也一樣收起來');
+    await adm({ key: 'magical', on: true, from: '', to: '' }); const s2 = await api({ act: 'state' }); ok(s2.pools.length === 1 && s2.pools[0].left == null, '重新打開、不設日期：卡池開著，沒有倒數');
+    await openP(); ok(await E(() => !document.querySelector('#panel .gp-tx i')), '沒設結束日就不寫剩幾天');
+    if (!phone) {   // 管理員頁：遊戲設定裡有卡池那一列，改日期按儲存
+      const ap = await pg.context().newPage(); await ap.goto(B + '/admin.html#world'); await ap.fill('#pw', PW); await ap.press('#pw', 'Enter');
+      await ap.waitForSelector('.gp-row[data-key=magical]', { timeout: 30000 }).catch(() => {}); await ap.waitForTimeout(300);
+      ok(await ap.evaluate(() => { const r = document.querySelector('.gp-row[data-key=magical]'); return !!r && /魔法少女（期間限定）/.test(r.textContent) && /開放中/.test(r.querySelector('.gp-st').textContent) && r.querySelector('input[type=checkbox]').checked; }), '管理員頁「遊戲設定」有魔法少女卡池那一列，寫開放中');
+      await ap.fill('.gp-row[data-key=magical] input[aria-label=結束日]', day(4)); await ap.click('.gp-row[data-key=magical] button'); await ap.waitForFunction(() => /存好了/.test(document.getElementById('gp-msg').textContent), null, { timeout: 30000 }).catch(() => {});
+      await ap.screenshot({ path: path.join(OUT, tag + '-7-admin.png') });
+      const s3 = await api({ act: 'state' }); ok(s3.pools[0].to === day(4) && /剩 [45] 天/.test(await ap.textContent('.gp-row[data-key=magical] .gp-st')), '在管理員頁改了結束日：遊戲裡的卡池跟著變，管理員頁寫剩幾天'); await ap.close();
+    }
+    ok(!pg.errors.length, '沒有頁面錯誤' + (pg.errors.length ? '：' + [...new Set(pg.errors)].slice(0, 3).join(' / ') : '')); await pg.context().close();
+  };
+
   // ---- 角色面板：職業／技能／任務分頁、技能書分段、小 i、模擬鍵盤、任務面板 ----
   const charT = async (phone) => {
     const tag = phone ? 'char-phone' : 'char'; console.log(tag);
@@ -626,11 +692,11 @@ async function main() {
     ok((await pa.textContent('.nw-hint')) === '扭蛋', '扭蛋機前冒出「扭蛋」');
     await pa.click('.nw-hint'); await panel('gacha');
     ok((await pa.getAttribute('#gacha-tickets', 'data-tickets')) === '3', '扭蛋機面板讀到帳號的 3 張扭蛋券');
-    await pa.click('#gacha-spin'); await pa.waitForSelector('#panel .result', { timeout: 30000 }).catch(() => {}); await pa.waitForTimeout(500); await shot(pa, 'home-5-gacha');
+    await pa.click('#gacha-spin'); await pa.waitForSelector('#panel .gp-stage', { timeout: 30000 }).catch(() => {}); await pa.waitForTimeout(200); await tap(pa, '#panel .gp-stage'); await pa.waitForSelector('#panel .gp-out', { timeout: 30000 }).catch(() => {}); await pa.waitForTimeout(500); await shot(pa, 'home-5-gacha');
     const g1 = await api('gacha', { act: 'state' });
     ok(g1.tickets === 2 && g1.pity === 1 || (g1.tickets === 2 && g1.pity === 0), '扭一次：券少一張、保底往前算（券 ' + g1.tickets + '、保底 ' + g1.pity + '）');
-    ok(!!(await pa.$('#panel .result img')), '扭到的裝備有手繪圖示');
-    await pa.click('#panel .acts button:nth-child(3)'); await pa.waitForFunction(() => document.getElementById('gacha-tickets').dataset.tickets === '5', null, { timeout: 30000 }).catch(() => {});
+    ok(!!(await pa.$('#panel .gp-out img')), '扭到的裝備有手繪圖示（卡池細節在 gacha 那一輪測）');
+    await tap(pa, '#gacha-back'); await pa.waitForTimeout(300); await tap(pa, '#gacha-gem'); await pa.waitForFunction(() => document.getElementById('gacha-tickets').dataset.tickets === '5', null, { timeout: 30000 }).catch(() => {});
     ok((await api('gacha', { act: 'state' })).tickets === 5, '一顆寶石換三張券');
     // 陽台：種子箱和公共花園
     await place(S.seedbox.x - 1.1, S.seedbox.z - 0.6); await near('seedbox');
@@ -1096,6 +1162,8 @@ async function main() {
   if (want === 'all' || want === 'chat') await chat();
   if (want === 'all' || want === 'char') await charT(false);
   if (want === 'char-phone') await charT(true);
+  if (want === 'all' || want === 'gacha') await gachaT(false);
+  if (want === 'gacha-phone') await gachaT(true);
   if (want === 'all' || want === 'wishes') await wishesT(false);
   if (want === 'wishes-phone') await wishesT(true);
   if (want === 'all' || want === 'multi') await multi();

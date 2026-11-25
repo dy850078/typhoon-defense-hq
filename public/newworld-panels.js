@@ -12,9 +12,9 @@ window.NW_PANELS = function (NW, token, opt) {
     return fetch('/api/newworld/' + name, { method: 'POST', headers: { Authorization: 'Bearer ' + token, 'content-type': 'application/json' }, body: JSON.stringify(body) })
       .then(function (r) { return r.ok ? r.json() : { ok: false, error: '連不上伺服器，等等再試' }; }, function () { return { ok: false, error: '連不上伺服器，等等再試' }; });
   }
-  function close() { if (cur === 'petcare') NW.previewPet(null); P.hidden = true; P.innerHTML = ''; cur = null; pinned = false; }
+  function close() { if (cur === 'petcare') { NW.previewPet(null); careCv = null; } P.hidden = true; P.innerHTML = ''; cur = null; pinned = false; }
   function frame(kind, title, sub) {
-    if (cur === 'petcare' && kind !== 'petcare') NW.previewPet(null);
+    if (cur === 'petcare' && kind !== 'petcare') { NW.previewPet(null); careCv = null; }
     cur = kind; P.hidden = false; P.innerHTML = ''; P.dataset.kind = kind; P.classList.remove('post');
     var h = el('h2', '', title), x = el('button', 'note', '關掉'); x.type = 'button'; x.onclick = close; h.appendChild(x); P.appendChild(h);
     if (sub) P.appendChild(el('p', 'sub', sub));
@@ -372,7 +372,7 @@ window.NW_PANELS = function (NW, token, opt) {
     if (r.error) body.appendChild(el('p', 'err', r.error));
     var ms = el('div', 'wtabs'); ms.id = 'pet-modes'; ms.appendChild(el('span', 'wlab', '模式'));
     Object.keys(r.modes).forEach(function (m) { var b = el('button', 'wtab' + (r.mode === m ? ' on' : ''), r.modes[m]); b.type = 'button'; b.dataset.mode = m; b.onclick = function () { if (r.mode !== m) go({ act: 'mode', mode: m })(); }; ms.appendChild(b); });
-    if (window.NW_TIP) ms.appendChild(NW_TIP.info('跟著走：牠跟在你腳邊。在草坪玩：牠留在寵物草坪自己逛，會去找別的寵物。回床睡：牠在草坪上自己的小床睡覺。你下線的時候，牠一律回小床睡。'));
+    if (window.NW_TIP) ms.appendChild(NW_TIP.info('跟著走：牠跟在你腳邊。在草坪玩：牠留在寵物草坪自己玩，會去鑽隧道、踢球、找別的寵物。去睡覺：牠在草坪上找自己的老位置睡覺。你下線的時候，牠也會在那裡睡。'));
     body.appendChild(ms);
     var acts = el('div', 'acts'); var pat = btn('摸摸' + (p.patLeft > 0 ? '（今天還能加 ' + p.patLeft + ' 次感情）' : '（今天的感情加滿了）'), go({ act: 'pat' }), 'main'); pat.id = 'pet-pat'; acts.appendChild(pat); body.appendChild(acts);
     body.appendChild(el('p', '', p.feedLeft > 0 ? '餵點心（今天還能餵 ' + p.feedLeft + ' 次）：' : '今天吃飽了，明天再餵。'));
@@ -387,12 +387,12 @@ window.NW_PANELS = function (NW, token, opt) {
     post('pet', { act: 'pat' }).then(function (x) { if (x.ok) { NW.lawnJoy(o.id, say); toast(x.text); if (cur === 'pet') drawPet(P.querySelector('.body'), x); } else toast(x.error); }); }
 
   // ---------- 寵物照顧員：領養、重捏 ----------
-  // 選項跟總部捏寵物的一樣（帽子除外）；面板裡是手繪的樣子，草坪上照顧員腳邊同時站一隻 3D 的給你看
-  var PT = window.HQ_PETS, careDraft = null;
+  // 選項跟總部捏寵物的一樣（帽子除外）；預覽就是牠在世界裡的 3D 樣子（同一個模型），可以拖著轉，像捏角色那樣邊調邊看
+  var PT = window.HQ_PETS, careDraft = null, careCv = null;
   function petcare() { var body = frame('petcare', '寵物照顧員'); wait(body); careDraft = null; post('pet', { act: 'form' }).then(function (r) { if (cur === 'petcare') drawCare(body, r); }); }
   function drawCare(body, r) {
     if (r.pet === undefined || !PT) return fail(body, r);
-    body.innerHTML = ''; petSync(r); NW.previewPet(null);
+    body.innerHTML = ''; petSync(r); NW.previewPet(null); careCv = null;
     if (r.error) body.appendChild(el('p', 'err', r.error));
     if (!r.pet) { body.appendChild(el('p', 'care-say', '「想找個伴嗎？挑一隻帶回家吧，牠會一直跟著你。」')); careDraft = Object.assign({}, PT.DEFAULTS.cat); return careForm(body, 'adopt'); }
     body.appendChild(el('p', 'care-say', '「' + r.pet.name + '今天過得不錯。要幫牠換個樣子，還是改名字？」'));
@@ -400,24 +400,25 @@ window.NW_PANELS = function (NW, token, opt) {
     body.appendChild(el('p', 'dim', '一個人只能養一隻。重捏不會影響感情。'));
   }
   function careForm(body, act) {
-    var d = careDraft, top = el('div', 'care-top'), cv = el('canvas', 'care-cv'); cv.width = 224; cv.height = 196; top.appendChild(cv);
-    var paint = function () { var x = cv.getContext('2d'); x.clearRect(0, 0, 224, 196); x.save(); x.translate(-20, -14); x.scale(3.5, 3.5); PT.drawPet(x, d, 'sit'); x.restore(); NW.previewPet(PT.sanitize(d)); };
-    var side = el('div', 'care-side'), kinds = el('div', 'wtabs'); kinds.id = 'care-kinds';
+    var d = careDraft, wrap = el('div', 'care-wrap'), view = el('div', 'care-view'), optBox = el('div', 'care-opts'), stage = el('div', 'care-stage'), cv = careCv || (careCv = el('canvas', 'care-cv'));
+    stage.appendChild(cv); stage.appendChild(el('span', 'care-turn', '拖曳可以轉著看')); view.appendChild(stage);
+    var paint = function () { NW.previewPet(PT.sanitize(d), cv); };
+    var kinds = el('div', 'wtabs'); kinds.id = 'care-kinds';
     Object.keys(PT.KINDS).forEach(function (k) { var b = el('button', 'wtab' + (d.kind === k ? ' on' : ''), PT.KINDS[k]); b.type = 'button'; b.dataset.kind = k; b.onclick = function () { if (d.kind === k) return; careDraft = Object.assign({}, PT.DEFAULTS[k], { name: d.name }); body.innerHTML = ''; careForm(body, act); }; kinds.appendChild(b); });
-    side.appendChild(kinds);
-    var nm = el('input'); nm.type = 'text'; nm.maxLength = PT.NAME_MAX; nm.placeholder = '幫牠取個名字（最多 ' + PT.NAME_MAX + ' 個字）'; nm.value = d.name || ''; nm.id = 'care-name'; nm.oninput = function () { d.name = nm.value; }; side.appendChild(nm);
-    top.appendChild(side); body.appendChild(top);
+    view.appendChild(kinds);
+    var nm = el('input'); nm.type = 'text'; nm.maxLength = PT.NAME_MAX; nm.placeholder = '幫牠取個名字（最多 ' + PT.NAME_MAX + ' 個字）'; nm.value = d.name || ''; nm.id = 'care-name'; nm.oninput = function () { d.name = nm.value; }; view.appendChild(nm);
+    wrap.appendChild(view); wrap.appendChild(optBox); body.appendChild(wrap);
     var O = PT.OPTS[d.kind], dog = d.kind === 'dog', horse = d.kind === 'horse';
     var LAB = dog ? { ears: '耳朵', pattern: '毛型', white: '白毛', tail: '尾巴', face: '表情' } : horse ? { ears: '耳朵', pattern: '鬃毛', white: '白毛', tail: '尾巴', face: '表情' } : { ears: '耳朵', pattern: '花紋', white: '白毛', tail: '尾巴', face: '表情', eyeshape: '眼型' };
     Object.keys(LAB).forEach(function (f) { var opts = O[f]; if (!opts || Object.keys(opts).length < 2) return; var row = el('div', 'wtabs care-row'); row.dataset.f = f; row.appendChild(el('span', 'wlab', LAB[f]));
       Object.keys(opts).forEach(function (k) { var b = el('button', 'wtab' + (d[f] === k ? ' on' : ''), opts[k]); b.type = 'button'; b.dataset.v = k; b.onclick = function () { d[f] = k; row.querySelectorAll('.wtab').forEach(function (e) { e.classList.toggle('on', e.dataset.v === k); }); paint(); }; row.appendChild(b); });
-      body.appendChild(row); });
+      optBox.appendChild(row); });
     var COL = [['fur', '毛色', PT.FURS], ['mark', dog ? '頭頂的毛' : horse ? '鬃毛和尾巴' : '花紋的顏色', PT.MARKS.concat(dog || horse ? ['#f2ddc0', '#fbf7ee', '#c68d62'] : [])]].concat(dog ? [['earc', '耳朵的毛', ['#c68d62', '#a97850', '#f1dcb2', '#6e4a30', '#3d3a3e']]] : [], [['eyes', '眼睛', PT.EYES.filter(function (c) { return c !== 'odd'; }).concat(['#2b2a33'])], ['nose', horse ? '嘴邊' : '鼻子', PT.NOSES.concat(horse ? ['#ecd0ad'] : [])]]);
     COL.forEach(function (c) { var f = c[0], row = el('div', 'care-col'); row.dataset.f = f; row.appendChild(el('span', 'wlab', c[1]));
       var pick = el('input'); pick.type = 'color'; pick.value = /^#[0-9a-f]{6}$/.test(d[f]) ? d[f] : c[2][0]; pick.setAttribute('aria-label', c[1] + '：自己調');
       var mark = function () { row.querySelectorAll('.sw').forEach(function (e) { e.classList.toggle('on', e.dataset.v === d[f]); }); };
       c[2].forEach(function (v) { var b = el('button', 'sw'); b.type = 'button'; b.dataset.v = v; b.style.background = v; b.setAttribute('aria-label', c[1] + ' ' + v); b.onclick = function () { d[f] = v; pick.value = v; mark(); paint(); }; row.appendChild(b); });
-      pick.oninput = function () { d[f] = pick.value.toLowerCase(); mark(); paint(); }; row.appendChild(pick); mark(); body.appendChild(row); });
+      pick.oninput = function () { d[f] = pick.value.toLowerCase(); mark(); paint(); }; row.appendChild(pick); mark(); optBox.appendChild(row); });
     var acts = el('div', 'acts'), ok = btn(act === 'adopt' ? '就是牠了，帶回家' : '好了，就這樣', function () { ok.disabled = true; d.name = nm.value;
       post('pet', { act: act, pet: d }).then(function (x) { if (cur !== 'petcare') return; if (!x.ok) { ok.disabled = false; var e = body.querySelector('.err') || body.insertBefore(el('p', 'err'), acts); e.textContent = x.error; return; }
         toast(x.text); careDraft = null; NW.previewPet(null); petKey = null; drawCare(body, x); if (act === 'adopt' && x.mode === 'follow') NW.petJoy('請多指教'); }); }, 'main'); ok.id = 'care-ok'; acts.appendChild(ok);

@@ -47,22 +47,7 @@ const NW = (() => {
     s.tip.scale.setScalar(1 + 0.18 * Math.sin(s.ph * 5)); };
   // 寵物：帳號在總部領養的那一隻（貓、狗、小馬，毛色照帳號的），在新世界跟在主人腳邊；主人坐下牠也趴下
   let PET = null, HASPET = false;
-  const makePet3 = (pet) => { const g = new THREE.Group(), b = new THREE.Group(); g.add(b); const k = pet.kind, hs = k === 'horse', fur = pet.fur, mk = pet.pattern !== 'none' ? pet.mark : fur, wh = pet.white !== 'none' ? '#fbf7ee' : fur;
-    const by = hs ? 0.66 : 0.36, hy = hs ? 1.2 : 0.66, hz = hs ? 0.46 : 0.26, ink = (r, pos, sc) => part(b, sph(r, 8, 6), INK, { pos, scale: sc, noLine: true, shadow: false, mat: basic(INK) });
-    part(b, sph(0.3), fur, { pos: [0, by, -0.05], scale: hs ? [0.8, 0.82, 1.35] : [0.85, 0.8, 1.15] });
-    if (pet.white !== 'none') part(b, sph(0.2), wh, { pos: [0, by - 0.07, 0.17], scale: [0.9, 0.8, 0.8], noLine: true, shadow: false });
-    if (pet.pattern !== 'none') [[0, 0.21, -0.02, 0.14], [0.1, 0.17, -0.2, 0.1], [-0.11, 0.16, 0.1, 0.09]].forEach(([x, y, z, r]) => part(b, sph(r, 8, 6), mk, { pos: [x, by + y, z], scale: [1, 0.35, 1], noLine: true, shadow: false }));
-    if (hs) { part(b, sph(0.17), fur, { pos: [0, 0.95, 0.26], scale: [0.75, 1.6, 0.85], rot: [0.55, 0, 0] }); [0, 1, 2, 3].forEach(i => part(b, sph(0.09, 8, 6), pet.mark, { pos: [0, 1.4 - i * 0.14, 0.26 - i * 0.07], scale: [0.6, 1, 0.9], noLine: true, shadow: false })); }
-    part(b, sph(0.27), fur, { pos: [0, hy, hz], scale: hs ? [0.82, 0.86, 0.95] : [1, 1, 1] });
-    part(b, sph(0.1), wh, { pos: [0, hy - 0.07, hz + (hs ? 0.26 : 0.22)], scale: hs ? [1.25, 1.2, 1.7] : [1.2, 0.8, 1] });
-    part(b, sph(0.04, 8, 6), pet.nose, { pos: [0, hy - 0.03, hz + (hs ? 0.44 : 0.315)], noLine: true, shadow: false, mat: basic(pet.nose) });
-    [-1, 1].forEach(a => { ink(0.034, [0.1 * a, hy + 0.04, hz + 0.24], [1, 1.2, 0.6]);
-      if (k === 'dog') part(b, sph(0.11), pet.earc || mk, { pos: [0.22 * a, hy + 0.12, hz - 0.06], scale: [0.6, 1.3, 0.8], rot: [0, 0, -0.5 * a] });
-      else if (pet.ears === 'fold') part(b, sph(0.09), fur, { pos: [0.17 * a, hy + 0.2, hz + 0.02], scale: [1, 0.5, 0.8], rot: [0.3, 0, -0.4 * a] });
-      else part(b, new THREE.ConeGeometry(hs ? 0.06 : 0.1, hs ? 0.18 : 0.2, 4), fur, { pos: [(hs ? 0.11 : 0.15) * a, hy + (hs ? 0.28 : 0.25), hz - 0.03], rot: [0, 0.6 * a, -0.2 * a], line: 0.016 }); });
-    g.legs = [[-1, 1], [1, 1], [-1, -1], [1, -1]].map(([a, c]) => part(b, sph(0.09), pet.white === 'socks' ? '#fbf7ee' : fur, { pos: [0.15 * a, hs ? 0.22 : 0.1, 0.2 * c - 0.05], scale: [1, hs ? 2.6 : 1.3, 1] }));
-    g.tail = part(b, sph(0.08), hs ? pet.mark : fur, { pos: [0, by + (hs ? 0.02 : 0.14), hs ? -0.46 : -0.4], scale: k === 'dog' ? [0.8, 1.5, 0.8] : hs ? [0.8, 2.6, 0.8] : [0.6, 2.6, 0.6], rot: [hs ? 0.25 : -0.6, 0, 0] });
-    g.b = b; g.legY = hs ? 0.22 : 0.1; g.scale.setScalar(0.95); scene.add(g); return g; };
+  const makePet3 = (pet) => { const g = makePet3D(pet); scene.add(g); return g; };   // 模型在 58-pet3d.js
   const setPet = (pet) => { if (PET) { scene.remove(PET.g); PET.g.traverse(o => { if (o.isMesh) { o.geometry.dispose(); } }); PET.tag.t.remove(); PET.tag.n.remove(); PET = null; }
     if (!pet || !ME) return; const tag = mkTag(); tag.s.textContent = pet.name; tag.n.hidden = false; tag.n.classList.add('pet'); PET = { g: makePet3(pet), tag, pet, x: ME.x - 1, z: ME.z + 0.6, f: 0, ph: 0, mv: 0, lie: 0 }; };
   const tickPet = (dt) => { if (!PET || !ME) return; const P = PET, f = ME.face, tx = ME.x + Math.sin(f) * 0.25 - Math.cos(f) * 1.3, tz = ME.z + Math.cos(f) * 0.25 + Math.sin(f) * 1.3;   // 走在主人左手邊、稍微前面一點（不會被主人擋住）
@@ -75,34 +60,47 @@ const NW = (() => {
     placeTag(P.tag, P.x, P.z, -1.2); };
   // 草坪上的寵物：主人不在線上的在自己的小床睡；主人放出來玩的在草坪裡自己逛（每個人的畫面各自算，不用同步位置）
   const LAWNP = new Map(), LIN = () => LAWN.IN;
-  const dropLawn = (id) => { const o = LAWNP.get(id); if (!o) return; LAWN.G.remove(o.g); o.g.traverse(m => { if (m.isMesh) m.geometry.dispose(); }); o.tag.t.remove(); o.tag.n.remove(); LAWNP.delete(id); };
+  const dropCush = (o) => { if (!o.cu) return; LAWN.G.remove(o.cu); o.cu.traverse(m => { if (m.isMesh) m.geometry.dispose(); }); o.cu = null; };
+  const dropLawn = (id) => { const o = LAWNP.get(id); if (!o) return; dropCush(o); LAWN.G.remove(o.g); o.g.traverse(m => { if (m.isMesh) m.geometry.dispose(); }); o.tag.t.remove(); o.tag.n.remove(); LAWNP.delete(id); };
   const setLawn = (list) => { if (!LAWN) return; const seen = new Set();
-    (Array.isArray(list) ? list : []).forEach(d => { if (!d || !d.pet) return; seen.add(d.id); let o = LAWNP.get(d.id); const key = JSON.stringify(d.pet), bed = LAWN.bed(d.bed);
+    (Array.isArray(list) ? list : []).forEach(d => { if (!d || !d.pet) return; seen.add(d.id); let o = LAWNP.get(d.id); const key = JSON.stringify(d.pet), q = LAWN.bed(d.bed), bed = q.small && d.pet.kind === 'horse' ? q.alt : q;   // 小馬上不了跳台、進不了紙箱：睡旁邊
       if (o && o.key !== key) { dropLawn(d.id); o = null; }
       if (!o) { const g = makePet3(d.pet), tag = mkTag(); LAWN.G.add(g); tag.s.textContent = d.pet.name; tag.n.hidden = false; tag.n.classList.add('pet');
         const sl = d.st === 'sleep', x = sl ? bed.x : LAWN.GATE.x - 1.2, z = sl ? bed.z : LAWN.GATE.z;
-        o = { id: d.id, g, tag, key, x, z, f: bed.f, tx: x, tz: z, wait: 0, mv: 0, ph: Math.random() * 6, lie: sl ? 1 : 0, joy: 0 }; LAWNP.set(d.id, o); }
+        o = { id: d.id, g, tag, key, x, z, f: bed.f, tx: x, tz: z, wait: 0, mv: 0, ph: Math.random() * 6, lie: sl ? 1 : 0, joy: 0, pt: null, path: [], big: d.pet.kind === 'horse' }; LAWNP.set(d.id, o); }
+      if (o.cu && (o.bed !== bed || d.st !== 'sleep')) dropCush(o); if (d.st === 'sleep' && bed.cush && !o.cu) o.cu = LAWN.cushion(bed);   // 要墊子的位置：有寵物睡才放
+      if (d.st === 'sleep') { o.pt = null; o.path = []; }
       o.st = d.st; o.bed = bed; o.owner = d.owner; o.name = d.pet.name; });
     [...LAWNP.keys()].forEach(id => { if (!seen.has(id)) dropLawn(id); }); };
+  // 在草坪玩的寵物：有時候隨便逛、有時候去找別的寵物、有時候去玩設施（鑽隧道、跳圈、繞桿、爬小山丘、挖沙、踩水、踢球……）
+  const lawnNext = (o, A) => { const u = Math.random(), acts = LAWN.PLAY.filter(p => !(p.small && o.big));
+    if (u < 0.55) { const p = acts[(Math.random() * acts.length) | 0];
+      if (p.kick != null) { const bl = LAWN.BALLS[p.kick]; o.pt = { x: bl.x - Math.sin(o.f) * 0.2, z: bl.z - Math.cos(o.f) * 0.2, run: 1, kick: p.kick }; o.path = []; } else { o.pt = p.pts[0]; o.path = p.pts.slice(1); }
+      o.tx = o.pt.x; o.tz = o.pt.z; return; }
+    const pals = [...LAWNP.values()].filter(q => q !== o && q.st === 'play'), pal = pals.length && u > 0.8 ? pals[(Math.random() * pals.length) | 0] : null;
+    const q = collide(pal ? pal.x + (Math.random() - 0.5) * 1.6 : A.x0 + Math.random() * (A.x1 - A.x0), pal ? pal.z + (Math.random() - 0.5) * 1.6 : A.z0 + Math.random() * (A.z1 - A.z0), 0.4);
+    o.pt = null; o.path = []; o.tx = Math.max(A.x0, Math.min(A.x1, q.x)); o.tz = Math.max(A.z0, Math.min(A.z1, q.z)); o.wait = 1.5 + Math.random() * 3.5; };
   const tickLawn = (dt) => { if (!LAWN) return; if (S.lob) { LAWNP.forEach(o => hideTag(o.tag)); return; } const A = LIN();
+    LAWN.BALLS.forEach(bl => { const v = Math.hypot(bl.vx, bl.vz); if (v < 0.05) return; const c = collide(Math.max(A.x0, Math.min(A.x1, bl.x + bl.vx * dt)), Math.max(A.z0, Math.min(A.z1, bl.z + bl.vz * dt)), bl.r), nx = c.x, nz = c.z;
+      bl.m.rotation.z -= (nx - bl.x) / bl.r; bl.m.rotation.x += (nz - bl.z) / bl.r; bl.x = nx; bl.z = nz; const k = Math.max(0, 1 - dt * 1.6); bl.vx *= k; bl.vz *= k; bl.m.position.set(bl.x, bl.r + LAWN.H(bl.x, bl.z), bl.z); });
     LAWNP.forEach(o => { const sleep = o.st === 'sleep';
       if (sleep) { o.tx = o.bed.x; o.tz = o.bed.z; }
-      else if ((o.wait -= dt) <= 0 && Math.hypot(o.tx - o.x, o.tz - o.z) < 0.3) {   // 逛到了：歇一下，再挑下一個地方（有時候去找別的寵物）
-        const pals = [...LAWNP.values()].filter(q => q !== o && q.st === 'play'), pal = pals.length && Math.random() < 0.35 ? pals[(Math.random() * pals.length) | 0] : null;
-        const q = collide(pal ? pal.x + (Math.random() - 0.5) * 1.6 : A.x0 + Math.random() * (A.x1 - A.x0), pal ? pal.z + (Math.random() - 0.5) * 1.6 : A.z0 + Math.random() * (A.z1 - A.z0), 0.4);
-        o.tx = Math.max(A.x0, Math.min(A.x1, q.x)); o.tz = Math.max(A.z0, Math.min(A.z1, q.z)); o.wait = 1.5 + Math.random() * 4; }
-      const dx = o.tx - o.x, dz = o.tz - o.z, d = Math.hypot(dx, dz), go = d > 0.12, sp = sleep ? 3 : 1.9;
-      if (go) { const st = Math.min(d, sp * dt); o.x += dx / d * st; o.z += dz / d * st; let df = Math.atan2(dx, dz) - o.f; df = Math.atan2(Math.sin(df), Math.cos(df)); o.f += df * Math.min(1, dt * 8); o.ph += dt * 11; }
+      else if (Math.hypot(o.tx - o.x, o.tz - o.z) < 0.3) {   // 到了：該跳的跳一下、該踢的踢出去，接著走下一點；整串走完歇一下再挑下一件事
+        const p = o.pt; if (p) { if (p.hop) o.joy = 0.7; if (p.kick != null) { const bl = LAWN.BALLS[p.kick], dx = bl.x - o.x, dz = bl.z - o.z, d = Math.hypot(dx, dz) || 1, a = Math.atan2(dx, dz) + (Math.random() - 0.5) * 0.8; if (d < 1.2) { bl.vx = Math.sin(a) * 5.5; bl.vz = Math.cos(a) * 5.5; o.joy = 0.5; } }
+          o.wait = p.stay ? p.stay * (0.6 + Math.random() * 0.8) : 0; o.pt = o.path.shift() || null; if (o.pt) { o.tx = o.pt.x; o.tz = o.pt.z; } else if (!o.wait) o.wait = 0.8 + Math.random() * 2; }
+        else if ((o.wait -= dt) <= 0) lawnNext(o, A); }
+      const dx = o.tx - o.x, dz = o.tz - o.z, d = Math.hypot(dx, dz), go = d > 0.12 && !(o.wait > 0 && !sleep && o.pt), sp = sleep ? 3 : o.pt && o.pt.run ? 3.3 : 1.9;
+      if (o.wait > 0 && !sleep && o.pt) o.wait -= dt;   // 在上一個點停一下（例如在山丘頂上看風景）再往下一點走
+      if (go) { const st = Math.min(d, sp * dt); o.x += dx / d * st; o.z += dz / d * st; let df = Math.atan2(dx, dz) - o.f; df = Math.atan2(Math.sin(df), Math.cos(df)); o.f += df * Math.min(1, dt * 8); o.ph += dt * (sp > 3 ? 15 : 11); }
       else if (sleep) { let df = o.bed.f - o.f; df = Math.atan2(Math.sin(df), Math.cos(df)); o.f += df * Math.min(1, dt * 4); }
       o.mv += ((go ? 1 : 0) - o.mv) * Math.min(1, dt * 8); o.lie += ((sleep && !go ? 1 : 0) - o.lie) * Math.min(1, dt * 3); if (o.joy > 0) o.joy = Math.max(0, o.joy - dt);
-      const onBed = sleep ? Math.max(0, 1 - Math.hypot(o.x - o.bed.x, o.z - o.bed.z) / 0.5) * 0.24 : 0;
-      o.g.position.set(o.x, onBed + o.mv * 0.06 * Math.abs(Math.sin(o.ph)) - o.lie * o.g.legY * 0.8 + (o.joy > 0 ? Math.abs(Math.sin(o.joy * 9)) * 0.28 : 0), o.z); o.g.rotation.y = o.f;
+      const c = sleep ? Math.max(0, 1 - Math.hypot(o.x - o.bed.x, o.z - o.bed.z) / 0.6) : 0, gy = LAWN.H(o.x, o.z) * (1 - c) + ((o.bed.y || 0) + (o.bed.cush ? 0.2 : 0)) * c;
+      o.g.position.set(o.x, gy + o.mv * 0.06 * Math.abs(Math.sin(o.ph)) - o.lie * o.g.legY * 0.8 + (o.joy > 0 ? Math.abs(Math.sin(o.joy * 9)) * 0.28 : 0), o.z); o.g.rotation.y = o.f;
       o.g.b.scale.y = 1 + o.lie * 0.035 * Math.sin(S.time * 1.6 + o.ph); o.g.b.rotation.z = o.lie * 0.22;
       o.g.legs.forEach((l, i) => { l.position.y = o.g.legY + o.mv * Math.max(0, Math.sin(o.ph + (i % 3 ? 0 : Math.PI))) * 0.08; }); o.g.tail.rotation.z = Math.sin(S.time * (o.lie > 0.5 ? 1.2 : 6) + o.ph) * (o.lie > 0.5 ? 0.12 : 0.35);
       placeTag(o.tag, o.x, o.z, -1.2); }); };
-  // 領養、重捏的時候，正在捏的那一隻先站在照顧員腳邊給你看
-  let PREV = null; const previewPet = (look) => { if (!LAWN) return; if (PREV) { LAWN.G.remove(PREV); PREV.traverse(m => { if (m.isMesh) m.geometry.dispose(); }); PREV = null; }
-    if (!look) return; PREV = makePet3(look); LAWN.G.add(PREV); PREV.position.set(LAWN.NPC.x + 0.25, 0, LAWN.NPC.z + 1.25); PREV.rotation.y = 1.0; };
+  // 領養、重捏的時候，面板裡那個小畫布畫的就是同一個 3D 模型（58-pet3d.js 的 PETVIEW）
+  const previewPet = (look, canvas) => PETVIEW.show(canvas, look);
   const FORMS = ['carry', 'float', 'front'], FORM_NAME = { carry: '單手捧著', float: '漂浮操控', front: '走在前面' };
   const CAM = [{ dist: 47, hgt: 17 }, { dist: 30, hgt: 10.5 }], CAM_ME = CAM, ANG0 = 0.62, LOB_TURN = 0.7;   // ANG0：鏡頭平常的方向；大廳只有北牆和西牆，鏡頭左右各只能轉 LOB_TURN（約 40 度），不然會被牆擋住
   S.ang = S.angT = ANG0;
@@ -173,7 +171,7 @@ const NW = (() => {
   const DETAIL = TW ? (() => {
     const r = rnd(77), PA = [0.479, 0.878], PN = [0.878, -0.479], P = (s, off) => [-7.5 + PA[0] * s + PN[0] * off, 9 + PA[1] * s + PN[1] * off];
     const offPath = (x, z) => { const dx = x + 7.5, dz = z - 9; return Math.abs(dx * PN[0] + dz * PN[1]); };
-    const free = (x, z, m) => offPath(x, z) > 2.1 + m && collide(x, z, m).x === x && Math.hypot(x - 7.6, z - 9.5) > 4.5;   // 不要長在路上、屋子和樹裡面、香菇怪腳下
+    const free = (x, z, m) => !(LAWN && LAWN.has(x, z)) && offPath(x, z) > 2.1 + m && collide(x, z, m).x === x && Math.hypot(x - 7.6, z - 9.5) > 4.5;   // 不要長在路上、屋子和樹裡面、香菇怪腳下
     const G = new THREE.Group(); scene.add(G);
     if (LOBBY) { ROUNDS.push({ x: WELL.x, z: WELL.z, r: 2.05 }, { x: GREEK_AT.x, z: GREEK_AT.z, r: 0.45 }); wishWell(WELL.x, WELL.z); }   // 許願池在前院（草和花會避開它）
     const batch = (geo, material, list, shadow) => { const im = new THREE.InstancedMesh(geo, material, list.length), o = new THREE.Object3D(), c = new THREE.Color();
@@ -404,7 +402,7 @@ const NW = (() => {
         STD.tick(ME.c, dt, meMoving ? Math.min(1, jl) : 0, ACT.run ? 2.1 : 1.6, ACT.pose || (ACT.run ? 'run' : null));
         // 最近的可以互動的東西
         let best = null, bd = 2.4; for (const it of INTER) { const d = Math.hypot(it.x - ME.x, it.z - ME.z) - (it.reach || 0); if (d < bd) { bd = d; best = it; } }
-        if (LAWN && !S.lob) LAWNP.forEach(o => { const d = Math.hypot(o.x - ME.x, o.z - ME.z) + 0.6; if (d < bd && d < 2.1) { bd = d; PAT.x = o.x; PAT.z = o.z; PAT.pet = o; best = PAT; } });
+        if (LAWN && !S.lob) LAWNP.forEach(o => { const d = Math.hypot(o.x - ME.x, o.z - ME.z) + 0.6; if (d < bd && d < 3.0) { bd = d; PAT.x = o.x; PAT.z = o.z; PAT.pet = o; best = PAT; } });
         NEAR = best; } else { NEAR = null; ME.sy = 0; } }
     if (moving) { const vx = wx, vz = wz, sp = 6.5;
       const h = collide(LIMX(S.x + vx * sp * dt, S.z), LIMZ(S.z + vz * sp * dt, S.z), 1.9); S.x = h.x; S.z = h.z;
@@ -469,7 +467,7 @@ const NW = (() => {
       o.c.H.position.set(o.x, o.y, o.z); o.c.H.rotation.y = o.f; STD.tick(o.c, dt, o.mv || far > 0.08 ? 1 : 0, o.mv === 2 ? 2.1 : 1.6, ps); tagOf(o); });
     if (STD) { if (ME) tickSpirit(ME.c, dt); OTH.forEach(o => tickSpirit(o.c, dt)); }
     if (MENTOR && S.lob) STD.tick(MENTOR, dt, 0, 1, 'sit');
-    tickPet(dt); tickLawn(dt); tickGreek(dt); if (KEEPER && !S.lob) STD.tick(KEEPER, dt, 0);
+    tickPet(dt); tickLawn(dt); PETVIEW.tick(dt); tickGreek(dt); if (KEEPER && !S.lob) STD.tick(KEEPER, dt, 0);
     if (STD && TW.s1) { const a2 = t * PI2 * 0.5; TW.s1.H.position.set(-7.4 + Math.sin(a2) * 2.2, 0, 6.2 + Math.cos(a2) * 1.8); TW.s1.H.rotation.y = a2 + Math.PI / 2;
       STD.tick(TW.s1, dt, 1, 1.1); STD.tick(TW.s2, dt, 0); STD.tick(TW.s3, dt, 0); }
     TW.pet.pose(t * PI2 * 4); TW.pet.position.y = 0.12 * Math.abs(Math.sin(t * PI2 * 4));
@@ -546,7 +544,7 @@ const NW = (() => {
     petJoy: (text) => { if (!PET) return; PET.joy = 1.4; if (text) { setBubble(PET.tag.b, text); PET.tag.until = S.time + 3; } },
     garden: (st) => { PLOTS = Array.isArray(st) ? st : []; if (LOBBY) LOBBY.setGarden(PLOTS); }, plots: () => PLOTS, setPet, hasPet: (v) => { HASPET = !!v; },
     // 寵物草坪：伺服器送來草坪上有哪些寵物；lawnJoy 讓其中一隻開心地跳幾下
-    previewPet, lawn: setLawn, lawnPets: () => [...LAWNP.values()].map(o => ({ id: o.id, name: o.name, owner: o.owner, st: o.st, x: o.x, z: o.z, lie: o.lie })), lawnInfo: () => (LAWN ? { npc: LAWN.NPC, gate: LAWN.GATE, area: LAWN.IN, beds: LAWN.BEDS.length } : null),
+    previewPet, petView: () => PETVIEW.info(), petTurn: (v) => PETVIEW.turn(v), lawn: setLawn, lawnPets: () => [...LAWNP.values()].map(o => ({ id: o.id, name: o.name, owner: o.owner, st: o.st, x: o.x, z: o.z, lie: o.lie })), lawnInfo: () => (LAWN ? { npc: LAWN.NPC, gate: LAWN.GATE, area: LAWN.IN, beds: LAWN.BEDS.length, play: LAWN.PLAY.length, balls: LAWN.BALLS.map(b => ({ x: b.x, z: b.z })) } : null),
     lawnJoy: (id, text) => { const o = LAWNP.get(id); if (!o) return; o.joy = 1.4; if (text) { setBubble(o.tag.b, text); o.tag.until = S.time + 3; } }, pet: () => (PET ? { name: PET.pet.name, kind: PET.pet.kind, x: PET.x, z: PET.z } : null),
     spots: () => (LOBBY ? { well: WELL, greek: GREEK_AT, ...(LAWN ? { petcare: LAWN.NPC } : {}), ...LOBBY.SPOTS } : null), hint: () => (HINT.hidden ? '' : HINT.textContent), hintMini: () => !HINT.hidden && HINT.classList.contains('mini'), CLS, CLS_NAME,
   };

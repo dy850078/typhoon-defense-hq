@@ -604,9 +604,9 @@ function nwBond(p, kind, amt) {
   return amt;
 }
 // ---- 寵物草坪：領養、三種模式、小床 ----
-// 模式存在 save.nw.petMode：follow 跟著走／play 在草坪玩／sleep 回床睡；床位 save.nw.petBed 是領養時排的，之後不變
+// 模式存在 save.nw.petMode：follow 跟著走／play 在草坪玩／sleep 去睡覺；床位 save.nw.petBed 是領養時排的，之後不變
 // 草坪上看得到的寵物：主人不在線上的（一律在床上睡）、主人在線上但模式是 play 或 sleep 的
-const NW_PET_MODES = { follow: '跟著走', play: '在草坪玩', sleep: '回床睡' }, NW_BEDS = 24;
+const NW_PET_MODES = { follow: '跟著走', play: '在草坪玩', sleep: '去睡覺' }, NW_BEDS = 24;
 const nwPetMode = (u) => { const m = u.save.nw && u.save.nw.petMode; return Object.prototype.hasOwnProperty.call(NW_PET_MODES, m) ? m : 'follow'; };
 const nwPetOf = (u) => { const n = u.save.nw; return n && n.pet ? PETS.sanitize(n.pet) : null; };
 const nwPetUsers = () => accounts.list().map(a => accounts.get(a.username)).filter(u => u && nwPetOf(u));
@@ -668,7 +668,7 @@ nwRoute('pet', { READ: ['state', 'form'],
     if (!p.pet) return { error: '你還沒有寵物' };
     if (!Object.prototype.hasOwnProperty.call(NW_PET_MODES, m)) return { error: '沒有這個模式' };
     u.save.nw = Object.assign({}, u.save.nw, { petMode: m });
-    return { text: m === 'follow' ? `${p.pet.name}回到你身邊了` : m === 'play' ? `${p.pet.name}去草坪玩了` : `${p.pet.name}回床上睡了`, changed: true };
+    return { text: m === 'follow' ? `${p.pet.name}回到你身邊了` : m === 'play' ? `${p.pet.name}去草坪玩了` : `${p.pet.name}去睡覺了`, changed: true };
   },
 });
 // ---- 管理員的「功能測試」面板（public/newworld-ui.js）：只有管理員帳號能用，每個動作都再檢查一次 ----

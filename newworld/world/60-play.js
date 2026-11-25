@@ -46,7 +46,7 @@ const NW = (() => {
     s.g.position.set(s.x, 1.35 + FY(s.x, s.z) + 0.14 * Math.sin(s.ph * 2.4), s.z); s.g.rotation.y = s.f; s.b.rotation.z = 0.12 * Math.sin(s.ph * 1.7); s.b.rotation.x = Math.min(0.35, d * 0.25);
     s.tip.scale.setScalar(1 + 0.18 * Math.sin(s.ph * 5)); };
   // 寵物：帳號在總部領養的那一隻（貓、狗、小馬，毛色照帳號的），在新世界跟在主人腳邊；主人坐下牠也趴下
-  let PET = null;
+  let PET = null, HASPET = false;
   const makePet3 = (pet) => { const g = new THREE.Group(), b = new THREE.Group(); g.add(b); const k = pet.kind, hs = k === 'horse', fur = pet.fur, mk = pet.pattern !== 'none' ? pet.mark : fur, wh = pet.white !== 'none' ? '#fbf7ee' : fur;
     const by = hs ? 0.66 : 0.36, hy = hs ? 1.2 : 0.66, hz = hs ? 0.46 : 0.26, ink = (r, pos, sc) => part(b, sph(r, 8, 6), INK, { pos, scale: sc, noLine: true, shadow: false, mat: basic(INK) });
     part(b, sph(0.3), fur, { pos: [0, by, -0.05], scale: hs ? [0.8, 0.82, 1.35] : [0.85, 0.8, 1.15] });
@@ -73,6 +73,36 @@ const NW = (() => {
     P.g.position.set(P.x, FY(P.x, P.z) + P.mv * 0.06 * Math.abs(Math.sin(P.ph)) - P.lie * P.g.legY * 0.8 + (P.joy > 0 ? Math.abs(Math.sin(P.joy * 9)) * 0.28 : 0), P.z); P.g.rotation.y = P.f; P.g.b.rotation.x = -P.lie * 0.12;
     P.g.legs.forEach((l, i) => { l.position.y = P.g.legY + P.mv * Math.max(0, Math.sin(P.ph + (i % 3 ? 0 : Math.PI))) * 0.08; }); P.g.tail.rotation.z = Math.sin(S.time * 7) * 0.45;
     placeTag(P.tag, P.x, P.z, -1.2); };
+  // 草坪上的寵物：主人不在線上的在自己的小床睡；主人放出來玩的在草坪裡自己逛（每個人的畫面各自算，不用同步位置）
+  const LAWNP = new Map(), LIN = () => LAWN.IN;
+  const dropLawn = (id) => { const o = LAWNP.get(id); if (!o) return; LAWN.G.remove(o.g); o.g.traverse(m => { if (m.isMesh) m.geometry.dispose(); }); o.tag.t.remove(); o.tag.n.remove(); LAWNP.delete(id); };
+  const setLawn = (list) => { if (!LAWN) return; const seen = new Set();
+    (Array.isArray(list) ? list : []).forEach(d => { if (!d || !d.pet) return; seen.add(d.id); let o = LAWNP.get(d.id); const key = JSON.stringify(d.pet), bed = LAWN.bed(d.bed);
+      if (o && o.key !== key) { dropLawn(d.id); o = null; }
+      if (!o) { const g = makePet3(d.pet), tag = mkTag(); LAWN.G.add(g); tag.s.textContent = d.pet.name; tag.n.hidden = false; tag.n.classList.add('pet');
+        const sl = d.st === 'sleep', x = sl ? bed.x : LAWN.GATE.x - 1.2, z = sl ? bed.z : LAWN.GATE.z;
+        o = { id: d.id, g, tag, key, x, z, f: bed.f, tx: x, tz: z, wait: 0, mv: 0, ph: Math.random() * 6, lie: sl ? 1 : 0, joy: 0 }; LAWNP.set(d.id, o); }
+      o.st = d.st; o.bed = bed; o.owner = d.owner; o.name = d.pet.name; });
+    [...LAWNP.keys()].forEach(id => { if (!seen.has(id)) dropLawn(id); }); };
+  const tickLawn = (dt) => { if (!LAWN) return; if (S.lob) { LAWNP.forEach(o => hideTag(o.tag)); return; } const A = LIN();
+    LAWNP.forEach(o => { const sleep = o.st === 'sleep';
+      if (sleep) { o.tx = o.bed.x; o.tz = o.bed.z; }
+      else if ((o.wait -= dt) <= 0 && Math.hypot(o.tx - o.x, o.tz - o.z) < 0.3) {   // 逛到了：歇一下，再挑下一個地方（有時候去找別的寵物）
+        const pals = [...LAWNP.values()].filter(q => q !== o && q.st === 'play'), pal = pals.length && Math.random() < 0.35 ? pals[(Math.random() * pals.length) | 0] : null;
+        const q = collide(pal ? pal.x + (Math.random() - 0.5) * 1.6 : A.x0 + Math.random() * (A.x1 - A.x0), pal ? pal.z + (Math.random() - 0.5) * 1.6 : A.z0 + Math.random() * (A.z1 - A.z0), 0.4);
+        o.tx = Math.max(A.x0, Math.min(A.x1, q.x)); o.tz = Math.max(A.z0, Math.min(A.z1, q.z)); o.wait = 1.5 + Math.random() * 4; }
+      const dx = o.tx - o.x, dz = o.tz - o.z, d = Math.hypot(dx, dz), go = d > 0.12, sp = sleep ? 3 : 1.9;
+      if (go) { const st = Math.min(d, sp * dt); o.x += dx / d * st; o.z += dz / d * st; let df = Math.atan2(dx, dz) - o.f; df = Math.atan2(Math.sin(df), Math.cos(df)); o.f += df * Math.min(1, dt * 8); o.ph += dt * 11; }
+      else if (sleep) { let df = o.bed.f - o.f; df = Math.atan2(Math.sin(df), Math.cos(df)); o.f += df * Math.min(1, dt * 4); }
+      o.mv += ((go ? 1 : 0) - o.mv) * Math.min(1, dt * 8); o.lie += ((sleep && !go ? 1 : 0) - o.lie) * Math.min(1, dt * 3); if (o.joy > 0) o.joy = Math.max(0, o.joy - dt);
+      const onBed = sleep ? Math.max(0, 1 - Math.hypot(o.x - o.bed.x, o.z - o.bed.z) / 0.5) * 0.24 : 0;
+      o.g.position.set(o.x, onBed + o.mv * 0.06 * Math.abs(Math.sin(o.ph)) - o.lie * o.g.legY * 0.8 + (o.joy > 0 ? Math.abs(Math.sin(o.joy * 9)) * 0.28 : 0), o.z); o.g.rotation.y = o.f;
+      o.g.b.scale.y = 1 + o.lie * 0.035 * Math.sin(S.time * 1.6 + o.ph); o.g.b.rotation.z = o.lie * 0.22;
+      o.g.legs.forEach((l, i) => { l.position.y = o.g.legY + o.mv * Math.max(0, Math.sin(o.ph + (i % 3 ? 0 : Math.PI))) * 0.08; }); o.g.tail.rotation.z = Math.sin(S.time * (o.lie > 0.5 ? 1.2 : 6) + o.ph) * (o.lie > 0.5 ? 0.12 : 0.35);
+      placeTag(o.tag, o.x, o.z, -1.2); }); };
+  // 領養、重捏的時候，正在捏的那一隻先站在照顧員腳邊給你看
+  let PREV = null; const previewPet = (look) => { if (!LAWN) return; if (PREV) { LAWN.G.remove(PREV); PREV.traverse(m => { if (m.isMesh) m.geometry.dispose(); }); PREV = null; }
+    if (!look) return; PREV = makePet3(look); LAWN.G.add(PREV); PREV.position.set(LAWN.NPC.x + 0.25, 0, LAWN.NPC.z + 1.25); PREV.rotation.y = 1.0; };
   const FORMS = ['carry', 'float', 'front'], FORM_NAME = { carry: '單手捧著', float: '漂浮操控', front: '走在前面' };
   const CAM = [{ dist: 47, hgt: 17 }, { dist: 30, hgt: 10.5 }], CAM_ME = CAM, ANG0 = 0.62, LOB_TURN = 0.7;   // ANG0：鏡頭平常的方向；大廳只有北牆和西牆，鏡頭左右各只能轉 LOB_TURN（約 40 度），不然會被牆擋住
   S.ang = S.angT = ANG0;
@@ -139,6 +169,7 @@ const NW = (() => {
   // ===== 場景細節：草叢、小花、踏腳石（一次畫一整批，不多花繪製次數）、木柵欄、路燈、路牌 =====
   // 小路的中心線：P(s) = (-7.5 + 0.479 s, 9 + 0.878 s)，s 從 -20 到 20；n 是路的右手邊
   const WELL = { x: -1.0, z: 1.5, y: 3.3, reach: 1.2 }, GREEK_AT = { x: 1.7, z: 2.6, y: 3.0, f: 0.25 };
+  const LAWN = TW && LOBBY ? makePetLawn(WALLS, ROUNDS) : null;   // 寵物草坪（59-petlawn.js）：先蓋好，草和花才會避開
   const DETAIL = TW ? (() => {
     const r = rnd(77), PA = [0.479, 0.878], PN = [0.878, -0.479], P = (s, off) => [-7.5 + PA[0] * s + PN[0] * off, 9 + PA[1] * s + PN[1] * off];
     const offPath = (x, z) => { const dx = x + 7.5, dz = z - 9; return Math.abs(dx * PN[0] + dz * PN[1]); };
@@ -210,16 +241,17 @@ const NW = (() => {
   const sitY = (x, z) => { for (const s of SEATS) if (Math.hypot(x - s.x, z - s.z) < 0.5) return s.h ?? 0.2; return -0.3; };   // 坐椅子或坐地上，屁股的高度不一樣
   // 可以互動的東西：靠近會在上面冒出一張小紙條，點紙條或按 E
   const YARD_DOOR = { x: -11.8, z: -1.6, f: 0.5 };
-  const INTER = SEATS.map(s => ({ kind: 'bench', x: s.x, z: s.z, f: s.f, y: 1.3 + (s.h ?? 0.2) + FY(s.x, s.z) })).concat(JUKE ? [{ kind: 'juke', x: JUKE.x, z: JUKE.z, y: JUKE.y }] : [], [{ kind: 'door', x: -12.3, z: -2.7, y: 3.2 }], LOBBY ? [{ kind: 'exit', x: LOBBY.EXIT.x, z: LOBBY.EXIT.z, y: LOBBY.EXIT.y }, { kind: 'well', ...WELL }, { kind: 'greek', ...GREEK_AT }, { kind: 'mentor', ...LOBBY.SPOTS.mentor }, { kind: 'gacha', ...LOBBY.SPOTS.gacha }, { kind: 'seedbox', ...LOBBY.SPOTS.seedbox }, ...LOBBY.SPOTS.plots.map((q, i) => ({ kind: 'plot', i, ...q }))] : []);
-  const HINT_TEXT = { bench: '坐下', juke: '聽歌', door: LOBBY ? '進大廳' : '敲門', exit: '到前院', well: '許個願', greek: '說話', mentor: '轉職', gacha: '扭蛋', seedbox: '領種子' }; let NEAR = null, onInteract = null;
+  const INTER = SEATS.map(s => ({ kind: 'bench', x: s.x, z: s.z, f: s.f, y: 1.3 + (s.h ?? 0.2) + FY(s.x, s.z) })).concat(JUKE ? [{ kind: 'juke', x: JUKE.x, z: JUKE.z, y: JUKE.y }] : [], [{ kind: 'door', x: -12.3, z: -2.7, y: 3.2 }], LOBBY ? [{ kind: 'exit', x: LOBBY.EXIT.x, z: LOBBY.EXIT.z, y: LOBBY.EXIT.y }, { kind: 'well', ...WELL }, { kind: 'greek', ...GREEK_AT }, { kind: 'mentor', ...LOBBY.SPOTS.mentor }, { kind: 'gacha', ...LOBBY.SPOTS.gacha }, { kind: 'seedbox', ...LOBBY.SPOTS.seedbox }, ...LOBBY.SPOTS.plots.map((q, i) => ({ kind: 'plot', i, ...q }))] : [], LAWN ? [{ kind: 'petcare', x: LAWN.NPC.x, z: LAWN.NPC.z, y: LAWN.NPC.y + 0.45, reach: 0.4 }] : []);
+  const HINT_TEXT = { bench: '坐下', juke: '聽歌', door: LOBBY ? '進大廳' : '敲門', exit: '到前院', well: '許個願', greek: '說話', mentor: '轉職', gacha: '扭蛋', seedbox: '領種子', petcare: '寵物照顧員', pat: '摸摸' }; let NEAR = null, onInteract = null;
   // 公共花園：12 格的狀態（伺服器送來的，跟總部同一塊）；紙條上的字照那一格現在能做什麼
   let PLOTS = [];
   const plotHint = (i) => { const q = PLOTS[i]; return !q ? '種東西' : q.stage === 4 ? '收成' : q.stage === 5 ? '清掉' : q.wet <= 0 ? '澆水' : '看看'; };
   // 紙條上的手繪小圖示（跟總部同一套，另外補了坐下和門）
-  const HINT_ICON = { bench: 'act-sit', juke: 'btn-song', door: 'act-home', exit: 'act-door', well: 'wish-coin', greek: 'act-greek', mentor: 'act-mentor', gacha: 'act-gacha', seedbox: 'act-seedbox' },
+  const HINT_ICON = { bench: 'act-sit', juke: 'btn-song', door: 'act-home', exit: 'act-door', well: 'wish-coin', greek: 'act-greek', mentor: 'act-mentor', gacha: 'act-gacha', seedbox: 'act-seedbox', petcare: 'btn-paw', pat: 'btn-paw' },
     PLOT_ICON = { '種東西': 'act-plant', '收成': 'act-harvest', '清掉': 'item-twig', '澆水': 'act-water', '看看': 'act-plant' };
   const TOUCH = window.matchMedia && matchMedia('(pointer: coarse)').matches;
   // 椅子的紙條：走近先完整顯示 3 秒，之後縮成一個小圖示（還是點得到），不擋畫面；走開再回來會重新顯示
+  const PAT = { kind: 'pat', x: 0, z: 0, y: 1.5, pet: null };
   let nearIt = null, nearAt = 0; const SEAT_FULL_MS = 3000;
   const showHint = (it) => { if (it !== nearIt) { nearIt = it; nearAt = performance.now(); }
     const mini = it.kind === 'bench' && performance.now() - nearAt > SEAT_FULL_MS && !!(window.HQ_ICONS && window.HQ_ICONS.url(HINT_ICON.bench));
@@ -229,14 +261,14 @@ const NW = (() => {
     HINT.classList.toggle('art', !!art); HINT.textContent = ''; if (!art) { HINT.textContent = lb; return; }
     const i = document.createElement('img'), sp = document.createElement('span'); i.src = art.url; i.width = art.w; i.height = art.h; i.alt = ''; sp.textContent = lb; HINT.append(i, sp); };
   // NPC 和地點的名牌：手繪紙條，飄在頭上
-  const NPCS = LOBBY ? [{ name: '職業導師', icon: 'act-mentor', x: LOBBY.SPOTS.mentorSeat.x, z: LOBBY.SPOTS.mentorSeat.z, y: 3.0, lob: true }, { name: '希臘少女', icon: 'act-greek', x: GREEK_AT.x, z: GREEK_AT.z, y: 2.62, lob: false }] : [];
+  const NPCS = LOBBY ? [{ name: '職業導師', icon: 'act-mentor', x: LOBBY.SPOTS.mentorSeat.x, z: LOBBY.SPOTS.mentorSeat.z, y: 3.0, lob: true }, { name: '希臘少女', icon: 'act-greek', x: GREEK_AT.x, z: GREEK_AT.z, y: 2.62, lob: false }].concat(LAWN ? [{ name: '寵物照顧員', icon: 'btn-paw', x: LAWN.NPC.x, z: LAWN.NPC.z, y: LAWN.NPC.y, lob: false }] : []) : [];
   const NPC_NEAR = 6;
   const placeNpcs = () => NPCS.forEach(n => { if (!n.el) { if (!window.NW_HINT) return; const a = window.NW_HINT.tag(n.icon, n.name); n.el = document.createElement('img'); n.el.className = 'nw-npc'; n.el.src = a.url; n.el.width = Math.round(a.w * 0.6); n.el.height = Math.round(a.h * 0.6); n.el.alt = n.name; n.el.style.opacity = '0'; LAB.appendChild(n.el); }   // 名牌縮成六成大
     PV.set(n.x, n.y, n.z).project(camera); const on = !!S.lob === n.lob && PV.z < 1 && Math.abs(PV.x) < 1.1 && Math.abs(PV.y) < 1.1 && !(NEAR && Math.hypot(NEAR.x - n.x, NEAR.z - n.z) < 1.2);   // 動作紙條冒出來的時候，名牌先讓位
     // 走近（大約五步內）才淡入，走遠淡出，畫面才不會一堆名牌
     const px = S.ctrl === 'me' && ME ? ME.x : S.x, pz = S.ctrl === 'me' && ME ? ME.z : S.z, close = Math.hypot(px - n.x, pz - n.z) < NPC_NEAR;
     n.el.style.display = on ? '' : 'none'; n.el.style.opacity = on && close ? '1' : '0'; if (on) n.el.style.transform = 'translate(' + ((PV.x * 0.5 + 0.5) * W).toFixed(1) + 'px,' + ((-PV.y * 0.5 + 0.5) * H).toFixed(1) + 'px) translate(-50%,-100%)'; });
-  const hintOf = (it) => (it.kind === 'plot' ? plotHint(it.i) : HINT_TEXT[it.kind]);
+  const hintOf = (it) => (it.kind === 'plot' ? plotHint(it.i) : it.kind === 'pat' ? '摸摸' + it.pet.name : it.kind === 'petcare' ? (HASPET ? '寵物照顧員' : '領養寵物') : HINT_TEXT[it.kind]);
 
   // 點地面走路的目標小圈圈
   const GOAL = new THREE.Mesh(new THREE.RingGeometry(0.42, 0.62, 32), new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.95, depthWrite: false }));
@@ -317,6 +349,8 @@ const NW = (() => {
   const V3_UP = new V3(0, 1, 0);
   const tickGreek = (dt) => { if (!GREEK || S.lob) return; STD.tick(GREEK, dt, 0); const B = GREEK.B, f = GREEK.H.rotation.y;
     aim(B.upper_armR, B.lower_armR, 0.12, 0.18, 1, f); aim(B.lower_armR, B.handR, 0.75, 0.62, 0.22, f); };
+  // 寵物草坪門口的照顧員：圍著圍裙色的上衣、綁包頭，站在踏墊旁邊
+  const KEEPER = LAWN && STD ? (() => { const c = STD.make({ hair: 'buns', top: 'hoodie', face: 'grin', glasses: false, hairCol: '#6b4a32', topCol: '#8fbf8a' }); c.H.position.set(LAWN.NPC.x, 0, LAWN.NPC.z); c.H.rotation.y = LAWN.NPC.f; ROUNDS.push({ x: LAWN.NPC.x, z: LAWN.NPC.z, r: 0.45 }); return c; })() : null;
   const YARD = LOBBY ? scene.children.filter(o => o.visible && !o.isLight && o !== sun.target && o !== R && o !== GOAL && o !== LOBBY.G && !(ME && o === ME.c.H) && !RIDER_FX.includes(o)) : [], SKY = scene.background;
   // 擋住人的高東西（房子、樹）變半透明：鏡頭可以轉了以後，人會走到它們後面
   // 只挑不會動的高東西（一開始就在場景裡、比人高、佔地不大）；太大的一整群（例如整片野外）往下一層找
@@ -369,7 +403,9 @@ const NW = (() => {
         ME.sy = ACT.pose === 'sit' ? sitY(ME.x, ME.z) : 0; ME.c.H.position.set(ME.x, ME.sy + FY(ME.x, ME.z), ME.z); ME.c.H.rotation.y = ME.face;
         STD.tick(ME.c, dt, meMoving ? Math.min(1, jl) : 0, ACT.run ? 2.1 : 1.6, ACT.pose || (ACT.run ? 'run' : null));
         // 最近的可以互動的東西
-        let best = null, bd = 2.4; for (const it of INTER) { const d = Math.hypot(it.x - ME.x, it.z - ME.z) - (it.reach || 0); if (d < bd) { bd = d; best = it; } } NEAR = best; } else { NEAR = null; ME.sy = 0; } }
+        let best = null, bd = 2.4; for (const it of INTER) { const d = Math.hypot(it.x - ME.x, it.z - ME.z) - (it.reach || 0); if (d < bd) { bd = d; best = it; } }
+        if (LAWN && !S.lob) LAWNP.forEach(o => { const d = Math.hypot(o.x - ME.x, o.z - ME.z) + 0.6; if (d < bd && d < 2.1) { bd = d; PAT.x = o.x; PAT.z = o.z; PAT.pet = o; best = PAT; } });
+        NEAR = best; } else { NEAR = null; ME.sy = 0; } }
     if (moving) { const vx = wx, vz = wz, sp = 6.5;
       const h = collide(LIMX(S.x + vx * sp * dt, S.z), LIMZ(S.z + vz * sp * dt, S.z), 1.9); S.x = h.x; S.z = h.z;
       let df = Math.atan2(vx, vz) - S.face; df = Math.atan2(Math.sin(df), Math.cos(df)); S.face += df * Math.min(1, dt * 7);
@@ -433,7 +469,7 @@ const NW = (() => {
       o.c.H.position.set(o.x, o.y, o.z); o.c.H.rotation.y = o.f; STD.tick(o.c, dt, o.mv || far > 0.08 ? 1 : 0, o.mv === 2 ? 2.1 : 1.6, ps); tagOf(o); });
     if (STD) { if (ME) tickSpirit(ME.c, dt); OTH.forEach(o => tickSpirit(o.c, dt)); }
     if (MENTOR && S.lob) STD.tick(MENTOR, dt, 0, 1, 'sit');
-    tickPet(dt); tickGreek(dt);
+    tickPet(dt); tickLawn(dt); tickGreek(dt); if (KEEPER && !S.lob) STD.tick(KEEPER, dt, 0);
     if (STD && TW.s1) { const a2 = t * PI2 * 0.5; TW.s1.H.position.set(-7.4 + Math.sin(a2) * 2.2, 0, 6.2 + Math.cos(a2) * 1.8); TW.s1.H.rotation.y = a2 + Math.PI / 2;
       STD.tick(TW.s1, dt, 1, 1.1); STD.tick(TW.s2, dt, 0); STD.tick(TW.s3, dt, 0); }
     TW.pet.pose(t * PI2 * 4); TW.pet.position.y = 0.12 * Math.abs(Math.sin(t * PI2 * 4));
@@ -508,8 +544,11 @@ const NW = (() => {
     // 大廳第二、三期：花園的狀態、寵物、可以互動的點（測試腳本用 spots 找位置）
     tier: (n) => { MYTIER = n | 0; if (MYTAG && ME) setBadge(MYTAG, ME.c.look.cls, MYTIER); }, myTier: () => MYTIER,
     petJoy: (text) => { if (!PET) return; PET.joy = 1.4; if (text) { setBubble(PET.tag.b, text); PET.tag.until = S.time + 3; } },
-    garden: (st) => { PLOTS = Array.isArray(st) ? st : []; if (LOBBY) LOBBY.setGarden(PLOTS); }, plots: () => PLOTS, setPet, pet: () => (PET ? { name: PET.pet.name, kind: PET.pet.kind, x: PET.x, z: PET.z } : null),
-    spots: () => (LOBBY ? { well: WELL, greek: GREEK_AT, ...LOBBY.SPOTS } : null), hint: () => (HINT.hidden ? '' : HINT.textContent), hintMini: () => !HINT.hidden && HINT.classList.contains('mini'), CLS, CLS_NAME,
+    garden: (st) => { PLOTS = Array.isArray(st) ? st : []; if (LOBBY) LOBBY.setGarden(PLOTS); }, plots: () => PLOTS, setPet, hasPet: (v) => { HASPET = !!v; },
+    // 寵物草坪：伺服器送來草坪上有哪些寵物；lawnJoy 讓其中一隻開心地跳幾下
+    previewPet, lawn: setLawn, lawnPets: () => [...LAWNP.values()].map(o => ({ id: o.id, name: o.name, owner: o.owner, st: o.st, x: o.x, z: o.z, lie: o.lie })), lawnInfo: () => (LAWN ? { npc: LAWN.NPC, gate: LAWN.GATE, area: LAWN.IN, beds: LAWN.BEDS.length } : null),
+    lawnJoy: (id, text) => { const o = LAWNP.get(id); if (!o) return; o.joy = 1.4; if (text) { setBubble(o.tag.b, text); o.tag.until = S.time + 3; } }, pet: () => (PET ? { name: PET.pet.name, kind: PET.pet.kind, x: PET.x, z: PET.z } : null),
+    spots: () => (LOBBY ? { well: WELL, greek: GREEK_AT, ...(LAWN ? { petcare: LAWN.NPC } : {}), ...LOBBY.SPOTS } : null), hint: () => (HINT.hidden ? '' : HINT.textContent), hintMini: () => !HINT.hidden && HINT.classList.contains('mini'), CLS, CLS_NAME,
   };
 })();
 window.HQ_NEWWORLD = NW;

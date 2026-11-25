@@ -12,8 +12,9 @@ window.NW_PANELS = function (NW, token, opt) {
     return fetch('/api/newworld/' + name, { method: 'POST', headers: { Authorization: 'Bearer ' + token, 'content-type': 'application/json' }, body: JSON.stringify(body) })
       .then(function (r) { return r.ok ? r.json() : { ok: false, error: '連不上伺服器，等等再試' }; }, function () { return { ok: false, error: '連不上伺服器，等等再試' }; });
   }
-  function close() { P.hidden = true; P.innerHTML = ''; cur = null; pinned = false; }
+  function close() { if (cur === 'petcare') NW.previewPet(null); P.hidden = true; P.innerHTML = ''; cur = null; pinned = false; }
   function frame(kind, title, sub) {
+    if (cur === 'petcare' && kind !== 'petcare') NW.previewPet(null);
     cur = kind; P.hidden = false; P.innerHTML = ''; P.dataset.kind = kind; P.classList.remove('post');
     var h = el('h2', '', title), x = el('button', 'note', '關掉'); x.type = 'button'; x.onclick = close; h.appendChild(x); P.appendChild(h);
     if (sub) P.appendChild(el('p', 'sub', sub));
@@ -353,22 +354,75 @@ window.NW_PANELS = function (NW, token, opt) {
   }
 
   // ---------- 寵物：摸摸和餵點心（感情值跟總部共用）----------
-  function pet() { var body = frame('pet', '寵物', '摸摸和餵點心可以加感情，每天有次數上限。'); wait(body); post('pet', { act: 'state' }).then(function (r) { if (cur === 'pet') drawPet(body, r); }); }
+  // 寵物的樣子或模式有變：身邊跟著的那一隻、右上的「寵物」鈕跟著更新（只有「跟著走」的時候牠才在身邊）
+  var petKey = null, ME_ID = String((function () { try { return localStorage.getItem('hq-user') || ''; } catch (e) { return ''; } })()).toLowerCase();
+  function petSync(r) { if (!r || r.pet === undefined) return; var k = r.pet ? r.mode + JSON.stringify(r.pet.look) : ''; NW.hasPet(!!r.pet); var b = document.getElementById('b-pet'); if (b) b.hidden = !r.pet;
+    if (k === petKey) return; petKey = k; NW.setPet(r.pet && r.mode === 'follow' ? r.pet.look : null); }
+  function pet() { var body = frame('pet', '寵物'); wait(body); post('pet', { act: 'state' }).then(function (r) { if (cur === 'pet') drawPet(body, r); }); }
   function drawPet(body, r) {
     if (r.pet === undefined) return fail(body, r);
-    body.innerHTML = '';
-    if (!r.pet) return body.appendChild(el('p', 'dim', '還沒有寵物。新世界的寵物領養還沒開放。'));
+    body.innerHTML = ''; petSync(r);
+    if (!r.pet) return body.appendChild(el('p', 'dim', '還沒有寵物。到前院的寵物草坪找照顧員，可以領養一隻。'));
     var p = r.pet, go = function (req) { return function () { post('pet', req).then(function (x) { if (cur !== 'pet') return;
       if (!x.ok) return post('pet', { act: 'state' }).then(function (s) { s.error = x.error; if (cur === 'pet') drawPet(body, s); });
-      toast(x.text); if (x.happy) NW.petJoy(req.act === 'pat' ? '好舒服' : '好吃'); drawPet(body, x); }); }; };
-    var row = el('div', 'line'); var t = el('span'); t.appendChild(el('b', '', p.name + '　' + p.levelName)); t.appendChild(el('small', '', '感情 ' + p.bond + (p.next ? ' / ' + p.next : '（滿了）'))); row.appendChild(t); row.id = 'pet-bond'; row.dataset.bond = p.bond; body.appendChild(row);
+      toast(x.text); if (x.happy) { if (x.mode === 'follow') NW.petJoy(req.act === 'pat' ? '好舒服' : '好吃'); else NW.lawnJoy(ME_ID, req.act === 'pat' ? '好舒服' : '好吃'); } drawPet(body, x); }); }; };
+    var row = el('div', 'line'); var t = el('span'); t.appendChild(el('b', '', p.name + '　' + p.levelName)); t.appendChild(el('small', '', '感情 ' + p.bond + (p.next ? ' / ' + p.next : '（滿了）'))); row.appendChild(t); row.id = 'pet-bond'; row.dataset.bond = p.bond;
+    if (window.NW_TIP) row.appendChild(NW_TIP.info('摸摸和餵點心可以加感情，每天有次數上限。想改名字或外觀，到寵物草坪找照顧員。')); body.appendChild(row);
     var bar = el('div', 'bar'), fill = el('b'); fill.style.width = (p.next ? Math.min(100, Math.round(p.bond / p.next * 100)) : 100) + '%'; bar.appendChild(fill); body.appendChild(bar);
     if (r.error) body.appendChild(el('p', 'err', r.error));
+    var ms = el('div', 'wtabs'); ms.id = 'pet-modes'; ms.appendChild(el('span', 'wlab', '模式'));
+    Object.keys(r.modes).forEach(function (m) { var b = el('button', 'wtab' + (r.mode === m ? ' on' : ''), r.modes[m]); b.type = 'button'; b.dataset.mode = m; b.onclick = function () { if (r.mode !== m) go({ act: 'mode', mode: m })(); }; ms.appendChild(b); });
+    if (window.NW_TIP) ms.appendChild(NW_TIP.info('跟著走：牠跟在你腳邊。在草坪玩：牠留在寵物草坪自己逛，會去找別的寵物。回床睡：牠在草坪上自己的小床睡覺。你下線的時候，牠一律回小床睡。'));
+    body.appendChild(ms);
     var acts = el('div', 'acts'); var pat = btn('摸摸' + (p.patLeft > 0 ? '（今天還能加 ' + p.patLeft + ' 次感情）' : '（今天的感情加滿了）'), go({ act: 'pat' }), 'main'); pat.id = 'pet-pat'; acts.appendChild(pat); body.appendChild(acts);
     body.appendChild(el('p', '', p.feedLeft > 0 ? '餵點心（今天還能餵 ' + p.feedLeft + ' 次）：' : '今天吃飽了，明天再餵。'));
     if (p.feedLeft > 0) { var fs = el('div', 'acts');
       r.foods.forEach(function (f) { var b = btn(f.name + ' ×' + f.n + '（感情 +' + f.gain + '）', go({ act: 'feed', item: f.k })), ic = icon(f.icon, 24); if (ic) b.insertBefore(ic, b.firstChild); b.dataset.food = f.k; fs.appendChild(b); });
       body.appendChild(fs); if (!r.foods.length) body.appendChild(el('p', 'dim', '背包裡沒有牠愛吃的。花園種的水果牠最喜歡。')); }
+  }
+  // 摸草坪上的寵物：自己的那一隻照常加感情；別人的只是摸摸，牠會開心地跳幾下
+  var PAT_SAY = ['呼嚕', '好舒服', '再摸一下', '嘿嘿'];
+  function patLawn(o) { if (!o) return; var say = PAT_SAY[Math.floor(Math.random() * PAT_SAY.length)];
+    if (o.id !== ME_ID) { NW.lawnJoy(o.id, say); return toast('摸了摸' + o.name + '（' + o.owner + '的）'); }
+    post('pet', { act: 'pat' }).then(function (x) { if (x.ok) { NW.lawnJoy(o.id, say); toast(x.text); if (cur === 'pet') drawPet(P.querySelector('.body'), x); } else toast(x.error); }); }
+
+  // ---------- 寵物照顧員：領養、重捏 ----------
+  // 選項跟總部捏寵物的一樣（帽子除外）；面板裡是手繪的樣子，草坪上照顧員腳邊同時站一隻 3D 的給你看
+  var PT = window.HQ_PETS, careDraft = null;
+  function petcare() { var body = frame('petcare', '寵物照顧員'); wait(body); careDraft = null; post('pet', { act: 'form' }).then(function (r) { if (cur === 'petcare') drawCare(body, r); }); }
+  function drawCare(body, r) {
+    if (r.pet === undefined || !PT) return fail(body, r);
+    body.innerHTML = ''; petSync(r); NW.previewPet(null);
+    if (r.error) body.appendChild(el('p', 'err', r.error));
+    if (!r.pet) { body.appendChild(el('p', 'care-say', '「想找個伴嗎？挑一隻帶回家吧，牠會一直跟著你。」')); careDraft = Object.assign({}, PT.DEFAULTS.cat); return careForm(body, 'adopt'); }
+    body.appendChild(el('p', 'care-say', '「' + r.pet.name + '今天過得不錯。要幫牠換個樣子，還是改名字？」'));
+    var acts = el('div', 'acts'), b = btn('重捏外觀、改名字', function () { careDraft = Object.assign({}, PT.DEFAULTS[r.pet.look.kind], r.pet.look); body.innerHTML = ''; careForm(body, 'restyle'); }, 'main'); b.id = 'care-restyle'; acts.appendChild(b); body.appendChild(acts);
+    body.appendChild(el('p', 'dim', '一個人只能養一隻。重捏不會影響感情。'));
+  }
+  function careForm(body, act) {
+    var d = careDraft, top = el('div', 'care-top'), cv = el('canvas', 'care-cv'); cv.width = 224; cv.height = 196; top.appendChild(cv);
+    var paint = function () { var x = cv.getContext('2d'); x.clearRect(0, 0, 224, 196); x.save(); x.translate(-20, -14); x.scale(3.5, 3.5); PT.drawPet(x, d, 'sit'); x.restore(); NW.previewPet(PT.sanitize(d)); };
+    var side = el('div', 'care-side'), kinds = el('div', 'wtabs'); kinds.id = 'care-kinds';
+    Object.keys(PT.KINDS).forEach(function (k) { var b = el('button', 'wtab' + (d.kind === k ? ' on' : ''), PT.KINDS[k]); b.type = 'button'; b.dataset.kind = k; b.onclick = function () { if (d.kind === k) return; careDraft = Object.assign({}, PT.DEFAULTS[k], { name: d.name }); body.innerHTML = ''; careForm(body, act); }; kinds.appendChild(b); });
+    side.appendChild(kinds);
+    var nm = el('input'); nm.type = 'text'; nm.maxLength = PT.NAME_MAX; nm.placeholder = '幫牠取個名字（最多 ' + PT.NAME_MAX + ' 個字）'; nm.value = d.name || ''; nm.id = 'care-name'; nm.oninput = function () { d.name = nm.value; }; side.appendChild(nm);
+    top.appendChild(side); body.appendChild(top);
+    var O = PT.OPTS[d.kind], dog = d.kind === 'dog', horse = d.kind === 'horse';
+    var LAB = dog ? { ears: '耳朵', pattern: '毛型', white: '白毛', tail: '尾巴', face: '表情' } : horse ? { ears: '耳朵', pattern: '鬃毛', white: '白毛', tail: '尾巴', face: '表情' } : { ears: '耳朵', pattern: '花紋', white: '白毛', tail: '尾巴', face: '表情', eyeshape: '眼型' };
+    Object.keys(LAB).forEach(function (f) { var opts = O[f]; if (!opts || Object.keys(opts).length < 2) return; var row = el('div', 'wtabs care-row'); row.dataset.f = f; row.appendChild(el('span', 'wlab', LAB[f]));
+      Object.keys(opts).forEach(function (k) { var b = el('button', 'wtab' + (d[f] === k ? ' on' : ''), opts[k]); b.type = 'button'; b.dataset.v = k; b.onclick = function () { d[f] = k; row.querySelectorAll('.wtab').forEach(function (e) { e.classList.toggle('on', e.dataset.v === k); }); paint(); }; row.appendChild(b); });
+      body.appendChild(row); });
+    var COL = [['fur', '毛色', PT.FURS], ['mark', dog ? '頭頂的毛' : horse ? '鬃毛和尾巴' : '花紋的顏色', PT.MARKS.concat(dog || horse ? ['#f2ddc0', '#fbf7ee', '#c68d62'] : [])]].concat(dog ? [['earc', '耳朵的毛', ['#c68d62', '#a97850', '#f1dcb2', '#6e4a30', '#3d3a3e']]] : [], [['eyes', '眼睛', PT.EYES.filter(function (c) { return c !== 'odd'; }).concat(['#2b2a33'])], ['nose', horse ? '嘴邊' : '鼻子', PT.NOSES.concat(horse ? ['#ecd0ad'] : [])]]);
+    COL.forEach(function (c) { var f = c[0], row = el('div', 'care-col'); row.dataset.f = f; row.appendChild(el('span', 'wlab', c[1]));
+      var pick = el('input'); pick.type = 'color'; pick.value = /^#[0-9a-f]{6}$/.test(d[f]) ? d[f] : c[2][0]; pick.setAttribute('aria-label', c[1] + '：自己調');
+      var mark = function () { row.querySelectorAll('.sw').forEach(function (e) { e.classList.toggle('on', e.dataset.v === d[f]); }); };
+      c[2].forEach(function (v) { var b = el('button', 'sw'); b.type = 'button'; b.dataset.v = v; b.style.background = v; b.setAttribute('aria-label', c[1] + ' ' + v); b.onclick = function () { d[f] = v; pick.value = v; mark(); paint(); }; row.appendChild(b); });
+      pick.oninput = function () { d[f] = pick.value.toLowerCase(); mark(); paint(); }; row.appendChild(pick); mark(); body.appendChild(row); });
+    var acts = el('div', 'acts'), ok = btn(act === 'adopt' ? '就是牠了，帶回家' : '好了，就這樣', function () { ok.disabled = true; d.name = nm.value;
+      post('pet', { act: act, pet: d }).then(function (x) { if (cur !== 'petcare') return; if (!x.ok) { ok.disabled = false; var e = body.querySelector('.err') || body.insertBefore(el('p', 'err'), acts); e.textContent = x.error; return; }
+        toast(x.text); careDraft = null; NW.previewPet(null); petKey = null; drawCare(body, x); if (act === 'adopt' && x.mode === 'follow') NW.petJoy('請多指教'); }); }, 'main'); ok.id = 'care-ok'; acts.appendChild(ok);
+    if (act === 'restyle') { var no = btn('先不改', function () { careDraft = null; petcare(); }); acts.appendChild(no); }
+    body.appendChild(acts); paint();
   }
 
   // ---------- 點唱機：聽歌、點歌（排進總部同一份歌單）----------
@@ -407,13 +461,14 @@ window.NW_PANELS = function (NW, token, opt) {
     garden: function () { if (cur !== 'plot') return; var i = plotI, body = plotBody; post('garden', { act: 'info', i: i }).then(function (r) { if (cur === 'plot' && plotI === i && r.info) drawPlot(body, i, r); }); },
     cur: function () { return cur; },
     refresh: function () { if (cur === 'bag') bag(); },
+    patLawn: patLawn,
     open: function (kind, it, pin) {
       if (pin && cur === (kind === 'gear' ? 'bag' : kind) && (kind !== 'gear' || eqView) && (kind !== 'bag' || !eqView)) return close();   // 右上的按鈕再按一次就是收起來
       if (kind === 'gear' || (pin && kind === 'bag')) { eqView = kind === 'gear'; eqSlot = null; bagSel = null; bag(); pinned = true; return; }
       if (pin && kind === 'pet') { pet(); pinned = true; return; }
       if (pin && kind === 'juke') { juke(); pinned = true; return; }
       pinned = false;
-      if (kind === 'mentor') mentor(); else if (kind === 'gacha') gacha(); else if (kind === 'plot') plot(it.i); else if (kind === 'seedbox') seedbox(); else if (kind === 'well') { wishQ.page = 1; well(); } else if (kind === 'juke') juke();
+      if (kind === 'mentor') mentor(); else if (kind === 'gacha') gacha(); else if (kind === 'plot') plot(it.i); else if (kind === 'seedbox') seedbox(); else if (kind === 'petcare') petcare(); else if (kind === 'well') { wishQ.page = 1; well(); } else if (kind === 'juke') juke();
       else if (kind === 'bag') { if (cur === 'bag') close(); else { eqView = false; bag(); } } else if (kind === 'pet') { if (cur === 'pet') close(); else pet(); } else if (cur) close();
     } };
 };

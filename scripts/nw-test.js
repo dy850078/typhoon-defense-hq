@@ -177,6 +177,65 @@ async function main() {
     await pa.context().close();
   };
 
+  // ---- 寵物草坪：照顧員領養和重捏、三種模式、離線的寵物在床上睡、摸別人的寵物 ----
+  const petlawn = async (phone) => {
+    const tag = phone ? 'petlawn-phone' : 'petlawn'; console.log(tag);
+    const acc = await account({ name: '小草', hair: 'bob' }), off = await account({ name: '阿睡', hair: 'short' }, false, { pet: { kind: 'cat', name: '麻糬', fur: '#f0a456', pattern: 'mackerel', white: 'socks' } });
+    await post('/api/admin/newworld', { username: off.name, on: true }, { 'x-admin-token': ad.token });
+    const api = (body, who) => post('/api/newworld/pet', body, { Authorization: 'Bearer ' + (who || acc).token }), nap = (ms) => new Promise(r => setTimeout(r, ms));
+    const pg = await open(acc, phone), E = (fn, arg) => pg.evaluate(fn, arg), T = async (sel) => { await tap(pg, sel); await pg.waitForTimeout(350); };
+    const place = async (x, z) => { await E(([x, z]) => HQ_NEWWORLD.debugPlace(x, z), [x, z]); await pg.waitForTimeout(900); };
+    const near = (k) => pg.waitForFunction((v) => HQ_NEWWORLD.near() === v, k, { timeout: 30000 }).catch(() => {});
+    const toast = () => E(() => document.getElementById('toast').textContent);
+    const mine = () => E((id) => HQ_NEWWORLD.lawnPets().find(p => p.id === id) || null, acc.name.toLowerCase());
+    const L = await E(() => HQ_NEWWORLD.lawnInfo());
+    ok(!!L && L.beds === 24 && L.npc.x > -20 && L.npc.x < -17, '前院西邊有寵物草坪：24 張小床，照顧員站在門口');
+    ok((await E(() => HQ_NEWWORLD.pet())) === null && await E(() => document.getElementById('b-pet').hidden), '新帳號沒有寵物，右上沒有「寵物」鈕');
+    await pg.waitForFunction(() => HQ_NEWWORLD.lawnPets().length === 1, null, { timeout: 30000 }).catch(() => {});
+    let lp = await E(() => HQ_NEWWORLD.lawnPets()); ok(lp.length === 1 && lp[0].name === '麻糬' && lp[0].owner === '阿睡' && lp[0].st === 'sleep', '不在線上的人的寵物在草坪的小床睡覺（' + JSON.stringify(lp.map(p => p.name + ':' + p.st)) + '）');
+    // 照顧員：領養
+    await place(L.npc.x + 1.1, L.npc.z + 0.4); await near('petcare');
+    ok(await E(() => HQ_NEWWORLD.hint()) === '領養寵物', '走到照顧員旁邊冒出「領養寵物」');
+    await pg.click('.nw-hint'); await pg.waitForSelector('#care-ok', { timeout: 30000 }).catch(() => {}); await pg.waitForTimeout(400);
+    ok(await E(() => document.querySelectorAll('#care-kinds .wtab').length === 3 && !!document.querySelector('#panel .care-cv') && document.querySelectorAll('#panel .care-row').length >= 4 && document.querySelectorAll('#panel .care-col').length >= 4 && !/帽/.test(document.getElementById('panel').textContent)), '領養畫面：貓狗小馬、名字、樣子和顏色的選項，還有手繪預覽');
+    await T('#care-kinds .wtab[data-kind=dog]'); ok(await E(() => document.querySelector('#care-kinds .wtab.on').dataset.kind === 'dog' && !!document.querySelector('#panel .care-col[data-f=earc]')), '換成狗狗，選項跟著換（多了耳朵的毛色）');
+    await pg.fill('#care-name', '可樂'); await T('#panel .care-col[data-f=fur] .sw:nth-of-type(3)'); await T('#panel .care-row[data-f=face] .wtab[data-v=tongue]'); await pg.waitForTimeout(500); await shot(pg, tag + '-1-adopt');
+    await T('#care-ok'); await pg.waitForFunction(() => !!HQ_NEWWORLD.pet(), null, { timeout: 30000 }).catch(() => {}); await pg.waitForTimeout(500);
+    const p1 = await E(() => HQ_NEWWORLD.pet()); ok(p1 && p1.name === '可樂' && p1.kind === 'dog' && /可樂跟你回家了/.test(await toast()), '領養完：可樂跟在身邊');
+    ok(await E(() => !document.getElementById('b-pet').hidden && !!document.getElementById('care-restyle')), '右上出現「寵物」鈕，照顧員那裡變成可以重捏');
+    ok((await api({ act: 'adopt', pet: { kind: 'cat' } })).error === '你已經有一隻了，一個人只能養一隻', '一個人只能養一隻');
+    await E(() => window.NW_UI.close()); await pg.waitForTimeout(600); ok(await E(() => HQ_NEWWORLD.hint()) === '寵物照顧員', '有寵物之後紙條變成「寵物照顧員」');
+    // 模式
+    if (phone) await T('#b-kit'); await T('#b-pet'); await pg.waitForSelector('#pet-modes', { timeout: 30000 }).catch(() => {});
+    ok(await E(() => document.querySelectorAll('#pet-modes .wtab').length === 3 && document.querySelector('#pet-modes .wtab.on').dataset.mode === 'follow'), '寵物面板有三種模式，現在是「跟著走」');
+    await T('#pet-modes .wtab[data-mode=play]'); await pg.waitForFunction(() => !HQ_NEWWORLD.pet(), null, { timeout: 30000 }).catch(() => {}); await pg.waitForTimeout(600);
+    let m = await mine(); ok((await E(() => HQ_NEWWORLD.pet())) === null && m && m.st === 'play', '切到「在草坪玩」：牠離開身邊，出現在草坪上');
+    const a0 = m; await pg.waitForTimeout(6000); m = await mine(); const A = L.area;
+    ok(Math.hypot(m.x - a0.x, m.z - a0.z) > 0.5 && m.x > A.x0 - 1.5 && m.x < A.x1 + 1.5 && m.z > A.z0 - 0.5 && m.z < A.z1 + 0.5, '牠在草坪裡自己逛（' + m.x.toFixed(1) + ', ' + m.z.toFixed(1) + '）');
+    await E(() => window.NW_UI.close()); await place(m.x + 1.2, m.z + 3.5); await pg.waitForTimeout(800); await shot(pg, tag + '-2-play');
+    if (phone) await T('#b-kit'); await T('#b-pet'); await pg.waitForSelector('#pet-modes', { timeout: 30000 }).catch(() => {});
+    await T('#pet-modes .wtab[data-mode=sleep]'); await pg.waitForFunction((id) => { const p = HQ_NEWWORLD.lawnPets().find(q => q.id === id); return p && p.st === 'sleep' && p.lie > 0.8; }, acc.name.toLowerCase(), { timeout: 150000 }).catch(() => {});
+    m = await mine(); ok(m && m.st === 'sleep' && m.lie > 0.8, '切到「回床睡」：牠走回自己的小床趴下' + JSON.stringify(m));
+    const st = await api({ act: 'state' }); const b0 = st.pet.bond;
+    await E(() => window.NW_UI.close()); await place(m.x + 0.3, m.z + 1.1); await near('pat'); ok(await E(() => HQ_NEWWORLD.hint()) === '摸摸可樂', '走到牠床邊冒出「摸摸可樂」');
+    await pg.click('.nw-hint'); await pg.waitForFunction(() => /摸了摸可樂/.test(document.getElementById('toast').textContent), null, { timeout: 30000 }).catch(() => {});
+    ok((await api({ act: 'state' })).pet.bond === b0 + 1, '摸自己的寵物：感情 +1'); await pg.waitForTimeout(500); await shot(pg, tag + '-3-sleep');
+    // 摸別人的寵物：不加感情
+    lp = await E(() => HQ_NEWWORLD.lawnPets()); const other = lp.find(p => p.name === '麻糬'); await place(other.x + 0.3, other.z + 1.1); await near('pat');
+    ok(await E(() => HQ_NEWWORLD.hint()) === '摸摸麻糬', '別人的寵物也可以摸'); await pg.click('.nw-hint'); await pg.waitForTimeout(600);
+    ok(/摸了摸麻糬（阿睡的）/.test(await toast()) && (await api({ act: 'state' }, off)).pet.bond === 0, '摸別人的寵物只是摸摸，牠的感情不會變');
+    await nap(300); await api({ act: 'mode', mode: 'play' }, off); await pg.waitForTimeout(700); lp = await E(() => HQ_NEWWORLD.lawnPets());
+    ok(lp.find(p => p.name === '麻糬').st === 'sleep', '主人不在線上，就算模式是「在草坪玩」也是在床上睡');
+    // 重捏：換成貓，感情照舊
+    await place(L.npc.x + 1.1, L.npc.z + 0.4); await near('petcare'); await pg.click('.nw-hint'); await pg.waitForSelector('#care-restyle', { timeout: 30000 }).catch(() => {});
+    await T('#care-restyle'); await T('#care-kinds .wtab[data-kind=cat]'); await pg.fill('#care-name', '可可'); await T('#panel .care-row[data-f=ears] .wtab[data-v=fold]'); await pg.waitForTimeout(400); await shot(pg, tag + '-4-restyle');
+    await T('#care-ok'); await pg.waitForFunction(() => /換了新樣子/.test(document.getElementById('toast').textContent), null, { timeout: 30000 }).catch(() => {}); await pg.waitForTimeout(500);
+    const s2 = await api({ act: 'state' }); m = await mine();
+    ok(s2.pet.name === '可可' && s2.pet.kind === 'cat' && s2.pet.bond === b0 + 1 && s2.mode === 'sleep' && m && m.name === '可可', '重捏成貓、改名可可：感情和模式照舊，草坪上那一隻也跟著換');
+    await nap(300); await api({ act: 'mode', mode: 'follow' }); await nap(300); ok((await api({ act: 'mode', mode: 'fly' })).error === '沒有這個模式', '不存在的模式會被擋');
+    ok(!pg.errors.length, '沒有頁面錯誤' + (pg.errors.length ? '：' + [...new Set(pg.errors)].slice(0, 3).join(' / ') : '')); await pg.context().close();
+  };
+
   // ---- 扭蛋機：卡池橫幅、內容物格子、扭蛋動畫、保底、管理員開關和日期 ----
   const gachaT = async (phone) => {
     const tag = phone ? 'gacha-phone' : 'gacha'; console.log(tag);
@@ -662,7 +721,7 @@ async function main() {
     // 前院的許願池
     await place(S.well.x - 0.4, S.well.z + 2.7); await near('well');
     ok((await pa.textContent('.nw-hint')) === '許個願' && !!(await pa.$('.nw-hint.art img')), '前院的許願池冒出手繪的「許個願」紙條'); await shot(pa, 'home-2-well');
-    ok((await pa.locator('.nw-npc').count()) === 2, '只有人物（導師、希臘少女）有手繪名牌，東西沒有');
+    ok((await pa.locator('.nw-npc').count()) === 3, '只有人物（導師、希臘少女、寵物照顧員）有手繪名牌，東西沒有');
     await place(S.greek.x + 4, S.greek.z + 3); await pa.waitForTimeout(700);
     const vis = () => pa.evaluate(() => [...document.querySelectorAll('.nw-npc')].filter(e => e.style.display !== 'none' && e.style.opacity === '1').map(e => e.alt).sort().join(','));
     ok(/希臘少女/.test(await vis()), '走到五步內，名牌淡入（' + (await vis()) + '）'); await shot(pa, 'home-2a-tags-near');
@@ -1164,6 +1223,8 @@ async function main() {
   if (want === 'char-phone') await charT(true);
   if (want === 'all' || want === 'gacha') await gachaT(false);
   if (want === 'gacha-phone') await gachaT(true);
+  if (want === 'all' || want === 'petlawn') await petlawn(false);
+  if (want === 'petlawn-phone') await petlawn(true);
   if (want === 'all' || want === 'wishes') await wishesT(false);
   if (want === 'wishes-phone') await wishesT(true);
   if (want === 'all' || want === 'multi') await multi();

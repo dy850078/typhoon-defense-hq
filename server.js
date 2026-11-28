@@ -371,7 +371,7 @@ function newworldUser(req, res) {
   if (!canNewworld(u)) { res.status(403).json({ ok: false }); return null; }
   return u;
 }
-const lookOf = (u) => { const a = sanitizeSave(u.save); return { ok: true, base: { name: a.name, hair: a.hair, skin: a.skin, hairColor: a.hairColor, outfit: a.outfit, glasses: a.glasses !== '0', face: a.face || '' }, look3d: sanitizeLook3d(u.save.look3d), pet: nwSave(u).pet, equip: nwGearOf(u) }; };
+const lookOf = (u) => { const a = sanitizeSave(u.save); return { ok: true, base: { name: a.name, hair: a.hair, skin: a.skin, hairColor: a.hairColor, outfit: a.outfit, glasses: a.glasses !== '0', face: a.face || '' }, look3d: sanitizeLook3d(u.save.look3d), pet: nwSave(u).pet, petMode: nwPetMode(u), equip: nwGearOf(u) }; };
 app.get('/api/newworld/look', (req, res) => { const u = newworldUser(req, res); if (u) res.json(lookOf(u)); });
 app.post('/api/newworld/look', (req, res) => {
   const u = newworldUser(req, res); if (!u) return;
@@ -412,6 +412,7 @@ function nwRoute(name, acts) {
     const A = nwActor(u), r = fn(A, b, u, req, now) || {};
     if (r.error) return res.json({ ok: false, error: r.error });
     if (!acts.READ.includes(b.act)) A.done();
+    if (r.changed) { delete r.changed; nwLawnChanged(); }
     res.json(Object.assign({ ok: true }, r, acts.view ? acts.view(A, u, now) : {}));
   });
 }
@@ -602,22 +603,41 @@ function nwBond(p, kind, amt) {
   const level = PETS.bondLevel(pet.bond);
   return amt;
 }
-nwRoute('pet', { READ: ['state'],
-  view: ({ p }) => {
-    if (!p.pet) return { pet: null };
+// ---- 寵物草坪：領養、三種模式、小床 ----
+// 模式存在 save.nw.petMode：follow 跟著走／play 在草坪玩／sleep 去睡覺；床位 save.nw.petBed 是領養時排的，之後不變
+// 草坪上看得到的寵物：主人不在線上的（一律在床上睡）、主人在線上但模式是 play 或 sleep 的
+const NW_PET_MODES = { follow: '跟著走', play: '在草坪玩', sleep: '去睡覺' }, NW_BEDS = 24;
+const nwPetMode = (u) => { const m = u.save.nw && u.save.nw.petMode; return Object.prototype.hasOwnProperty.call(NW_PET_MODES, m) ? m : 'follow'; };
+const nwPetOf = (u) => { const n = u.save.nw; return n && n.pet ? PETS.sanitize(n.pet) : null; };
+const nwPetUsers = () => accounts.list().map(a => accounts.get(a.username)).filter(u => u && nwPetOf(u));
+const nwPetBed = (u) => { const b = u.save.nw && u.save.nw.petBed; return Number.isInteger(b) && b >= 0 ? b : -1; };
+function nwNewBed(u) { const used = new Set(nwPetUsers().filter(x => x !== u).map(nwPetBed)); let i = 0; while (used.has(i)) i++; return i; }
+const nwPetLook = (pet) => ({ kind: pet.kind, name: pet.name, ears: pet.ears, fur: pet.fur, pattern: pet.pattern, mark: pet.mark, white: pet.white, nose: pet.nose, earc: pet.earc, tail: pet.tail });
+function nwLawn() {
+  const on = new Set([...nwPlayers.values()].map(q => q.user && String(q.user).toLowerCase()));
+  nwPetUsers().forEach(u => { if (nwPetBed(u) < 0) accounts.update(u, { nw: Object.assign({}, u.save.nw, { petBed: nwNewBed(u) }) }); });   // 測試或補發給的寵物還沒有床位，補排一個
+  return nwPetUsers().map(u => { const online = on.has(u.username.toLowerCase()), mode = nwPetMode(u), pet = nwPetOf(u);
+    if (online && mode === 'follow') return null;
+    return { id: u.username.toLowerCase(), owner: sanitizeSave(u.save).name || u.username, st: online && mode === 'play' ? 'play' : 'sleep', bed: nwPetBed(u) % NW_BEDS, pet: nwPetLook(pet) }; }).filter(Boolean);
+}
+const nwLawnChanged = () => io.of('/newworld').emit('lawn', nwLawn());
+nwRoute('pet', { READ: ['state', 'form'],
+  view: ({ p }, u) => {
+    if (!p.pet) return { pet: null, mode: 'follow' };
     const log = nwPetLog(p.pet), lv = PETS.bondLevel(p.pet.bond), next = PETS.BOND_LEVELS[lv + 1];
     return { pet: { name: p.pet.name, kind: p.pet.kind, bond: p.pet.bond || 0, level: lv, levelName: PETS.BOND_LEVELS[lv].name, next: next ? next.at : null,
-        patLeft: PETS.BOND_CAPS.pat - log.pat, feedLeft: PETS.BOND_CAPS.feed - log.feed },
+        patLeft: PETS.BOND_CAPS.pat - log.pat, feedLeft: PETS.BOND_CAPS.feed - log.feed, look: nwPetLook(p.pet) }, mode: nwPetMode(u), modes: NW_PET_MODES,
       foods: Object.keys(PETS.FEED).filter(k => p.inv[k] > 0).map(k => ({ k, name: nwItemName(k), n: p.inv[k], gain: PETS.FEED[k], icon: 'item-' + k })) };
   },
   state: () => ({}),
-  pat: ({ p }) => {
-    if (!p.pet) return { error: '新世界的寵物領養還沒開放' };
+  form: () => ({}),
+  pat: ({ p }, b, u) => {
+    if (!p.pet) return { error: '你還沒有寵物，到前院的寵物草坪找照顧員領養' };
     const g = nwBond(p, 'pat', 1);
     return { happy: true, text: g ? `摸了摸${p.pet.name}，感情 +${g}` : `摸了摸${p.pet.name}（今天摸夠了，感情明天再加）` };
   },
   feed: ({ p }, b) => {
-    if (!p.pet) return { error: '新世界的寵物領養還沒開放' };
+    if (!p.pet) return { error: '你還沒有寵物，到前院的寵物草坪找照顧員領養' };
     const item = String(b.item), gain = PETS.FEED[item];
     if (!gain) return { error: '牠不吃這個' };
     if (!(p.inv[item] >= 1)) return { error: '背包裡沒有這個了' };
@@ -625,6 +645,30 @@ nwRoute('pet', { READ: ['state'],
     p.inv[item]--;
     const g = nwBond(p, 'feed', gain);
     return { happy: true, text: `${p.pet.name}吃了${nwItemName(item)}，感情 +${g}` };
+  },
+  // 領養：一個人一隻。外觀照送來的（不對的值換回預設），個性是擲出來的
+  adopt: ({ p }, b, u) => {
+    if (p.pet) return { error: '你已經有一隻了，一個人只能養一隻' };
+    const pet = PETS.sanitize(Object.assign({}, b.pet, { bond: 0, bd: null }));
+    if (!pet) return { error: '先選一種寵物' };
+    delete pet.temper; p.pet = PETS.withTemper(pet);
+    u.save.nw = Object.assign({}, u.save.nw, { petMode: 'follow', petBed: nwNewBed(u) });
+    return { text: `${p.pet.name}跟你回家了`, setPet: p.pet, changed: true };
+  },
+  // 重捏：外觀和名字可以改，種類也可以換；感情、個性、床位照舊
+  restyle: ({ p }, b) => {
+    if (!p.pet) return { error: '你還沒有寵物' };
+    const pet = PETS.sanitize(Object.assign({}, b.pet, { bond: p.pet.bond, bd: p.pet.bd, temper: p.pet.temper }));
+    if (!pet) return { error: '先選一種寵物' };
+    p.pet = pet;
+    return { text: `${p.pet.name}換了新樣子`, setPet: p.pet, changed: true };
+  },
+  mode: ({ p }, b, u) => {
+    const m = String(b.mode);
+    if (!p.pet) return { error: '你還沒有寵物' };
+    if (!Object.prototype.hasOwnProperty.call(NW_PET_MODES, m)) return { error: '沒有這個模式' };
+    u.save.nw = Object.assign({}, u.save.nw, { petMode: m });
+    return { text: m === 'follow' ? `${p.pet.name}回到你身邊了` : m === 'play' ? `${p.pet.name}去草坪玩了` : `${p.pet.name}去睡覺了`, changed: true };
   },
 });
 // ---- 管理員的「功能測試」面板（public/newworld-ui.js）：只有管理員帳號能用，每個動作都再檢查一次 ----
@@ -644,10 +688,10 @@ nwRoute('test', { READ: [],
     return { text: '放進背包了：' + S.name };
   }),
   pet: nwTestAdmin(({ p }, b) => {
-    if (b.kind === 'none') { p.pet = null; return { text: '寵物收走了', pet: null }; }
+    if (b.kind === 'none') { p.pet = null; return { text: '寵物收走了', pet: null, changed: true }; }
     const kind = Object.prototype.hasOwnProperty.call(PETS.KINDS, b.kind) ? b.kind : 'cat';
     p.pet = PETS.withTemper(PETS.sanitize(Object.assign({}, PETS.DEFAULTS[kind], { kind, name: { cat: '測試貓', dog: '測試狗', horse: '測試馬' }[kind] || '測試寵物' })));
-    return { text: '領到一隻' + p.pet.name, pet: p.pet };
+    return { text: '領到一隻' + p.pet.name, pet: p.pet, changed: true };
   }),
   clear: nwTestAdmin(({ p }) => { p.inv = {}; p.furn = {}; p.gear = {}; p.seen = []; p.equip = {}; p.gachaPity = 0; return { text: '背包和裝備清空了', equip: {} }; }),
 });
@@ -722,6 +766,7 @@ function startNewworldNet() {
     socket.broadcast.emit('join', pub(p));
     socket.emit('music', musicState());
     socket.emit('garden', garden.state());
+    nwLawnChanged();   // 主人上線：牠從床上起來（或繼續在草坪玩）
     COMBAT.join(socket, u, p);
     // 壓力測試用的假人：管理員要幾個就放幾個（最多 30），隨機造型、隨機亂走，所有人都看得到
     socket.on('bots', (n) => { if (!u.admin) return; n = Math.round(num(n, 0, 30));
@@ -742,7 +787,7 @@ function startNewworldNet() {
       if (!text || now - p.said < 600) return;
       p.said = now; nw.emit('chat', { id: p.id, name: p.name, text });
     });
-    socket.on('disconnect', () => { COMBAT.leave(p); nwPlayers.delete(p.id); nw.emit('leave', p.id); });
+    socket.on('disconnect', () => { COMBAT.leave(p); nwPlayers.delete(p.id); nw.emit('leave', p.id); nwLawnChanged(); });
   });
   setInterval(() => { nwBots.forEach(b => { const dx = b.tx - b.x, dz = b.tz - b.z, d = Math.hypot(dx, dz);
     if (d < 0.3) { b.mv = 0; if ((b.wait -= 0.1) <= 0) { b.tx = Math.max(-30, Math.min(30, b.x + (Math.random() - 0.5) * 16)); b.tz = Math.max(-6, Math.min(30, b.z + (Math.random() - 0.5) * 16)); b.wait = 1 + Math.random() * 4; } }

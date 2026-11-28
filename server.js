@@ -700,8 +700,9 @@ app.post('/api/newworld/music', async (req, res) => {
   const u = newworldUser(req, res); if (!u) return;
   const b = req.body && typeof req.body === 'object' ? req.body : {}, me = 'nw:' + u.username.toLowerCase(), m = musicOf('all'), now = Date.now();
   const name = sanitizeSave(u.save).name || u.username;
-  const out = (o) => res.json(Object.assign({ ok: !o.error }, o, { me, now: m.now ? { vid: m.now.vid, title: m.now.title, byName: m.now.byName, mine: m.now.by === me } : null,
-    queue: m.queue.map((q, i) => ({ i, title: q.title, byName: q.byName, mine: q.by === me })), max: MUSIC_MAX_QUEUE }));
+  const here = () => nwPlayers.size + [...players.values()].filter(o => musicArea(o) === 'all' && !awayTimers.has(o.id)).length, need = () => Math.floor(here() / 2) + 1;
+  const out = (o) => res.json(Object.assign({ ok: !o.error }, o, { me, now: m.now ? { vid: m.now.vid, title: m.now.title, byName: m.now.byName, mine: m.now.by === me, skips: m.skips.size, need: need(), voted: m.skips.has(me) } : null,
+    queue: m.queue.map((q, i) => ({ i, vid: q.vid, title: q.title, byName: q.byName, mine: q.by === me })), max: MUSIC_MAX_QUEUE }));
   try {
     if (b.act === 'state') return out({});
     if (b.act === 'search') {
@@ -727,7 +728,11 @@ app.post('/api/newworld/music', async (req, res) => {
     }
     if (b.act === 'skip') {
       if (!m.now) return out({ error: '現在沒有在放歌' });
-      if (m.now.by !== me) return out({ error: '只有點這首歌的人可以直接切，要投票切歌請到總部' });
+      if (m.now.by !== me) {   // 不是自己點的：投票，超過一半在線上的人同意就切（跟總部同一套）
+        if (m.skips.has(me)) return out({ error: '你已經投過了' });
+        m.skips.add(me); const n = need();
+        if (m.skips.size < n) { emitMusic(); return out({ text: `投了切歌（${m.skips.size} / ${n}）` }); }
+      }
       musicNext('all');
       return out({ text: '切到下一首了' });
     }
@@ -738,6 +743,9 @@ app.post('/api/newworld/music', async (req, res) => {
       emitMusic();
       return out({ text: '拿掉了' });
     }
+    // 播放器回報：這首多長（貼連結點的歌伺服器不知道長度）、播完了（開頭幾秒內的不算，避免載入失敗就被跳過）
+    if (b.act === 'len') { const sec = Math.round(Number(b.sec)); if (m.now && m.now.vid === b.vid && !m.now.len && sec > 0 && sec <= MUSIC_MAX_LEN) { m.now.len = sec; musicTimer('all'); } return out({}); }
+    if (b.act === 'ended') { if (m.now && m.now.vid === b.vid && now - m.now.startedAt > 5000) musicNext('all'); return out({}); }
     out({ error: '沒有這個動作' });
   } catch (e) { console.error('新世界點歌失敗', e.message); res.json({ ok: false, error: '出了點問題，等等再試' }); }
 });

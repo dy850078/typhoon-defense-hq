@@ -247,6 +247,58 @@ async function main() {
     ok(!pg.errors.length, '沒有頁面錯誤' + (pg.errors.length ? '：' + [...new Set(pg.errors)].slice(0, 3).join(' / ') : '')); await pg.context().close();
   };
 
+  // ---- 點唱機：唱盤（黑膠、唱臂、音量）、點歌和排隊、投票切歌、角落的小唱片（模擬器連不到 YouTube，播放狀態用 debug 模擬） ----
+  const jukeT = async (phone) => {
+    const tag = phone ? 'juke-phone' : 'juke'; console.log(tag);
+    const A = await account({ name: '阿點', hair: 'bob' }), B = await account({ name: '阿票', hair: 'short' });
+    const api = (body, who) => post('/api/newworld/music', body, { Authorization: 'Bearer ' + (who || A).token }), nap = (ms) => new Promise(r => setTimeout(r, ms));
+    const pg = await open(A, phone), pb = await open(B, false), E = (fn, arg) => pg.evaluate(fn, arg), T = async (sel) => { await tap(pg, sel); await pg.waitForTimeout(350); };
+    const toast = () => E(() => document.getElementById('toast').textContent), st = () => E(() => { const s = NW_MUSIC.state(); return { on: s.on, playing: s.playing, need: s.need, vol: s.vol, vid: s.vid }; });
+    await E(() => { try { localStorage.removeItem('hq-vol'); localStorage.removeItem('hq-vol-last'); } catch (e) {} });
+    if (phone) await T('#b-kit'); await T('#b-song'); await pg.waitForSelector('#juke-deck', { timeout: 30000 }).catch(() => {});
+    ok(await E(() => !!document.querySelector('#juke-deck .jk-vinyl.big') && !!document.querySelector('#juke-deck .jk-arm') && document.querySelectorAll('#juke-deck .jk-eq i').length === 6 && !!document.getElementById('juke-vol') && !!document.getElementById('juke-mute') && !!document.getElementById('juke-q')), '點唱機面板有唱盤（黑膠、唱臂、音量條）、音量、搜尋框');
+    ok(/現在沒有歌/.test(await pg.textContent('#juke-now')) && await E(() => document.getElementById('nw-disc').hidden && !document.getElementById('juke-deck').classList.contains('on')), '沒有歌：唱臂抬著、角落沒有小唱片');
+    ok(await E(() => !/總部/.test(document.getElementById('panel').textContent)), '說明不再叫人去總部');
+    await shot(pg, tag + '-1-empty');
+    // B 先點一首（變成現在這首），A 再點一首排隊
+    await api({ act: 'add', vid: 'https://youtu.be/dQw4w9WgXcQ' }, B); await pg.waitForFunction(() => !/現在沒有歌/.test(document.getElementById('juke-now').textContent), null, { timeout: 30000 }).catch(() => {});
+    ok(/阿票 點的/.test(await pg.textContent('#juke-now')) && await E(() => document.querySelector('#juke-deck .jk-vinyl img').dataset.v === 'dQw4w9WgXcQ'), '有人點歌：面板自己更新，黑膠中間換成這首歌的封面');
+    await T('#juke-listen'); let s = await st(); ok(s.on && s.vid === 'dQw4w9WgXcQ' && await E(() => !document.getElementById('nw-disc').hidden && document.getElementById('juke-deck').classList.contains('on') && document.getElementById('juke-listen').textContent === '先不聽'), '按「我要聽」：唱臂放下、角落出現小唱片');
+    ok(await E(() => !document.getElementById('juke-deck').classList.contains('spin')), '還沒真的出聲之前唱片不轉');
+    await E(() => NW_MUSIC.debug({ playing: true, fail: false })); ok(await E(() => document.getElementById('juke-deck').classList.contains('spin') && document.getElementById('nw-disc').classList.contains('spin') && getComputedStyle(document.querySelector('#juke-deck .jk-vinyl')).animationName === 'jk-spin'), '有聲音之後唱片開始轉（面板和角落的都是）');
+    await E(() => NW_MUSIC.debug({ playing: false, need: true })); ok(await E(() => !document.getElementById('juke-kick').hidden && /再點一下/.test(document.getElementById('juke-msg').textContent)), '手機出不了聲的時候有「點一下開始聽」');
+    await E(() => NW_MUSIC.debug({ playing: true, need: false }));
+    // 音量
+    const setV = (v) => E((v) => { const r = document.getElementById('juke-vol'); r.dispatchEvent(new Event('pointerdown')); r.value = v; r.dispatchEvent(new Event('input')); r.dispatchEvent(new Event('change')); }, v);
+    ok((await st()).vol === 60 && await E(() => document.getElementById('juke-vol').value === '60'), '音量預設 60');
+    await setV(30); ok((await st()).vol === 30 && await E(() => localStorage.getItem('hq-vol') === '30'), '拉音量：會記住');
+    await T('#juke-mute'); ok((await st()).vol === 0 && await E(() => document.getElementById('juke-mute').dataset.k === 'btn-mute' && document.getElementById('juke-vol').value === '0'), '按喇叭：靜音，滑桿跑到 0');
+    await T('#juke-mute'); ok((await st()).vol === 30, '再按一次回到剛剛的音量');
+    await setV(2); ok((await st()).vol === 0, '拉到快要 0 就當作靜音'); await T('#juke-mute'); ok((await st()).vol === 30, '靜音後按喇叭回到拉之前的音量');
+    // 排隊
+    await api({ act: 'add', vid: 'https://www.youtube.com/watch?v=9bZkp7q19f0' }); await nap(300); await api({ act: 'add', vid: 'https://youtu.be/kJQP7kiw5Fk' }, B);
+    await pg.waitForFunction(() => document.querySelectorAll('#panel .song').length === 2, null, { timeout: 30000 }).catch(() => {}); await pg.waitForTimeout(300);
+    ok(await E(() => { const q = [...document.querySelectorAll('#panel .song')]; return q.length === 2 && !!q[0].querySelector('.opt') && !q[1].querySelector('.opt') && q.every(x => !!x.querySelector('img.jk-th') && !!x.querySelector('.jk-no')) && /排隊 2 \//.test(document.getElementById('juke-queue').textContent) && /阿點 點的/.test(q[0].textContent) && /阿票 點的/.test(q[1].textContent); }), '排隊清單：第幾首、封面、誰點的，自己點的才有「拿掉」');
+    await pg.waitForTimeout(400); await shot(pg, tag + '-2-playing');
+    // 投票切歌：兩個人在線上，要兩票
+    ok(await E(() => /投票切歌/.test(document.getElementById('juke-skip').textContent)), '別人點的歌：按鈕是「投票切歌」');
+    await T('#juke-skip'); await pg.waitForFunction(() => /投了切歌/.test(document.getElementById('toast').textContent), null, { timeout: 30000 }).catch(() => {});
+    ok(/投了切歌（1 \/ 2）/.test(await toast()) && await E(() => document.getElementById('juke-skip').disabled && /已投切歌 1 \/ 2/.test(document.getElementById('juke-skip').textContent)), '投一票：還差一票，按鈕變成已投');
+    ok((await api({ act: 'skip' })).error === '你已經投過了', '不能重複投');
+    ok((await api({ act: 'len', vid: 'dQw4w9WgXcQ', sec: 212 })).ok && (await api({ act: 'ended', vid: 'xxxxxxxxxxx' })).now.vid === 'dQw4w9WgXcQ', '播放器可以回報歌長；回報別首歌播完不會切到現在這首');
+    await api({ act: 'skip' }, B); await pg.waitForFunction(() => /阿點 點的/.test(document.getElementById('juke-now').textContent), null, { timeout: 30000 }).catch(() => {});
+    ok(/阿點 點的/.test(await pg.textContent('#juke-now')) && await E(() => document.getElementById('juke-skip').textContent === '切掉這首' && document.querySelectorAll('#panel .song').length === 1), '點歌的人切掉：換下一首，自己點的可以直接切');
+    // 角落小唱片
+    await E(() => window.NW_UI.close()); await pg.waitForTimeout(400);
+    ok(await E(() => { const c = document.getElementById('nw-disc'), r = c.getBoundingClientRect(); return !c.hidden && r.width > 40 && r.right <= innerWidth && c.querySelector('b').textContent.length > 0 && document.getElementById('panel').hidden; }), '面板關掉後角落留著小唱片和歌名');
+    ok(await E(() => { const c = document.getElementById('nw-disc').getBoundingClientRect(); return ['cb-me', 'btns'].every(id => { const e = document.getElementById(id); if (!e || e.hidden) return true; const q = (id === 'btns' ? (e.querySelector('#b-kit:not([hidden])') && getComputedStyle(e.querySelector('#b-kit')).display !== 'none' ? e.querySelector('#b-kit') : e.querySelector('#hb-row')) : e).getBoundingClientRect(); return q.width === 0 || c.right <= q.left + 1 || c.left >= q.right - 1 || c.bottom <= q.top + 1 || c.top >= q.bottom - 1; }); }), '小唱片沒有蓋到等級卡和右上的按鈕');
+    await shot(pg, tag + '-3-disc');
+    await T('#nw-disc'); await pg.waitForSelector('#juke-deck', { timeout: 30000 }).catch(() => {}); ok(await E(() => !!document.getElementById('juke-deck')), '點小唱片打開點唱機');
+    await T('#juke-listen'); ok(!(await st()).on && await E(() => document.getElementById('nw-disc').hidden && !document.getElementById('juke-deck').classList.contains('on')), '按「先不聽」：小唱片收掉、唱臂抬起來');
+    await nap(300); await api({ act: 'skip' }); await nap(300); await api({ act: 'skip' }, B);
+    ok(!pg.errors.length, '沒有頁面錯誤' + (pg.errors.length ? '：' + [...new Set(pg.errors)].slice(0, 3).join(' / ') : '')); await pb.context().close(); await pg.context().close();
+  };
+
   // ---- 扭蛋機：卡池橫幅、內容物格子、扭蛋動畫、保底、管理員開關和日期 ----
   const gachaT = async (phone) => {
     const tag = phone ? 'gacha-phone' : 'gacha'; console.log(tag);
@@ -1236,6 +1288,8 @@ async function main() {
   if (want === 'gacha-phone') await gachaT(true);
   if (want === 'all' || want === 'petlawn') await petlawn(false);
   if (want === 'petlawn-phone') await petlawn(true);
+  if (want === 'all' || want === 'juke') await jukeT(false);
+  if (want === 'juke-phone') await jukeT(true);
   if (want === 'all' || want === 'wishes') await wishesT(false);
   if (want === 'wishes-phone') await wishesT(true);
   if (want === 'all' || want === 'multi') await multi();

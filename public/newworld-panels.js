@@ -426,27 +426,47 @@ window.NW_PANELS = function (NW, token, opt) {
     body.appendChild(acts); paint();
   }
 
-  // ---------- 點唱機：聽歌、點歌（排進總部同一份歌單）----------
-  var jukeBody = null, jukeFound = null;
-  function juke() { var body = frame('juke', '點唱機', '跟總部放的是同一份歌單，在這裡點的歌總部也聽得到。'); jukeBody = body; jukeFound = null; wait(body); jukePost({ act: 'state' }); }
+  // ---------- 點唱機：上面（電腦版在左邊）是唱盤，黑膠貼這首歌的封面，真的有聲音才會轉、唱臂才會放下；下面是點歌和排隊 ----------
+  var jukeBody = null, jukeFound = null, jukeSub = false, M = opt.music;
+  var thumb = function (vid) { var i = el('img', 'jk-th'); i.alt = ''; i.loading = 'lazy'; if (vid) { i.dataset.v = vid; i.src = 'https://i.ytimg.com/vi/' + vid + '/mqdefault.jpg'; } i.onerror = function () { i.removeAttribute('src'); }; return i; };   // 封面載不到就留底色
+  function juke() { var body = frame('juke', '點唱機', '大家聽的是同一份歌單，點的歌會排隊輪流放。'); jukeBody = body; jukeFound = null; wait(body); jukePost({ act: 'state' });
+    if (!jukeSub) { jukeSub = true; M.sub(function () { if (cur === 'juke') jukeDeck(); }); } }
   function jukePost(req) { var body = jukeBody; return post('music', req).then(function (r) { if (cur !== 'juke' || body !== jukeBody) return r; if (r.list) jukeFound = r.list; if (r.ok && r.text) { toast(r.text); if (req.act === 'add') jukeFound = null; } drawJuke(body, r); return r; }); }
+  // 唱盤跟著播放器的狀態動（不重畫整個面板，打到一半的字才不會不見）
+  function jukeDeck() { var d = document.getElementById('juke-deck'); if (!d) return; var s = M.state(), $ = function (id) { return document.getElementById(id); };
+    d.classList.toggle('spin', !!(s.on && s.playing)); d.classList.toggle('on', !!(s.on && s.now));
+    var lis = $('juke-listen'); lis.textContent = s.on ? '先不聽' : '我要聽'; lis.classList.toggle('on', s.on); lis.classList.toggle('main', !s.on);
+    $('juke-kick').hidden = !(s.on && s.now && s.need);
+    $('juke-msg').textContent = s.fail ? '連不到 YouTube，聽不到音樂' : !s.now ? '' : !s.on ? '按「我要聽」才會有聲音' : s.need ? '手機要再點一下才會出聲' : s.playing ? '' : '準備中…'; $('juke-msg').hidden = !$('juke-msg').textContent;
+    var vr = $('juke-vol'); if (document.activeElement !== vr) vr.value = s.vol; var mu = $('juke-mute'), key = s.vol ? 'btn-vol' : 'btn-mute';
+    if (mu.dataset.k !== key) { mu.dataset.k = key; mu.innerHTML = ''; var ic = icon(key, 26); if (ic) mu.appendChild(ic); mu.title = s.vol ? '靜音' : '開聲音'; mu.setAttribute('aria-label', mu.title); } }
   function drawJuke(body, r) {
     if (!r.queue) return fail(body, r);
     body.innerHTML = '';
-    var on = opt.music.state().on, row = el('div', 'line'), ic = icon('btn-song', 30); if (ic) row.appendChild(ic);
-    var t = el('span'); t.appendChild(el('b', '', r.now ? r.now.title : '現在沒有歌')); t.appendChild(el('small', '', r.now ? r.now.byName + ' 點的' : '點一首就會開始放')); row.appendChild(t); row.id = 'juke-now'; body.appendChild(row);
-    var acts = el('div', 'acts'); var lis = btn(on ? '先不聽' : '我要聽', function () { opt.music.toggle(); drawJuke(body, r); }, on ? 'on' : 'main'); lis.id = 'juke-listen'; acts.appendChild(lis);
-    if (r.now && r.now.mine) acts.appendChild(btn('切掉我點的這首', function () { jukePost({ act: 'skip' }); }));
-    body.appendChild(acts);
-    if (r.error) body.appendChild(el('p', 'err', r.error));
-    var q = el('input'); q.type = 'text'; q.maxLength = 200; q.placeholder = '打歌名搜尋，或貼 YouTube 連結'; q.id = 'juke-q'; body.appendChild(q);
-    var a2 = el('div', 'acts'), go = btn('點歌', function () { var v = q.value.trim(); if (!v) return; go.disabled = true; jukePost(/youtu\.?be|^[\w-]{11}$/.test(v) ? { act: 'add', vid: v } : { act: 'search', q: v }); }, 'main'); go.id = 'juke-go'; a2.appendChild(go);
-    a2.appendChild(el('span', 'dim', '排隊 ' + r.queue.length + ' / ' + r.max + ' 首')); body.appendChild(a2);
+    var wrap = el('div', 'jk-wrap'), deck = el('div', 'jk-deck'), side = el('div', 'jk-side'); deck.id = 'juke-deck'; wrap.appendChild(deck); wrap.appendChild(side); body.appendChild(wrap);
+    var plate = el('div', 'jk-plate'), vinyl = el('i', 'jk-vinyl big'), art = thumb(r.now && r.now.vid); art.className = ''; art.loading = 'eager'; vinyl.appendChild(art); plate.appendChild(vinyl); plate.appendChild(el('i', 'jk-arm'));
+    var eq = el('span', 'jk-eq'); for (var i = 0; i < 6; i++) eq.appendChild(el('i')); plate.appendChild(eq); deck.appendChild(plate);
+    var info = el('div', 'jk-info'); info.id = 'juke-now'; info.appendChild(el('b', '', r.now ? r.now.title : '現在沒有歌')); info.appendChild(el('small', '', r.now ? r.now.byName + ' 點的' : '點一首就會開始放')); deck.appendChild(info);
+    var msg = el('p', 'dim jk-msg'); msg.id = 'juke-msg'; deck.appendChild(msg);
+    var acts = el('div', 'acts'), lis = btn('我要聽', function () { M.toggle(); }, 'main'); lis.id = 'juke-listen'; acts.appendChild(lis);
+    var kick = btn('點一下開始聽', function () { M.kick(); }, 'main'); kick.id = 'juke-kick'; kick.hidden = true; acts.appendChild(kick);
+    if (r.now) { var sk = btn(r.now.mine ? '切掉這首' : r.now.voted ? '已投切歌 ' + r.now.skips + ' / ' + r.now.need : '投票切歌' + (r.now.skips ? ' ' + r.now.skips + ' / ' + r.now.need : ''), function () { jukePost({ act: 'skip' }); }); sk.id = 'juke-skip'; sk.disabled = !r.now.mine && !!r.now.voted; acts.appendChild(sk); }
+    deck.appendChild(acts);
+    var vl = el('div', 'jk-vol'), mu = el('button', 'jk-mute'), vr = el('input'), before = 0; mu.type = 'button'; mu.id = 'juke-mute'; mu.onclick = function () { M.mute(); };
+    vr.type = 'range'; vr.min = 0; vr.max = 100; vr.id = 'juke-vol'; vr.setAttribute('aria-label', '音量'); vr.addEventListener('pointerdown', function () { before = M.state().vol; }); vr.oninput = function () { M.setVol(vr.value, before); };
+    vr.onchange = function () { vr.blur(); jukeDeck(); }; vl.appendChild(mu); vl.appendChild(vr); deck.appendChild(vl);
+    if (r.error) side.appendChild(el('p', 'err', r.error));
+    var find = el('div', 'jk-find'), q = el('input'); q.type = 'text'; q.maxLength = 200; q.placeholder = '打歌名搜尋，或貼 YouTube 連結'; q.id = 'juke-q'; find.appendChild(q);
+    var go = btn('點歌', function () { var v = q.value.trim(); if (!v) return; go.disabled = true; jukePost(/youtu\.?be|^[\w-]{11}$/.test(v) ? { act: 'add', vid: v } : { act: 'search', q: v }); }, 'main'); go.id = 'juke-go'; find.appendChild(go); side.appendChild(find);
     q.addEventListener('keydown', function (e) { e.stopPropagation(); if (e.key === 'Enter') go.click(); }); q.addEventListener('keyup', function (e) { e.stopPropagation(); });
-    if (jukeFound) { if (!jukeFound.length) body.appendChild(el('p', 'dim', '找不到，換個關鍵字試試。'));
-      jukeFound.forEach(function (s) { var li = el('div', 'song found'); li.appendChild(el('span', '', s.title)); li.appendChild(btn('點這首', function () { jukePost({ act: 'add', vid: s.vid, title: s.title }); })); body.appendChild(li); }); }
-    if (r.queue.length) body.appendChild(el('p', 'sub', '接下來：'));
-    r.queue.forEach(function (s) { var li = el('div', 'song'); li.appendChild(el('span', '', (s.i + 1) + '. ' + s.title + '　' + s.byName)); if (s.mine) li.appendChild(btn('拿掉', function () { jukePost({ act: 'remove', i: s.i }); })); body.appendChild(li); });
+    if (jukeFound) { var fh = el('p', 'sub jk-h', '搜尋結果'), fx = el('button', 'jk-x', '收起來'); fx.type = 'button'; fx.onclick = function () { jukeFound = null; drawJuke(body, r); }; fh.appendChild(fx); side.appendChild(fh);
+      if (!jukeFound.length) side.appendChild(el('p', 'dim', '找不到，換個關鍵字試試。'));
+      jukeFound.forEach(function (s) { var li = el('div', 'song found'); li.appendChild(thumb(s.vid)); li.appendChild(el('span', '', s.title)); li.appendChild(btn('點這首', function () { jukePost({ act: 'add', vid: s.vid, title: s.title }); })); side.appendChild(li); }); }
+    var qh = el('p', 'sub jk-h', '接下來'); qh.appendChild(el('em', '', '排隊 ' + r.queue.length + ' / ' + r.max + ' 首')); qh.id = 'juke-queue'; side.appendChild(qh);
+    if (!r.queue.length) side.appendChild(el('p', 'dim', '後面沒有歌了，點一首吧。'));
+    r.queue.forEach(function (s) { var li = el('div', 'song'), tx = el('span'); li.appendChild(el('u', 'jk-no', String(s.i + 1))); li.appendChild(thumb(s.vid)); tx.appendChild(el('b', '', s.title)); tx.appendChild(el('small', '', s.byName + ' 點的')); li.appendChild(tx);
+      if (s.mine) li.appendChild(btn('拿掉', function () { jukePost({ act: 'remove', i: s.i }); })); side.appendChild(li); });
+    jukeDeck();
   }
 
   // 走遠了就把面板收起來（背包和寵物是按鈕開的，不會自己收）

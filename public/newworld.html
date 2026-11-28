@@ -276,6 +276,39 @@
     #panel .cell.r-SR { background: #fff6dc; } #panel .cell.r-SSR { background: #ffe9fb; } #panel .cell.r-XR { background: #e3f4ff; } #panel .cell.on.r-SR, #panel .cell.on.r-SSR, #panel .cell.on.r-XR { background: #f3d27a; }
     #panel .worn-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 6px 0 10px; } #panel .worn-row .cell { cursor: default; min-height: 62px; justify-content: center; } #panel .worn-row .cell small { opacity: .6; }
     #panel .bar { height: 10px; border-radius: 6px; border: 1.5px solid rgba(43,42,51,.6); background: #fff; overflow: hidden; margin: 4px 0 8px; } #panel .bar b { display: block; height: 100%; background: #ff9db0; }
+    /* 點唱機：唱盤 */
+    .jk-vinyl { position: relative; display: block; flex: none; width: 34px; height: 34px; border-radius: 50%; border: 2px solid #2b2a33; box-sizing: border-box;
+      background: repeating-radial-gradient(circle at 50% 50%, #2b2a33 0 2px, #3c3a45 2px 3px), #2b2a33; }
+    .jk-vinyl::before { content: ''; position: absolute; inset: 0; border-radius: 50%; background: conic-gradient(from 20deg, rgba(255,255,255,.22), transparent 14%, transparent 48%, rgba(255,255,255,.16) 56%, transparent 68%); }
+    .jk-vinyl img { position: absolute; left: 50%; top: 50%; width: 46%; height: 46%; transform: translate(-50%, -50%); border-radius: 50%; object-fit: cover; background: #e8604c; border: 1.5px solid #2b2a33; box-sizing: border-box; }
+    .jk-vinyl::after { content: ''; position: absolute; left: 50%; top: 50%; width: 8%; height: 8%; min-width: 3px; min-height: 3px; transform: translate(-50%, -50%); border-radius: 50%; background: #fffaf0; border: 1px solid #2b2a33; z-index: 1; }
+    @keyframes jk-spin { to { transform: rotate(360deg); } } @keyframes jk-eq { from { height: 3px; } to { height: 100%; } }
+    .spin .jk-vinyl, .spin.jk-vinyl, #nw-disc.spin .jk-vinyl { animation: jk-spin 3.2s linear infinite; }
+    #nw-disc { all: unset; box-sizing: border-box; position: fixed; z-index: 3; left: 188px; top: calc(10px + env(safe-area-inset-top)); display: flex; align-items: center; gap: 7px; max-width: 210px; padding: 5px 11px 5px 6px; cursor: pointer;
+      background: #fffaf0; border: 2px solid #2b2a33; border-radius: 22px 19px 23px 18px; box-shadow: 2px 3px 0 rgba(43,42,51,.22); font: inherit; color: #2b2a33; }
+    #nw-disc[hidden] { display: none; } #nw-disc b { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+    @media (max-width: 820px) { #nw-disc { max-width: calc(100vw - 188px - 84px); padding-right: 8px; } }
+    #panel .jk-wrap { display: flex; gap: 16px; align-items: flex-start; } #panel .jk-deck { flex: none; width: 250px; display: flex; flex-direction: column; gap: 8px; } #panel .jk-side { flex: 1; min-width: 0; }
+    #panel .jk-plate { position: relative; height: 190px; border: 2px solid #2b2a33; border-radius: 14px 10px 15px 9px; background: linear-gradient(160deg, #f3d9a6, #e6c080); box-shadow: inset 0 0 0 5px rgba(255,250,240,.45); overflow: hidden; }
+    #panel .jk-vinyl.big { position: absolute; left: 18px; top: 20px; width: 150px; height: 150px; }
+    #panel .jk-arm { position: absolute; right: 30px; top: 16px; width: 9px; height: 112px; border-radius: 5px; background: #fffaf0; border: 2px solid #2b2a33; box-sizing: border-box; transform-origin: 50% 9px; transform: rotate(-6deg); transition: transform .6s ease; }
+    #panel .jk-arm::before { content: ''; position: absolute; left: 50%; top: -9px; width: 26px; height: 26px; margin-left: -13px; border-radius: 50%; background: #c98a52; border: 2px solid #2b2a33; box-sizing: border-box; }
+    #panel .jk-arm::after { content: ''; position: absolute; left: 50%; bottom: -8px; width: 17px; height: 24px; margin-left: -8.5px; border-radius: 4px; background: #e8604c; border: 2px solid #2b2a33; box-sizing: border-box; }
+    #panel .jk-deck.on .jk-arm { transform: rotate(27deg); }
+    #panel .jk-eq { position: absolute; right: 12px; bottom: 12px; display: flex; gap: 3px; align-items: flex-end; height: 26px; } #panel .jk-eq i { width: 5px; height: 3px; border-radius: 2px; background: #2b2a33; }
+    #panel .jk-deck.spin .jk-eq i { animation: jk-eq .7s ease-in-out infinite alternate; } #panel .jk-eq i:nth-child(2) { animation-delay: -.3s; } #panel .jk-eq i:nth-child(3) { animation-delay: -.55s; } #panel .jk-eq i:nth-child(4) { animation-delay: -.15s; } #panel .jk-eq i:nth-child(5) { animation-delay: -.45s; } #panel .jk-eq i:nth-child(6) { animation-delay: -.2s; }
+    #panel .jk-info b { display: block; font-size: 15px; line-height: 1.3; overflow-wrap: anywhere; } #panel .jk-info small { display: block; opacity: .7; margin-top: 2px; } #panel .jk-msg { margin: 0; } #panel .jk-deck .acts { margin: 0; flex-wrap: wrap; }
+    #panel .jk-vol { display: flex; align-items: center; gap: 8px; } #panel .jk-mute { all: unset; box-sizing: border-box; flex: none; width: 36px; height: 36px; display: grid; place-items: center; cursor: pointer; border: 1.5px solid rgba(43,42,51,.5); border-radius: 10px 8px 11px 7px; background: #fffaf0; }
+    #panel .jk-vol input[type=range] { -webkit-appearance: none; appearance: none; flex: 1; min-width: 0; height: 28px; margin: 0; padding: 0; border: 0; background: none; cursor: pointer; }
+    #panel .jk-vol input[type=range]::-webkit-slider-runnable-track { height: 8px; border-radius: 5px; background: #fffaf0; border: 1.5px solid #2b2a33; box-sizing: border-box; } #panel .jk-vol input[type=range]::-moz-range-track { height: 8px; border-radius: 5px; background: #fffaf0; border: 1.5px solid #2b2a33; box-sizing: border-box; }
+    #panel .jk-vol input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 20px; height: 20px; margin-top: -7.5px; border-radius: 50%; background: #e8604c; border: 2px solid #2b2a33; box-sizing: border-box; } #panel .jk-vol input[type=range]::-moz-range-thumb { width: 20px; height: 20px; border-radius: 50%; background: #e8604c; border: 2px solid #2b2a33; box-sizing: border-box; }
+    #panel .jk-find { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; } #panel .jk-find input { flex: 1; min-width: 0; margin: 0; } #panel .jk-find .opt { flex: none; }
+    #panel .jk-h { display: flex; align-items: baseline; justify-content: space-between; margin: 10px 0 2px; font-weight: 700; } #panel .jk-h em { font-style: normal; font-weight: 400; font-size: 12px; opacity: .7; }
+    #panel .jk-x { all: unset; cursor: pointer; font-size: 12px; font-weight: 400; text-decoration: underline; opacity: .7; }
+    #panel .jk-th { flex: none; width: 54px; height: 31px; object-fit: cover; border-radius: 5px; border: 1.5px solid rgba(43,42,51,.5); background: #e9dcb8; box-sizing: border-box; }
+    #panel .jk-no { flex: none; width: 18px; text-align: center; text-decoration: none; font-weight: 700; opacity: .6; } #panel .song span b { display: block; font-weight: 400; } #panel .song span small { display: block; font-size: 11px; opacity: .65; }
+    @media (max-width: 820px) { body #panel[data-kind="juke"] { max-height: min(84vh, calc(100vh - 110px)); } #panel .jk-wrap { display: block; } #panel .jk-deck { width: auto; margin-bottom: 12px; } #panel .jk-plate { height: 150px; } #panel .jk-vinyl.big { width: 118px; height: 118px; top: 14px; left: calc(50% - 86px); } #panel .jk-arm { height: 90px; right: calc(50% - 82px); } }
+    @media (min-width: 821px) { body #panel[data-kind="juke"] { width: min(720px, calc(100vw - 48px)); max-height: calc(100vh - 150px); } }
     #panel .song { display: flex; align-items: center; gap: 8px; padding: 5px 0; border-bottom: 1px dashed rgba(43,42,51,.25); } #panel .song span { flex: 1; min-width: 0; overflow-wrap: anywhere; } #panel .song .opt { flex: none; padding: 5px 9px; font-size: 12px; }
     #toast { position: fixed; left: 50%; top: calc(14px + env(safe-area-inset-top)); transform: translateX(-50%); max-width: min(360px, calc(100vw - 150px)); padding: 8px 14px; font-size: 13px; font-weight: 700; z-index: 6; pointer-events: none; text-align: center; }
     @media (max-width: 520px) { #hint { display: none; } }
@@ -329,6 +362,7 @@
     </div>
   </div>
   <div id="music-nw"><div id="music-yt"></div></div>
+  <button id="nw-disc" type="button" hidden aria-label="打開點唱機"><i class="jk-vinyl"><img alt=""></i><b></b></button>
   <div id="stick" hidden><div id="knob"></div></div>
   <div id="dress" class="note" hidden></div>
   <div id="panel" class="note" hidden></div>
@@ -435,19 +469,46 @@
         if (L && (O.parts.hair.indexOf(L.hair) < 0 || O.parts.top.indexOf(L.top) < 0 || O.parts.face.indexOf(L.face) < 0)) L = null;
         NW.dress(L || NW.fromAccount(base)); showClass(NW.setClass(L && L.cls)); NW.setPet(r.petMode === 'follow' || !r.petMode ? r.pet : null); NW.hasPet(!!r.pet); NW.gear(r.equip); $('b-pet').hidden = !r.pet; if (!$('dress').hidden) drawDress(); document.body.dataset.look = '1'; }).then(online);
       // 點唱機：播的是總部正在播的那一首，跟著總部的進度；點歌在面板裡（newworld-panels.js）
+      // 點唱機的播放器：聽的是總部「全區」那一份歌單。音量 0 就是靜音，按喇叭回到上次的音量（跟總部用同一組設定）
       var music = (function () {
-        var now = null, got = 0, on = false, player = null, loading = false, cur = '';
-        function pos() { return now ? (now.at + (Date.now() - got)) / 1000 : 0; }
-        function play() { if (!on || !now) { if (player && player.stopVideo) player.stopVideo(); cur = ''; return; }
-          if (player && player.loadVideoById) { if (cur !== now.vid) { cur = now.vid; player.loadVideoById({ videoId: now.vid, startSeconds: Math.max(0, pos()) }); } return; }
-          if (loading) return; loading = true;
-          window.onYouTubeIframeAPIReady = function () { player = new YT.Player('music-yt', { width: 200, height: 120, playerVars: { playsinline: 1, controls: 0, disablekb: 1, rel: 0 },
-            events: { onReady: function () { player.setVolume(60); play(); } } }); };
-          var s = document.createElement('script'); s.src = 'https://www.youtube.com/iframe_api'; document.head.appendChild(s); }
-        return { set: function (st) { var a = st && st.all && st.all.now; var was = now && now.vid; now = a ? { vid: a.vid, title: a.title, at: a.at || 0 } : null; got = Date.now();
-            if (on && (!now || now.vid !== was)) { if (now) NW.net.say(null, '現在播：' + now.title); play(); } },
+        var now = null, got = 0, on = false, player = null, apiP = null, cur = '', playing = false, need = false, fail = false, subs = [], startT = 0, lenSent = '';
+        var LS = function (k, v) { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (e) { /* 存不了就算了 */ } return null; };
+        var vol = LS('hq-vol') == null ? 60 : Math.max(0, Math.min(100, Number(LS('hq-vol')) || 0)), last = Number(LS('hq-vol-last')) || 60;
+        function emit() { subs.forEach(function (f) { try { f(); } catch (e) { console.error(e); } }); }
+        function tell(body) { fetch('/api/newworld/music', { method: 'POST', headers: { Authorization: 'Bearer ' + token, 'content-type': 'application/json' }, body: JSON.stringify(body) }).catch(function () {}); }
+        function pos() { return now ? (now.at + (Date.now() - got)) / 1000 : 0; }   // 現在這首應該播到第幾秒
+        function applyVol() { if (!player || !player.setVolume) return; player.setVolume(vol); if (vol) player.unMute(); else player.mute(); }
+        function onState(e) { playing = e.data === 1;
+          if (playing) { need = false; var d = player.getDuration && player.getDuration(); if (cur && d > 0 && lenSent !== cur) { lenSent = cur; tell({ act: 'len', vid: cur, sec: d }); } }   // 告訴伺服器這首多長，它才能自己倒數換歌
+          if (e.data === 0 && cur) tell({ act: 'ended', vid: cur }); emit(); }
+        function onError() { var v = cur; setTimeout(function () { if (cur === v && v) tell({ act: 'ended', vid: v }); }, 6000); }
+        function api() { if (apiP) return apiP;
+          apiP = new Promise(function (res, rej) { window.onYouTubeIframeAPIReady = res; var s = document.createElement('script'); s.src = 'https://www.youtube.com/iframe_api'; s.onerror = function () { apiP = null; rej(); }; document.head.appendChild(s); })
+            .then(function () { return new Promise(function (res) { player = new YT.Player('music-yt', { width: 200, height: 120, playerVars: { playsinline: 1, controls: 0, disablekb: 1, rel: 0 }, events: { onReady: function () { res(); }, onStateChange: onState, onError: onError } }); }); });
+          return apiP; }
+        function play() {
+          if (!on || !now) { cur = ''; playing = false; need = false; clearTimeout(startT); if (player && player.stopVideo) player.stopVideo(); emit(); return; }
+          if (cur === now.vid) { emit(); return; } cur = now.vid; var v = cur; fail = false; playing = false; need = false; emit();
+          api().then(function () { if (cur !== v) return; player.loadVideoById({ videoId: v, startSeconds: Math.max(0, pos()) }); applyVol(); clearTimeout(startT);
+            startT = setTimeout(function () { if (cur !== v || !player.getPlayerState) return; var st = player.getPlayerState(); need = !(st === 1 || st === 3); emit(); }, 3000);   // 手機有時候不讓網頁自己出聲，要再點一下
+          }).catch(function () { if (cur === v) { fail = true; cur = ''; emit(); } }); }
+        // 每 5 秒對一次時間，差太多就跳到正確的位置；多跳 1.5 秒給它緩衝，跳完 15 秒內不再檢查，同一首最多跳 3 次（不然切回分頁會一直跳針）
+        var fixes = 0, fixVid = '', fixUntil = 0;
+        function drift() { if (!player || !cur || !player.getCurrentTime || !player.getPlayerState || player.getPlayerState() !== 1) return; if (fixVid !== cur) { fixVid = cur; fixes = 0; }
+          if (fixes >= 3 || Date.now() < fixUntil) return; var at = player.getCurrentTime(), want = pos(); if (Math.abs(at - want) <= 3) return; fixes++; fixUntil = Date.now() + 15000; player.seekTo(want + 1.5, true); }
+        setInterval(drift, 5000); document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') setTimeout(drift, 2000); });
+        function setVol(v, before) { v = Math.max(0, Math.min(100, Math.round(Number(v) || 0))); if (v <= 3) v = 0; if (!v && vol) last = before || vol; else if (v) last = v; vol = v; LS('hq-vol', String(vol)); LS('hq-vol-last', String(last)); applyVol(); emit(); }
+        return { set: function (st) { var a = st && st.all && st.all.now; var was = now && now.vid; now = a ? { vid: a.vid, title: a.title, byName: a.byName || '', at: a.at || 0 } : null; got = Date.now();
+            if (on && (!now || now.vid !== was)) { if (now) NW.net.say(null, '現在播：' + now.title); play(); } else emit(); },
           toggle: function () { on = !on; if (now || !on) NW.net.say(null, on ? '現在播：' + now.title : '把音樂關掉了'); play(); return on; },
-          state: function () { return { on: on, vid: now && now.vid }; } }; })();
+          kick: function () { if (player && player.playVideo && cur) { player.seekTo(Math.max(0, pos()), true); player.playVideo(); applyVol(); need = false; emit(); } },   // 「點一下開始聽」
+          setVol: setVol, mute: function () { setVol(vol ? 0 : last); }, sub: function (f) { subs.push(f); },
+          debug: function (o) { if ('playing' in o) playing = o.playing; if ('need' in o) need = o.need; if ('on' in o) on = o.on; if ('fail' in o) fail = o.fail; emit(); },   // 測試用：模擬器連不到 YouTube
+          state: function () { return { on: on, vid: now && now.vid, now: now, playing: playing, need: need, fail: fail, vol: vol, last: last }; } }; })();
+      // 角落的小唱片：有在聽的時候留在等級卡旁邊，點它打開點唱機
+      (function () { var c = document.getElementById('nw-disc'), img = c.querySelector('img'), tt = c.querySelector('b');
+        music.sub(function () { var s = music.state(); c.hidden = !(s.on && s.now); if (c.hidden) return; c.classList.toggle('spin', s.playing); tt.textContent = s.now.title; var src = 'https://i.ytimg.com/vi/' + s.now.vid + '/mqdefault.jpg'; if (img.dataset.s !== src) { img.dataset.s = src; img.src = src; } }); img.onerror = function () { img.removeAttribute('src'); };
+        c.onclick = function () { if (window.NW_UI) NW_UI.open('juke', null, true); }; })();
       window.NW_MUSIC = music;
       // 大廳的導師、扭蛋機、花圃、種子箱和前院的許願池：點紙條開面板
       var panels = window.NW_PANELS ? NW_PANELS(NW, token, { music: music, curClass: function () { return (NW.look() || {}).cls || ''; }, setClass: function (c) { var n = NW.setClass(c); showClass(n); saveLook(); return n; } }) : null;
